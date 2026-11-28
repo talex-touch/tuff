@@ -98,7 +98,12 @@ vi.mock('@talex-touch/tuffex/markdown-editor', () => ({
           @input="$emit('update:modelValue', $event.target.value)"
           @blur="$emit('blur')"
         />
-        <div class="tx-md-content">{{ modelValue }}</div>
+        <div class="tx-md-content markdown-body">
+          <p
+            v-for="(blk, idx) in String(modelValue || '').split(/\\n{2,}/).filter(Boolean)"
+            :key="idx"
+          >{{ blk }}</p>
+        </div>
       </div>
     `
   }
@@ -2023,8 +2028,101 @@ describe('WorkspaceFileViewer', () => {
 
     const sweep = wrapper.find('[data-testid="file-viewer-canvas-sweep"]')
     expect(sweep.exists()).toBe(true)
-    expect(sweep.find('.WorkspaceFileViewer-CanvasWipeCurtain').exists()).toBe(true)
-    expect(sweep.find('.WorkspaceFileViewer-CanvasWipeVeil').exists()).toBe(true)
-    expect(sweep.find('.WorkspaceFileViewer-CanvasWipeEdge').exists()).toBe(true)
+    expect(sweep.find('.WorkspaceFileViewer-CanvasReplaceVeil').exists()).toBe(true)
+    const oldLayer = wrapper.find('[data-testid="file-viewer-canvas-old-layer"]')
+    expect(oldLayer.exists()).toBe(true)
+    expect(oldLayer.text()).toContain('Original line.')
+  })
+
+  it('paces changed plain paragraph words through useStreamPacer with monochrome blur and unwraps cleanly', async () => {
+    vi.useFakeTimers({
+      toFake: ['setTimeout', 'clearTimeout', 'requestAnimationFrame', 'cancelAnimationFrame', 'performance']
+    })
+    try {
+      let diskText = '# Story\n\n从休眠舱醒来，名字不见了。\n'
+      let diskMtime = 1000
+      mocks.send.mockImplementation(async (event: unknown) => {
+        if (event === AgentWorkspaceEvents.readFile) {
+          return {
+            path: '/tmp/space/story.md',
+            kind: 'text',
+            mimeType: 'text/markdown',
+            size: diskText.length,
+            truncated: false,
+            mtimeMs: diskMtime,
+            text: diskText
+          }
+        }
+        return null
+      })
+
+      const wrapper = mount(WorkspaceFileViewer, {
+        props: {
+          filePath: '/tmp/space/story.md',
+          displayPath: 'story.md',
+          workspaceRoot: '/tmp/space',
+          conversationId: 'conv-paced-reveal',
+          aiActionsEnabled: true,
+          aiStreaming: false,
+          messages: []
+        }
+      })
+      await flushPromises()
+
+      await wrapper.setProps({
+        aiStreaming: true,
+        messages: [
+          { id: 'u1', role: 'user', content: '润色 story.md', status: 'complete' },
+          { id: 'a1', role: 'assistant', content: '', status: 'streaming' }
+        ]
+      })
+      await flushPromises()
+
+      diskText = '# Story\n\n从休眠舱醒来，金属气味先于记忆抵达——我想不起自己的名字。\n'
+      diskMtime = 2000
+      await wrapper.setProps({
+        aiStreaming: false,
+        messages: [
+          { id: 'u1', role: 'user', content: '润色 story.md', status: 'complete' },
+          {
+            id: 'a1',
+            role: 'assistant',
+            content: '已更新 story.md。',
+            status: 'complete',
+            parts: [
+              {
+                type: 'tool-call',
+                id: 't-pace',
+                name: 'file.write',
+                status: 'done',
+                input: JSON.stringify({ path: 'story.md' })
+              }
+            ]
+          }
+        ]
+      })
+      await flushPromises()
+      await nextTick()
+
+      // Changed paragraph keeps leading prefix anchored and wraps newly written words in paced spans.
+      const revealSpans = wrapper.findAll('.WorkspaceFileViewer-RevealWord')
+      expect(revealSpans.length).toBeGreaterThan(2)
+      const paragraphs = wrapper.findAll('.markdown-body > p')
+      expect(paragraphs[1]?.text()).toContain('从休眠舱醒来，')
+      expect(revealSpans.map((n) => n.text()).join('')).not.toContain('从休眠舱醒来')
+
+      // Advance rAF frames -> words reveal progressively, then settle and unwrap cleanly back to text nodes.
+      vi.advanceTimersByTime(120)
+      await nextTick()
+      expect(wrapper.findAll('.WorkspaceFileViewer-RevealWord.is-revealed').length).toBeGreaterThan(0)
+
+      vi.advanceTimersByTime(3400)
+      await nextTick()
+      expect(wrapper.findAll('.WorkspaceFileViewer-RevealWord')).toHaveLength(0)
+      expect(wrapper.find('[data-testid="file-viewer-canvas-sweep"]').exists()).toBe(false)
+      expect(paragraphs[1]?.text()).toContain('我想不起自己的名字。')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

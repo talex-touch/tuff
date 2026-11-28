@@ -15,13 +15,24 @@ import {
 } from '@talex-touch/tuffex/selection-actions'
 import { TxSkeleton } from '@talex-touch/tuffex/skeleton'
 import { TxSpinner } from '@talex-touch/tuffex/spinner'
+import { segmentWords, useStreamPacer, type StreamPacer } from '@talex-touch/tuffex/stream-text'
 import { TxTouchSurface } from '@talex-touch/tuffex/touch-surface'
 import { hasDocument, hasWindow, isElectronRenderer } from '@talex-touch/utils/env'
 import { useAppSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { AgentWorkspaceEvents } from '@talex-touch/utils/transport/sdk/domains/agent-workspace'
 import { ConversationReviewEvents } from '@talex-touch/utils/transport/sdk/domains/conversation-review'
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, watchEffect } from 'vue'
+import {
+  computed,
+  effectScope,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  watch,
+  watchEffect,
+  type EffectScope
+} from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import { SHELL_MENU_CARD } from '~/components/shell/shell-menu-panel'
@@ -53,6 +64,7 @@ import {
   applyCanvasRevisionToSource,
   computeCanvasLineDiff,
   computeChangedBlockIndices,
+  computeInlineRevealSegments,
   extractCanvasRevisionFromReply,
   findTargetAssistantMessage,
   isClaimedDiskUpdateReply,
@@ -427,6 +439,7 @@ interface PendingCanvasSession {
   beforeText: string
   beforeMtimeMs: number
   beforeBlockTexts: string[]
+  beforeRawBlockTexts: string[]
   baseline: CanvasTurnBaseline
   lastSeenWriteCount: number
   diskApplied: boolean
@@ -444,6 +457,8 @@ interface AppliedCanvasSnapshot {
   beforeMtimeMs: number
   afterMtimeMs: number
   diff: CanvasDiffSummary
+  beforeBlockTexts: string[]
+  beforeRawBlockTexts: string[]
   changedBlockIndices: Set<number>
 }
 
@@ -452,6 +467,7 @@ interface AmbientBeforeSnapshot {
   beforeText: string
   beforeMtimeMs: number
   beforeBlockTexts: string[]
+  beforeRawBlockTexts: string[]
 }
 
 interface CanvasComposeSession {
@@ -463,7 +479,17 @@ interface CanvasComposeSession {
   range?: Range
 }
 
+interface OldMarkdownSnapshot {
+  node: HTMLElement
+  top: number
+  left: number
+  width: number
+  height: number
+  contentBottom: number
+}
+
 const markdownEditorRef = ref<InstanceType<typeof TxMarkdownEditor> | null>(null)
+const oldSnapshotHostRef = ref<HTMLElement | null>(null)
 const canvasPhase = ref<CanvasEditPhase>('idle')
 const canvasPending = ref<PendingCanvasSession | null>(null)
 const canvasApplied = ref<AppliedCanvasSnapshot | null>(null)
@@ -493,6 +519,12 @@ let canvasOpToken = 0
 let isUnmounted = false
 
 let sweepTimer: ReturnType<typeof setTimeout> | null = null
+let replaceSweepRaf: number | null = null
+let revealPacerScope: EffectScope | null = null
+let revealPacer: StreamPacer | null = null
+let revealPacerStopWatch: (() => void) | null = null
+let revealWordSpans: HTMLElement[] = []
+let revealPacedBlocks: HTMLElement[] = []
 let canvasWriteInFlight = false
 let canvasFinalizeInFlight = false
 let lastAppliedAssistantId: string | null = null
@@ -671,25 +703,163 @@ function prefersReducedMotion(): boolean {
   )
 }
 
+function teardownInlineReveal(): void {
+  if (replaceSweepRaf !== null && hasWindow() && typeof cancelAnimationFrame === 'function') {
+    cancelAnimationFrame(replaceSweepRaf)
+    replaceSweepRaf = null
+  }
+  if (revealPacerStopWatch) {
+    revealPacerStopWatch()
+    revealPacerStopWatch = null
+  }
+  if (revealPacer) {
+    revealPacer.stop()
+    revealPacer = null
+  }
+  if (revealPacerScope) {
+    revealPacerScope.stop()
+    revealPacerScope = null
+  }
+  if (oldSnapshotHostRef.value) {
+    oldSnapshotHostRef.value.replaceChildren()
+    oldSnapshotHostRef.value.style.removeProperty('top')
+    oldSnapshotHostRef.value.style.removeProperty('left')
+    oldSnapshotHostRef.value.style.removeProperty('width')
+  }
+  if (markdownContainerRef.value) {
+    markdownContainerRef.value.style.removeProperty('--canvas-replace-y')
+    markdownContainerRef.value.style.removeProperty('--canvas-replace-start')
+    markdownContainerRef.value.style.removeProperty('--canvas-replace-old-top')
+    markdownContainerRef.value.style.removeProperty('--canvas-replace-veil-opacity')
+    markdownContainerRef.value.style.removeProperty('min-height')
+  }
+  const parentsToNormalize = new Set<Node>()
+  for (const span of revealWordSpans) {
+    const parent = span.parentNode
+    if (!parent) continue
+    while (span.firstChild) {
+      parent.insertBefore(span.firstChild, span)
+    }
+    parent.removeChild(span)
+    parentsToNormalize.add(parent)
+  }
+  for (const parent of parentsToNormalize) {
+    if (parent instanceof Element || parent instanceof DocumentFragment) {
+      parent.normalize()
+    }
+  }
+  for (const block of revealPacedBlocks) {
+    block.classList.remove('is-canvas-word-paced')
+  }
+  revealWordSpans = []
+  revealPacedBlocks = []
+}
+
 function clearSweepTimer(): void {
   if (sweepTimer !== null) {
     clearTimeout(sweepTimer)
     sweepTimer = null
   }
+  teardownInlineReveal()
+}
+
+function finishCanvasSweep(): void {
+  clearSweepTimer()
+  canvasSweepActive.value = false
+  for (const el of getMarkdownBodyBlocks()) {
+    el.classList.remove('is-canvas-entering', 'is-canvas-word-paced')
+    el.style.removeProperty('--canvas-reveal-delay')
+  }
+}
+
+const PLAIN_REVEAL_BLOCK_TAGS = new Set(['P', 'H1', 'H2', 'H3', 'H4', 'LI', 'BLOCKQUOTE'])
+
+function isPlainRevealBlock(el: HTMLElement): boolean {
+  if (!PLAIN_REVEAL_BLOCK_TAGS.has(el.tagName)) return false
+  if (el.childNodes.length === 0) return false
+  for (const child of Array.from(el.childNodes)) {
+    if (child.nodeType !== Node.TEXT_NODE) return false
+  }
+  return Boolean((el.textContent ?? '').trim())
+}
+
+function getLiveMarkdownBody(): HTMLElement | null {
+  const container = markdownContainerRef.value
+  if (!container) return null
+  return (
+    container.querySelector<HTMLElement>(
+      '.WorkspaceFileViewer-MarkdownEditor .tx-markdown-editor__surface.markdown-body'
+    ) ??
+    container.querySelector<HTMLElement>('.WorkspaceFileViewer-MarkdownEditor .markdown-body') ??
+    container.querySelector<HTMLElement>('.tx-markdown-editor__surface.markdown-body') ??
+    container.querySelector<HTMLElement>('.markdown-body:not([data-canvas-old-snapshot])')
+  )
+}
+
+function captureOldMarkdownSnapshot(): OldMarkdownSnapshot | null {
+  const container = markdownContainerRef.value
+  const body = getLiveMarkdownBody()
+  if (!container || !body) return null
+  const containerRect = container.getBoundingClientRect()
+  const bodyRect = body.getBoundingClientRect()
+  const hasLayout = containerRect.width > 0 && bodyRect.height > 0
+  const clone = body.cloneNode(true) as HTMLElement
+  clone.setAttribute('data-canvas-old-snapshot', 'true')
+  clone.removeAttribute('contenteditable')
+  clone.removeAttribute('tabindex')
+  clone.removeAttribute('id')
+  clone.removeAttribute('data-testid')
+  clone.classList.remove('tx-markdown-editor__surface')
+  for (const span of Array.from(clone.querySelectorAll('.WorkspaceFileViewer-RevealWord'))) {
+    const parent = span.parentNode
+    if (!parent) continue
+    while (span.firstChild) {
+      parent.insertBefore(span.firstChild, span)
+    }
+    parent.removeChild(span)
+  }
+  for (const el of Array.from(clone.querySelectorAll<HTMLElement>('*'))) {
+    el.removeAttribute('id')
+    el.removeAttribute('contenteditable')
+    el.removeAttribute('tabindex')
+    el.removeAttribute('data-testid')
+    el.classList.remove(
+      'is-canvas-targeted',
+      'is-canvas-pending',
+      'is-canvas-changed',
+      'is-canvas-entering',
+      'is-canvas-word-paced'
+    )
+  }
+  const lastChild = body.lastElementChild
+  const contentBottom =
+    hasLayout && lastChild
+      ? Math.max(0, Math.round(lastChild.getBoundingClientRect().bottom - bodyRect.top))
+      : hasLayout
+        ? Math.round(bodyRect.height)
+        : 0
+  return {
+    node: clone,
+    top: hasLayout ? bodyRect.top - containerRect.top : 16,
+    left: hasLayout ? bodyRect.left - containerRect.left : 22,
+    width: hasLayout ? bodyRect.width : 0,
+    height: hasLayout ? bodyRect.height : 0,
+    contentBottom
+  }
 }
 
 function getMarkdownBodyBlocks(): HTMLElement[] {
-  const container = markdownContainerRef.value
-  if (!container) return []
-  const body =
-    container.querySelector('.tx-markdown-editor__surface.markdown-body') ??
-    container.querySelector('.markdown-body')
+  const body = getLiveMarkdownBody()
   if (!body) return []
   return Array.from(body.children).filter((el): el is HTMLElement => el instanceof HTMLElement)
 }
 
 function snapshotMarkdownBlockTexts(): string[] {
   return getMarkdownBodyBlocks().map((el) => normalizeMarkdownMatchText(el.textContent ?? ''))
+}
+
+function snapshotRawMarkdownBlockTexts(): string[] {
+  return getMarkdownBodyBlocks().map((el) => el.textContent ?? '')
 }
 
 function resolvePendingBlockIndices(selection: SelectionPayload): Set<number> {
@@ -811,7 +981,7 @@ function syncMarkdownBlockClasses(entering = false): void {
             const elTop = el.getBoundingClientRect().top - containerRect.top
             progress = Math.max(0, Math.min(1, (elTop - top) / Math.max(1, height)))
           }
-          el.style.setProperty('--canvas-reveal-delay', `${Math.round(progress * 560)}ms`)
+          el.style.setProperty('--canvas-reveal-delay', `${Math.round(progress * 820)}ms`)
         }
       }
 
@@ -993,23 +1163,313 @@ function keepCanvasEdit(): void {
   selectionPrompt.value = ''
 }
 
-function triggerCanvasSweepAnimation(): void {
+function mountMonochromePacedWords(): number {
+  const snapshot = canvasApplied.value
+  if (!snapshot) return 0
+  const blocks = getMarkdownBodyBlocks()
+  if (blocks.length === 0) return 0
+
+  const changed = snapshot.changedBlockIndices
+  const segLocale = String(locale?.value ?? 'zh') || 'zh'
+  const spans: HTMLElement[] = []
+  const pacedBlocks: HTMLElement[] = []
+
+  for (let i = 0; i < blocks.length; i += 1) {
+    if (changed.size > 0 && !changed.has(i)) continue
+    const el = blocks[i]!
+    if (!isPlainRevealBlock(el)) continue
+    const afterText = el.textContent ?? ''
+    const beforeText = snapshot.beforeRawBlockTexts[i] ?? ''
+    const segments = computeInlineRevealSegments(beforeText, afterText)
+    if (!segments.some((seg) => seg.kind === 'reveal' && seg.text.length > 0)) continue
+
+    const doc = el.ownerDocument
+    const frag = doc.createDocumentFragment()
+    let blockWordCount = 0
+    for (const seg of segments) {
+      if (seg.kind === 'anchor') {
+        frag.appendChild(doc.createTextNode(seg.text))
+        continue
+      }
+      const words = segmentWords(seg.text, segLocale)
+      for (const unit of words) {
+        const span = doc.createElement('span')
+        span.className = 'WorkspaceFileViewer-RevealWord'
+        span.textContent = unit.text
+        frag.appendChild(span)
+        spans.push(span)
+        blockWordCount += 1
+        if (unit.ws) {
+          frag.appendChild(doc.createTextNode(unit.ws))
+        }
+      }
+    }
+    if (blockWordCount > 0) {
+      el.textContent = ''
+      el.appendChild(frag)
+      el.classList.add('is-canvas-word-paced')
+      pacedBlocks.push(el)
+    }
+  }
+
+  revealWordSpans = spans
+  revealPacedBlocks = pacedBlocks
+  return spans.length
+}
+
+function triggerCanvasSweepAnimation(oldSnapshot: OldMarkdownSnapshot | null = null): void {
   clearSweepTimer()
   syncMarkdownBlockClasses(true)
   if (prefersReducedMotion()) {
     canvasSweepActive.value = false
     return
   }
+
+  const container = markdownContainerRef.value
+  const body = getLiveMarkdownBody()
+  const blocks = getMarkdownBodyBlocks()
+  const changed = canvasApplied.value?.changedBlockIndices ?? new Set<number>()
+  const targets =
+    changed.size > 0
+      ? blocks.filter((_, idx) => changed.has(idx))
+      : blocks
+
+  const firstChangedIdx =
+    changed.size > 0 ? Math.min(...Array.from(changed.values())) : 0
+
+  // Diagonal reading-flow angle (175deg: gentle 5deg tilt so left leads right across each line).
+  const TILT_RAD = (5 * Math.PI) / 180
+  const SIN_TILT = Math.sin(TILT_RAD)
+  const COS_TILT = Math.cos(TILT_RAD)
+
+  let startY = 0
+  let endY = 260
+  let sweepWidth = 520
+  let oldTop = oldSnapshot?.top ?? 16
+  let hasRealLayout = false
+  if (body && targets.length > 0) {
+    const bodyRect = body.getBoundingClientRect()
+    const firstRect = targets[0]!.getBoundingClientRect()
+    const lastRect = targets[targets.length - 1]!.getBoundingClientRect()
+    hasRealLayout = bodyRect.height > 0 && (firstRect.height > 0 || lastRect.height > 0)
+    if (hasRealLayout) {
+      startY = Math.max(0, Math.round(firstRect.top - bodyRect.top))
+      const newEndY = Math.round(lastRect.bottom - bodyRect.top)
+      const isTailEdited = targets[targets.length - 1] === blocks[blocks.length - 1]
+      const oldEndY =
+        isTailEdited && oldSnapshot && oldSnapshot.contentBottom > 0
+          ? oldSnapshot.contentBottom
+          : newEndY
+      endY = Math.max(newEndY, oldEndY, startY + 72)
+      sweepWidth = Math.min(840, Math.max(240, Math.round(bodyRect.width)))
+    }
+    if (container && bodyRect.height > 0) {
+      const containerRect = container.getBoundingClientRect()
+      oldTop = bodyRect.top - containerRect.top
+      const lastLive = body.lastElementChild
+      const liveBottom = lastLive
+        ? Math.round(lastLive.getBoundingClientRect().bottom - bodyRect.top)
+        : Math.round(bodyRect.height)
+      const reserveHeight = Math.max(
+        oldTop + liveBottom + 28,
+        oldSnapshot && oldSnapshot.contentBottom > 0
+          ? oldSnapshot.top + oldSnapshot.contentBottom + 28
+          : 0
+      )
+      if (reserveHeight > 0) {
+        container.style.minHeight = `${Math.round(reserveHeight)}px`
+      }
+    }
+  }
+
+  // Mount the frozen OLD document snapshot underneath so old text stays quietly visible
+  // in receding muted ink while the fresh NEW layer sweeps diagonally over it.
+  if (oldSnapshot && oldSnapshotHostRef.value) {
+    const oldChildren = Array.from(oldSnapshot.node.children).filter(
+      (el): el is HTMLElement => el instanceof HTMLElement
+    )
+    for (let idx = 0; idx < oldChildren.length; idx += 1) {
+      if (idx < firstChangedIdx) {
+        oldChildren[idx]!.classList.add('is-canvas-old-static')
+      }
+    }
+    const host = oldSnapshotHostRef.value
+    host.replaceChildren(oldSnapshot.node)
+    host.style.top = `${oldSnapshot.top}px`
+    host.style.left = `${oldSnapshot.left}px`
+    if (oldSnapshot.width > 0) {
+      host.style.width = `${oldSnapshot.width}px`
+    } else {
+      host.style.removeProperty('width')
+    }
+  }
+
+  const totalWords = mountMonochromePacedWords()
+
+  // Measure each paced word's exact diagonal coordinate (using first line-box rect so
+  // multi-line wrapped words never report x=0 and jump ahead of earlier words).
+  const wordDiags: number[] = []
+  if (hasRealLayout && body && revealWordSpans.length > 0) {
+    const bodyRect = body.getBoundingClientRect()
+    let prevDiag = 0
+    for (const span of revealWordSpans) {
+      const r = span.getClientRects()[0] ?? span.getBoundingClientRect()
+      const dx = Math.max(0, r.left - bodyRect.left)
+      const dy = Math.max(0, r.top - bodyRect.top)
+      const diag = Math.max(prevDiag, dx * SIN_TILT + dy * COS_TILT)
+      wordDiags.push(diag)
+      prevDiag = diag
+    }
+  }
+
+  const startD = Math.round(startY * COS_TILT)
+  const endD = Math.round(endY * COS_TILT + sweepWidth * SIN_TILT)
+  const sweepSpan = Math.max(180, endD - startD)
+  const sweepDurationMs = Math.min(2900, Math.max(2100, Math.round(sweepSpan * 8.2)))
+  const fromD = startD - 28
+  const toD = endD + 66
+
+  if (container) {
+    container.style.setProperty('--canvas-replace-start', `${startD}px`)
+    container.style.setProperty('--canvas-replace-old-top', `${Math.round(oldTop)}px`)
+    container.style.setProperty('--canvas-replace-y', `${fromD}px`)
+    container.style.setProperty('--canvas-replace-veil-opacity', '0')
+  }
+
   canvasSweepKey.value += 1
   canvasSweepActive.value = true
-  sweepTimer = setTimeout(() => {
-    canvasSweepActive.value = false
-    for (const el of getMarkdownBodyBlocks()) {
-      el.classList.remove('is-canvas-entering')
-      el.style.removeProperty('--canvas-reveal-delay')
+
+  let sweepDone = !container || !isMarkdown.value || viewMode.value !== 'preview'
+  let pacerDone = totalWords === 0
+
+  const maybeFinish = (): void => {
+    if (sweepDone && pacerDone) {
+      finishCanvasSweep()
     }
-    sweepTimer = null
-  }, 1480)
+  }
+
+  if (!sweepDone && container) {
+    let startTs: number | null = null
+    const applySweepFrame = (rawProgress: number): void => {
+      const clamped = Math.max(0, Math.min(1, rawProgress))
+      // Smooth easeInOutSine: gentle launch, natural reading cadence, soft effortless settle.
+      const eased = 0.5 - 0.5 * Math.cos(Math.PI * clamped)
+      const curD = fromD + (toD - fromD) * eased
+      const veilAlpha =
+        clamped < 0.08
+          ? clamped / 0.08
+          : clamped > 0.86
+            ? Math.max(0, (1 - clamped) / 0.14)
+            : 1
+      container.style.setProperty('--canvas-replace-y', `${curD.toFixed(1)}px`)
+      container.style.setProperty('--canvas-replace-veil-opacity', veilAlpha.toFixed(3))
+
+      if (wordDiags.length === revealWordSpans.length && wordDiags.length > 0) {
+        for (let idx = 0; idx < wordDiags.length; idx += 1) {
+          const wd = wordDiags[idx]!
+          if (wd <= curD + 16) {
+            revealWordSpans[idx]?.classList.add('is-revealed')
+          }
+          if (wd <= curD - 74) {
+            revealWordSpans[idx]?.classList.add('is-settled')
+          }
+        }
+      }
+    }
+
+    applySweepFrame(0)
+    if (hasWindow() && typeof requestAnimationFrame === 'function') {
+      const tick = (now: number): void => {
+        if (!canvasSweepActive.value) return
+        if (startTs === null) {
+          startTs = now
+        }
+        const elapsed = Math.max(0, now - startTs)
+        const progress = Math.min(1, elapsed / sweepDurationMs)
+        applySweepFrame(progress)
+        if (progress >= 1) {
+          replaceSweepRaf = null
+          sweepDone = true
+          maybeFinish()
+          return
+        }
+        replaceSweepRaf = requestAnimationFrame(tick)
+      }
+      replaceSweepRaf = requestAnimationFrame(tick)
+    } else {
+      sweepDone = true
+    }
+  }
+
+  if (totalWords > 0) {
+    const drainWindowMs = Math.round(sweepDurationMs * 0.9)
+    const wordPaceMs = Math.max(16, Math.min(30, Math.round(drainWindowMs / totalWords)))
+    const settleWindowMs = 520
+    const scope = effectScope(true)
+    revealPacerScope = scope
+    scope.run(() => {
+      const pacer = useStreamPacer({
+        total: () => totalWords,
+        streaming: () => false,
+        appear: true,
+        wordMs: () => wordPaceMs,
+        maxLagMs: () => 1400,
+        drainMs: () => drainWindowMs,
+        settleMs: () => settleWindowMs,
+        paced: () => true
+      })
+      revealPacer = pacer
+
+      let lastRevealed = 0
+      let lastSettled = 0
+      revealPacerStopWatch = watch(
+        [pacer.revealed, pacer.settled, pacer.state],
+        ([revealedCount, settledCount, state]) => {
+          // When layout coordinates exist, the 175deg frontier drives exact glyph timing;
+          // pacer still acts as the rhythmic completion & headless/jsdom driver.
+          if (wordDiags.length === 0) {
+            for (
+              let idx = lastRevealed;
+              idx < revealedCount && idx < revealWordSpans.length;
+              idx += 1
+            ) {
+              revealWordSpans[idx]?.classList.add('is-revealed')
+            }
+            lastRevealed = Math.max(lastRevealed, revealedCount)
+            for (
+              let idx = lastSettled;
+              idx < settledCount && idx < revealWordSpans.length;
+              idx += 1
+            ) {
+              revealWordSpans[idx]?.classList.add('is-settled')
+            }
+            lastSettled = Math.max(lastSettled, settledCount)
+          }
+          if (state === 'done' && settledCount >= revealWordSpans.length) {
+            pacerDone = true
+            maybeFinish()
+          }
+        },
+        { immediate: true }
+      )
+    })
+
+    // Safety cleanup in case rAF is throttled in a background tab.
+    sweepTimer = setTimeout(
+      () => {
+        finishCanvasSweep()
+      },
+      Math.min(4000, Math.max(2500, sweepDurationMs + settleWindowMs + 420))
+    )
+    return
+  }
+
+  sweepTimer = setTimeout(
+    () => {
+      finishCanvasSweep()
+    },
+    sweepDurationMs + 320
+  )
 }
 
 // ── Direct Markdown Editing & Safe Debounced Disk Persistence ───────────────────────
@@ -1330,6 +1790,7 @@ function commitCanvasVisualTransition(
   beforeText: string,
   beforeMtimeMs: number,
   beforeBlockTexts: string[],
+  beforeRawBlockTexts: string[],
   meta: {
     source: CanvasAppliedSource
     actionId: string
@@ -1341,6 +1802,10 @@ function commitCanvasVisualTransition(
   const afterText = nextData.text ?? ''
   const diff = computeCanvasLineDiff(beforeText, afterText)
   const targetPath = nextData.path || resolvedPath.value
+  // Capture the rendered OLD document pixel-for-pixel BEFORE committing nextData,
+  // so old text remains cleanly visible underneath while the new layer sweeps over it.
+  const oldSnapshot =
+    isMarkdown.value && viewMode.value === 'preview' ? captureOldMarkdownSnapshot() : null
   data.value = nextData
   markDiskSynced(targetPath, afterText, nextData.mtimeMs)
   canvasPhase.value = 'applied'
@@ -1360,6 +1825,8 @@ function commitCanvasVisualTransition(
     beforeMtimeMs,
     afterMtimeMs: nextData.mtimeMs,
     diff,
+    beforeBlockTexts,
+    beforeRawBlockTexts,
     changedBlockIndices: new Set()
   }
 
@@ -1372,7 +1839,7 @@ function commitCanvasVisualTransition(
       ...canvasApplied.value,
       changedBlockIndices: changedBlocks
     }
-    triggerCanvasSweepAnimation()
+    triggerCanvasSweepAnimation(oldSnapshot)
   })
 }
 
@@ -1408,6 +1875,11 @@ async function syncFromDisk(options: {
     : ambientSnap
       ? ambientSnap.beforeBlockTexts
       : snapshotMarkdownBlockTexts()
+  const beforeRawBlockTexts = session
+    ? session.beforeRawBlockTexts
+    : ambientSnap
+      ? ambientSnap.beforeRawBlockTexts
+      : snapshotRawMarkdownBlockTexts()
 
   try {
     const fresh = await transport.send(AgentWorkspaceEvents.readFile, {
@@ -1431,7 +1903,9 @@ async function syncFromDisk(options: {
       return false
     }
     const freshText = fresh.text ?? ''
-    if (freshText === diskBaselineText) {
+    const latestSyncedText =
+      targetPath === lastPersistedPath ? lastPersistedText : diskBaselineText
+    if (freshText === diskBaselineText || freshText === latestSyncedText) {
       return false
     }
 
@@ -1477,13 +1951,20 @@ async function syncFromDisk(options: {
     ambientBeforeSnapshot.value = null
     const tail = props.messages.at(-1)
     ambientSettledMessageId.value = tail?.role === 'assistant' ? tail.id : null
-    commitCanvasVisualTransition(fresh, beforeText, beforeMtimeMs, beforeBlockTexts, {
-      source: options.reason,
-      actionId: session?.actionId ?? 'sync',
-      scope: session?.scope ?? 'selection',
-      selectedText: session?.selectedText ?? '',
-      sourceRange: session?.sourceRange ?? null
-    })
+    commitCanvasVisualTransition(
+      fresh,
+      beforeText,
+      beforeMtimeMs,
+      beforeBlockTexts,
+      beforeRawBlockTexts,
+      {
+        source: options.reason,
+        actionId: session?.actionId ?? 'sync',
+        scope: session?.scope ?? 'selection',
+        selectedText: session?.selectedText ?? '',
+        sourceRange: session?.sourceRange ?? null
+      }
+    )
     return true
   } catch {
     return false
@@ -1610,6 +2091,7 @@ async function finalizePendingCanvasSession(target: ConversationMessage): Promis
         session.beforeText,
         session.beforeMtimeMs,
         session.beforeBlockTexts,
+        session.beforeRawBlockTexts,
         {
           source: 'improve',
           actionId: session.actionId,
@@ -1718,6 +2200,7 @@ async function startCanvasImprove(
   const beforeText = data.value.text ?? ''
   const beforeMtimeMs = data.value.mtimeMs
   const beforeBlockTexts = snapshotMarkdownBlockTexts()
+  const beforeRawBlockTexts = snapshotRawMarkdownBlockTexts()
   const pendingIndices = options?.blockIndices
     ? new Set(options.blockIndices)
     : resolvePendingBlockIndices(selection)
@@ -1754,6 +2237,7 @@ async function startCanvasImprove(
     beforeText,
     beforeMtimeMs,
     beforeBlockTexts,
+    beforeRawBlockTexts,
     baseline: {
       knownMessageIds: new Set(props.messages.map((m) => m.id)),
       initialCount: props.messages.length,
@@ -1892,7 +2376,8 @@ watch(isCanvasLocked, (locked, prevLocked) => {
           targetPath === lastPersistedPath && lastPersistedMtimeMs !== undefined
             ? lastPersistedMtimeMs
             : data.value.mtimeMs,
-        beforeBlockTexts: snapshotMarkdownBlockTexts()
+        beforeBlockTexts: snapshotMarkdownBlockTexts(),
+        beforeRawBlockTexts: snapshotRawMarkdownBlockTexts()
       }
     }
   } else if (prevLocked && ambientBeforeSnapshot.value && canvasPhase.value !== 'applied') {
@@ -3117,6 +3602,7 @@ function adjustZoom(delta: number): void {
                 ref="markdownContainerRef"
                 class="WorkspaceFileViewer-Markdown"
                 :class="{
+                  'is-dark': beamTheme === 'dark',
                   'is-canvas-locked': isCanvasLocked,
                   'is-canvas-sweeping': canvasSweepActive
                 }"
@@ -3142,19 +3628,24 @@ function adjustZoom(delta: number): void {
                   @update:model-value="handleMarkdownEditorInput"
                   @blur="handleMarkdownEditorBlur"
                 />
+                <!-- Underlayer: frozen OLD markdown snapshot staying calmly in place underneath while NEW covers it -->
+                <div
+                  v-show="canvasSweepActive"
+                  ref="oldSnapshotHostRef"
+                  class="WorkspaceFileViewer-CanvasOldLayer tx-markdown-editor"
+                  :class="{ 'tx-markdown-editor--dark': beamTheme === 'dark' }"
+                  aria-hidden="true"
+                  data-testid="file-viewer-canvas-old-layer"
+                />
+                <!-- Paper-matched gradient mist riding seamlessly along the active old->new frontier -->
                 <div
                   v-if="canvasSweepActive"
                   :key="canvasSweepKey"
-                  class="WorkspaceFileViewer-CanvasWipe"
-                  :class="`is-${beamTheme}`"
-                  :style="canvasSweepStyle"
+                  class="WorkspaceFileViewer-CanvasReplaceVeilHost"
                   aria-hidden="true"
                   data-testid="file-viewer-canvas-sweep"
                 >
-                  <div class="WorkspaceFileViewer-CanvasWipeCurtain">
-                    <div class="WorkspaceFileViewer-CanvasWipeVeil" />
-                    <div class="WorkspaceFileViewer-CanvasWipeEdge" />
-                  </div>
+                  <div class="WorkspaceFileViewer-CanvasReplaceVeil" />
                 </div>
               </div>
 
@@ -4900,8 +5391,8 @@ function adjustZoom(delta: number): void {
     }
   }
 
-  // Newly applied blocks: crisp prismatic-to-primary straight margin hairline (zero box clutter),
-  // paired with synchronized curtain-clip ink materialization & ephemeral chromatic wash.
+  // Newly applied blocks: restrained monochrome margin hairline once settled into review
+  // (hidden while sweeping so the paper stays 100% pure, borderless, and seamless).
   :deep(.markdown-body > .is-canvas-changed) {
     position: relative;
     z-index: 0;
@@ -4912,49 +5403,148 @@ function adjustZoom(delta: number): void {
       top: 3px;
       bottom: 3px;
       left: -12px;
-      width: 2.5px;
+      width: 2px;
       border-radius: 999px;
-      background: linear-gradient(
-        180deg,
-        #38bdf8 0%,
-        color-mix(in srgb, var(--shell-primary, #2b7fd9) 68%, #a855f7 32%) 52%,
-        rgba(244, 63, 94, 0.78) 100%
-      );
+      background: color-mix(in srgb, var(--shell-text-primary) 26%, transparent);
+      opacity: 1;
+      transition: opacity 320ms cubic-bezier(0.22, 1, 0.36, 1);
       pointer-events: none;
     }
   }
 
-  @media (prefers-reduced-motion: no-preference) {
-    :deep(.markdown-body > .is-canvas-entering) {
-      animation: canvas-block-materialize 660ms cubic-bezier(0.22, 1, 0.36, 1) both;
-      animation-delay: var(--canvas-reveal-delay, calc(var(--canvas-stagger-idx, 0) * 56ms));
+  &.is-canvas-sweeping {
+    :deep(.markdown-body > .is-canvas-changed::before) {
+      opacity: 0;
+    }
 
-      &::after {
-        content: '';
-        position: absolute;
-        inset: -3px -10px;
-        z-index: -1;
-        border-radius: 8px;
-        background: linear-gradient(
-          92deg,
-          rgba(56, 189, 248, 0.22) 0%,
-          rgba(129, 140, 248, 0.19) 36%,
-          rgba(192, 132, 252, 0.18) 68%,
-          rgba(251, 113, 133, 0.14) 100%
-        );
-        pointer-events: none;
-        animation: canvas-block-sheen 1320ms cubic-bezier(0.22, 1, 0.36, 1) both;
-        animation-delay: var(--canvas-reveal-delay, calc(var(--canvas-stagger-idx, 0) * 56ms));
+    // NEW layer paints cleanly on top using the EXACT same paper color (--shell-bg),
+    // gliding along a gentle 175deg reading diagonal over the quiet receding OLD layer.
+    :deep(.WorkspaceFileViewer-MarkdownEditor.tx-markdown-editor) {
+      position: relative;
+      z-index: 2;
+      background: var(--shell-bg);
+      mask-image: linear-gradient(
+        175deg,
+        #000 0px,
+        #000 max(var(--canvas-replace-start, 0px), calc(var(--canvas-replace-y, 0px) - 48px)),
+        rgba(0, 0, 0, 0.82)
+          max(var(--canvas-replace-start, 0px), calc(var(--canvas-replace-y, 0px) - 20px)),
+        rgba(0, 0, 0, 0.16)
+          max(var(--canvas-replace-start, 0px), calc(var(--canvas-replace-y, 0px) - 4px)),
+        transparent max(var(--canvas-replace-start, 0px), calc(var(--canvas-replace-y, 0px) + 4px)),
+        transparent 100%
+      );
+      -webkit-mask-image: linear-gradient(
+        175deg,
+        #000 0px,
+        #000 max(var(--canvas-replace-start, 0px), calc(var(--canvas-replace-y, 0px) - 48px)),
+        rgba(0, 0, 0, 0.82)
+          max(var(--canvas-replace-start, 0px), calc(var(--canvas-replace-y, 0px) - 20px)),
+        rgba(0, 0, 0, 0.16)
+          max(var(--canvas-replace-start, 0px), calc(var(--canvas-replace-y, 0px) - 4px)),
+        transparent max(var(--canvas-replace-start, 0px), calc(var(--canvas-replace-y, 0px) + 4px)),
+        transparent 100%
+      );
+    }
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    :deep(.WorkspaceFileViewer-RevealWord) {
+      opacity: 0.18;
+      filter: blur(3px);
+      will-change: opacity, filter;
+
+      &.is-revealed {
+        animation: canvas-word-reveal-light 540ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
       }
+
+      &.is-settled {
+        opacity: 1;
+        filter: none;
+        text-shadow: none;
+        animation: none;
+        will-change: auto;
+      }
+    }
+
+    &.is-dark :deep(.WorkspaceFileViewer-RevealWord.is-revealed) {
+      animation: canvas-word-reveal-dark 560ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
     }
   }
 }
 
-/* ── Iridescent Prismatic Scanline Curtain (GPT Canvas / Writing Tools Replacement Reveal) ── */
+/* ── Seamless Same-Paper Diagonal Old->New Cover (Zero Boxes, Luminous Monochrome Ink) ── */
+.WorkspaceFileViewer-CanvasOldLayer {
+  position: absolute;
+  top: 16px;
+  left: 22px;
+  width: calc(100% - 44px);
+  z-index: 1;
+  pointer-events: none;
+  user-select: none;
+  overflow: hidden;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  mask-image: linear-gradient(
+    175deg,
+    transparent 0px,
+    transparent calc(var(--canvas-replace-y, 0px) - 2px),
+    rgba(0, 0, 0, 0.42) calc(var(--canvas-replace-y, 0px) + 20px),
+    #000 calc(var(--canvas-replace-y, 0px) + 48px),
+    #000 100%
+  );
+  -webkit-mask-image: linear-gradient(
+    175deg,
+    transparent 0px,
+    transparent calc(var(--canvas-replace-y, 0px) - 2px),
+    rgba(0, 0, 0, 0.42) calc(var(--canvas-replace-y, 0px) + 20px),
+    #000 calc(var(--canvas-replace-y, 0px) + 48px),
+    #000 100%
+  );
+
+  // Calmly soften receding OLD blocks below the frontier so fresh 100% NEW ink
+  // reads with immediate effortless visual hierarchy (unchanged header stays 100% static).
+  @media (prefers-reduced-motion: no-preference) {
+    :deep(.markdown-body > *:not(.is-canvas-old-static)) {
+      animation: canvas-old-recede 320ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    }
+  }
+}
+
+.WorkspaceFileViewer-CanvasReplaceVeilHost {
+  position: absolute;
+  top: var(--canvas-replace-old-top, 16px);
+  right: 22px;
+  bottom: 0;
+  left: 22px;
+  z-index: 3;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.WorkspaceFileViewer-CanvasReplaceVeil {
+  position: absolute;
+  inset: 0;
+  opacity: var(--canvas-replace-veil-opacity, 0);
+  will-change: opacity;
+  background: linear-gradient(
+    175deg,
+    transparent 0px,
+    transparent max(var(--canvas-replace-start, 0px), calc(var(--canvas-replace-y, 0px) - 32px)),
+    color-mix(in srgb, var(--shell-bg) 72%, transparent)
+      max(var(--canvas-replace-start, 0px), var(--canvas-replace-y, 0px)),
+    transparent max(var(--canvas-replace-start, 0px), calc(var(--canvas-replace-y, 0px) + 32px)),
+    transparent 100%
+  );
+}
+
+/* ── Subtle Same-Paper Veil for Code Viewer Sweep ── */
 .WorkspaceFileViewer-CanvasWipe {
   position: absolute;
-  right: 8px;
-  left: 8px;
+  right: 0;
+  left: 0;
   top: 0;
   height: 100%;
   overflow: hidden;
@@ -4967,71 +5557,29 @@ function adjustZoom(delta: number): void {
   right: 0;
   left: 0;
   top: 0;
-  height: 92px;
-  transform: translate3d(0, -92px, 0);
+  height: 112px;
+  transform: translate3d(0, -112px, 0);
   will-change: transform, opacity;
 
   @media (prefers-reduced-motion: no-preference) {
-    animation: canvas-wipe-sweep 1060ms cubic-bezier(0.32, 0.08, 0.24, 1) forwards;
+    animation: canvas-wipe-sweep 2000ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
   }
 }
 
 .WorkspaceFileViewer-CanvasWipeVeil {
   position: absolute;
-  inset: 0 0 2px 0;
-  background:
-    linear-gradient(
-      to bottom,
-      transparent 0%,
-      rgba(56, 189, 248, 0.08) 40%,
-      rgba(168, 85, 247, 0.2) 78%,
-      rgba(244, 63, 94, 0.24) 100%
-    ),
-    linear-gradient(
-      90deg,
-      rgba(56, 189, 248, 0.24) 0%,
-      rgba(99, 102, 241, 0.24) 34%,
-      rgba(192, 132, 252, 0.25) 66%,
-      rgba(251, 146, 60, 0.22) 100%
-    );
-  mask-image: linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 0.45) 48%, #000 100%);
-  -webkit-mask-image: linear-gradient(
+  inset: 0;
+  background: linear-gradient(
     to bottom,
     transparent 0%,
-    rgba(0, 0, 0, 0.45) 48%,
-    #000 100%
+    color-mix(in srgb, var(--shell-bg) 52%, transparent) 42%,
+    color-mix(in srgb, var(--shell-bg) 72%, transparent) 60%,
+    transparent 100%
   );
-
-  .WorkspaceFileViewer-CanvasWipe.is-dark & {
-    opacity: 1.3;
-  }
 }
 
 .WorkspaceFileViewer-CanvasWipeEdge {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  height: 3px;
-  border-radius: 999px;
-  background: linear-gradient(
-    90deg,
-    rgba(6, 182, 212, 0.25) 0%,
-    #06b6d4 16%,
-    #3b82f6 38%,
-    #8b5cf6 60%,
-    #ec4899 82%,
-    rgba(245, 158, 11, 0.35) 100%
-  );
-  box-shadow:
-    0 0 16px 3px rgba(99, 102, 241, 0.56),
-    0 0 32px 6px rgba(236, 72, 153, 0.32);
-
-  .WorkspaceFileViewer-CanvasWipe.is-dark & {
-    box-shadow:
-      0 0 20px 4px rgba(129, 140, 248, 0.72),
-      0 0 38px 8px rgba(236, 72, 153, 0.44);
-  }
+  display: none;
 }
 
 /* ── Inline Canvas Diff View ── */
@@ -5222,13 +5770,13 @@ function adjustZoom(delta: number): void {
   }
 
   &.is-canvas-changed {
-    background: color-mix(in srgb, var(--shell-primary) 5%, transparent);
-    box-shadow: inset 2px 0 0 color-mix(in srgb, var(--shell-primary) 62%, transparent);
+    background: color-mix(in srgb, var(--shell-text-primary) 4%, transparent);
+    box-shadow: inset 2px 0 0 color-mix(in srgb, var(--shell-text-primary) 28%, transparent);
   }
 
   @media (prefers-reduced-motion: no-preference) {
     &.is-canvas-entering {
-      animation: canvas-block-reveal 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
+      animation: canvas-block-reveal 620ms cubic-bezier(0.22, 1, 0.36, 1) both;
     }
   }
 }
@@ -5797,61 +6345,74 @@ function adjustZoom(delta: number): void {
 @keyframes canvas-wipe-sweep {
   0% {
     opacity: 0;
-    transform: translate3d(0, -92px, 0);
+    transform: translate3d(0, -132px, 0);
   }
 
-  10% {
+  12% {
     opacity: 1;
   }
 
-  88% {
-    opacity: 1;
-    transform: translate3d(0, calc(var(--canvas-sweep-travel, 240px) - 92px), 0);
+  84% {
+    opacity: 0.92;
+    transform: translate3d(0, calc(var(--canvas-sweep-travel, 240px) - 110px), 0);
   }
 
   100% {
     opacity: 0;
-    transform: translate3d(0, calc(var(--canvas-sweep-travel, 240px) - 60px), 0);
+    transform: translate3d(0, calc(var(--canvas-sweep-travel, 240px) - 72px), 0);
   }
 }
 
-@keyframes canvas-block-materialize {
+@keyframes canvas-old-recede {
   0% {
-    opacity: 0;
-    clip-path: inset(0 0 100% 0);
-    transform: translateY(-4px);
-    filter: blur(4px);
+    opacity: 1;
   }
 
-  58% {
+  100% {
+    opacity: 0.42;
+  }
+}
+
+@keyframes canvas-word-reveal-light {
+  0% {
+    opacity: 0.18;
+    filter: blur(3.5px);
+    text-shadow: 0 0 8px rgba(29, 29, 31, 0.14);
+  }
+
+  44% {
     opacity: 0.96;
-    clip-path: inset(0 0 0% 0);
-    transform: translateY(0);
-    filter: blur(0.4px);
+    filter: blur(0.45px);
+    text-shadow: 0 0 5px rgba(29, 29, 31, 0.07);
   }
 
   100% {
     opacity: 1;
-    clip-path: inset(0 0 0% 0);
-    transform: translateY(0);
     filter: blur(0);
+    text-shadow: none;
   }
 }
 
-@keyframes canvas-block-sheen {
+@keyframes canvas-word-reveal-dark {
   0% {
-    opacity: 0;
-    transform: scaleX(0.96);
+    opacity: 0.22;
+    filter: blur(3.5px);
+    color: #ffffff;
+    text-shadow: 0 0 14px rgba(255, 255, 255, 0.55);
   }
 
-  18% {
+  42% {
     opacity: 1;
-    transform: scaleX(1);
+    filter: blur(0.5px);
+    color: #ffffff;
+    text-shadow: 0 0 10px rgba(255, 255, 255, 0.28);
   }
 
   100% {
-    opacity: 0;
-    transform: scaleX(1);
+    opacity: 1;
+    filter: blur(0);
+    color: inherit;
+    text-shadow: none;
   }
 }
 
