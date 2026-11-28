@@ -16,6 +16,7 @@ interface PendingThumbnail {
   resolve: (value: ThumbnailGenerationResult) => void
   reject: (error: Error) => void
   startedAt: number
+  timeout: ReturnType<typeof setTimeout>
 }
 
 interface PendingMetrics {
@@ -31,6 +32,7 @@ type WorkerMessage =
 const fileProviderLog = getLogger('file-provider')
 const FILE_THUMBNAIL_NAMESPACE = 'file/thumbnails'
 const FILE_THUMBNAIL_RETENTION_MS = 7 * 24 * 60 * 60_000
+const DEFAULT_THUMBNAIL_TASK_TIMEOUT_MS = 25_000
 let thumbnailNamespaceRegistered = false
 
 function ensureThumbnailNamespace(): string {
@@ -56,11 +58,20 @@ export class ThumbnailWorkerClient {
   private workerStartedAt: number | null = null
   private lastMetricsSample: { at: number; cpuUsage: WorkerMetricsPayload['cpuUsage'] } | null =
     null
+  private closed = false
+  private readonly taskTimeoutMs: number
   private readonly idleShutdown = new IdleWorkerShutdownController({
     timeoutMs: FILE_WORKER_IDLE_SHUTDOWN_MS,
     shouldShutdown: () => this.pending.size === 0 && this.metricsPending.size === 0,
     shutdown: () => this.terminateWorker()
   })
+
+  constructor(options?: { taskTimeoutMs?: number }) {
+    this.taskTimeoutMs =
+      typeof options?.taskTimeoutMs === 'number' && options.taskTimeoutMs > 0
+        ? options.taskTimeoutMs
+        : DEFAULT_THUMBNAIL_TASK_TIMEOUT_MS
+  }
 
   async generate(
     filePath: string,
@@ -75,7 +86,15 @@ export class ThumbnailWorkerClient {
     const outputDir = ensureThumbnailNamespace()
 
     return new Promise<ThumbnailGenerationResult>((resolve, reject) => {
-      this.pending.set(taskId, { resolve, reject, startedAt })
+      const timeout = setTimeout(() => {
+        if (!this.pending.has(taskId)) return
+        this.handleWorkerError(
+          new Error(`THUMBNAIL_WORKER_TIMEOUT: task ${taskId} exceeded ${this.taskTimeoutMs}ms`)
+        )
+      }, this.taskTimeoutMs)
+      timeout.unref?.()
+
+      this.pending.set(taskId, { resolve, reject, startedAt, timeout })
 
       worker.postMessage({
         type: 'thumbnail',
@@ -106,10 +125,25 @@ export class ThumbnailWorkerClient {
   }
 
   shutdown(): void {
+    this.closed = true
+    const error = new Error('THUMBNAIL_WORKER_CLOSED')
+    for (const [, pending] of this.pending) {
+      clearTimeout(pending.timeout)
+      pending.reject(error)
+    }
+    this.pending.clear()
+    for (const [, pending] of this.metricsPending) {
+      clearTimeout(pending.timeout)
+      pending.resolve(null)
+    }
+    this.metricsPending.clear()
     this.terminateWorker()
   }
 
   private ensureWorker(): Worker {
+    if (this.closed) {
+      throw new Error('THUMBNAIL_WORKER_CLOSED')
+    }
     this.idleShutdown.cancel()
     if (this.worker) return this.worker
 
@@ -120,9 +154,15 @@ export class ThumbnailWorkerClient {
     worker.on('message', (message: WorkerMessage) => this.handleMessage(message))
     worker.on('error', (error) => this.handleWorkerError(error))
     worker.on('exit', (code) => {
-      if (this.worker === worker && code !== 0) {
+      if (this.worker !== worker) return
+      if (code !== 0 || this.pending.size > 0 || this.metricsPending.size > 0) {
         this.handleWorkerError(new Error(`ThumbnailWorker exited with code ${code}`))
+        return
       }
+      this.idleShutdown.cancel()
+      this.worker = null
+      this.workerStartedAt = null
+      this.lastMetricsSample = null
     })
 
     this.worker = worker
@@ -145,6 +185,7 @@ export class ThumbnailWorkerClient {
     if (!pending) return
 
     if (message.type === 'done') {
+      clearTimeout(pending.timeout)
       this.pending.delete(message.taskId)
       pending.resolve(message.thumbnail)
       this.lastTask = {
@@ -159,6 +200,7 @@ export class ThumbnailWorkerClient {
     }
 
     if (message.type === 'error') {
+      clearTimeout(pending.timeout)
       this.pending.delete(message.taskId)
       this.lastError = message.error
       this.lastTask = {
@@ -176,6 +218,7 @@ export class ThumbnailWorkerClient {
   private handleWorkerError(error: Error): void {
     if (this.pending.size > 0) {
       for (const [, pending] of this.pending) {
+        clearTimeout(pending.timeout)
         pending.reject(error)
       }
       this.pending.clear()

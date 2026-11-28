@@ -157,6 +157,7 @@ import {
   type AppSearchFinishOptions
 } from './app-search-pipeline'
 import { AppSearchCatalogService } from './services/app-search-catalog-service'
+import { resolveAuthoritativeExecuteLaunch } from './services/app-execute-authority'
 import { searchIndexCommitHub } from '../../search-engine/search-index-commit-hub'
 import type { AppLaunchKind, ScannedAppInfo } from './app-types'
 
@@ -3439,45 +3440,34 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
   async onExecute(args: IExecuteArgs): Promise<IProviderActivate | null> {
     const { item, searchResult, eventId } = args
-
-    const appMeta = (item.meta?.app as
-      | {
-          path?: string
-          launchKind?: AppLaunchKind
-          launchTarget?: string
-          launchArgs?: string
-          workingDirectory?: string
-        }
-      | undefined) ?? { path: undefined }
-    const appPath = appMeta.path
-    if (!appPath) {
-      logApp('Execution failed: App path not found', LogStyle.error)
+    const appMeta = (item.meta?.app as { path?: string } | undefined) ?? { path: undefined }
+    const resolved = await resolveAuthoritativeExecuteLaunch(
+      {
+        searchCatalog: this.searchCatalog,
+        dbUtils: this.dbUtils,
+        fetchExtensionsForFiles: (files) => this.fetchExtensionsForFiles(files),
+        mapDbAppToScannedInfo: (row) => this._mapDbAppToScannedInfo(row)
+      },
+      item.id,
+      appMeta.path,
+      item.render?.basic?.title
+    )
+    if (resolved.status !== 'ok') {
+      logApp(
+        resolved.status === 'refused'
+          ? `Execution refused: App is not in authoritative app index (${item.id})`
+          : 'Execution failed: App path not found',
+        resolved.status === 'refused' ? LogStyle.warning : LogStyle.error
+      )
       return null
     }
-
-    const launchKind = appMeta.launchKind || 'path'
-    const launchTarget =
-      launchKind === 'uwp' && isWindowsUwpShellPath(appMeta.launchTarget || appPath)
-        ? (appMeta.launchTarget || appPath).replace(/^shell:AppsFolder\\/i, '')
-        : appMeta.launchTarget || appPath
-    const launchArgs = appMeta.launchArgs
-    const workingDirectory = appMeta.workingDirectory
-
     // Foreground read before the launch is handed over: once the target is frontmost, "what the
     // user came from" is gone. Awaited before `launchApp` below for the same reason — a read left
     // to race reports the launched app as the app it was launched from (3s-cached in the common
     // case).
     const previous = await resolvePreviousAppContext()
 
-    const outcome = await launchApp({
-      name: item.render?.basic?.title,
-      path: appPath,
-      launchKind,
-      launchTarget,
-      launchArgs,
-      workingDirectory,
-      sourceItemId: item.id
-    })
+    const outcome = await launchApp({ ...resolved.params, sourceItemId: item.id })
 
     // Only a launch the OS accepted is a use. A missing path, a failed open and a launch that was
     // merely scheduled are not, and a count recorded before this point could not tell them apart.

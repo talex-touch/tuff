@@ -623,11 +623,20 @@ export interface PiCliToolOptions {
 }
 
 /**
+ * Prevents untrusted prompt text from matching `pi`/`omp`'s positional `@file` attachment syntax.
+ * Only triggers when the prompt starts with `@` (even after leading whitespace), leaving ordinary
+ * prompts byte-identical.
+ */
+export function neutralizePiPositionalPrompt(text: string): string {
+  return /^\s*@/.test(text) ? `User: ${text}` : text
+}
+
+/**
  * Builds the argument vector for one run.
  *
  * `attachmentPaths` are files already written to disk by the caller; they become `pi`'s `@file`
  * positional arguments, which the CLI reads before the message that follows them
- * (`pi [options] [@files...] [messages...]`).
+ * (`pi [options] -- [@files...] [messages...]`).
  *
  * `thinking` is the level main planned for this run (`--thinking`, pi 0.84.3 `--help`: off,
  * minimal, low, medium, high, xhigh, max); pi clamps it to what the model offers. Absent — the
@@ -669,8 +678,9 @@ export function buildPiArgs(
 
   if (model) args.push('--model', model)
   if (thinking) args.push('--thinking', thinking)
+  args.push('--')
   for (const path of attachmentPaths) args.push(`@${path}`)
-  args.push(prompt.prompt)
+  args.push(neutralizePiPositionalPrompt(prompt.prompt))
   return args
 }
 
@@ -710,8 +720,9 @@ export function buildOmpArgs(
   ]
 
   if (model) args.push('--model', model)
+  args.push('--')
   for (const path of attachmentPaths) args.push(`@${path}`)
-  args.push(prompt.prompt)
+  args.push(neutralizePiPositionalPrompt(prompt.prompt))
   return args
 }
 

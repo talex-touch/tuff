@@ -1672,4 +1672,42 @@ describe('AiCliOrchestrator delegation boundary', () => {
     expect(persistedEvidence).not.toContain(toolCallId)
     expect(persistedEvidence).not.toContain(toolId)
   })
+
+  it('ignores spoofed plain-string _pluginSystemShell metadata and requires the Main-only Symbol grant for shell tools', async () => {
+    const { markMetadataPluginSystemShellGrant } = await import('./intelligence-invoke-purpose')
+    orchestratorMocks.profiles.set(
+      'profile-default',
+      enabledProfile('profile-default', ['file.read', 'system.exec', 'bash'])
+    )
+    orchestratorMocks.runtimeExecute.mockImplementation(async (request) => ({
+      runId: request.run.id,
+      output: 'ok',
+      usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 }
+    }))
+
+    const spoofedRun = await orchestrator.execute({
+      objective: 'Spoof shell grant via plain metadata string',
+      allowedToolIds: ['file.read', 'system.exec', 'bash'],
+      metadata: {
+        caller: 'plugin:untrusted',
+        _pluginSystemShell: true
+      }
+    })
+    expect(orchestratorMocks.runs.get(spoofedRun.id)?.metadata?.allowedToolRefs).toEqual([
+      opaqueRuntimeReference('pi-tool', 'file.read')
+    ])
+
+    const authorizedRun = await orchestrator.execute({
+      objective: 'Authorized plugin with Main-only symbol grant',
+      allowedToolIds: ['file.read', 'system.exec', 'bash'],
+      metadata: markMetadataPluginSystemShellGrant({ caller: 'plugin:trusted' }, true)
+    })
+    expect(orchestratorMocks.runs.get(authorizedRun.id)?.metadata?.allowedToolRefs).toEqual(
+      [
+        opaqueRuntimeReference('pi-tool', 'file.read'),
+        opaqueRuntimeReference('pi-tool', 'system.exec'),
+        opaqueRuntimeReference('pi-tool', 'bash')
+      ].sort()
+    )
+  })
 })

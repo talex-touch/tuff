@@ -1,6 +1,7 @@
 import type { TuffQuery } from '@talex-touch/utils'
 import { TuffInputType } from '@talex-touch/utils'
 import { createHash } from 'node:crypto'
+import { createReadStream } from 'node:fs'
 import { mkdir, readdir, readFile, rename, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -363,14 +364,26 @@ export async function computeFileHashes(filePath: string): Promise<
       }
     }
 
-    const buffer = await readFile(filePath)
+    const md5 = createHash('md5')
+    const sha1 = createHash('sha1')
+    const sha256 = createHash('sha256')
+    await new Promise<void>((resolve, reject) => {
+      const stream = createReadStream(filePath, { highWaterMark: 64 * 1024 })
+      stream.on('data', (chunk: string | Buffer) => {
+        md5.update(chunk)
+        sha1.update(chunk)
+        sha256.update(chunk)
+      })
+      stream.on('error', reject)
+      stream.on('end', () => resolve())
+    })
     return {
       path: filePath,
       fileName: path.basename(filePath) || filePath,
       size: info.size,
-      md5: createHash('md5').update(buffer).digest('hex'),
-      sha1: createHash('sha1').update(buffer).digest('hex'),
-      sha256: createHash('sha256').update(buffer).digest('hex')
+      md5: md5.digest('hex'),
+      sha1: sha1.digest('hex'),
+      sha256: sha256.digest('hex')
     }
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code

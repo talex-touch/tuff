@@ -516,8 +516,8 @@ export class AiOrchestratorStore {
                 allowedToolIds: JSON.stringify(defaultTools),
                 enabledSkillIds: '[]',
                 permissionPolicy: JSON.stringify({
-                  mode: 'preauthorized',
-                  allowedPermissions: ['*']
+                  mode: 'manual',
+                  allowedPermissions: []
                 }),
                 timeoutMs: DEFAULT_TIMEOUT_MS,
                 createdAt: now,
@@ -577,16 +577,35 @@ export class AiOrchestratorStore {
       for (const toolId of requiredToolIds) {
         if (!allowedToolIds.includes(toolId)) allowedToolIds.push(toolId)
       }
-      const needsPolicyUpdate = defaultProfile.permissionPolicy?.mode !== 'preauthorized'
+      const hasLegacyWildcardPolicy =
+        defaultProfile.permissionPolicy?.mode === 'preauthorized' &&
+        defaultProfile.permissionPolicy.allowedPermissions.includes('*')
       const changed =
         allowedToolIds.length !== defaultProfile.allowedToolIds.length ||
         requiredToolIds.some((toolId) => !defaultProfile.allowedToolIds.includes(toolId)) ||
-        needsPolicyUpdate
+        hasLegacyWildcardPolicy
       if (changed) {
         await this.saveProfile({
           ...defaultProfile,
           allowedToolIds,
-          permissionPolicy: { mode: 'preauthorized', allowedPermissions: ['*'] }
+          permissionPolicy: hasLegacyWildcardPolicy
+            ? { mode: 'manual', allowedPermissions: [] }
+            : defaultProfile.permissionPolicy
+        })
+      }
+    }
+
+    for (const spec of LOCAL_CLI_PROFILE_SPECS) {
+      if (spec.id === DEFAULT_PROFILE_ID) continue
+      const cliProfile = await this.getProfile(spec.id)
+      if (
+        cliProfile &&
+        cliProfile.permissionPolicy?.mode === 'preauthorized' &&
+        cliProfile.permissionPolicy.allowedPermissions.includes('*')
+      ) {
+        await this.saveProfile({
+          ...cliProfile,
+          permissionPolicy: { mode: 'manual', allowedPermissions: [] }
         })
       }
     }

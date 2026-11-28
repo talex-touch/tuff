@@ -2568,4 +2568,96 @@ describe('contextHygieneService', () => {
       expect(sql).not.toContain('is_pinned')
     }
   })
+
+  it('excludes host global memories and scopes local knowledge queries for plugin actors', async () => {
+    const now = Date.now()
+    const executedMemorySql: string[] = []
+    dbMock.client.execute.mockImplementation(
+      async (statement: string | { sql: string; args?: unknown[] }) => {
+        const sql = typeof statement === 'string' ? statement : statement.sql
+        if (sql.includes('SELECT * FROM intelligence_context_sessions')) {
+          return rows([
+            {
+              id: 'plugin-session-1',
+              owner: 'corebox',
+              status: 'active',
+              objective: null,
+              summary: null,
+              metadata: JSON.stringify({ contextActorId: 'plugin:attacker' }),
+              created_at: now - 1000,
+              updated_at: now,
+              archived_at: null
+            }
+          ])
+        }
+        if (sql.includes('FROM intelligence_memory_items')) {
+          executedMemorySql.push(sql)
+          // Even if the DB returned a global memory row, defense-in-depth must drop it for plugins.
+          return rows([
+            {
+              id: 'host-global-secret',
+              type: 'preference',
+              scope: 'global',
+              content: 'Host private preference',
+              summary: 'Host private preference',
+              tags: '[]',
+              confidence: 1,
+              source_session_id: null,
+              source_turn_id: null,
+              privacy_level: 'normal',
+              ttl: null,
+              enabled: 1,
+              created_at: now - 500,
+              updated_at: now - 500,
+              last_used_at: null,
+              usage_count: 0
+            },
+            {
+              id: 'plugin-session-mem',
+              type: 'preference',
+              scope: 'session',
+              content: 'Plugin scoped note',
+              summary: 'Plugin scoped note',
+              tags: '[]',
+              confidence: 1,
+              source_session_id: 'plugin-session-1',
+              source_turn_id: null,
+              privacy_level: 'normal',
+              ttl: null,
+              enabled: 1,
+              created_at: now - 400,
+              updated_at: now - 400,
+              last_used_at: null,
+              usage_count: 0
+            }
+          ])
+        }
+        return rows([])
+      }
+    )
+
+    const service = new ContextHygieneService()
+    const result = await service.prepareTurn({
+      owner: 'corebox',
+      sessionId: 'plugin-session-1',
+      continueSession: true,
+      explicitScope: 'retrieval',
+      input: 'Fetch local context',
+      tokenBudget: 800,
+      metadata: {
+        contextActorId: 'plugin:attacker',
+        contextActorType: 'plugin'
+      }
+    })
+
+    expect(executedMemorySql.length).toBeGreaterThan(0)
+    expect(executedMemorySql[0]).not.toContain("m.scope = 'global'")
+    expect(result.package.items.some((item) => item.sourceId === 'host-global-secret')).toBe(false)
+    expect(result.package.items.some((item) => item.sourceId === 'plugin-session-mem')).toBe(true)
+    expect(localKnowledgeEngine.buildContext).toHaveBeenCalledWith(
+      expect.objectContaining({
+        permissionScope: 'plugin:attacker'
+      })
+    )
+  })
 })

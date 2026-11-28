@@ -107,20 +107,19 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function canUseRequestedOwner(
   request: IntelligenceContextExecutionRequest,
-  actor: IntelligenceContextActor
+  actor: IntelligenceContextActor,
+  persistence: 'full' | 'ephemeral' = 'full'
 ): boolean {
   if (actor.type === 'host') return true
 
-  const owner = request.context.owner ?? 'corebox'
-  const entrypoint = request.options?.metadata?.contextEntrypoint
-  if (
-    !isRecord(entrypoint) ||
-    entrypoint.owner !== owner ||
-    entrypoint.mode !== request.context.mode
-  ) {
-    return false
+  // Never trust caller-supplied `options.metadata.contextEntrypoint` to authorize host-owned
+  // persistent context sessions. Ephemeral plugin invocations read no sessions, memories, or
+  // local knowledge (current-input-only), so they may target the CoreBox surface.
+  if (persistence === 'ephemeral') {
+    const owner = request.context.owner ?? 'corebox'
+    return owner === 'corebox'
   }
-  return owner === 'corebox' && entrypoint.id === 'corebox.ai-ask'
+  return false
 }
 
 function normalizeRole(value: unknown): IntelligenceMessage['role'] {
@@ -348,7 +347,8 @@ export class IntelligenceContextExecutionService {
 
   private validateRequest(
     request: IntelligenceContextExecutionRequest,
-    actor: IntelligenceContextActor
+    actor: IntelligenceContextActor,
+    persistence: 'full' | 'ephemeral' = 'full'
   ) {
     if (request?.capabilityId !== 'text.chat') {
       throw new Error('CONTEXT_EXECUTION_CAPABILITY_UNSUPPORTED')
@@ -359,7 +359,7 @@ export class IntelligenceContextExecutionService {
     if (!actor.id.trim()) {
       throw new Error('INVALID_CONTEXT_EXECUTION_ACTOR')
     }
-    if (!canUseRequestedOwner(request, actor)) {
+    if (!canUseRequestedOwner(request, actor, persistence)) {
       throw new Error('CONTEXT_SESSION_OWNER_FORBIDDEN')
     }
   }
@@ -370,13 +370,23 @@ export class IntelligenceContextExecutionService {
     summary: IntelligenceContextExecutionSummary,
     signal?: AbortSignal
   ): HostContextExecutionInvokeOptions {
+    const metadata: Record<string, unknown> = {
+      ...(request.options?.metadata ?? {})
+    }
+    delete metadata.profileId
+    if (actor.type === 'plugin') {
+      delete metadata.approved
+      delete metadata.approvalGranted
+      delete metadata.approvedAt
+      delete metadata.workingDirectory
+      delete metadata.automationPolicy
+      delete metadata.contextEntrypoint
+    }
+    metadata.caller = actor.id
+    metadata.contextExecution = summary
     const options: HostContextExecutionInvokeOptions = {
       ...(request.options ?? {}),
-      metadata: {
-        ...(request.options?.metadata ?? {}),
-        caller: actor.id,
-        contextExecution: summary
-      },
+      metadata,
       ...(signal ? { signal } : {})
     }
     return inheritOuterGovernance(request.options, options)
@@ -388,7 +398,7 @@ export class IntelligenceContextExecutionService {
     signal?: AbortSignal
   ): Promise<PreparedContextExecution> {
     throwIfContextCancelled(signal)
-    this.validateRequest(request, actor)
+    this.validateRequest(request, actor, 'ephemeral')
     if (request.context.mode === 'continue') {
       throw new Error('CONTEXT_EPHEMERAL_CONTINUATION_UNSUPPORTED')
     }

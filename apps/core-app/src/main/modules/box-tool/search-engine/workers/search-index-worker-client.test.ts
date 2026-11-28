@@ -575,20 +575,23 @@ describe('SearchIndexWorkerClient init gate', () => {
     await vi.advanceTimersByTimeAsync(60_000)
 
     expect(terminate).toHaveBeenCalledTimes(1)
-    await expect(
-      client.applyProviderItems(
-        'file-provider',
-        [
-          {
-            itemId: 'file:/tmp/retry.txt',
-            providerId: 'file-provider',
-            type: 'file',
-            name: 'retry'
-          }
-        ],
-        []
-      )
-    ).rejects.toThrow('SEARCH_INDEX_WORKER_TERMINATION_UNCONFIRMED:pending')
+    const pendingWrite = client.applyProviderItems(
+      'file-provider',
+      [
+        {
+          itemId: 'file:/tmp/retry.txt',
+          providerId: 'file-provider',
+          type: 'file',
+          name: 'retry'
+        }
+      ],
+      []
+    )
+    const pendingWriteRejection = expect(pendingWrite).rejects.toThrow(
+      'SEARCH_INDEX_WORKER_TERMINATION_UNCONFIRMED:pending'
+    )
+    await vi.advanceTimersByTimeAsync(3000)
+    await pendingWriteRejection
     expect(workerMock.workers).toHaveLength(1)
     // The retiring worker only received init + the graceful-close request — the
     // pending write was rejected, never dispatched to it.
@@ -625,6 +628,44 @@ describe('SearchIndexWorkerClient init gate', () => {
     })
 
     await expect(retry).resolves.toEqual({ removedItems: 0, indexedItems: 1 })
+  })
+
+  it('transparently waits for normal idle retirement and executes non-maintenance writes without rejecting', async () => {
+    vi.useFakeTimers()
+    const client = new SearchIndexWorkerClient()
+    const init = client.init('/tmp/search-index.db')
+    const retiringWorker = workerMock.workers.at(-1)!
+    retiringWorker.emit('message', { type: 'done', taskId: taskIdOf(retiringWorker.messages[0]) })
+    await init
+
+    const termination = deferred<number>()
+    vi.spyOn(retiringWorker, 'terminate').mockReturnValue(termination.promise)
+    await vi.advanceTimersByTimeAsync(60_000)
+
+    const write = client.applyProviderItems(
+      'file-provider',
+      [{ itemId: 'file:/tmp/wait-ok.txt', providerId: 'file-provider', type: 'file', name: 'ok' }],
+      []
+    )
+    expect(workerMock.workers).toHaveLength(1)
+
+    termination.resolve(0)
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(workerMock.workers).toHaveLength(2)
+    const replacementWorker = workerMock.workers.at(-1)!
+    replacementWorker.emit('message', {
+      type: 'done',
+      taskId: taskIdOf(replacementWorker.messages[0])
+    })
+    await vi.advanceTimersByTimeAsync(0)
+    replacementWorker.emit('message', {
+      type: 'result',
+      taskId: taskIdOf(replacementWorker.messages[1]),
+      result: { removedItems: 0, indexedItems: 1 }
+    })
+
+    await expect(write).resolves.toEqual({ removedItems: 0, indexedItems: 1 })
   })
 
   it('keeps drain pending through an unresolved idle termination and releases it after settlement', async () => {

@@ -39,7 +39,10 @@ import {
 } from '../../local-ai-cli/session-store'
 import { resolveConversationWorkspaceRoot } from '../../local-ai-cli/workspace-root'
 import { getProject } from '../../project/project-store'
-import { readHostInvokePurpose } from '../intelligence-invoke-purpose'
+import {
+  readHostInvokePurpose,
+  readSchedulerProfileAuthority
+} from '../intelligence-invoke-purpose'
 import { readReasoningPlan } from '../reasoning-effort-runtime'
 import { IntelligenceProvider } from '../runtime/base-provider'
 import { foldToolsIntoPrompt } from '../tool-text-protocol'
@@ -336,6 +339,21 @@ function thirdPartyCliOf(config: IntelligenceProviderConfig): ThirdPartyCliEntry
   )
 }
 
+/**
+ * Only a Main-owned scheduler profile token (attached via `markSchedulerProfileAuthority`) matching
+ * `metadata.profileId` may authorize executing a third-party CLI binary. Spoofed plain
+ * `metadata.profileId` strings from IPC or plugins never satisfy this check.
+ */
+function hasAuthorizedSchedulerProfile(
+  external: ThirdPartyCliEntry,
+  options: IntelligenceInvokeOptions
+): boolean {
+  return (
+    options.metadata?.profileId === external.schedulerProfileId &&
+    readSchedulerProfileAuthority(options) === external.schedulerProfileId
+  )
+}
+
 export class PiCliProvider extends IntelligenceProvider {
   readonly type = IntelligenceProviderType.LOCAL
 
@@ -359,10 +377,7 @@ export class PiCliProvider extends IntelligenceProvider {
    */
   supportsNativeToolsFor(options: IntelligenceInvokeOptions): boolean {
     const external = thirdPartyCliOf(this.config)
-    return (
-      Boolean(external?.configReuseCli) &&
-      options.metadata?.profileId !== external?.schedulerProfileId
-    )
+    return Boolean(external?.configReuseCli) && !hasAuthorizedSchedulerProfile(external!, options)
   }
 
   private resolveModel(options: IntelligenceInvokeOptions): string | undefined {
@@ -374,7 +389,7 @@ export class PiCliProvider extends IntelligenceProvider {
     options: IntelligenceInvokeOptions
   ): AsyncGenerator<IntelligenceStreamChunk> {
     const external = thirdPartyCliOf(this.config)
-    if (external && options.metadata?.profileId !== external.schedulerProfileId) {
+    if (external && !hasAuthorizedSchedulerProfile(external, options)) {
       if (!external.configReuseCli) {
         throw new Error(`${external.codePrefix}_CONFIG_PROVIDER_UNAVAILABLE`)
       }
@@ -405,104 +420,113 @@ export class PiCliProvider extends IntelligenceProvider {
     let timeoutTimer: NodeJS.Timeout | undefined
     let abortController: AbortController | undefined
     let removeRawListener: (() => void) | undefined
+    let pointer: StoredLocalAiCliSession | null = null
+    let isolationRoot: string | undefined
+    let releaseConversationLease: (() => void) | undefined
+    let releaseNativeLease: (() => void) | undefined
+    let toolRuntime: PiToolRuntimeConfig | null = null
+    let ompIsolation: OmpIsolation | undefined
+    let pointerStateAlreadyPersisted = false
 
     let signal: AbortSignal | undefined = rawSignal
 
-    if (timeoutMs && timeoutMs > 0) {
-      abortController = new AbortController()
-      if (rawSignal) {
-        const onRawAbort = () => abortController?.abort(rawSignal.reason)
-        rawSignal.addEventListener('abort', onRawAbort, { once: true })
-        removeRawListener = () => rawSignal.removeEventListener('abort', onRawAbort)
-      }
-      timeoutTimer = setTimeout(() => {
-        abortController?.abort(new Error(`CLI request timed out after ${timeoutMs}ms`))
-      }, timeoutMs)
-      signal = abortController.signal
-    }
-
-    const isOmp =
-      this.config.id === OMP_CLI_PROVIDER_ID || this.config.metadata?.origin === OMP_CLI_ORIGIN
-    const isCodex =
-      this.config.id === CODEX_CLI_PROVIDER_ID || this.config.metadata?.origin === CODEX_CLI_ORIGIN
-    const isClaude =
-      this.config.id === CLAUDE_CLI_PROVIDER_ID ||
-      this.config.metadata?.origin === CLAUDE_CLI_ORIGIN
-
-    let executable: string | null = null
-    let cliName = 'pi'
-    let errorPrefix = '[PiCliProvider]'
-    let localProviderId: LocalAiCliProviderId = 'pi'
-
-    if (isOmp) {
-      executable = await resolveOmpExecutable()
-      cliName = 'omp'
-      errorPrefix = '[OmpCliProvider]'
-      localProviderId = 'oh-my-pi'
-    } else if (isCodex) {
-      executable = await resolveCodexExecutable()
-      cliName = 'codex'
-      errorPrefix = '[CodexCliProvider]'
-      localProviderId = 'codex'
-    } else if (isClaude) {
-      executable = await resolveClaudeExecutable()
-      cliName = 'claude'
-      errorPrefix = '[ClaudeCliProvider]'
-      localProviderId = 'claude'
-    } else {
-      executable = await resolvePiExecutable()
-    }
-
-    if (!executable) {
-      throw new Error(
-        `${errorPrefix} ${cliName.toUpperCase()}_CLI_NOT_FOUND: the '${cliName}' CLI was not found on this machine`
-      )
-    }
-    const home = resolveHomeSessionContext(options)
-    // Native continuation is `pi`'s protocol. `omp` has no `--session`/`--session-id`, and
-    // `codex exec --ephemeral` / `claude -p --no-session-persistence` keep no session either, so
-    // their home-surface turns rebuild the transcript instead of reading the session store.
-    const isPi = !isOmp && !isCodex && !isClaude
-    const nativeSession = home && isPi ? home : null
-    const cwd = nativeSession
-      ? await resolveHomeSessionRoot(nativeSession.projectId, nativeSession.conversationId)
-      : undefined
-    let pointer: StoredLocalAiCliSession | null = nativeSession
-      ? await getLocalAiCliSessionForConversation(nativeSession.conversationId)
-      : null
-    if (nativeSession && pointer) {
-      if (
-        pointer.provider !== localProviderId ||
-        pointer.projectId !== nativeSession.projectId ||
-        pointer.projectRoot !== cwd
-      ) {
-        throw new Error('NATIVE_SESSION_CONFLICT')
-      }
-      if (pointer.state === 'missing') throw new Error('NATIVE_SESSION_MISSING')
-      if (pointer.state === 'conflict') throw new Error('NATIVE_SESSION_CONFLICT')
-    }
-
-    const nativeSessionId = nativeSession ? (pointer?.nativeSessionId ?? randomUUID()) : undefined
-    let releaseNativeLease: (() => void) | undefined
-    let fileCapture: PiSessionFileCapture | null = null
-    let capturedHead: string | null = null
-    // `codex` and `claude` still read AGENTS.md / CLAUDE.md out of their working directory, so a run
-    // started from the app's launch directory would feed unrelated repository rules into the chat.
-    // The throwaway directory is the whole isolation — removed in `finally`, whatever the turn did.
-    // omp is isolated from the app's launch directory the same way, and from the user's own agent
-    // directory below (see `createOmpIsolation`).
-    const isolationRoot =
-      isCodex || isClaude || isOmp ? await mkdtemp(join(tmpdir(), 'tuff-cli-')) : undefined
-    // Taken only once there is nothing left to fail before the guarded block: the lease is released
-    // in the `finally` below, so taking it ahead of a call that can reject would strand the thread
-    // in NATIVE_SESSION_BUSY until the app restarted.
-    const releaseConversationLease = home
-      ? acquireHomeConversationLease(home.conversationId)
-      : undefined
-    let toolRuntime: PiToolRuntimeConfig | null = null
-    let ompIsolation: OmpIsolation | undefined
-
     try {
+      if (timeoutMs && timeoutMs > 0) {
+        abortController = new AbortController()
+        if (rawSignal) {
+          const onRawAbort = () => abortController?.abort(rawSignal.reason)
+          rawSignal.addEventListener('abort', onRawAbort, { once: true })
+          removeRawListener = () => rawSignal.removeEventListener('abort', onRawAbort)
+        }
+        timeoutTimer = setTimeout(() => {
+          abortController?.abort(new Error(`CLI request timed out after ${timeoutMs}ms`))
+        }, timeoutMs)
+        signal = abortController.signal
+      }
+
+      const isOmp =
+        this.config.id === OMP_CLI_PROVIDER_ID || this.config.metadata?.origin === OMP_CLI_ORIGIN
+      const isCodex =
+        this.config.id === CODEX_CLI_PROVIDER_ID ||
+        this.config.metadata?.origin === CODEX_CLI_ORIGIN
+      const isClaude =
+        this.config.id === CLAUDE_CLI_PROVIDER_ID ||
+        this.config.metadata?.origin === CLAUDE_CLI_ORIGIN
+
+      let executable: string | null = null
+      let cliName = 'pi'
+      let errorPrefix = '[PiCliProvider]'
+      let localProviderId: LocalAiCliProviderId = 'pi'
+
+      if (isOmp) {
+        executable = await resolveOmpExecutable()
+        cliName = 'omp'
+        errorPrefix = '[OmpCliProvider]'
+        localProviderId = 'oh-my-pi'
+      } else if (isCodex) {
+        executable = await resolveCodexExecutable()
+        cliName = 'codex'
+        errorPrefix = '[CodexCliProvider]'
+        localProviderId = 'codex'
+      } else if (isClaude) {
+        executable = await resolveClaudeExecutable()
+        cliName = 'claude'
+        errorPrefix = '[ClaudeCliProvider]'
+        localProviderId = 'claude'
+      } else {
+        executable = await resolvePiExecutable()
+      }
+
+      if (!executable) {
+        throw new Error(
+          `${errorPrefix} ${cliName.toUpperCase()}_CLI_NOT_FOUND: the '${cliName}' CLI was not found on this machine`
+        )
+      }
+      const home = resolveHomeSessionContext(options)
+      // Native continuation is `pi`'s protocol. `omp` has no `--session`/`--session-id`, and
+      // `codex exec --ephemeral` / `claude -p --no-session-persistence` keep no session either, so
+      // their home-surface turns rebuild the transcript instead of reading the session store.
+      const isPi = !isOmp && !isCodex && !isClaude
+      const nativeSession = home && isPi ? home : null
+      const cwd = nativeSession
+        ? await resolveHomeSessionRoot(nativeSession.projectId, nativeSession.conversationId)
+        : undefined
+      pointer = nativeSession
+        ? await getLocalAiCliSessionForConversation(nativeSession.conversationId)
+        : null
+      if (nativeSession && pointer) {
+        if (
+          pointer.provider !== localProviderId ||
+          pointer.projectId !== nativeSession.projectId ||
+          pointer.projectRoot !== cwd
+        ) {
+          pointerStateAlreadyPersisted = true
+          throw new Error('NATIVE_SESSION_CONFLICT')
+        }
+        if (pointer.state === 'missing') {
+          pointerStateAlreadyPersisted = true
+          throw new Error('NATIVE_SESSION_MISSING')
+        }
+        if (pointer.state === 'conflict') {
+          pointerStateAlreadyPersisted = true
+          throw new Error('NATIVE_SESSION_CONFLICT')
+        }
+      }
+
+      const nativeSessionId = nativeSession ? (pointer?.nativeSessionId ?? randomUUID()) : undefined
+      let fileCapture: PiSessionFileCapture | null = null
+      let capturedHead: string | null = null
+      // `codex` and `claude` still read AGENTS.md / CLAUDE.md out of their working directory, so a run
+      // started from the app's launch directory would feed unrelated repository rules into the chat.
+      // The throwaway directory is the whole isolation — removed in `finally`, whatever the turn did.
+      // omp is isolated from the app's launch directory the same way, and from the user's own agent
+      // directory below (see `createOmpIsolation`).
+      isolationRoot =
+        isCodex || isClaude || isOmp ? await mkdtemp(join(tmpdir(), 'tuff-cli-')) : undefined
+      releaseConversationLease = home
+        ? acquireHomeConversationLease(home.conversationId)
+        : undefined
+
       if (isOmp) ompIsolation = await createOmpIsolation()
       if (nativeSession && cwd && pointer) {
         releaseNativeLease = nativeSessionLeaseRegistry.acquire({
@@ -515,6 +539,7 @@ export class PiCliProvider extends IntelligenceProvider {
         const sessionFile = await findPiNativeSessionFile(pointer.nativeSessionId)
         if (!sessionFile) {
           await markLocalAiCliSessionState(pointer.id, 'missing')
+          pointerStateAlreadyPersisted = true
           throw new Error('NATIVE_SESSION_MISSING')
         }
         fileCapture = await capturePiSessionFile(sessionFile, pointer.nativeSessionId, cwd!)
@@ -582,7 +607,7 @@ export class PiCliProvider extends IntelligenceProvider {
                   '-s',
                   'read-only',
                   '-C',
-                  isolationRoot,
+                  isolationRoot!,
                   '--color',
                   'never',
                   // The user's own MCP servers must not ride into the app's headless run. The flag
@@ -595,6 +620,7 @@ export class PiCliProvider extends IntelligenceProvider {
                   ...(model ? ['-m', model] : []),
                   // Attachments are images only: the spill writes png/jpg/webp/gif and nothing else.
                   ...attachmentPaths.flatMap((path) => ['-i', path]),
+                  '--',
                   // `exec --json` has no system-prompt flag, so the system text rides in front.
                   `${prompt.systemPrompt}\n\n---\n\n${prompt.prompt}`
                 ]
@@ -626,6 +652,7 @@ export class PiCliProvider extends IntelligenceProvider {
                       prompt.systemPrompt,
                       ...(model ? ['--model', model] : []),
                       ...(claudeEffort ? ['--effort', claudeEffort] : []),
+                      '--',
                       prompt.prompt
                     ]
                   }
@@ -704,9 +731,15 @@ export class PiCliProvider extends IntelligenceProvider {
         await touchLocalAiCliSession(pointer.id, finalHead)
       }
     } catch (error) {
-      if (pointer && error instanceof Error && error.message === 'NATIVE_SESSION_CONFLICT') {
+      if (
+        !pointerStateAlreadyPersisted &&
+        pointer &&
+        error instanceof Error &&
+        error.message === 'NATIVE_SESSION_CONFLICT'
+      ) {
         await markLocalAiCliSessionState(pointer.id, 'conflict')
       } else if (
+        !pointerStateAlreadyPersisted &&
         pointer &&
         ((error instanceof Error && error.message === 'NATIVE_SESSION_MISSING') ||
           isNativeSessionMissingError(error))

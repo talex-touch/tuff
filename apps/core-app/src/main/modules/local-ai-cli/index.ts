@@ -973,9 +973,15 @@ export class LocalAiCliModule extends BaseModule {
     })
     this.taskProcesses.set(callId, { abortController, releaseLease, done: taskDone })
     context.emit({ type: 'status', callId, status: 'starting' })
-    context.signal.addEventListener('abort', () => abortController.abort(), { once: true })
+    const onAbort = () => abortController.abort()
+    context.signal.addEventListener('abort', onAbort, { once: true })
 
     try {
+      if (context.signal.aborted || context.isCancelled()) {
+        abortController.abort()
+        context.emit({ type: 'cancelled', callId })
+        return
+      }
       const stream = query({
         prompt,
         options: {
@@ -1088,6 +1094,7 @@ export class LocalAiCliModule extends BaseModule {
         })
       }
     } finally {
+      context.signal.removeEventListener('abort', onAbort)
       this.approvals.cancelCall(callId)
       this.taskProcesses.delete(callId)
       releaseLease?.()

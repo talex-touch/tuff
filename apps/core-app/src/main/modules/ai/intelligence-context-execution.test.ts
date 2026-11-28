@@ -400,8 +400,8 @@ describe('IntelligenceContextExecutionService', () => {
     )
 
     await service.invoke(createRequest(), {
-      id: 'plugin:touch-intelligence',
-      type: 'plugin'
+      id: 'host:core-app',
+      type: 'host'
     })
 
     expect(prepareTurn).toHaveBeenCalledOnce()
@@ -459,13 +459,13 @@ describe('IntelligenceContextExecutionService', () => {
     const request = createRequest()
 
     const nonStream = await service.invoke(request, {
-      id: 'plugin:touch-intelligence',
-      type: 'plugin'
+      id: 'host:core-app',
+      type: 'host'
     })
     const streamEvents: IntelligenceContextStreamEvent<unknown>[] = []
     for await (const event of service.stream(request, {
-      id: 'plugin:touch-intelligence',
-      type: 'plugin'
+      id: 'host:core-app',
+      type: 'host'
     })) {
       streamEvents.push(event)
     }
@@ -585,8 +585,8 @@ describe('IntelligenceContextExecutionService', () => {
     )
 
     const result = await service.invoke(createRequest(), {
-      id: 'plugin:touch-intelligence',
-      type: 'plugin'
+      id: 'host:core-app',
+      type: 'host'
     })
 
     const providerPayload = invoke.mock.calls[0]?.[1] as IntelligenceChatPayload
@@ -650,7 +650,7 @@ describe('IntelligenceContextExecutionService', () => {
         },
         context: { mode: 'stateless', owner: 'corebox', scope: 'retrieval', tokenBudget: 1200 }
       },
-      { id: 'plugin:touch-intelligence', type: 'plugin' }
+      { id: 'host:core-app', type: 'host' }
     )
 
     expect(prepareTurn).toHaveBeenCalledWith(
@@ -717,8 +717,8 @@ describe('IntelligenceContextExecutionService', () => {
       }
 
       const result = await service.invoke(request, {
-        id: 'plugin:touch-intelligence',
-        type: 'plugin'
+        id: 'host:core-app',
+        type: 'host'
       })
 
       const fallbackPayload = invoke.mock.calls[0]?.[1] as IntelligenceChatPayload
@@ -762,7 +762,7 @@ describe('IntelligenceContextExecutionService', () => {
 
     let rejection: unknown
     try {
-      await service.invoke(request, { id: 'plugin:touch-intelligence', type: 'plugin' })
+      await service.invoke(request, { id: 'host:core-app', type: 'host' })
     } catch (error) {
       rejection = error
     }
@@ -793,8 +793,8 @@ describe('IntelligenceContextExecutionService', () => {
     let rejection: unknown
     try {
       for await (const _ of service.stream(request, {
-        id: 'plugin:touch-intelligence',
-        type: 'plugin'
+        id: 'host:core-app',
+        type: 'host'
       })) {
       }
     } catch (error) {
@@ -808,7 +808,7 @@ describe('IntelligenceContextExecutionService', () => {
     expect(stream).not.toHaveBeenCalled()
   })
 
-  it('honors the CoreBox entrypoint for any plugin actor and rejects the retired Assistant one and a missing entrypoint', async () => {
+  it('rejects plugin actors attempting persistent host-owned sessions even when spoofing contextEntrypoint', async () => {
     const { IntelligenceContextExecutionService } = await import('./intelligence-context-execution')
     const contextPackage = createPackage()
     const prepared = createPrepared(contextPackage)
@@ -836,7 +836,6 @@ describe('IntelligenceContextExecutionService', () => {
       },
       context: { mode: 'new', owner: 'corebox', scope: 'light' }
     }
-    // The floating ball's voice panel submitted through this pair; nothing sends it any more.
     const retired: IntelligenceContextExecutionRequest = {
       ...request,
       options: {
@@ -847,31 +846,31 @@ describe('IntelligenceContextExecutionService', () => {
       context: { mode: 'new', owner: 'assistant', scope: 'light' }
     }
 
+    // Plugin actors MUST NOT access persistent host context sessions by spoofing contextEntrypoint
     await expect(
       service.invoke(request, { id: 'plugin:touch-intelligence', type: 'plugin' })
-    ).resolves.toMatchObject({ invocation: { result: 'CoreBox answer' } })
-    expect(prepareTurn).toHaveBeenCalledWith(
-      expect.objectContaining({ owner: 'corebox', explicitScope: 'light' })
-    )
-
-    const withoutEntrypoint: IntelligenceContextExecutionRequest = { ...request, options: {} }
+    ).rejects.toThrow('CONTEXT_SESSION_OWNER_FORBIDDEN')
     await expect(
       service.invoke(retired, { id: 'plugin:touch-intelligence', type: 'plugin' })
     ).rejects.toThrow('CONTEXT_SESSION_OWNER_FORBIDDEN')
     await expect(
-      service.invoke(withoutEntrypoint, { id: 'plugin:other-plugin', type: 'plugin' })
+      service.invoke({ ...request, options: {} }, { id: 'plugin:other-plugin', type: 'plugin' })
     ).rejects.toThrow('CONTEXT_SESSION_OWNER_FORBIDDEN')
-    expect(prepareTurn).toHaveBeenCalledTimes(1)
-
-    // The intelligence.context permission admits a caller, not its name; the actor id only scopes
-    // the session it gets.
     await expect(
       service.invoke(request, { id: 'plugin:other-plugin', type: 'plugin' })
+    ).rejects.toThrow('CONTEXT_SESSION_OWNER_FORBIDDEN')
+    expect(prepareTurn).not.toHaveBeenCalled()
+
+    // Host actors remain authorized for persistent CoreBox sessions
+    await expect(
+      service.invoke(request, { id: 'host:core-app', type: 'host' })
     ).resolves.toMatchObject({ invocation: { result: 'CoreBox answer' } })
-    expect(prepareTurn).toHaveBeenCalledTimes(2)
-    expect(prepareTurn).toHaveBeenLastCalledWith(
+    expect(prepareTurn).toHaveBeenCalledTimes(1)
+    expect(prepareTurn).toHaveBeenCalledWith(
       expect.objectContaining({
-        metadata: expect.objectContaining({ contextActorId: 'plugin:other-plugin' })
+        owner: 'corebox',
+        explicitScope: 'light',
+        metadata: expect.objectContaining({ contextActorId: 'host:core-app' })
       })
     )
   })
@@ -914,8 +913,8 @@ describe('IntelligenceContextExecutionService', () => {
     )
 
     await service.invoke(createRequest(), {
-      id: 'plugin:touch-intelligence',
-      type: 'plugin'
+      id: 'host:core-app',
+      type: 'host'
     })
 
     const payload = invoke.mock.calls[0]?.[1] as IntelligenceChatPayload
@@ -957,14 +956,14 @@ describe('IntelligenceContextExecutionService', () => {
 
     await service.invoke(
       { ...createRequest(), options: outerOptions },
-      { id: 'plugin:touch-intelligence', type: 'plugin' }
+      { id: 'host:core-app', type: 'host' }
     )
 
     const forwardedOptions = invoke.mock.calls[0]![2]
     expect(forwardedOptions).not.toBe(outerOptions)
     expect(isOuterGovernedInvocation(forwardedOptions)).toBe(true)
     expect(forwardedOptions.metadata).toMatchObject({
-      caller: 'plugin:touch-intelligence',
+      caller: 'host:core-app',
       workflowExecutionId: 'workflow-run-1',
       contextExecution: {
         packageId: 'package-1',
@@ -998,8 +997,8 @@ describe('IntelligenceContextExecutionService', () => {
 
     await expect(
       service.invoke(createRequest(), {
-        id: 'plugin:touch-intelligence',
-        type: 'plugin'
+        id: 'host:core-app',
+        type: 'host'
       })
     ).rejects.toThrow('CONTEXT_CURRENT_INPUT_POLICY_BLOCKED')
     expect(invoke).not.toHaveBeenCalled()
@@ -1021,7 +1020,7 @@ describe('IntelligenceContextExecutionService', () => {
     await expect(
       service.invoke(
         { ...createRequest(), capabilityId: 'vision.ocr' },
-        { id: 'plugin:touch-intelligence', type: 'plugin' },
+        { id: 'host:core-app', type: 'host' },
         { signal: controller.signal }
       )
     ).rejects.toMatchObject({ code: 'INTELLIGENCE_OPERATION_CANCELLED' })
@@ -1049,7 +1048,7 @@ describe('IntelligenceContextExecutionService', () => {
     await expect(
       service.invoke(
         createRequest(),
-        { id: 'plugin:touch-intelligence', type: 'plugin' },
+        { id: 'host:core-app', type: 'host' },
         { signal: controller.signal }
       )
     ).rejects.toMatchObject({ code: 'INTELLIGENCE_OPERATION_CANCELLED' })
@@ -1090,7 +1089,7 @@ describe('IntelligenceContextExecutionService', () => {
     const controller = new AbortController()
     const pending = service.invoke(
       createRequest(),
-      { id: 'plugin:touch-intelligence', type: 'plugin' },
+      { id: 'host:core-app', type: 'host' },
       { signal: controller.signal }
     )
 
@@ -1118,7 +1117,7 @@ describe('IntelligenceContextExecutionService', () => {
     await expect(
       service.invoke(
         createRequest(),
-        { id: 'plugin:touch-intelligence', type: 'plugin' },
+        { id: 'host:core-app', type: 'host' },
         { signal: controller.signal }
       )
     ).rejects.toMatchObject({ code: 'INTELLIGENCE_OPERATION_CANCELLED' })
@@ -1154,7 +1153,7 @@ describe('IntelligenceContextExecutionService', () => {
     await expect(
       service.invoke(
         createRequest(),
-        { id: 'plugin:touch-intelligence', type: 'plugin' },
+        { id: 'host:core-app', type: 'host' },
         { signal: controller.signal }
       )
     ).rejects.toMatchObject({ code: 'INTELLIGENCE_OPERATION_CANCELLED' })
@@ -1187,7 +1186,7 @@ describe('IntelligenceContextExecutionService', () => {
     const controller = new AbortController()
     const pending = service.invoke(
       createRequest(),
-      { id: 'plugin:touch-intelligence', type: 'plugin' },
+      { id: 'host:core-app', type: 'host' },
       { signal: controller.signal }
     )
 
@@ -1238,7 +1237,7 @@ describe('IntelligenceContextExecutionService', () => {
     const controller = new AbortController()
     const iterator = service.stream(
       createRequest(),
-      { id: 'plugin:touch-intelligence', type: 'plugin' },
+      { id: 'host:core-app', type: 'host' },
       { signal: controller.signal }
     )
     const pending = iterator.next()
@@ -1283,7 +1282,7 @@ describe('IntelligenceContextExecutionService', () => {
     const controller = new AbortController()
     const iterator = service.stream(
       createRequest(),
-      { id: 'plugin:touch-intelligence', type: 'plugin' },
+      { id: 'host:core-app', type: 'host' },
       { signal: controller.signal }
     )
     const pending = iterator.next()

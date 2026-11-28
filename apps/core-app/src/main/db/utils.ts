@@ -1312,49 +1312,72 @@ function createDbUtilsInternal(
     },
     async setPluginData(pluginId: string, key: string, value: unknown) {
       const stringValue = JSON.stringify(value)
-      return db
-        .insert(schema.pluginData)
-        .values({ pluginId, key, value: stringValue })
-        .onConflictDoUpdate({
-          target: [schema.pluginData.pluginId, schema.pluginData.key],
-          set: { value: stringValue }
-        })
+      return scheduleDbWrite(
+        'plugin-data.set',
+        () =>
+          db
+            .insert(schema.pluginData)
+            .values({ pluginId, key, value: stringValue })
+            .onConflictDoUpdate({
+              target: [schema.pluginData.pluginId, schema.pluginData.key],
+              set: { value: stringValue }
+            }),
+        { priority: 'interactive' }
+      )
     },
     async deletePluginData(pluginId: string, key?: string) {
-      if (key) {
-        return db
-          .delete(schema.pluginData)
-          .where(and(eq(schema.pluginData.pluginId, pluginId), eq(schema.pluginData.key, key)))
-      }
-      return db.delete(schema.pluginData).where(eq(schema.pluginData.pluginId, pluginId))
+      return scheduleDbWrite(
+        'plugin-data.delete',
+        () => {
+          if (key) {
+            return db
+              .delete(schema.pluginData)
+              .where(and(eq(schema.pluginData.pluginId, pluginId), eq(schema.pluginData.key, key)))
+          }
+          return db.delete(schema.pluginData).where(eq(schema.pluginData.pluginId, pluginId))
+        },
+        { priority: 'interactive' }
+      )
     },
 
     // Pinned Items
     async pinItem(sourceId: string, itemId: string, sourceType: string) {
-      const maxOrderResult = await db
-        .select({ maxOrder: sql<number>`MAX(${schema.pinnedItems.order})` })
-        .from(schema.pinnedItems)
-        .get()
-      const nextOrder = (maxOrderResult?.maxOrder ?? -1) + 1
+      return scheduleDbWrite(
+        'pinned-items.pin',
+        () =>
+          db.transaction(async (tx) => {
+            const maxOrderResult = await tx
+              .select({ maxOrder: sql<number>`MAX(${schema.pinnedItems.order})` })
+              .from(schema.pinnedItems)
+              .get()
+            const nextOrder = (maxOrderResult?.maxOrder ?? -1) + 1
 
-      return db
-        .insert(schema.pinnedItems)
-        .values({
-          sourceId,
-          itemId,
-          sourceType,
-          pinnedAt: new Date(),
-          order: nextOrder
-        })
-        .onConflictDoNothing()
+            return tx
+              .insert(schema.pinnedItems)
+              .values({
+                sourceId,
+                itemId,
+                sourceType,
+                pinnedAt: new Date(),
+                order: nextOrder
+              })
+              .onConflictDoNothing()
+          }),
+        { priority: 'interactive' }
+      )
     },
 
     async unpinItem(sourceId: string, itemId: string) {
-      return db
-        .delete(schema.pinnedItems)
-        .where(
-          and(eq(schema.pinnedItems.sourceId, sourceId), eq(schema.pinnedItems.itemId, itemId))
-        )
+      return scheduleDbWrite(
+        'pinned-items.unpin',
+        () =>
+          db
+            .delete(schema.pinnedItems)
+            .where(
+              and(eq(schema.pinnedItems.sourceId, sourceId), eq(schema.pinnedItems.itemId, itemId))
+            ),
+        { priority: 'interactive' }
+      )
     },
 
     async isPinned(sourceId: string, itemId: string) {
@@ -1373,14 +1396,51 @@ function createDbUtilsInternal(
     },
 
     async togglePin(sourceId: string, itemId: string, sourceType: string) {
-      const isPinned = await this.isPinned(sourceId, itemId)
-      if (isPinned) {
-        await this.unpinItem(sourceId, itemId)
-        return false
-      } else {
-        await this.pinItem(sourceId, itemId, sourceType)
-        return true
-      }
+      return scheduleDbWrite(
+        'pinned-items.toggle',
+        () =>
+          db.transaction(async (tx) => {
+            const existing = await tx
+              .select({ sourceId: schema.pinnedItems.sourceId })
+              .from(schema.pinnedItems)
+              .where(
+                and(
+                  eq(schema.pinnedItems.sourceId, sourceId),
+                  eq(schema.pinnedItems.itemId, itemId)
+                )
+              )
+              .get()
+            if (existing) {
+              await tx
+                .delete(schema.pinnedItems)
+                .where(
+                  and(
+                    eq(schema.pinnedItems.sourceId, sourceId),
+                    eq(schema.pinnedItems.itemId, itemId)
+                  )
+                )
+              return false
+            }
+
+            const maxOrderResult = await tx
+              .select({ maxOrder: sql<number>`MAX(${schema.pinnedItems.order})` })
+              .from(schema.pinnedItems)
+              .get()
+            const nextOrder = (maxOrderResult?.maxOrder ?? -1) + 1
+            await tx
+              .insert(schema.pinnedItems)
+              .values({
+                sourceId,
+                itemId,
+                sourceType,
+                pinnedAt: new Date(),
+                order: nextOrder
+              })
+              .onConflictDoNothing()
+            return true
+          }),
+        { priority: 'interactive' }
+      )
     }
   }
 }

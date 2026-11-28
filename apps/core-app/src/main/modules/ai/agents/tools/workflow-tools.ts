@@ -1,5 +1,6 @@
 import type { ToolExecutionContext } from '../tool-registry'
-import { exec } from 'node:child_process'
+import { spawn } from 'node:child_process'
+import process from 'node:process'
 import type { AgentPermission } from '@talex-touch/utils'
 import type { ClipboardWriteRequest } from '@talex-touch/utils/transport/events/types'
 import { network } from '@talex-touch/utils/network'
@@ -10,6 +11,7 @@ import { intelligenceDesktopContextService } from '../../intelligence-desktop-co
 import { toolRegistry } from '../tool-registry'
 import { describeToolFailure } from '../../tool-error-projection'
 import { createLogger } from '../../../../utils/logger'
+import { fetchSafeWebPageText } from './ssrf-safe-fetch'
 
 const workflowToolsLog = createLogger('Intelligence').child('WorkflowTools')
 
@@ -271,20 +273,55 @@ export function registerWorkflowTools(capabilities: WorkflowToolCapabilities): v
       },
       permissions: ['network:access' as AgentPermission]
     },
-    async (input: unknown) => {
+    async (input: unknown, ctx?: ToolExecutionContext) => {
       const { url } = input as { url: string }
-      const html = await network.readText(url)
+      const fetched = await fetchSafeWebPageText(url, { signal: ctx?.signal })
+      const html = fetched.body
       const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)
       const text = stripHtml(html).slice(0, 4000)
       return {
-        url,
-        title: titleMatch?.[1]?.trim() ?? url,
+        url: fetched.url,
+        title: titleMatch?.[1]?.trim() ?? fetched.url,
         content: text
       }
     }
   )
 
+  const MAX_EXEC_BUFFER_BYTES = 10 * 1024 * 1024
+
+  const killProcessTree = (childPid: number | undefined, fallbackKill: () => void) => {
+    if (childPid && childPid > 0) {
+      if (process.platform !== 'win32') {
+        try {
+          process.kill(-childPid, 'SIGKILL')
+          return
+        } catch {
+          // Fall back to direct child kill below.
+        }
+      } else {
+        try {
+          const killer = spawn('taskkill', ['/pid', String(childPid), '/T', '/F'], {
+            stdio: 'ignore',
+            windowsHide: true
+          })
+          killer.unref()
+          return
+        } catch {
+          // Fall back to direct child kill below.
+        }
+      }
+    }
+    try {
+      fallbackKill()
+    } catch {
+      // ignore
+    }
+  }
+
   const execHandler = async (input: unknown, ctx?: ToolExecutionContext) => {
+    if (ctx?.signal?.aborted) {
+      throw new Error('TOOL_EXECUTION_CANCELLED')
+    }
     const record = input && typeof input === 'object' ? (input as Record<string, unknown>) : null
     const rawCommand = record && typeof record.command === 'string' ? record.command : ''
     const rawCwd = record && typeof record.cwd === 'string' ? record.cwd : undefined
@@ -296,6 +333,7 @@ export function registerWorkflowTools(capabilities: WorkflowToolCapabilities): v
     const cmd = rawCommand.trim()
     if (!cmd) throw new Error('Command is required')
     const effectiveCwd = rawCwd || ctx?.workingDirectory || process.env.HOME || process.cwd()
+    const timeoutMs = Math.min(Math.max(1000, rawTimeout), 120000)
 
     return await new Promise<{
       command: string
@@ -303,47 +341,102 @@ export function registerWorkflowTools(capabilities: WorkflowToolCapabilities): v
       stdout: string
       stderr: string
       exitCode: number
-    }>((resolve) => {
-      const child = exec(
-        cmd,
-        {
-          cwd: effectiveCwd,
-          timeout: Math.min(Math.max(1000, rawTimeout), 120000),
-          maxBuffer: 10 * 1024 * 1024,
-          env: { ...process.env }
-        },
-        (error, stdout, stderr) => {
-          const stdoutStr = String(stdout || '')
-          const stderrStr = String(stderr || '')
-          let exitCode = 0
-          if (error) {
-            exitCode = 1
-            if ('code' in error && typeof error.code === 'number') {
-              exitCode = error.code
-            }
-          }
-          resolve({
-            command: cmd,
-            cwd: effectiveCwd,
-            stdout: stdoutStr,
-            stderr: stderrStr,
-            exitCode
-          })
-        }
-      )
-      if (ctx?.signal) {
-        ctx.signal.addEventListener(
-          'abort',
-          () => {
-            try {
-              child.kill('SIGKILL')
-            } catch {
-              // ignore
-            }
-          },
-          { once: true }
-        )
+    }>((resolve, reject) => {
+      if (ctx?.signal?.aborted) {
+        reject(new Error('TOOL_EXECUTION_CANCELLED'))
+        return
       }
+
+      const isWin = process.platform === 'win32'
+      const shellBin = isWin ? process.env.ComSpec || 'cmd.exe' : '/bin/sh'
+      const shellArgs = isWin ? ['/d', '/s', '/c', cmd] : ['-c', cmd]
+      const child = spawn(shellBin, shellArgs, {
+        cwd: effectiveCwd,
+        env: { ...process.env },
+        detached: !isWin,
+        stdio: ['ignore', 'pipe', 'pipe'],
+        windowsHide: true
+      })
+
+      const stdoutChunks: Buffer[] = []
+      const stderrChunks: Buffer[] = []
+      let stdoutBytes = 0
+      let stderrBytes = 0
+      let settled = false
+      let timedOut = false
+      let overflowed = false
+
+      const killTree = () => killProcessTree(child.pid, () => child.kill('SIGKILL'))
+
+      const onAbort = () => {
+        killTree()
+        finishReject(new Error('TOOL_EXECUTION_CANCELLED'))
+      }
+
+      const timer = setTimeout(() => {
+        timedOut = true
+        killTree()
+      }, timeoutMs)
+
+      const cleanup = () => {
+        clearTimeout(timer)
+        ctx?.signal?.removeEventListener('abort', onAbort)
+      }
+
+      const finishResolve = (exitCode: number) => {
+        if (settled) return
+        settled = true
+        cleanup()
+        resolve({
+          command: cmd,
+          cwd: effectiveCwd,
+          stdout: Buffer.concat(stdoutChunks, stdoutBytes).toString('utf8'),
+          stderr: Buffer.concat(stderrChunks, stderrBytes).toString('utf8'),
+          exitCode
+        })
+      }
+
+      const finishReject = (err: Error) => {
+        if (settled) return
+        settled = true
+        cleanup()
+        reject(err)
+      }
+
+      ctx?.signal?.addEventListener('abort', onAbort, { once: true })
+
+      child.stdout?.on('data', (chunk: Buffer) => {
+        if (stdoutBytes + chunk.byteLength > MAX_EXEC_BUFFER_BYTES) {
+          overflowed = true
+          killTree()
+          return
+        }
+        stdoutBytes += chunk.byteLength
+        stdoutChunks.push(chunk)
+      })
+
+      child.stderr?.on('data', (chunk: Buffer) => {
+        if (stderrBytes + chunk.byteLength > MAX_EXEC_BUFFER_BYTES) {
+          overflowed = true
+          killTree()
+          return
+        }
+        stderrBytes += chunk.byteLength
+        stderrChunks.push(chunk)
+      })
+
+      child.on('error', () => {
+        finishResolve(1)
+      })
+
+      child.on('close', (code) => {
+        if (ctx?.signal?.aborted) {
+          finishReject(new Error('TOOL_EXECUTION_CANCELLED'))
+          return
+        }
+        const exitCode = timedOut || overflowed ? 1 : typeof code === 'number' ? code : 1
+        finishResolve(exitCode)
+      })
     })
   }
 

@@ -462,6 +462,7 @@ export class McpHostModule extends BaseModule<TalexEvents> {
               `${McpHostFailureCode.SettingsNotSaved}: the switch was not saved, so the server was left on`
             )
           }
+          this.remembered.clear()
           await this.stopListener()
         }
         return this.getState()
@@ -484,6 +485,12 @@ export class McpHostModule extends BaseModule<TalexEvents> {
           throw new Error(
             `${McpHostFailureCode.SettingsNotSaved}: the switch for ${payload.name} was not saved`
           )
+        }
+        if (payload.enabled !== true) {
+          const prefix = `${payload.name}:`
+          for (const key of this.remembered) {
+            if (key === payload.name || key.startsWith(prefix)) this.remembered.delete(key)
+          }
         }
         return this.getState()
       }) as never),
@@ -508,6 +515,7 @@ export class McpHostModule extends BaseModule<TalexEvents> {
             `${McpHostFailureCode.SettingsNotSaved}: the port was not saved, so the previous one was kept`
           )
         }
+        this.remembered.clear()
         if (this.isEnabled()) await this.startListener()
         return this.getState()
       }) as never),
@@ -525,6 +533,7 @@ export class McpHostModule extends BaseModule<TalexEvents> {
           this.token = previous
           throw error
         }
+        this.remembered.clear()
         // The old token is worthless the moment the store changes, but the
         // listener compares against the value it started with, so it restarts.
         await this.restartForToken()
@@ -558,6 +567,7 @@ export class McpHostModule extends BaseModule<TalexEvents> {
   }
 
   async onDestroy(): Promise<void> {
+    this.remembered.clear()
     for (const dispose of this.disposers) dispose()
     this.disposers = []
     try {

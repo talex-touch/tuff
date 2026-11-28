@@ -2684,6 +2684,7 @@ export class SearchEngineCore
     this.destroying = true
     this.fileCommitInvalidation.dispose()
     this.indexMaintenanceRunner.stop()
+    const drainFailures: Error[] = []
     try {
       const runtime = this.indexingRuntime
       runtime?.beginShutdown()
@@ -2693,7 +2694,6 @@ export class SearchEngineCore
           'Destroying SearchEngineCore and aborting live search sessions'
         )
       }
-      const drainFailures: Error[] = []
       const recordDrainFailure = (message: string, error: unknown): void => {
         searchEngineLog.error(message, { error })
         drainFailures.push(error instanceof Error ? error : new Error(String(error)))
@@ -2796,6 +2796,14 @@ export class SearchEngineCore
         throw new AggregateError(drainFailures, 'SEARCH_CORE_INDEX_DRAIN_FAILED')
       }
       await this.providerRegistry.destroy()
+      appProvider.setIndexedSourceRuntimeDelegate(null)
+      fileProvider.setIndexedSourceRuntimeResetDelegate(null)
+      fileProvider.setIndexedSourceRuntimeMutationDelegate(null)
+      fileProvider.setFilePersistencePort(null)
+      await this.indexingRuntime?.clear()
+      this.indexingRuntime = null
+      this.indexWriterRouter = null
+    } finally {
       this.indexCommitUnsubscribe?.()
       this.indexCommitUnsubscribe = null
       this.usageChangedUnsubscribe?.()
@@ -2808,14 +2816,6 @@ export class SearchEngineCore
       }
       this.indexCommitStreams.clear()
 
-      appProvider.setIndexedSourceRuntimeDelegate(null)
-      fileProvider.setIndexedSourceRuntimeResetDelegate(null)
-      fileProvider.setIndexedSourceRuntimeMutationDelegate(null)
-      fileProvider.setFilePersistencePort(null)
-      await this.indexingRuntime?.clear()
-      this.indexingRuntime = null
-      this.indexWriterRouter = null
-
       foregroundAppSnapshotStore.setInstantSource(null)
       await this.foregroundActivity?.stop().catch((error) => {
         searchEngineLog.error('Failed to flush foreground app activity on destroy', { error })
@@ -2824,7 +2824,6 @@ export class SearchEngineCore
       await this.searchUsageService.flush().catch((error) => {
         searchEngineLog.error('Failed to flush usage stats queue on destroy', { error })
       })
-    } finally {
       await this.searchIndexReadWorker?.close()
       this.searchIndexReadWorker = null
       await this.searchIndexFastReadWorker?.close()

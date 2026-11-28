@@ -62,7 +62,7 @@ async function runWithDbBusyRecovery<T>(
   }
 }
 
-export function setAuxDbResolver(resolver: AuxDbResolver): void {
+export function setAuxDbResolver(resolver: AuxDbResolver | null): void {
   auxDbResolver = resolver
 }
 
@@ -139,10 +139,48 @@ export async function scheduleAuxWrite<T>(
         '(DatabaseModule.onInit) — wiring bug, or a test missing a resolveDb override'
     )
   }
-  const { db, isAux } = resolver()
-  const lane: DbWriteLane = isAux ? 'aux' : 'primary'
-  return dbWriteScheduler.schedule(label, () => runWithDbBusyRecovery(lane, () => opFactory(db)), {
-    ...scheduleOptions,
-    lane
-  })
+  const initial = resolver()
+  if (initial.isAux) {
+    return dbWriteScheduler.schedule(
+      label,
+      () => runWithDbBusyRecovery('aux', () => opFactory(initial.db)),
+      {
+        ...scheduleOptions,
+        lane: 'aux'
+      }
+    )
+  }
+
+  let rerouteToAux: MainDatabase | null = null
+  const result = await dbWriteScheduler.schedule(
+    label,
+    async () => {
+      // Re-check at execution time: if aux migration finished while this fallback write
+      // waited in the primary lane queue, do not write an orphaned row to database.db.
+      const live = resolver()
+      if (live.isAux) {
+        rerouteToAux = live.db
+        return undefined as T
+      }
+      return await runWithDbBusyRecovery('primary', () => opFactory(live.db))
+    },
+    {
+      ...scheduleOptions,
+      lane: 'primary'
+    }
+  )
+
+  if (rerouteToAux) {
+    const auxDb = rerouteToAux
+    return dbWriteScheduler.schedule(
+      label,
+      () => runWithDbBusyRecovery('aux', () => opFactory(auxDb)),
+      {
+        ...scheduleOptions,
+        lane: 'aux'
+      }
+    )
+  }
+
+  return result
 }

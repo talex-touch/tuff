@@ -197,28 +197,38 @@ interface PersistChunkSummary {
 export function withFileIndexPersistenceRetry<T>(
   operation: () => Promise<T>,
   label: string,
-  client?: Pick<Client, 'reconnect'>
+  clientOrReconnect?: Pick<Client, 'reconnect'> | (() => void | Promise<void>)
 ): Promise<T> {
   return withSqliteRetry(operation, {
     label,
     // @libsql/client#352: a native statement that fails SQLITE_BUSY stays active until GC.
-    // Reconnect this writer-owned file client before retrying so the poisoned connection cannot
-    // make every later transaction fail at COMMIT with "SQL statements in progress".
-    onBusy: client ? () => client.reconnect() : undefined
+    // Reconnect this writer-owned file client (and reapply per-connection PRAGMAs via callback)
+    // before retrying so the poisoned connection cannot make later transactions fail or drop caps.
+    onBusy:
+      typeof clientOrReconnect === 'function'
+        ? clientOrReconnect
+        : clientOrReconnect
+          ? () => clientOrReconnect.reconnect()
+          : undefined
   })
 }
 
 export class SqliteFileIndexPersistenceRepository implements FileIndexPersistenceRepository {
   private readonly client: Client
+  private readonly onBusyReconnect?: () => void | Promise<void>
 
-  constructor(private readonly db: LibSQLDatabase<typeof schema>) {
+  constructor(
+    private readonly db: LibSQLDatabase<typeof schema>,
+    options?: { onBusyReconnect?: () => void | Promise<void> }
+  ) {
     const client = (db as LibSQLDatabase<typeof schema> & { $client?: Client }).$client
     if (!client) throw new Error('LIBSQL_CLIENT_UNAVAILABLE')
     this.client = client
+    this.onBusyReconnect = options?.onBusyReconnect
   }
 
   private withRetry<T>(operation: () => Promise<T>, label: string): Promise<T> {
-    return withFileIndexPersistenceRetry(operation, label, this.client)
+    return withFileIndexPersistenceRetry(operation, label, this.onBusyReconnect ?? this.client)
   }
 
   async persistEntries(entries: FilePersistenceEntry[]): Promise<PersistEntriesSummary> {

@@ -847,18 +847,13 @@ export class DbWriteScheduler {
   }
 
   private shouldDropTaskByWait(task: DbWriteTask<unknown>, waitedMs: number): boolean {
-    const maxWaitMs =
+    const effectiveMaxWaitMs =
       typeof task.maxQueueWaitMs === 'number' && task.maxQueueWaitMs > 0
         ? task.maxQueueWaitMs
-        : undefined
-    if (maxWaitMs && waitedMs > maxWaitMs) return true
-    if (
-      (task.dropPolicy === 'drop' || task.dropPolicy === 'latest_wins') &&
-      waitedMs > DROPPABLE_TIMEOUT_MS
-    ) {
-      return true
-    }
-    return false
+        : task.dropPolicy === 'drop' || task.dropPolicy === 'latest_wins'
+          ? DROPPABLE_TIMEOUT_MS
+          : undefined
+    return Boolean(effectiveMaxWaitMs && waitedMs > effectiveMaxWaitMs)
   }
 
   /**

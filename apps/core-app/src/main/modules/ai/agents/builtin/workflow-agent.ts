@@ -66,6 +66,7 @@ const descriptor: AgentDescriptor = {
       description: '基于输入生成简单的工作流计划'
     }
   ],
+  tools: [],
   enabled: true
 }
 
@@ -113,10 +114,15 @@ async function executeWorkflow(
       throw new Error('WorkflowAgent cannot invoke itself')
     }
 
+    const caller =
+      typeof ctx.metadata?.caller === 'string' && ctx.metadata.caller.trim()
+        ? ctx.metadata.caller.trim()
+        : undefined
     const task: AgentTask = {
       agentId: step.agentId,
       type: step.type ?? 'execute',
       input: step.input ?? {},
+      ...(caller ? { caller } : {}),
       context: {
         sessionId: ctx.sessionId,
         workingDirectory: ctx.workingDirectory,

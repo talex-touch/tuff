@@ -137,6 +137,7 @@ export class FxRateProvider {
   private isRefreshing = false
   private started = false
   private startupRefreshTimer: NodeJS.Timeout | null = null
+  private retryTimer: NodeJS.Timeout | null = null
   private retryCount = 0
   private maxRetries = 3
 
@@ -167,6 +168,10 @@ export class FxRateProvider {
     if (this.startupRefreshTimer) {
       clearTimeout(this.startupRefreshTimer)
       this.startupRefreshTimer = null
+    }
+    if (this.retryTimer) {
+      clearTimeout(this.retryTimer)
+      this.retryTimer = null
     }
     this.pollingService.unregister(this.refreshTaskId)
     log.info('FxRateProvider stopped')
@@ -382,13 +387,20 @@ export class FxRateProvider {
 
       // Exponential backoff on failure
       this.retryCount++
-      if (this.retryCount < this.maxRetries) {
+      if (this.started && this.retryCount < this.maxRetries) {
         const delay = Math.min(1000 * 2 ** this.retryCount, 30000)
         log.warn(`Rate refresh failed, retrying in ${delay}ms`, {
           meta: { attempt: this.retryCount }
         })
-        setTimeout(() => this.refresh(), delay)
-      } else {
+        if (this.retryTimer) {
+          clearTimeout(this.retryTimer)
+        }
+        this.retryTimer = setTimeout(() => {
+          this.retryTimer = null
+          if (!this.started) return
+          void this.refresh()
+        }, delay)
+      } else if (this.started) {
         log.error('Max retries reached, using cached/default rates')
       }
 

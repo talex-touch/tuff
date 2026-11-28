@@ -1,6 +1,7 @@
 import type { DbUtils } from '../../../../../db/utils'
 import { eq } from 'drizzle-orm'
 import { getLogger } from '@talex-touch/utils/common/logger'
+import { scheduleDbWrite } from '../../../../../db/db-write'
 import { config as configSchema } from '../../../../../db/schema'
 import { resolveAppItemId } from '../app-index-metadata'
 import type { ScannedAppInfo } from '../app-types'
@@ -125,10 +126,16 @@ export class AppUserAliasService {
     try {
       const value = JSON.stringify(candidate)
       const db = dbUtils.getDb()
-      await db
-        .insert(configSchema)
-        .values({ key: USER_ALIASES_CONFIG_KEY, value })
-        .onConflictDoUpdate({ target: configSchema.key, set: { value } })
+      await scheduleDbWrite(
+        'app-user-alias.persist',
+        async () => {
+          await db
+            .insert(configSchema)
+            .values({ key: USER_ALIASES_CONFIG_KEY, value })
+            .onConflictDoUpdate({ target: configSchema.key, set: { value } })
+        },
+        { priority: 'interactive' }
+      )
     } catch (error) {
       log.error('Failed to persist user aliases', { error })
       throw new Error('ALIAS_PERSIST_FAILED')

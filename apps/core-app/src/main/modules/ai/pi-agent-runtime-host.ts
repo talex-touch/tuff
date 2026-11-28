@@ -37,6 +37,7 @@ import { app, utilityProcess } from 'electron'
 import { createLogger } from '../../utils/logger'
 import { AgentPermission } from '@talex-touch/utils'
 import { agentManager, toolRegistry } from './agents'
+import { markSchedulerProfileAuthority } from './intelligence-invoke-purpose'
 import { tuffIntelligence } from './intelligence-sdk'
 import { toolGatewayModule } from '../tool-gateway'
 import { intelligenceMcpRegistry } from './intelligence-mcp-registry'
@@ -910,30 +911,33 @@ export class PiAgentRuntimeHost {
         },
         { toolNames: new Set(request.tools.map((tool) => tool.name)) }
       )
-      const streamOptions = {
-        modelPreference: context.workspace?.model
-          ? [context.workspace.model]
-          : request.modelPreference.length > 0
-            ? request.modelPreference
-            : undefined,
-        ...(context.workspace?.providerId || CLI_PROFILE_PROVIDER_MAP[context.profile.id]
-          ? {
-              preferredProviderId:
-                context.workspace?.providerId || CLI_PROFILE_PROVIDER_MAP[context.profile.id]
-            }
-          : {}),
-        ...(context.workspace?.reasoningEffort
-          ? { reasoningEffort: context.workspace.reasoningEffort }
-          : {}),
-        signal: context.controller.signal,
-        metadata: {
-          caller: 'ai-cli-orchestrator',
-          runId: request.runId,
-          sessionId: context.run.sessionId,
-          step: request.step,
-          profileId: context.profile.id
-        }
-      }
+      const streamOptions = markSchedulerProfileAuthority(
+        {
+          modelPreference: context.workspace?.model
+            ? [context.workspace.model]
+            : request.modelPreference.length > 0
+              ? request.modelPreference
+              : undefined,
+          ...(context.workspace?.providerId || CLI_PROFILE_PROVIDER_MAP[context.profile.id]
+            ? {
+                preferredProviderId:
+                  context.workspace?.providerId || CLI_PROFILE_PROVIDER_MAP[context.profile.id]
+              }
+            : {}),
+          ...(context.workspace?.reasoningEffort
+            ? { reasoningEffort: context.workspace.reasoningEffort }
+            : {}),
+          signal: context.controller.signal,
+          metadata: {
+            caller: 'ai-cli-orchestrator',
+            runId: request.runId,
+            sessionId: context.run.sessionId,
+            step: request.step,
+            profileId: context.profile.id
+          }
+        },
+        context.profile.id
+      )
 
       for await (const event of tuffIntelligence.stream<string>(
         'text.chat',
@@ -1203,16 +1207,19 @@ export class PiAgentRuntimeHost {
       }
     }
 
-    const isFullPermission =
-      toolGatewayModule.getGatewayState().mode === 'full' ||
-      context.profile.permissionPolicy.allowedPermissions.includes('*') ||
-      context.profile.id === 'default-pi'
+    const isFullPermission = toolGatewayModule.getGatewayState().mode === 'full'
 
     if (!approval && requiredPermissions.size > 0) {
       if (isFullPermission) {
         approval = undefined
       } else if (context.profile.permissionPolicy.mode === 'preauthorized') {
-        const allowed = new Set(context.profile.permissionPolicy.allowedPermissions)
+        // Respect review mode: wildcard '*' never grants blanket auto-approval; only explicit
+        // scoped permissions listed on the profile satisfy preauthorization.
+        const allowed = new Set(
+          context.profile.permissionPolicy.allowedPermissions.filter(
+            (permission) => permission !== '*'
+          )
+        )
         const missing = Array.from(requiredPermissions).filter(
           (permission) => !allowed.has(permission)
         )

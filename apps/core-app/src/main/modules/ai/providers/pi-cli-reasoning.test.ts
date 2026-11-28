@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { markSchedulerProfileAuthority } from '../intelligence-invoke-purpose'
 import { planProviderReasoning, withReasoningPlan } from '../reasoning-effort-runtime'
 import { PiCliProvider } from './pi-cli-provider'
 import {
@@ -29,9 +30,10 @@ const prompt = { systemPrompt: 'sys', prompt: 'hi' }
 describe('buildPiArgs --thinking', () => {
   it('adds the planned level and nothing on auto', () => {
     expect(buildPiArgs(prompt, 'codex/gpt-5.5', undefined, [], 'high')).toEqual([
-      ...buildPiArgs(prompt, 'codex/gpt-5.5').slice(0, -1),
+      ...buildPiArgs(prompt, 'codex/gpt-5.5').slice(0, -2),
       '--thinking',
       'high',
+      '--',
       'hi'
     ])
     // Auto keeps the argv byte-for-byte: pi then uses the user's own defaultThinkingLevel.
@@ -39,6 +41,23 @@ describe('buildPiArgs --thinking', () => {
       buildPiArgs(prompt, 'codex/gpt-5.5')
     )
     expect(buildPiArgs(prompt)).not.toContain('--thinking')
+  })
+
+  it('terminates options with -- and neutralizes leading @file syntax in prompts', () => {
+    const flagArgs = buildPiArgs({ systemPrompt: 'sys', prompt: '--tools=all' }, 'codex/gpt-5.5')
+    expect(flagArgs.slice(-2)).toEqual(['--', '--tools=all'])
+
+    const atFileArgs = buildPiArgs(
+      { systemPrompt: 'sys', prompt: '  @/etc/passwd' },
+      'codex/gpt-5.5'
+    )
+    expect(atFileArgs.slice(-2)).toEqual(['--', 'User:   @/etc/passwd'])
+
+    const ompAtArgs = buildOmpArgs(
+      { systemPrompt: 'sys', prompt: '@/etc/shadow' },
+      'openai/gpt-5.5'
+    )
+    expect(ompAtArgs.slice(-2)).toEqual(['--', 'User: @/etc/shadow'])
   })
 })
 
@@ -141,11 +160,12 @@ describe('PiCliProvider argv under a reasoning plan', () => {
       [CLAUDE_CLI_PROVIDER_ID]: CLAUDE_CLI_PROFILE_ID,
       [OMP_CLI_PROVIDER_ID]: OMP_CLI_PROFILE_ID
     }[config.id]
-    const options = {
+    const baseOptions = {
       modelPreference: [model],
       ...(scheduler ? { metadata: { profileId: scheduler } } : {}),
       ...(reasoningEffort ? { reasoningEffort } : {})
     }
+    const options = scheduler ? markSchedulerProfileAuthority(baseOptions, scheduler) : baseOptions
     const planned = withReasoningPlan(options, planProviderReasoning(options, config, model))
     for await (const _chunk of new PiCliProvider(config, () => true).chatStream(
       { messages: [{ role: 'user', content: 'hi' }] },
@@ -266,6 +286,7 @@ describe('PiCliProvider argv under a reasoning plan', () => {
       systemPrompt,
       '--model',
       'openai/gpt-5.5',
+      '--',
       'hi'
     ])
 
@@ -288,6 +309,7 @@ describe('PiCliProvider argv under a reasoning plan', () => {
       systemPrompt,
       '--model',
       'openai/gpt-5.5',
+      '--',
       'hi'
     ])
 
@@ -308,6 +330,7 @@ describe('PiCliProvider argv under a reasoning plan', () => {
       'mcp_servers={}',
       '-m',
       'gpt-5.5',
+      '--',
       expect.stringMatching(/\n\n---\n\nhi$/)
     ])
 
@@ -330,6 +353,7 @@ describe('PiCliProvider argv under a reasoning plan', () => {
       systemPrompt,
       '--model',
       'opus',
+      '--',
       'hi'
     ])
   })

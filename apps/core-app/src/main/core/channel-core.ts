@@ -875,10 +875,36 @@ class TouchChannel {
         webContents.send(_channelCategory, finalData)
 
         const timeoutMs = finalData.sync?.timeout ?? CHANNEL_DEFAULT_TIMEOUT
+        const cleanupDestroyListener = () => {
+          if (typeof webContents.removeListener === 'function') {
+            webContents.removeListener('destroyed', onWebContentsDestroyed)
+          }
+        }
+        const onWebContentsDestroyed = () => {
+          if (!this.pendingMap.has(uniqueId)) {
+            return
+          }
+          clearTimeout(timeoutHandle)
+          this.pendingMap.delete(uniqueId)
+          channelLog.warn(
+            `[Channel] Request "${eventName}" aborted because target webContents was destroyed.`
+          )
+          traceIpc(eventName, startedAt, false)
+          resolve({
+            code: DataCode.ERROR,
+            data: {
+              message: `WebContents destroyed while waiting for "${eventName}"`,
+              reason: 'webcontents_destroyed',
+              eventName
+            }
+          })
+        }
+
         const timeoutHandle = setTimeout(() => {
           if (!this.pendingMap.has(uniqueId)) {
             return
           }
+          cleanupDestroyListener()
           this.pendingMap.delete(uniqueId)
           channelLog.warn(`[Channel] Request "${eventName}" timed out after ${timeoutMs}ms.`)
           traceIpc(eventName, startedAt, false)
@@ -892,8 +918,13 @@ class TouchChannel {
           })
         }, timeoutMs)
 
+        if (typeof webContents.once === 'function') {
+          webContents.once('destroyed', onWebContentsDestroyed)
+        }
+
         this.pendingMap.set(uniqueId, (res) => {
           clearTimeout(timeoutHandle)
+          cleanupDestroyListener()
           this.pendingMap.delete(uniqueId)
 
           traceIpc(eventName, startedAt, res.code === DataCode.SUCCESS)

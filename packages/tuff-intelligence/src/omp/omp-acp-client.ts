@@ -37,7 +37,9 @@ export class OmpAcpClient extends AcpClient {
 
   static override async spawn(options: OmpAcpSpawnOptions = {}): Promise<OmpAcpClient> {
     const executable = options.executablePath || 'omp'
-    const proc = spawn(executable, ['acp'], {
+    const extraArgs = options.args ?? []
+    const args = extraArgs[0] === 'acp' ? [...extraArgs] : ['acp', ...extraArgs]
+    const proc = spawn(executable, args, {
       cwd: options.cwd || process.cwd(),
       env: buildSpawnEnv(options.env),
       stdio: ['pipe', 'pipe', 'pipe'],

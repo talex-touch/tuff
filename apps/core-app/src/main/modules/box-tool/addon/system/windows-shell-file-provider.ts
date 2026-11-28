@@ -232,14 +232,24 @@ export class WindowsShellFileProvider implements ISearchProvider<ProviderContext
   }
 
   async onExecute(args: IExecuteArgs): Promise<IProviderActivate | null> {
+    const prefix = `${this.id}:`
+    const entryIdFromItem = args.item.id?.startsWith(prefix)
+      ? args.item.id.slice(prefix.length)
+      : null
     const meta = getWindowsShellEntryMeta(args.item)
-    if (!meta) {
-      windowsShellFileLog.warn('Windows shell entry metadata is missing')
+    const candidateId = entryIdFromItem || meta?.id || null
+    const entry = candidateId
+      ? WINDOWS_SHELL_ENTRIES.find((candidate) => candidate.id === candidateId)
+      : undefined
+    if (!entry) {
+      windowsShellFileLog.warn('Refused unrecognized Windows shell entry execution', {
+        itemId: args.item.id
+      })
       return null
     }
 
     try {
-      const child = spawnSafe('explorer.exe', [meta.target], {
+      const child = spawnSafe('explorer.exe', [entry.target], {
         detached: true,
         stdio: 'ignore',
         windowsHide: true
@@ -256,7 +266,7 @@ export class WindowsShellFileProvider implements ISearchProvider<ProviderContext
     } catch (error) {
       windowsShellFileLog.warn('Failed to open Windows shell entry', {
         error,
-        meta
+        entryId: entry.id
       })
     }
 

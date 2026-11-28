@@ -15,8 +15,6 @@ import type {
   IntelligenceVisionOcrPayload,
   IntelligenceVisionOcrResult
 } from '@talex-touch/tuff-intelligence'
-import { readFile } from 'node:fs/promises'
-import path from 'node:path'
 import { ChatAnthropic } from '@langchain/anthropic'
 import { HumanMessage, SystemMessage } from '@langchain/core/messages'
 import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
@@ -24,6 +22,7 @@ import { toLangChainAnthropicThinkingFields } from '@talex-touch/utils/intellige
 import { readModelPlan } from '../model-request-plan'
 import { readReasoningPlan } from '../reasoning-effort-runtime'
 import { IntelligenceProvider } from '../runtime/base-provider'
+import { readSafeVisionImageFile } from './vision-image-file'
 import {
   extractReasoningContent,
   extractTextContent,
@@ -125,23 +124,6 @@ function resolveUsageInfo(rawMessage: Record<string, unknown>): IntelligenceUsag
   }
 }
 
-function detectMime(filePath: string): string {
-  const ext = path.extname(filePath).toLowerCase()
-  switch (ext) {
-    case '.jpg':
-    case '.jpeg':
-      return 'image/jpeg'
-    case '.webp':
-      return 'image/webp'
-    case '.gif':
-      return 'image/gif'
-    case '.bmp':
-      return 'image/bmp'
-    default:
-      return 'image/png'
-  }
-}
-
 function parseDataUrl(input: string): { mimeType: string; base64: string } | null {
   const matched = input.match(/^data:(.+?);base64,(.+)$/)
   if (!matched) return null
@@ -152,7 +134,8 @@ function parseDataUrl(input: string): { mimeType: string; base64: string } | nul
 }
 
 async function toAnthropicImageSource(
-  source: IntelligenceVisionImageSource
+  source: IntelligenceVisionImageSource,
+  options?: IntelligenceInvokeOptions
 ): Promise<{ mimeType: string; base64: string }> {
   if (source.type === 'data-url' && source.dataUrl) {
     const parsed = parseDataUrl(source.dataUrl)
@@ -170,10 +153,10 @@ async function toAnthropicImageSource(
   }
 
   if (source.type === 'file' && source.filePath) {
-    const image = await readFile(source.filePath)
+    const image = await readSafeVisionImageFile(source.filePath, options)
     return {
-      mimeType: detectMime(source.filePath),
-      base64: image.toString('base64')
+      mimeType: image.mimeType,
+      base64: image.buffer.toString('base64')
     }
   }
 
@@ -392,7 +375,7 @@ export class AnthropicProvider extends IntelligenceProvider {
       endpoint: '/langchain/vision'
     })
 
-    const imageSource = await toAnthropicImageSource(source)
+    const imageSource = await toAnthropicImageSource(source, options)
     const model = this.createModel({ model: modelName, options, maxTokens })
     const response = await model.invoke([
       new HumanMessage({

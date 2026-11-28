@@ -329,7 +329,8 @@ async function getAppInfoUnstable(appPath: string): Promise<ScannedAppInfo | nul
   // `name` is always the file name
   const name = fileName
 
-  const bundleId = getValueFromPlist(plistContent, 'CFBundleIdentifier') || ''
+  const rawBundleId = getValueFromPlist(plistContent, 'CFBundleIdentifier') || ''
+  const bundleId = /^[A-Za-z0-9][A-Za-z0-9._-]{0,254}$/.test(rawBundleId) ? rawBundleId : ''
   const version =
     getValueFromPlist(plistContent, 'CFBundleShortVersionString') ||
     getValueFromPlist(plistContent, 'CFBundleVersion') ||

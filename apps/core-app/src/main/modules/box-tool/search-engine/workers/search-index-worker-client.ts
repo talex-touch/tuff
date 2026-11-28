@@ -221,6 +221,7 @@ export class SearchIndexWorkerClient {
   private kernelInitGeneration = 0
   private initAttemptSeq = 0
   private terminationBarrier: Promise<void> | null = null
+  private retiringForIdle = false
   private terminationSeq = 0
   private terminationFailure: Error | null = null
   private readonly idleShutdown = new IdleWorkerShutdownController({
@@ -999,6 +1000,7 @@ export class SearchIndexWorkerClient {
 
   async shutdown(): Promise<void> {
     this.shuttingDown = true
+    this.retiringForIdle = false
     if (this.useKernelProcess) {
       const termination = this.beginWorkerTermination({
         keepInitState: false,
@@ -1054,6 +1056,10 @@ export class SearchIndexWorkerClient {
 
   private async ensureInitialized(signal?: AbortSignal): Promise<void> {
     signal?.throwIfAborted()
+    if (!this.shuttingDown && this.retiringForIdle && this.terminationBarrier) {
+      await this.awaitRetirementBeforeMaintenance(signal)
+      signal?.throwIfAborted()
+    }
     this.assertTerminationConfirmed()
     if (
       this.useKernelProcess &&
@@ -1764,15 +1770,20 @@ export class SearchIndexWorkerClient {
           }
         }
       })()
+      this.retiringForIdle = Boolean(
+        options.keepInitState && options.graceful && !this.shuttingDown
+      )
       this.terminationBarrier = termination
       void termination.then(
         () => {
           if (this.terminationSeq !== termId) return
           this.terminationBarrier = null
+          this.retiringForIdle = false
           this.resolveDrainWaitersIfIdle()
         },
         () => {
           if (this.terminationSeq !== termId) return
+          this.retiringForIdle = false
           this.terminationFailure = new SearchIndexWorkerTerminationUnconfirmedError('rejected')
           this.resolveDrainWaitersIfIdle()
         }
@@ -1788,22 +1799,24 @@ export class SearchIndexWorkerClient {
     if (!worker) return Promise.resolve()
 
     // Detaching this.worker/initPromise above is synchronous, so a write arriving
-    // during a graceful close spins a FRESH worker instead of hitting the one
-    // being torn down (which would reject with "Worker not initialized"). The
-    // captured `worker` is checkpointed + closed, then terminated.
+    // during a graceful close waits for retirement to finish, then spins a FRESH
+    // worker instead of failing with SEARCH_INDEX_WORKER_TERMINATION_UNCONFIRMED.
     const termination = Promise.resolve()
       .then(() => (options.graceful ? this.requestWorkerGracefulClose(worker) : undefined))
       .then(() => worker.terminate())
       .then(() => undefined)
+    this.retiringForIdle = Boolean(options.keepInitState && options.graceful && !this.shuttingDown)
     this.terminationBarrier = termination
     void termination.then(
       () => {
         if (this.terminationBarrier !== termination) return
         this.terminationBarrier = null
+        this.retiringForIdle = false
         this.resolveDrainWaitersIfIdle()
       },
       () => {
         if (this.terminationBarrier !== termination) return
+        this.retiringForIdle = false
         this.terminationFailure = new SearchIndexWorkerTerminationUnconfirmedError('rejected')
         this.resolveDrainWaitersIfIdle()
       }

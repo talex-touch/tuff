@@ -154,17 +154,29 @@ async function writeThumbnail(
   }
 }
 
+const FFPROBE_EXEC_TIMEOUT_MS = 5_000
+const FFMPEG_EXEC_TIMEOUT_MS = 15_000
+const MEDIA_EXEC_MAX_BUFFER_BYTES = 1024 * 1024
+
 async function probeVideoDuration(filePath: string, ffprobePath: string): Promise<number | null> {
   try {
-    const { stdout } = await execFileAsync(ffprobePath, [
-      '-v',
-      'error',
-      '-show_entries',
-      'format=duration',
-      '-of',
-      'default=noprint_wrappers=1:nokey=1',
-      filePath
-    ])
+    const { stdout } = await execFileAsync(
+      ffprobePath,
+      [
+        '-v',
+        'error',
+        '-show_entries',
+        'format=duration',
+        '-of',
+        'default=noprint_wrappers=1:nokey=1',
+        filePath
+      ],
+      {
+        timeout: FFPROBE_EXEC_TIMEOUT_MS,
+        killSignal: 'SIGKILL',
+        maxBuffer: MEDIA_EXEC_MAX_BUFFER_BYTES
+      }
+    )
     const duration = Number.parseFloat(String(stdout).trim())
     return Number.isFinite(duration) && duration > 0 ? duration : null
   } catch {
@@ -182,20 +194,28 @@ async function generateVideoFrame(
   const duration = ffprobePath ? await probeVideoDuration(filePath, ffprobePath) : null
   const seekSeconds = duration ? Math.min(1, Math.max(0, duration * 0.1)) : 0
 
-  await execFileAsync(ffmpegPath, [
-    '-hide_banner',
-    '-loglevel',
-    'error',
-    '-ss',
-    String(seekSeconds),
-    '-i',
-    filePath,
-    '-frames:v',
-    '1',
-    '-an',
-    '-y',
-    framePath
-  ])
+  await execFileAsync(
+    ffmpegPath,
+    [
+      '-hide_banner',
+      '-loglevel',
+      'error',
+      '-ss',
+      String(seekSeconds),
+      '-i',
+      filePath,
+      '-frames:v',
+      '1',
+      '-an',
+      '-y',
+      framePath
+    ],
+    {
+      timeout: FFMPEG_EXEC_TIMEOUT_MS,
+      killSignal: 'SIGKILL',
+      maxBuffer: MEDIA_EXEC_MAX_BUFFER_BYTES
+    }
+  )
 
   return framePath
 }

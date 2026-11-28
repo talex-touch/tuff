@@ -20,7 +20,7 @@ function nowIso() {
 }
 
 function randomId(prefix: string) {
-  return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
+  return `${prefix}_${crypto.randomUUID().replace(/-/g, '')}`
 }
 
 function parseJson<T>(value: string | null | undefined, fallback: T): T {
@@ -188,7 +188,7 @@ export class D1RuntimeStoreAdapter implements RuntimeStoreAdapter {
       lastTurnId: undefined,
     }
 
-    await this.db.prepare(`
+    const result = await this.db.prepare(`
       INSERT INTO ${SESSIONS_TABLE} (session_id, user_id, status, title, notify_unread, last_seq, heartbeat_at, pause_reason, created_at, updated_at)
       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
       ON CONFLICT(session_id) DO UPDATE SET
@@ -196,7 +196,12 @@ export class D1RuntimeStoreAdapter implements RuntimeStoreAdapter {
         heartbeat_at = excluded.heartbeat_at,
         pause_reason = excluded.pause_reason,
         updated_at = excluded.updated_at
+      WHERE user_id = ?2
     `).bind(sessionId, this.userId, row.status, null, 0, 0, now, null, now, now).run()
+
+    if (result?.meta && typeof result.meta.changes === 'number' && result.meta.changes === 0) {
+      throw new Error('Session ID conflict: session belongs to another user')
+    }
 
     return row
   }

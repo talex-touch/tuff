@@ -397,4 +397,17 @@ describe('openImageTranslatePinWindow', () => {
     expect(html).toContain('class="overlay"')
     expect(html).toContain('&lt;你好&gt;')
   })
+
+  it('rejects untrusted MIME types and strips non-base64 characters from image src', async () => {
+    await openImageTranslatePinWindow({
+      translatedImageBase64: `${translatedImageBase64()}" onload="alert(1)`,
+      imageMimeType: 'image/png" onerror="alert(1)'
+    })
+
+    const url = String(pinWindowMocks.loadURL.mock.calls[0]?.[0] ?? '')
+    const html = decodeURIComponent(url.slice(url.indexOf(',') + 1))
+    expect(html).toContain(`src="data:image/png;base64,${translatedImageBase64()}onload=alert1"`)
+    expect(html).not.toContain('onerror=')
+    expect(html).not.toContain('" onload=')
+  })
 })

@@ -101,4 +101,51 @@ describe('workflow clipboard and browser tools', () => {
     expect(output.stdout.trim()).toBe('hello tuff')
     expect(output.exitCode).toBe(0)
   })
+
+  it('rejects pre-aborted AbortSignal in system.exec without running the command and removes abort listener', async () => {
+    registerWorkflowTools({
+      clipboard: { write: writeClipboardMock },
+      systemShell: { openExternal: openExternalMock }
+    })
+
+    const preAborted = new AbortController()
+    preAborted.abort()
+    const abortedResult = await toolRegistry.executeTool(
+      'system.exec',
+      { command: 'echo should-not-run' },
+      { taskId: 'task-shell-abort', agentId: 'agent-workflow', signal: preAborted.signal }
+    )
+    expect(abortedResult.success).toBe(false)
+
+    const liveController = new AbortController()
+    const removeSpy = vi.spyOn(liveController.signal, 'removeEventListener')
+    const okResult = await toolRegistry.executeTool(
+      'system.exec',
+      { command: 'echo clean' },
+      { taskId: 'task-shell-clean', agentId: 'agent-workflow', signal: liveController.signal }
+    )
+    expect(okResult.success).toBe(true)
+    expect(removeSpy).toHaveBeenCalledWith('abort', expect.any(Function))
+  })
+
+  it('blocks local file and loopback SSRF targets in browser.extract', async () => {
+    registerWorkflowTools({
+      clipboard: { write: writeClipboardMock },
+      systemShell: { openExternal: openExternalMock }
+    })
+
+    for (const blockedUrl of [
+      'file:///etc/passwd',
+      'http://127.0.0.1:8080/secret',
+      'http://169.254.169.254/latest/meta-data/'
+    ]) {
+      const res = await toolRegistry.executeTool(
+        'browser.extract',
+        { url: blockedUrl },
+        { taskId: 'task-ssrf', agentId: 'agent-workflow' }
+      )
+      expect(res.success, blockedUrl).toBe(false)
+      expect(res.error, blockedUrl).toContain('SSRF_BLOCKED')
+    }
+  })
 })

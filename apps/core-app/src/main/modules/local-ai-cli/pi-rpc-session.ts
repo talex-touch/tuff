@@ -84,6 +84,8 @@ function isTurnComplete(record: PiRpcRecord): boolean {
  * the actual process and its stdin/stdout alive so GUI and terminal views can submit turns through
  * the same agent instead of spawning a fresh CLI for every view change.
  */
+const MAX_LINE_BUFFER_CHARS = 4 * 1024 * 1024
+
 export class PersistentPiRpcSession {
   readonly state: PersistentPiRpcState
   private readonly child: ChildProcess
@@ -105,6 +107,10 @@ export class PersistentPiRpcSession {
 
     child.stdout?.setEncoding('utf8')
     child.stdout?.on('data', (chunk: string) => this.receive(chunk))
+    // Drain stderr so a chatty child cannot fill the OS pipe buffer (64 KiB POSIX / 4 KiB Windows)
+    // and deadlock while blocked on stderr writes.
+    child.stderr?.on('error', () => undefined)
+    child.stderr?.resume()
     // Reporting an EPIPE here keeps it from surfacing as an unhandled error in the main process.
     child.stdin?.on('error', (error) => this.fail(error))
     child.once('error', (error) => this.fail(error))
@@ -146,6 +152,12 @@ export class PersistentPiRpcSession {
     this.lineBuffer += chunk
     while (this.lineBuffer.includes('\n')) {
       const newline = this.lineBuffer.indexOf('\n')
+      if (newline > MAX_LINE_BUFFER_CHARS) {
+        this.lineBuffer = ''
+        this.fail(new Error('RPC_LINE_BUFFER_OVERFLOW'))
+        void this.close()
+        return
+      }
       const line = this.lineBuffer.slice(0, newline).replace(/\r$/, '')
       this.lineBuffer = this.lineBuffer.slice(newline + 1)
       if (!line.trim()) continue
@@ -164,6 +176,11 @@ export class PersistentPiRpcSession {
       }
       this.activeTurn?.push(record)
       if (isTurnComplete(record)) this.activeTurn?.end()
+    }
+    if (this.lineBuffer.length > MAX_LINE_BUFFER_CHARS) {
+      this.lineBuffer = ''
+      this.fail(new Error('RPC_LINE_BUFFER_OVERFLOW'))
+      void this.close()
     }
   }
 

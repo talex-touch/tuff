@@ -243,8 +243,8 @@ export class ToolRegistry {
     if (!schema) return null
 
     // Basic type validation
-    const inputType = Array.isArray(input) ? 'array' : typeof input
-    if (schema.type && schema.type !== inputType && input !== null) {
+    const inputType = input === null ? 'null' : Array.isArray(input) ? 'array' : typeof input
+    if (schema.type && schema.type !== inputType) {
       return `Expected ${schema.type}, got ${inputType}`
     }
 
@@ -257,7 +257,7 @@ export class ToolRegistry {
     ) {
       const obj = input as Record<string, unknown>
       for (const field of schema.required) {
-        if (!(field in obj)) {
+        if (!Object.hasOwn(obj, field)) {
           return `Missing required field: ${field}`
         }
       }

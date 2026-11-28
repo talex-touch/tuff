@@ -73,9 +73,104 @@ export function resolveIconRoots(
   return [...new Set(roots)]
 }
 
-async function findIconPath(iconName: string): Promise<string> {
-  if (path.isAbsolute(iconName) && (await fs.stat(iconName).catch(() => null))) {
-    return iconName
+const MAX_DESKTOP_SCAN_DEPTH = 8
+const DESKTOP_FIELD_CODE_PATTERN = /^%[fFuUdDnNickvm]$/
+
+function isPathInsideDir(candidatePath: string, rootDir: string): boolean {
+  const relative = path.relative(rootDir, candidatePath)
+  return Boolean(relative) && !relative.startsWith('..') && !path.isAbsolute(relative)
+}
+
+export function tokenizeDesktopExec(rawExec: string): string[] {
+  const tokens: string[] = []
+  let current = ''
+  let quote: '"' | "'" | null = null
+  let inToken = false
+
+  for (let i = 0; i < rawExec.length; i += 1) {
+    const ch = rawExec[i]
+    if (quote) {
+      if (quote === '"' && ch === '\\' && i + 1 < rawExec.length) {
+        current += rawExec[i + 1]
+        i += 1
+        continue
+      }
+      if (ch === quote) {
+        quote = null
+        continue
+      }
+      current += ch
+      continue
+    }
+
+    if (ch === '"' || ch === "'") {
+      quote = ch
+      inToken = true
+      continue
+    }
+    if (ch === '\\' && i + 1 < rawExec.length) {
+      current += rawExec[i + 1]
+      i += 1
+      inToken = true
+      continue
+    }
+    if (/\s/.test(ch)) {
+      if (inToken) {
+        tokens.push(current)
+        current = ''
+        inToken = false
+      }
+      continue
+    }
+    current += ch
+    inToken = true
+  }
+
+  if (inToken) {
+    tokens.push(current)
+  }
+
+  const cleaned: string[] = []
+  for (const token of tokens) {
+    if (DESKTOP_FIELD_CODE_PATTERN.test(token)) {
+      continue
+    }
+    const stripped = token.replace(/%([%fFuUdDnNickvm])/g, (_match, code: string) =>
+      code === '%' ? '%' : ''
+    )
+    if (stripped) {
+      cleaned.push(stripped)
+    }
+  }
+  return cleaned
+}
+
+function serializeLaunchArgs(args: readonly string[]): string | undefined {
+  if (args.length === 0) return undefined
+  return args.map((arg) => (/\s/.test(arg) ? `"${arg.replace(/"/g, '')}"` : arg)).join(' ')
+}
+
+function resolveDesktopStableId(desktopFilePath: string, rootDir?: string): string {
+  if (rootDir && isPathInsideDir(desktopFilePath, rootDir)) {
+    return path.relative(rootDir, desktopFilePath).split(path.sep).join('-')
+  }
+  return path.basename(desktopFilePath)
+}
+
+export async function findIconPath(
+  iconName: string,
+  env: NodeJS.ProcessEnv = process.env,
+  home: string = os.homedir()
+): Promise<string> {
+  if (!iconName || /[\r\n\0]/.test(iconName)) return ''
+
+  if (path.isAbsolute(iconName)) {
+    const stat = await fs.stat(iconName).catch(() => null)
+    return stat?.isFile() ? iconName : ''
+  }
+
+  if (iconName.includes('/') || iconName.includes('\\') || iconName.includes('..')) {
+    return ''
   }
 
   const themes = ['Yaru', 'hicolor', 'Adwaita', 'ubuntu-mono-dark', 'ubuntu-mono-light', 'Humanity']
@@ -90,8 +185,9 @@ async function findIconPath(iconName: string): Promise<string> {
   // that by every candidate root -- most of which are absent on any given machine -- is what
   // would have made adding flatpak support expensive. Four stats up front bound it instead.
   const roots: string[] = []
-  for (const root of resolveIconRoots()) {
-    if (await fs.stat(root).catch(() => null)) roots.push(root)
+  for (const root of resolveIconRoots(env, home)) {
+    const stat = await fs.stat(root).catch(() => null)
+    if (stat?.isDirectory()) roots.push(path.resolve(root))
   }
 
   for (const theme of themes) {
@@ -102,8 +198,10 @@ async function findIconPath(iconName: string): Promise<string> {
           // flatpak app resolves at the same point under its own prefix, rather than after the
           // whole system sweep has missed.
           for (const root of roots) {
-            const iconPath = path.join(root, theme, size, type, `${iconName}${ext}`)
-            if (await fs.stat(iconPath).catch(() => null)) {
+            const iconPath = path.resolve(root, theme, size, type, `${iconName}${ext}`)
+            if (!isPathInsideDir(iconPath, root)) continue
+            const stat = await fs.stat(iconPath).catch(() => null)
+            if (stat?.isFile()) {
               return iconPath
             }
           }
@@ -113,8 +211,11 @@ async function findIconPath(iconName: string): Promise<string> {
   }
 
   for (const root of roots) {
-    const pixmapPath = path.join(path.dirname(root), 'pixmaps', `${iconName}.png`)
-    if (await fs.stat(pixmapPath).catch(() => null)) {
+    const pixmapsDir = path.resolve(path.dirname(root), 'pixmaps')
+    const pixmapPath = path.resolve(pixmapsDir, `${iconName}.png`)
+    if (!isPathInsideDir(pixmapPath, pixmapsDir)) continue
+    const stat = await fs.stat(pixmapPath).catch(() => null)
+    if (stat?.isFile()) {
       return pixmapPath
     }
   }
@@ -122,7 +223,10 @@ async function findIconPath(iconName: string): Promise<string> {
   return ''
 }
 
-async function parseDesktopFile(desktopFilePath: string): Promise<AppInfo | null> {
+export async function parseDesktopFile(
+  desktopFilePath: string,
+  rootDir?: string
+): Promise<AppInfo | null> {
   try {
     const content = await fs.readFile(desktopFilePath, 'utf8')
     if (!content.includes('[Desktop Entry]')) {
@@ -144,18 +248,21 @@ async function parseDesktopFile(desktopFilePath: string): Promise<AppInfo | null
     const iconName = properties.Icon
     const noDisplay = properties.NoDisplay === 'true'
     const type = properties.Type
+    const workingDirectory = properties.Path?.trim() || undefined
 
     if (type !== 'Application' || !name || !exec || noDisplay) {
       return null
     }
 
-    const execPath = exec
-      .replace(/ %[A-Z]/gi, '')
-      .replace(/"/g, '')
-      .trim()
-      .split(' ')[0]
+    const execTokens = tokenizeDesktopExec(exec)
+    const execPath = execTokens[0]
+    if (!execPath) {
+      return null
+    }
+    const launchArgs = serializeLaunchArgs(execTokens.slice(1))
     const iconPath = iconName ? await findIconPath(iconName) : ''
     const stats = await fs.stat(desktopFilePath)
+    const stableId = resolveDesktopStableId(desktopFilePath, rootDir)
 
     return {
       name,
@@ -163,9 +270,12 @@ async function parseDesktopFile(desktopFilePath: string): Promise<AppInfo | null
       icon: iconPath ? `file://${iconPath}` : '',
       bundleId: '',
       uniqueId: desktopFilePath, // Use .desktop file path as uniqueId
-      stableId: execPath,
-      launchKind: 'path',
+      stableId,
+      identityKind: 'linux-desktop',
+      launchKind: launchArgs ? 'shortcut' : 'path',
       launchTarget: execPath,
+      ...(launchArgs ? { launchArgs } : {}),
+      ...(workingDirectory ? { workingDirectory } : {}),
       displayPath: desktopFilePath,
       lastModified: stats.mtime,
       createdAt: resolveScannedAppCreatedAt(stats)
@@ -175,17 +285,49 @@ async function parseDesktopFile(desktopFilePath: string): Promise<AppInfo | null
   }
 }
 
-async function findDesktopFiles(dir: string): Promise<string[]> {
+export async function findDesktopFiles(
+  dir: string,
+  visitedDirs: Set<string> = new Set(),
+  depth = 0
+): Promise<string[]> {
+  if (depth > MAX_DESKTOP_SCAN_DEPTH) {
+    return []
+  }
+
   let desktopFiles: string[] = []
   try {
+    const dirStat = await fs.stat(dir)
+    if (!dirStat.isDirectory()) return []
+    const dirKey = `${dirStat.dev}:${dirStat.ino}`
+    if (visitedDirs.has(dirKey)) {
+      return []
+    }
+    visitedDirs.add(dirKey)
+
     const files = await fs.readdir(dir)
     for (const file of files) {
       const fullPath = path.join(dir, file)
       try {
-        const stats = await fs.stat(fullPath)
-        if (stats.isDirectory()) {
-          desktopFiles = desktopFiles.concat(await findDesktopFiles(fullPath))
-        } else if (file.endsWith('.desktop')) {
+        const lstats = await fs.lstat(fullPath)
+        if (lstats.isDirectory()) {
+          if (depth < MAX_DESKTOP_SCAN_DEPTH) {
+            desktopFiles = desktopFiles.concat(
+              await findDesktopFiles(fullPath, visitedDirs, depth + 1)
+            )
+          }
+        } else if (lstats.isSymbolicLink()) {
+          const targetStat = await fs.stat(fullPath)
+          if (targetStat.isDirectory()) {
+            const targetKey = `${targetStat.dev}:${targetStat.ino}`
+            if (depth < MAX_DESKTOP_SCAN_DEPTH && !visitedDirs.has(targetKey)) {
+              desktopFiles = desktopFiles.concat(
+                await findDesktopFiles(fullPath, visitedDirs, depth + 1)
+              )
+            }
+          } else if (targetStat.isFile() && file.endsWith('.desktop')) {
+            desktopFiles.push(fullPath)
+          }
+        } else if (lstats.isFile() && file.endsWith('.desktop')) {
           desktopFiles.push(fullPath)
         }
       } catch {
@@ -199,11 +341,16 @@ async function findDesktopFiles(dir: string): Promise<string[]> {
 }
 
 export async function getApps(): Promise<AppInfo[]> {
-  const allDesktopFilesPromises = resolveApplicationRoots().map((p) => findDesktopFiles(p))
-  const nestedDesktopFiles = await Promise.all(allDesktopFilesPromises)
-  const allDesktopFiles = nestedDesktopFiles.flat()
+  const roots = resolveApplicationRoots()
+  const nestedDesktopEntries = await Promise.all(
+    roots.map(async (root) => {
+      const files = await findDesktopFiles(root)
+      return files.map((file) => ({ file, root }))
+    })
+  )
+  const allDesktopEntries = nestedDesktopEntries.flat()
 
-  const appInfoPromises = allDesktopFiles.map((file) => parseDesktopFile(file))
+  const appInfoPromises = allDesktopEntries.map(({ file, root }) => parseDesktopFile(file, root))
   const results = await Promise.all(appInfoPromises)
 
   return results.filter((app): app is AppInfo => app !== null)

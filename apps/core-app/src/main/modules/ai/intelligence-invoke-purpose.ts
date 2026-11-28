@@ -23,8 +23,129 @@ export interface HostInvokePurpose {
  * spread/rest (the SDK's option copies) carry it to the provider.
  */
 const HOST_INVOKE_PURPOSE = Symbol('tuff.intelligence.hostInvokePurpose')
+const SCHEDULER_PROFILE_AUTHORITY = Symbol('tuff.intelligence.schedulerProfileAuthority')
+const PLUGIN_INVOCATION_CALLER = Symbol('tuff.intelligence.pluginInvocationCaller')
+const PLUGIN_SYSTEM_SHELL_GRANT = Symbol('tuff.intelligence.pluginSystemShellGrant')
 
-type PurposedOptions = IntelligenceInvokeOptions & { [HOST_INVOKE_PURPOSE]?: HostInvokePurpose }
+type PurposedOptions = IntelligenceInvokeOptions & {
+  [HOST_INVOKE_PURPOSE]?: HostInvokePurpose
+  [SCHEDULER_PROFILE_AUTHORITY]?: string
+  [PLUGIN_INVOCATION_CALLER]?: string
+  [PLUGIN_SYSTEM_SHELL_GRANT]?: boolean
+}
+
+/**
+ * A copy of `options` carrying Main-only scheduler profile authority. Symbols cannot cross IPC or
+ * structured cloning, so only Main scheduler code can authorize a third-party CLI binary execution.
+ */
+export function markSchedulerProfileAuthority<T extends IntelligenceInvokeOptions>(
+  options: T,
+  profileId: string
+): T {
+  const normalized = profileId.trim()
+  if (!normalized) return options
+  return {
+    ...options,
+    metadata: {
+      ...(options.metadata ?? {}),
+      profileId: normalized
+    },
+    [SCHEDULER_PROFILE_AUTHORITY]: normalized
+  }
+}
+
+/** The Main-authorized scheduler profile id attached to `options`, or `undefined`. */
+export function readSchedulerProfileAuthority(
+  options: IntelligenceInvokeOptions | undefined
+): string | undefined {
+  return (options as PurposedOptions | undefined)?.[SCHEDULER_PROFILE_AUTHORITY]
+}
+
+/**
+ * Marks `options` with Main-verified plugin caller identity (plus optional `system.shell` grant)
+ * so downstream runtimes can enforce plugin least-privilege without trusting string metadata.
+ */
+export function markPluginInvocation<T extends IntelligenceInvokeOptions>(
+  options: T,
+  pluginName: string,
+  hasSystemShell = false
+): T {
+  return {
+    ...options,
+    [PLUGIN_INVOCATION_CALLER]: pluginName,
+    [PLUGIN_SYSTEM_SHELL_GRANT]: hasSystemShell
+  }
+}
+
+export function readPluginInvocation(
+  options: IntelligenceInvokeOptions | undefined
+): string | undefined {
+  return (options as PurposedOptions | undefined)?.[PLUGIN_INVOCATION_CALLER]
+}
+
+export function hasPluginSystemShellGrant(options: IntelligenceInvokeOptions | undefined): boolean {
+  return (options as PurposedOptions | undefined)?.[PLUGIN_SYSTEM_SHELL_GRANT] === true
+}
+
+type PluginShellGrantedMetadata<T extends Record<string, unknown>> = T & {
+  [PLUGIN_SYSTEM_SHELL_GRANT]?: boolean
+}
+
+/**
+ * Stamps a Main-only Symbol indicating whether a plugin caller holds `system.shell`, and strips
+ * any spoofable plain-string `_pluginSystemShell` property. Because Symbols do not cross IPC or
+ * JSON serialization, untrusted callers cannot forge this authority.
+ */
+export function markMetadataPluginSystemShellGrant<T extends Record<string, unknown>>(
+  metadata: T,
+  granted: boolean
+): T {
+  const clean = { ...metadata } as Record<string, unknown>
+  delete clean._pluginSystemShell
+  ;(clean as PluginShellGrantedMetadata<Record<string, unknown>>)[PLUGIN_SYSTEM_SHELL_GRANT] =
+    granted === true
+  return clean as T
+}
+
+export function readMetadataPluginSystemShellGrant(
+  metadata: Record<string, unknown> | undefined
+): boolean {
+  return (
+    (metadata as PluginShellGrantedMetadata<Record<string, unknown>> | undefined)?.[
+      PLUGIN_SYSTEM_SHELL_GRANT
+    ] === true
+  )
+}
+
+/**
+ * Strips untrusted Main-only control fields from IPC-supplied invocation options.
+ * `profileId` is stripped for EVERY IPC caller (host and plugin) so only Main schedulers can
+ * select a third-party CLI executor via `markSchedulerProfileAuthority`.
+ */
+export function stripUntrustedInvokeMetadata<T extends IntelligenceInvokeOptions>(
+  options: T | undefined,
+  isPlugin: boolean
+): T | undefined {
+  if (!options || typeof options !== 'object') {
+    return options
+  }
+  const hasMetadata = options.metadata && typeof options.metadata === 'object'
+  if (!hasMetadata) {
+    return { ...options }
+  }
+  const metadata = { ...options.metadata }
+  delete metadata.profileId
+  delete metadata._pluginSystemShell
+  if (isPlugin) {
+    delete metadata.approved
+    delete metadata.approvalGranted
+    delete metadata.approvedAt
+    delete metadata.workingDirectory
+    delete metadata.automationPolicy
+    delete metadata.contextEntrypoint
+  }
+  return { ...options, metadata }
+}
 
 /**
  * A copy of `options` marked as a genuine Home chat turn for `origin`. Call only from a Main path

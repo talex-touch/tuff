@@ -109,4 +109,18 @@ describe('BoxItemManager', () => {
     ])
     expect(manager.getVisibleItems().map((item) => item.id)).toEqual(['b', 'a', 'legacy'])
   })
+
+  it('ignores __proto__/constructor/prototype keys during update deepMerge', () => {
+    const manager = new BoxItemManager()
+    manager.upsert(createItem('safe-item', 'touch-a', 'touch-a'))
+
+    const maliciousUpdates = JSON.parse(
+      '{"meta":{"__proto__":{"boxPolluted":"yes"},"constructor":{"prototype":{"boxPolluted2":"yes"}}}}'
+    ) as Partial<TuffItem>
+
+    manager.update('safe-item', maliciousUpdates)
+
+    expect(({} as Record<string, unknown>).boxPolluted).toBeUndefined()
+    expect(({} as Record<string, unknown>).boxPolluted2).toBeUndefined()
+  })
 })

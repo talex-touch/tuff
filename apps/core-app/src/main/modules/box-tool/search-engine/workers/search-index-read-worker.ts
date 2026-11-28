@@ -38,7 +38,7 @@ async function assertExistingRegularDatabaseFile(): Promise<void> {
 
 async function getClient(): Promise<Client> {
   if (!clientPromise) {
-    clientPromise = Promise.resolve().then(async () => {
+    const pending = Promise.resolve().then(async () => {
       // libSQL opens a missing `file:` target by creating it. Assert first so a
       // reader cannot accidentally become a second database initializer.
       await assertExistingRegularDatabaseFile()
@@ -47,8 +47,18 @@ async function getClient(): Promise<Client> {
         await nextClient.execute('PRAGMA query_only = ON')
         return nextClient
       } catch (error) {
-        nextClient.close()
+        try {
+          nextClient.close()
+        } catch {
+          // ignore close errors on failed init
+        }
         throw error
+      }
+    })
+    clientPromise = pending
+    pending.catch(() => {
+      if (clientPromise === pending) {
+        clientPromise = null
       }
     })
   }

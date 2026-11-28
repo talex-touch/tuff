@@ -87,6 +87,7 @@ vi.mock('../../permission/channel-guard', () => ({
 }))
 
 import { registerAgentChannels } from './agent-channels'
+import { readMetadataPluginSystemShellGrant } from '../intelligence-invoke-purpose'
 
 function deferred() {
   let resolve!: () => void
@@ -235,9 +236,80 @@ describe('registerAgentChannels', () => {
       }
 
       await expect(handler(task, pluginContext)).resolves.toEqual(expectedResult)
-      expect(manager).toHaveBeenCalledWith({ ...task, caller: 'plugin:third-party-plugin' })
+      expect(manager).toHaveBeenCalledWith(
+        expect.objectContaining({
+          ...task,
+          caller: 'plugin:third-party-plugin',
+          context: expect.objectContaining({
+            workingDirectory: undefined,
+            metadata: expect.objectContaining({
+              caller: 'plugin:third-party-plugin'
+            })
+          })
+        })
+      )
+      const forwardedTask = (manager.mock.calls as unknown[][])[0]?.[0] as {
+        context?: { metadata?: Record<string, unknown> }
+      }
+      expect(forwardedTask.context?.metadata).not.toHaveProperty('_pluginSystemShell')
+      expect(readMetadataPluginSystemShellGrant(forwardedTask.context?.metadata)).toBe(false)
     }
   )
+
+  it('strips untrusted workingDirectory, profileId, _pluginSystemShell, and approval metadata from plugin agent tasks', async () => {
+    const { transport, handlers } = createTransport()
+    const pluginContext = {
+      plugin: { name: 'third-party-plugin', uniqueKey: 'plugin-key', verified: true }
+    } as HandlerContext
+    permissionMocks.runtimeAvailable = true
+    permissionMocks.permissionGranted = true
+
+    registerAgentChannels(transport)
+
+    const execute = handlers.get(AgentsEvents.api.execute.toEventName())
+    if (!execute) throw new Error('Queued agent execution handler was not registered')
+
+    await execute(
+      {
+        agentId: 'builtin.workflow-agent',
+        input: { operation: 'summarize' },
+        context: {
+          workingDirectory: '/etc',
+          metadata: {
+            profileId: 'profile:cli:codex',
+            approved: true,
+            approvalGranted: true,
+            automationPolicy: { mode: 'full' },
+            _pluginSystemShell: true,
+            safeTag: 'kept'
+          }
+        }
+      },
+      pluginContext
+    )
+
+    expect(agentManagerMock.executeTask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentId: 'builtin.workflow-agent',
+        input: { operation: 'summarize' },
+        caller: 'plugin:third-party-plugin',
+        context: expect.objectContaining({
+          workingDirectory: undefined,
+          metadata: expect.objectContaining({
+            safeTag: 'kept',
+            caller: 'plugin:third-party-plugin'
+          })
+        })
+      })
+    )
+    const forwardedTask = (agentManagerMock.executeTask.mock.calls as unknown[][])[0]?.[0] as {
+      context?: { metadata?: Record<string, unknown> }
+    }
+    expect(forwardedTask.context?.metadata).not.toHaveProperty('_pluginSystemShell')
+    expect(forwardedTask.context?.metadata).not.toHaveProperty('profileId')
+    expect(forwardedTask.context?.metadata).not.toHaveProperty('approved')
+    expect(readMetadataPluginSystemShellGrant(forwardedTask.context?.metadata)).toBe(false)
+  })
 
   it('preserves an explicit host caller for queued execution', async () => {
     const { transport, handlers } = createTransport()

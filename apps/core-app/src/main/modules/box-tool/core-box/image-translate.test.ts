@@ -32,9 +32,14 @@ vi.mock('./image-translate-pin-window', () => ({
   openImageTranslatePinWindow: pinWindowMocks.openImageTranslatePinWindow
 }))
 
-import { mkdtemp, writeFile } from 'node:fs/promises'
+import { mkdtemp, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
+
+const ONE_PIXEL_PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==',
+  'base64'
+)
 import { normalizeIntelligenceError } from '../../ai/intelligence-error-normalizer'
 import {
   registerBoxToolAiCapabilityPort,
@@ -102,7 +107,7 @@ describe('translateCoreBoxImageItem', () => {
   it('runs image translate scene for clipboard image item and writes translated image', async () => {
     const tempDir = await mkdtemp(path.join(tmpdir(), 'corebox-image-translate-'))
     const imagePath = path.join(tempDir, 'source.png')
-    await writeFile(imagePath, Buffer.from('source-image'))
+    await writeFile(imagePath, ONE_PIXEL_PNG)
 
     sceneMocks.runNexusScene.mockResolvedValue({
       status: 'completed',
@@ -147,7 +152,7 @@ describe('translateCoreBoxImageItem', () => {
     })
     expect(sceneMocks.runNexusScene).toHaveBeenCalledWith('corebox.screenshot.translate', {
       input: {
-        imageBase64: Buffer.from('source-image').toString('base64'),
+        imageBase64: ONE_PIXEL_PNG.toString('base64'),
         targetLang: 'zh'
       },
       capability: 'image.translate.e2e'
@@ -160,7 +165,7 @@ describe('translateCoreBoxImageItem', () => {
   it('opens pin window instead of writing clipboard when requested', async () => {
     const tempDir = await mkdtemp(path.join(tmpdir(), 'corebox-image-translate-'))
     const imagePath = path.join(tempDir, 'source.png')
-    await writeFile(imagePath, Buffer.from('source-image'))
+    await writeFile(imagePath, ONE_PIXEL_PNG)
 
     sceneMocks.runNexusScene.mockResolvedValue({
       status: 'completed',
@@ -205,7 +210,7 @@ describe('translateCoreBoxImageItem', () => {
     expect(result).toMatchObject({ success: true })
     expect(sceneMocks.runNexusScene).toHaveBeenCalledWith('corebox.screenshot.translate', {
       input: {
-        imageBase64: Buffer.from('source-image').toString('base64'),
+        imageBase64: ONE_PIXEL_PNG.toString('base64'),
         targetLang: 'zh'
       },
       capability: undefined
@@ -218,6 +223,30 @@ describe('translateCoreBoxImageItem', () => {
       overlay: { mode: 'client-render' }
     })
     expect(electronMocks.writeImage).not.toHaveBeenCalled()
+  })
+
+  it('rejects arbitrary local files outside allowed directories, symlinks, and non-image payloads', async () => {
+    const tempDir = await mkdtemp(path.join(tmpdir(), 'corebox-image-translate-guard-'))
+    const realPng = path.join(tempDir, 'real.png')
+    await writeFile(realPng, ONE_PIXEL_PNG)
+    const linkPng = path.join(tempDir, 'link.png')
+    await symlink(realPng, linkPng)
+    const disguisedText = path.join(tempDir, 'fake.png')
+    await writeFile(disguisedText, Buffer.from('root:x:0:0:root:/root:/bin/sh'))
+
+    const makeItem = (content: string) => ({
+      id: 'clipboard-guard',
+      kind: 'image' as const,
+      source: { id: 'clipboard-history', type: 'history' as const, name: 'Clipboard History' },
+      render: { mode: 'default' as const, basic: { title: 'Image' } },
+      meta: { raw: { type: 'image', content } }
+    })
+
+    for (const blockedPath of ['/etc/passwd', linkPng, disguisedText]) {
+      const result = await translateCoreBoxImageItem(makeItem(blockedPath))
+      expect(result).toMatchObject({ success: false, code: 'IMAGE_UNAVAILABLE' })
+    }
+    expect(sceneMocks.runNexusScene).not.toHaveBeenCalled()
   })
 
   it('returns IMAGE_UNAVAILABLE when item has no readable image source', async () => {

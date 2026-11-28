@@ -367,4 +367,43 @@ describe('ompAcpClient unit tests', () => {
     expect(killSignals).toEqual(['SIGTERM', 'SIGKILL'])
     expect(client.isClosed()).toBe(true)
   })
+
+  it('forwards options.args after acp when spawning OmpAcpClient', async () => {
+    const fs = await import('node:fs/promises')
+    const os = await import('node:os')
+    const path = await import('node:path')
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'omp-acp-args-'))
+    const argvFile = path.join(dir, 'argv.json')
+    const stub = path.join(dir, 'omp-stub.js')
+    await fs.writeFile(
+      stub,
+      [
+        '#!/usr/bin/env node',
+        `require('node:fs').writeFileSync(${JSON.stringify(argvFile)}, JSON.stringify(process.argv.slice(2)))`,
+        'process.stdin.on("data", (chunk) => {',
+        '  for (const line of chunk.toString().split("\\n")) {',
+        '    if (!line.trim()) continue',
+        '    const req = JSON.parse(line)',
+        '    if (req.method === "initialize") {',
+        '      process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: req.id, result: { protocolVersion: 1, agentInfo: { name: "omp", version: "1.0" } } }) + "\\n")',
+        '    }',
+        '  }',
+        '})',
+      ].join('\n'),
+      'utf8',
+    )
+    await fs.chmod(stub, 0o755)
+    try {
+      const client = await OmpAcpClient.spawn({
+        executablePath: stub,
+        args: ['--model', 'test-model', '--no-rules'],
+        initTimeoutMs: 5_000,
+      })
+      await client.close()
+      const recorded = JSON.parse(await fs.readFile(argvFile, 'utf8')) as string[]
+      expect(recorded).toEqual(['acp', '--model', 'test-model', '--no-rules'])
+    } finally {
+      await fs.rm(dir, { recursive: true, force: true })
+    }
+  })
 })

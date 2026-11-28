@@ -38,6 +38,7 @@ export class IconWorkerClient {
   private workerStartedAt: number | null = null
   private lastMetricsSample: { at: number; cpuUsage: WorkerMetricsPayload['cpuUsage'] } | null =
     null
+  private closed = false
   private readonly idleShutdown = new IdleWorkerShutdownController({
     timeoutMs: FILE_WORKER_IDLE_SHUTDOWN_MS,
     shouldShutdown: () => this.pending.size === 0 && this.metricsPending.size === 0,
@@ -91,10 +92,14 @@ export class IconWorkerClient {
   }
 
   shutdown(): void {
+    this.closed = true
     this.terminateWorker()
   }
 
   private ensureWorker(): Worker {
+    if (this.closed) {
+      throw new Error('ICON_WORKER_CLOSED')
+    }
     this.idleShutdown.cancel()
     if (this.worker) {
       return this.worker
@@ -107,9 +112,15 @@ export class IconWorkerClient {
     worker.on('message', (message: WorkerMessage) => this.handleMessage(message))
     worker.on('error', (error) => this.handleWorkerError(error))
     worker.on('exit', (code) => {
-      if (this.worker === worker && code !== 0) {
+      if (this.worker !== worker) return
+      if (code !== 0 || this.pending.size > 0 || this.metricsPending.size > 0) {
         this.handleWorkerError(new Error(`IconWorker exited with code ${code}`))
+        return
       }
+      this.idleShutdown.cancel()
+      this.worker = null
+      this.workerStartedAt = null
+      this.lastMetricsSample = null
     })
 
     this.worker = worker

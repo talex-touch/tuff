@@ -1140,11 +1140,15 @@ export class ContextHygieneService {
     return (result.rows as unknown as TurnRow[]).map(turnFromRow).reverse()
   }
 
-  private async listUsableMemories(sessionId: string): Promise<MemoryItem[]> {
+  private async listUsableMemories(
+    sessionId: string,
+    options?: { allowGlobal?: boolean }
+  ): Promise<MemoryItem[]> {
     const client = this.requireClient()
     const now = Date.now()
-    const result = await client.execute({
-      sql: `
+    const allowGlobal = options?.allowGlobal !== false
+    const sql = allowGlobal
+      ? `
         SELECT m.*
         FROM intelligence_memory_items m
         LEFT JOIN intelligence_memory_tombstones t ON t.memory_id = m.id
@@ -1155,12 +1159,30 @@ export class ContextHygieneService {
           AND (m.scope = 'global' OR (m.scope = 'session' AND m.source_session_id = ?))
         ORDER BY m.updated_at DESC
         LIMIT 5
-      `,
+      `
+      : `
+        SELECT m.*
+        FROM intelligence_memory_items m
+        LEFT JOIN intelligence_memory_tombstones t ON t.memory_id = m.id
+        WHERE m.enabled = 1
+          AND m.privacy_level = 'normal'
+          AND t.memory_id IS NULL
+          AND (m.ttl IS NULL OR m.updated_at + m.ttl > ?)
+          AND (m.scope = 'session' AND m.source_session_id = ?)
+        ORDER BY m.updated_at DESC
+        LIMIT 5
+      `
+    const result = await client.execute({
+      sql,
       args: [now, sessionId]
     })
     return (result.rows as unknown as MemoryRow[])
       .map(memoryFromRow)
-      .filter((memory) => isMemoryUsableForContext(memory, sessionId, now))
+      .filter(
+        (memory) =>
+          (allowGlobal || memory.scope !== 'global') &&
+          isMemoryUsableForContext(memory, sessionId, now)
+      )
   }
 
   private async saveTurn(
@@ -1482,8 +1504,15 @@ export class ContextHygieneService {
       }
     }
 
+    const contextActorId =
+      typeof input.metadata?.contextActorId === 'string' ? input.metadata.contextActorId.trim() : ''
+    const isPluginActor =
+      input.metadata?.contextActorType === 'plugin' || contextActorId.startsWith('plugin:')
+
     if (includeHistory && (input.scope === 'session' || input.scope === 'retrieval')) {
-      for (const memory of await this.listUsableMemories(input.session.id)) {
+      for (const memory of await this.listUsableMemories(input.session.id, {
+        allowGlobal: !isPluginActor
+      })) {
         addItem({
           sourceType: 'memory',
           sourceId: memory.id,
@@ -1495,34 +1524,44 @@ export class ContextHygieneService {
     }
 
     if (input.scope === 'retrieval') {
-      const retrieval = await localKnowledgeEngine.buildContext({
-        query: input.turn.content,
-        tokenBudget: Math.max(1, input.tokenBudget - tokenEstimate),
-        maxChunks: 4,
-        dedupe: true
-      })
-      retrievalMetadata = {
-        status: retrieval.status,
-        degradedReason: retrieval.degradedReason,
-        chunkCount: retrieval.chunks.length,
-        citationCount: retrieval.citations.length
-      }
-      for (const hit of retrieval.chunks) {
-        addItem({
-          sourceType: 'retrieval',
-          sourceId: hit.chunk.id,
-          reason: `local knowledge match: ${hit.document.title}`,
-          content: hit.chunk.content,
-          tokenEstimate: hit.chunk.tokenEstimate,
-          metadata: {
-            citation: hit.citation,
-            documentId: hit.document.id,
-            sourceType: hit.document.sourceType,
-            sourceUri: hit.document.sourceUri,
-            status: retrieval.status,
-            degradedReason: retrieval.degradedReason
-          }
+      if (isPluginActor && !contextActorId) {
+        retrievalMetadata = {
+          status: 'unavailable',
+          degradedReason: 'plugin-scope-missing',
+          chunkCount: 0,
+          citationCount: 0
+        }
+      } else {
+        const retrieval = await localKnowledgeEngine.buildContext({
+          query: input.turn.content,
+          tokenBudget: Math.max(1, input.tokenBudget - tokenEstimate),
+          maxChunks: 4,
+          dedupe: true,
+          ...(isPluginActor ? { permissionScope: contextActorId } : {})
         })
+        retrievalMetadata = {
+          status: retrieval.status,
+          degradedReason: retrieval.degradedReason,
+          chunkCount: retrieval.chunks.length,
+          citationCount: retrieval.citations.length
+        }
+        for (const hit of retrieval.chunks) {
+          addItem({
+            sourceType: 'retrieval',
+            sourceId: hit.chunk.id,
+            reason: `local knowledge match: ${hit.document.title}`,
+            content: hit.chunk.content,
+            tokenEstimate: hit.chunk.tokenEstimate,
+            metadata: {
+              citation: hit.citation,
+              documentId: hit.document.id,
+              sourceType: hit.document.sourceType,
+              sourceUri: hit.document.sourceUri,
+              status: retrieval.status,
+              degradedReason: retrieval.degradedReason
+            }
+          })
+        }
       }
     }
 

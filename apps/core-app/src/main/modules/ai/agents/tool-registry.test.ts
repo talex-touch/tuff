@@ -170,6 +170,12 @@ describe('agent ToolRegistry Tuff bridge', () => {
     await expect(
       registry.executeTool('legacy.required', {}, { taskId: 'task-1', agentId: 'agent-1' })
     ).resolves.toMatchObject({ error: 'Input validation failed: Missing required field: value' })
+    await expect(
+      registry.executeTool('legacy.required', null, { taskId: 'task-1', agentId: 'agent-1' })
+    ).resolves.toMatchObject({
+      success: false,
+      error: expect.stringContaining('Expected object, got null')
+    })
   })
 
   it('keeps legacy registerTool and executeTool behavior', async () => {
