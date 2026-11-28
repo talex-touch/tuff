@@ -1,4 +1,9 @@
 // @vitest-environment jsdom
+import type {
+  LoadPersistedCanvasSessionResult,
+  SavePersistedCanvasSessionResult,
+  TdsPersistedCanvasSession
+} from '~/components/tds-canvas/canvas-session-client'
 import type { WorkspaceFileAiActionPayload } from '~/components/preview/workspace-file-tree'
 import type {
   TdsCanvasAddFramePayload,
@@ -17,7 +22,8 @@ enableAutoUnmount(afterEach)
 const toastMocks = vi.hoisted(() => ({
   success: vi.fn(),
   error: vi.fn(),
-  info: vi.fn()
+  info: vi.fn(),
+  warning: vi.fn()
 }))
 
 const captureMocks = vi.hoisted(() => ({
@@ -27,17 +33,26 @@ const captureMocks = vi.hoisted(() => ({
 }))
 
 const sessionStoreMocks = vi.hoisted(() => {
-  const remoteSessions = new Map<string, unknown>()
+  const remoteSessions = new Map<string, TdsPersistedCanvasSession>()
   return {
     remoteSessions,
-    loadPersistedCanvasSession: vi.fn(async (conversationId: string) => {
-      const stored = remoteSessions.get(conversationId)
-      return stored ? JSON.parse(JSON.stringify(stored)) : null
-    }),
-    savePersistedCanvasSession: vi.fn(async (conversationId: string, session: unknown) => {
-      remoteSessions.set(conversationId, JSON.parse(JSON.stringify(session)))
-      return true
-    }),
+    loadPersistedCanvasSession: vi.fn(
+      async (conversationId: string): Promise<LoadPersistedCanvasSessionResult> => {
+        const stored = remoteSessions.get(conversationId)
+        return stored
+          ? { status: 'loaded', session: JSON.parse(JSON.stringify(stored)) }
+          : { status: 'missing' }
+      }
+    ),
+    savePersistedCanvasSession: vi.fn(
+      async (
+        conversationId: string,
+        session: TdsPersistedCanvasSession
+      ): Promise<SavePersistedCanvasSessionResult> => {
+        remoteSessions.set(conversationId, JSON.parse(JSON.stringify(session)))
+        return { ok: true }
+      }
+    ),
     deletePersistedCanvasSession: vi.fn(async (conversationId: string) => {
       return remoteSessions.delete(conversationId)
     })
@@ -55,7 +70,7 @@ vi.mock('@talex-touch/utils/env', async (importOriginal) => {
 vi.mock('~/components/tds-canvas/canvas-session-client', () => ({
   loadPersistedCanvasSession: (conversationId: string) =>
     sessionStoreMocks.loadPersistedCanvasSession(conversationId),
-  savePersistedCanvasSession: (conversationId: string, session: unknown) =>
+  savePersistedCanvasSession: (conversationId: string, session: TdsPersistedCanvasSession) =>
     sessionStoreMocks.savePersistedCanvasSession(conversationId, session),
   deletePersistedCanvasSession: (conversationId: string) =>
     sessionStoreMocks.deletePersistedCanvasSession(conversationId)
@@ -178,9 +193,16 @@ import {
   TDS_PAPER_INK_PACK,
   useTdsThemePack
 } from '~/modules/tds-theme'
-import HomeSideCanvasPane, {
-  __resetHomeSideCanvasSessionsForTesting
-} from './HomeSideCanvasPane.vue'
+import { __resetHomeSideCanvasSessionsForTesting } from './canvas-session-cache'
+import HomeSideCanvasPane from './HomeSideCanvasPane.vue'
+
+function createDeferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+  let resolve: (value: T) => void = () => {}
+  const promise = new Promise<T>((resolver) => {
+    resolve = resolver
+  })
+  return { promise, resolve }
+}
 
 function makeAssistantMessage(
   id: string,
@@ -204,16 +226,21 @@ describe('HomeSideCanvasPane', () => {
     sessionStoreMocks.remoteSessions.clear()
     sessionStoreMocks.loadPersistedCanvasSession.mockReset()
     sessionStoreMocks.loadPersistedCanvasSession.mockImplementation(
-      async (conversationId: string) => {
+      async (conversationId: string): Promise<LoadPersistedCanvasSessionResult> => {
         const stored = sessionStoreMocks.remoteSessions.get(conversationId)
-        return stored ? JSON.parse(JSON.stringify(stored)) : null
+        return stored
+          ? { status: 'loaded', session: JSON.parse(JSON.stringify(stored)) }
+          : { status: 'missing' }
       }
     )
     sessionStoreMocks.savePersistedCanvasSession.mockReset()
     sessionStoreMocks.savePersistedCanvasSession.mockImplementation(
-      async (conversationId: string, session: unknown) => {
+      async (
+        conversationId: string,
+        session: TdsPersistedCanvasSession
+      ): Promise<SavePersistedCanvasSessionResult> => {
         sessionStoreMocks.remoteSessions.set(conversationId, JSON.parse(JSON.stringify(session)))
-        return true
+        return { ok: true }
       }
     )
     sessionStoreMocks.deletePersistedCanvasSession.mockReset()
@@ -903,22 +930,23 @@ describe('HomeSideCanvasPane', () => {
 
     // 2. Rapid switch in Electron ignores slow stale load response from previous conversation
     captureMocks.isElectron = true
-    let resolveSlow!: (value: unknown) => void
+    const slowLoad = createDeferred<LoadPersistedCanvasSessionResult>()
     sessionStoreMocks.loadPersistedCanvasSession.mockImplementation((convId: string) => {
       if (convId === 'conv-slow') {
-        return new Promise((resolve) => {
-          resolveSlow = resolve
-        })
+        return slowLoad.promise
       }
       return Promise.resolve({
-        version: 1,
-        frames: [],
-        notes: [],
-        selectedFrameId: null,
-        history: { blobs: {}, entries: [], cursor: -1 },
-        deletedAutoFrameIds: [],
-        antiSlop: true,
-        canvasThemePackId: 'tds-obsidian-cobalt'
+        status: 'loaded',
+        session: {
+          version: 1,
+          frames: [],
+          notes: [],
+          selectedFrameId: null,
+          history: { blobs: {}, entries: [], cursor: -1 },
+          deletedAutoFrameIds: [],
+          antiSlop: true,
+          canvasThemePackId: 'tds-obsidian-cobalt'
+        }
       })
     })
 
@@ -936,17 +964,509 @@ describe('HomeSideCanvasPane', () => {
     expect(raceWrapper.findComponent(TdsDesignCanvasStub).props('canvasPattern')).toBe('grid')
 
     // Now resolve slow conv-slow response — must be discarded so conv-fast stays intact
-    resolveSlow({
-      version: 1,
-      frames: [],
-      notes: [],
-      selectedFrameId: null,
-      history: { blobs: {}, entries: [], cursor: -1 },
-      deletedAutoFrameIds: [],
-      antiSlop: true,
-      canvasThemePackId: 'tds-paper-ink'
+    slowLoad.resolve({
+      status: 'loaded',
+      session: {
+        version: 1,
+        frames: [],
+        notes: [],
+        selectedFrameId: null,
+        history: { blobs: {}, entries: [], cursor: -1 },
+        deletedAutoFrameIds: [],
+        antiSlop: true,
+        canvasThemePackId: 'tds-paper-ink'
+      }
     })
     await flushPromises()
     expect(raceWrapper.findComponent(TdsDesignCanvasStub).props('canvasPattern')).toBe('grid')
+  })
+
+  it('wires deterministic contentDigest to TdsLintPopover so 1-pass auto-fix triggers once per frame and antiSlop revision', async () => {
+    const flawedHtml = [
+      '<!doctype html>',
+      '<html><head><title>Hero Card</title></head>',
+      '<body><img src="https://cdn.example.com/banner.png" class="border-2" /></body></html>'
+    ].join('\n')
+
+    const wrapper = mount(HomeSideCanvasPane, {
+      props: {
+        messages: [makeAssistantMessage('asst-autofix', `\`\`\`html\n${flawedHtml}\n\`\`\``)],
+        conversationId: 'conv-autofix-1',
+        aiActionsEnabled: true
+      }
+    })
+    await flushPromises()
+
+    const canvas = wrapper.findComponent(TdsDesignCanvasStub)
+    const frameId = (canvas.props('frames') as TdsCanvasFrame[])[0]!.id
+    canvas.vm.$emit('open-lint', frameId)
+    await flushPromises()
+
+    const autoFixToggle = wrapper.get('[data-testid="tds-lint-autofix-toggle"]')
+    expect(autoFixToggle.attributes('aria-checked')).toBe('false')
+    expect(wrapper.emitted('ai-action')).toBeUndefined()
+
+    // Enabling auto-fix dispatches 1 pass for the current frame digest.
+    await autoFixToggle.trigger('click')
+    await flushPromises()
+    expect(wrapper.emitted('ai-action')).toHaveLength(1)
+    expect((wrapper.emitted('ai-action')![0]![0] as WorkspaceFileAiActionPayload).prompt).toContain(
+      'remote-asset-url'
+    )
+
+    // Re-opening lint on identical frame does not loop.
+    canvas.vm.$emit('open-lint', frameId)
+    await flushPromises()
+    expect(wrapper.emitted('ai-action')).toHaveLength(1)
+
+    // Toggling anti-slop changes the digest and permits 1 fresh pass.
+    await wrapper.get('[data-testid="tds-lint-antislop-toggle"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.emitted('ai-action')).toHaveLength(2)
+  })
+
+  it('never overwrites saved disk session or seeds chat frames when load fails, and recovers cleanly on retry', async () => {
+    vi.useFakeTimers()
+    try {
+      captureMocks.isElectron = true
+      const savedSession: TdsPersistedCanvasSession = {
+        version: 1,
+        frames: [
+          {
+            id: 'saved-frame-1',
+            title: 'Saved Board',
+            kind: 'html',
+            source:
+              '<html><head><title>Saved Board</title></head><body><h1>Saved</h1></body></html>',
+            deviceId: 'desktop-hd',
+            showShell: true,
+            x: 120,
+            y: 80
+          }
+        ],
+        notes: [],
+        selectedFrameId: 'saved-frame-1',
+        history: { blobs: {}, entries: [], cursor: -1 },
+        deletedAutoFrameIds: [],
+        antiSlop: true,
+        canvasThemePackId: 'tds-paper-ink'
+      }
+
+      sessionStoreMocks.loadPersistedCanvasSession.mockResolvedValueOnce({
+        status: 'error',
+        error: 'SQLITE_BUSY'
+      })
+
+      const messages = [
+        makeAssistantMessage(
+          'asst-seed',
+          '```html\n<title>Chat Seed</title><body><p>Should not overwrite disk</p></body>\n```'
+        )
+      ]
+
+      const wrapper = mount(HomeSideCanvasPane, {
+        props: {
+          messages,
+          conversationId: 'conv-load-err',
+          active: false
+        }
+      })
+      await flushPromises()
+
+      // Failed load must NOT seed frames from chat or persist anything to disk.
+      const canvas = wrapper.findComponent(TdsDesignCanvasStub)
+      expect(canvas.props('frames')).toEqual([])
+      expect(wrapper.find('[data-testid="canvas-persistence-error"]').exists()).toBe(true)
+      expect(
+        wrapper.get('[data-testid="canvas-persistence-error"]').attributes('data-error-kind')
+      ).toBe('load')
+      expect(toastMocks.error).toHaveBeenCalledWith('home.sidePanel.canvasSessionLoadFailed')
+
+      // Even if new messages arrive or timers elapse, disk save is NEVER called after load error.
+      await wrapper.setProps({
+        messages: [
+          ...messages,
+          makeAssistantMessage('asst-seed-2', '```html\n<title>More</title><div>2</div>\n```')
+        ]
+      })
+      await vi.advanceTimersByTimeAsync(1000)
+      await flushPromises()
+      expect(canvas.props('frames')).toEqual([])
+      expect(sessionStoreMocks.savePersistedCanvasSession).not.toHaveBeenCalled()
+
+      // Clicking Retry after storage recovers loads the saved session cleanly.
+      sessionStoreMocks.loadPersistedCanvasSession.mockResolvedValueOnce({
+        status: 'loaded',
+        session: savedSession
+      })
+      await wrapper.get('[data-testid="canvas-persistence-retry"]').trigger('click')
+      await flushPromises()
+
+      expect(wrapper.find('[data-testid="canvas-persistence-error"]').exists()).toBe(false)
+      const restoredFrames = canvas.props('frames') as TdsCanvasFrame[]
+      expect(restoredFrames.some((frame) => frame.id === 'saved-frame-1')).toBe(true)
+      expect(canvas.props('canvasPattern')).toBe('paper-grain')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps null or blank conversationId strictly in-memory in Electron without calling disk IPC', async () => {
+    vi.useFakeTimers()
+    try {
+      captureMocks.isElectron = true
+      const messages = [
+        makeAssistantMessage('asst-anon', '```html\n<title>Scratchpad</title><p>Temp</p>\n```')
+      ]
+
+      const wrapper = mount(HomeSideCanvasPane, {
+        props: {
+          messages,
+          conversationId: null,
+          active: false
+        }
+      })
+      await flushPromises()
+
+      const canvas = wrapper.findComponent(TdsDesignCanvasStub)
+      expect((canvas.props('frames') as TdsCanvasFrame[]).length).toBe(1)
+
+      // Mutate frame and switch to whitespace-only conversationId.
+      const currentFrames = canvas.props('frames') as TdsCanvasFrame[]
+      canvas.vm.$emit('update:frames', [{ ...currentFrames[0]!, x: 99, y: 77 }])
+      await vi.advanceTimersByTimeAsync(600)
+      await flushPromises()
+
+      await wrapper.setProps({ conversationId: '   ' })
+      await vi.advanceTimersByTimeAsync(600)
+      await flushPromises()
+      wrapper.unmount()
+
+      expect(sessionStoreMocks.loadPersistedCanvasSession).not.toHaveBeenCalled()
+      expect(sessionStoreMocks.savePersistedCanvasSession).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('retries transient autosave failures without losing newer edits, surfaces permanent limit errors, and guards manual frame limit', async () => {
+    vi.useFakeTimers()
+    try {
+      captureMocks.isElectron = true
+      const wrapper = mount(HomeSideCanvasPane, {
+        props: {
+          messages: [
+            makeAssistantMessage('asst-save', '```html\n<title>Board</title><p>V1</p>\n```')
+          ],
+          conversationId: 'conv-autosave-1',
+          active: false
+        }
+      })
+      await flushPromises()
+
+      // Let initial seed save succeed cleanly.
+      await vi.advanceTimersByTimeAsync(400)
+      await flushPromises()
+      expect(wrapper.get('[data-testid="home-side-canvas-pane"]').attributes('data-unsaved')).toBe(
+        'false'
+      )
+      sessionStoreMocks.savePersistedCanvasSession.mockClear()
+
+      const canvas = wrapper.findComponent(TdsDesignCanvasStub)
+      const baseFrame = (canvas.props('frames') as TdsCanvasFrame[])[0]!
+
+      // 1. Transient failure keeps snapshot unsaved and retries cleanly on backoff.
+      sessionStoreMocks.savePersistedCanvasSession
+        .mockResolvedValueOnce({ ok: false, error: 'IPC_TIMEOUT', permanent: false })
+        .mockResolvedValueOnce({ ok: true })
+
+      canvas.vm.$emit('update:frames', [{ ...baseFrame, x: 111, y: 222 }])
+      await vi.advanceTimersByTimeAsync(400)
+      await flushPromises()
+
+      expect(sessionStoreMocks.savePersistedCanvasSession).toHaveBeenCalledTimes(1)
+      expect(wrapper.get('[data-testid="home-side-canvas-pane"]').attributes('data-unsaved')).toBe(
+        'true'
+      )
+
+      // Backoff retry succeeds at 1000ms and clears unsaved state.
+      await vi.advanceTimersByTimeAsync(1100)
+      await flushPromises()
+      expect(sessionStoreMocks.savePersistedCanvasSession).toHaveBeenCalledTimes(2)
+      expect(wrapper.get('[data-testid="home-side-canvas-pane"]').attributes('data-unsaved')).toBe(
+        'false'
+      )
+
+      // 2. Newer edit arriving during a failing in-flight save is never overwritten by stale state.
+      sessionStoreMocks.savePersistedCanvasSession.mockClear()
+      const firstSaveDeferred = createDeferred<SavePersistedCanvasSessionResult>()
+      sessionStoreMocks.savePersistedCanvasSession
+        .mockImplementationOnce(() => firstSaveDeferred.promise)
+        .mockImplementationOnce(async (convId, session) => {
+          sessionStoreMocks.remoteSessions.set(convId, JSON.parse(JSON.stringify(session)))
+          return { ok: true }
+        })
+
+      canvas.vm.$emit('update:frames', [{ ...baseFrame, x: 300, y: 10 }])
+      await vi.advanceTimersByTimeAsync(400)
+      await flushPromises()
+      expect(sessionStoreMocks.savePersistedCanvasSession).toHaveBeenCalledTimes(1)
+
+      // While x=300 save is still in flight, user moves frame to x=555.
+      canvas.vm.$emit('update:frames', [{ ...baseFrame, x: 555, y: 20 }])
+      firstSaveDeferred.resolve({ ok: false, error: 'IPC_TIMEOUT', permanent: false })
+      await flushPromises()
+      await vi.advanceTimersByTimeAsync(400)
+      await flushPromises()
+
+      expect(sessionStoreMocks.savePersistedCanvasSession).toHaveBeenCalledTimes(2)
+      const secondSavedSession = sessionStoreMocks.savePersistedCanvasSession.mock
+        .calls[1]![1] as TdsPersistedCanvasSession
+      expect(secondSavedSession.frames[0]!.x).toBe(555)
+      expect(wrapper.get('[data-testid="home-side-canvas-pane"]').attributes('data-unsaved')).toBe(
+        'false'
+      )
+
+      // 3. Permanent size-cap failure stops retrying, stays unsaved, and displays localized error.
+      sessionStoreMocks.savePersistedCanvasSession.mockClear()
+      toastMocks.error.mockClear()
+      sessionStoreMocks.savePersistedCanvasSession.mockResolvedValueOnce({
+        ok: false,
+        error: 'CANVAS_SESSION_TOO_LARGE:5000000>4194304',
+        permanent: true
+      })
+
+      canvas.vm.$emit('update:frames', [{ ...baseFrame, x: 700, y: 30 }])
+      await vi.advanceTimersByTimeAsync(400)
+      await flushPromises()
+
+      expect(sessionStoreMocks.savePersistedCanvasSession).toHaveBeenCalledTimes(1)
+      expect(wrapper.get('[data-testid="home-side-canvas-pane"]').attributes('data-unsaved')).toBe(
+        'true'
+      )
+      expect(wrapper.find('[data-testid="canvas-persistence-error"]').exists()).toBe(true)
+      expect(wrapper.get('[data-testid="canvas-persistence-error"]').text()).toContain(
+        'home.sidePanel.canvasSessionSaveTooLarge'
+      )
+      expect(toastMocks.error).toHaveBeenCalledWith('home.sidePanel.canvasSessionSaveTooLarge')
+
+      // Advancing timers further must NOT auto-retry a permanent failure.
+      await vi.advanceTimersByTimeAsync(5000)
+      await flushPromises()
+      expect(sessionStoreMocks.savePersistedCanvasSession).toHaveBeenCalledTimes(1)
+
+      // 3b. Frame-source and history-blob size caps also map to canvasSessionSaveTooLarge without retrying.
+      for (const sizeErrorCode of [
+        'CANVAS_FRAME_SOURCE_TOO_LARGE:600000>524288',
+        'CANVAS_HISTORY_BLOB_TOO_LARGE:600000>524288'
+      ]) {
+        sessionStoreMocks.savePersistedCanvasSession.mockClear()
+        toastMocks.error.mockClear()
+        sessionStoreMocks.savePersistedCanvasSession.mockResolvedValueOnce({
+          ok: false,
+          error: sizeErrorCode,
+          permanent: true
+        })
+        canvas.vm.$emit('update:frames', [{ ...baseFrame, x: 705, y: 31 }])
+        await vi.advanceTimersByTimeAsync(400)
+        await flushPromises()
+        expect(sessionStoreMocks.savePersistedCanvasSession).toHaveBeenCalledTimes(1)
+        expect(wrapper.get('[data-testid="canvas-persistence-error"]').text()).toContain(
+          'home.sidePanel.canvasSessionSaveTooLarge'
+        )
+        expect(toastMocks.error).toHaveBeenCalledWith('home.sidePanel.canvasSessionSaveTooLarge')
+        await vi.advanceTimersByTimeAsync(5000)
+        await flushPromises()
+        expect(sessionStoreMocks.savePersistedCanvasSession).toHaveBeenCalledTimes(1)
+      }
+
+      // 3c. Queued/flushed save racing with conversation deletion drops silently (no retry, no error toast).
+      sessionStoreMocks.savePersistedCanvasSession.mockClear()
+      toastMocks.error.mockClear()
+      sessionStoreMocks.savePersistedCanvasSession.mockResolvedValueOnce({
+        ok: false,
+        error: 'CANVAS_SESSION_CONVERSATION_DELETED',
+        permanent: true
+      })
+      canvas.vm.$emit('update:frames', [{ ...baseFrame, x: 708, y: 32 }])
+      await vi.advanceTimersByTimeAsync(400)
+      await flushPromises()
+      expect(sessionStoreMocks.savePersistedCanvasSession).toHaveBeenCalledTimes(1)
+      expect(wrapper.get('[data-testid="home-side-canvas-pane"]').attributes('data-unsaved')).toBe(
+        'false'
+      )
+      expect(wrapper.find('[data-testid="canvas-persistence-error"]').exists()).toBe(false)
+      expect(toastMocks.error).not.toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(5000)
+      await flushPromises()
+      expect(sessionStoreMocks.savePersistedCanvasSession).toHaveBeenCalledTimes(1)
+
+      // 4. Flush on conversation switch checks save result too (surfaces permanent error on flush,
+      //    and drops CANVAS_SESSION_CONVERSATION_DELETED silently without error toast).
+      sessionStoreMocks.savePersistedCanvasSession.mockClear()
+      toastMocks.error.mockClear()
+      sessionStoreMocks.savePersistedCanvasSession.mockResolvedValueOnce({
+        ok: false,
+        error: 'CANVAS_SESSION_CONVERSATION_DELETED',
+        permanent: true
+      })
+      canvas.vm.$emit('update:frames', [{ ...baseFrame, x: 709, y: 33 }])
+      await wrapper.setProps({ conversationId: 'conv-autosave-deleted-next', messages: [] })
+      await flushPromises()
+      expect(sessionStoreMocks.savePersistedCanvasSession).toHaveBeenCalledTimes(1)
+      expect(toastMocks.error).not.toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(5000)
+      await flushPromises()
+      expect(sessionStoreMocks.savePersistedCanvasSession).toHaveBeenCalledTimes(1)
+
+      // Switch back and verify flush surfaces permanent frame-limit error.
+      await wrapper.setProps({ conversationId: 'conv-autosave-1' })
+      await flushPromises()
+      sessionStoreMocks.savePersistedCanvasSession.mockClear()
+      toastMocks.error.mockClear()
+      sessionStoreMocks.savePersistedCanvasSession.mockResolvedValueOnce({
+        ok: false,
+        error: 'CANVAS_SESSION_FRAME_LIMIT:65>64',
+        permanent: true
+      })
+      const restoredAutosaveCanvas = wrapper.findComponent(TdsDesignCanvasStub)
+      restoredAutosaveCanvas.vm.$emit('update:frames', [{ ...baseFrame, x: 710, y: 35 }])
+      // Switch conversation BEFORE the 350ms debounce fires -> triggers flushPendingRemotePersist.
+      await wrapper.setProps({ conversationId: 'conv-autosave-2', messages: [] })
+      await flushPromises()
+      expect(sessionStoreMocks.savePersistedCanvasSession).toHaveBeenCalledTimes(1)
+      expect(toastMocks.error).toHaveBeenCalledWith(
+        'home.sidePanel.canvasSessionSaveFrameLimit:{"max":64}'
+      )
+
+      // 5. Guard manual frame addition at MAX_CANVAS_FRAMES (64) with localized feedback.
+      toastMocks.warning.mockClear()
+      const sixtyFourFrames: TdsCanvasFrame[] = Array.from({ length: 64 }, (_, idx) => ({
+        id: `frame-cap-${idx}`,
+        title: `Frame ${idx + 1}`,
+        kind: 'html',
+        source: `<html><body>${idx}</body></html>`,
+        deviceId: 'desktop-hd',
+        showShell: true,
+        x: idx * 20,
+        y: 0
+      }))
+      const nextCanvas = wrapper.findComponent(TdsDesignCanvasStub)
+      nextCanvas.vm.$emit('update:frames', sixtyFourFrames)
+      await flushPromises()
+      expect((nextCanvas.props('frames') as TdsCanvasFrame[]).length).toBe(64)
+
+      nextCanvas.vm.$emit('add-frame', {
+        deviceId: 'iphone-17-pro',
+        kind: 'html',
+        title: 'Overflow 65'
+      } satisfies TdsCanvasAddFramePayload)
+      await flushPromises()
+
+      expect((nextCanvas.props('frames') as TdsCanvasFrame[]).length).toBe(64)
+      expect(toastMocks.warning).toHaveBeenCalledWith(
+        'home.sidePanel.canvasFrameLimitReached:{"max":64}'
+      )
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('preserves loaded disk session when mutations or messages arrive while async hydration is in flight', async () => {
+    vi.useFakeTimers()
+    try {
+      captureMocks.isElectron = true
+      const pendingLoad = createDeferred<LoadPersistedCanvasSessionResult>()
+      sessionStoreMocks.loadPersistedCanvasSession.mockReturnValueOnce(pendingLoad.promise)
+
+      const wrapper = mount(HomeSideCanvasPane, {
+        props: {
+          messages: [
+            makeAssistantMessage(
+              'asst-hydrate',
+              '```html\n<title>Chat Frame</title><body><p>Chat</p></body>\n```'
+            )
+          ],
+          conversationId: 'conv-hydrating-1',
+          active: false
+        }
+      })
+      await flushPromises()
+
+      // Hydration is in flight: pane exposes loading state and disables toolbar mutations.
+      expect(
+        wrapper.get('[data-testid="home-side-canvas-pane"]').attributes('data-hydrating')
+      ).toBe('true')
+      expect(wrapper.find('[data-testid="canvas-session-loading"]').exists()).toBe(true)
+      expect(
+        (wrapper.get('[data-testid="canvas-add-frame-trigger"]').element as HTMLButtonElement)
+          .disabled
+      ).toBe(true)
+
+      // Provisional mutations emitted while hydration is in flight must be ignored and never persisted.
+      const canvas = wrapper.findComponent(TdsDesignCanvasStub)
+      canvas.vm.$emit('add-frame', {
+        deviceId: 'iphone-17-pro',
+        kind: 'html',
+        title: 'Provisional Frame'
+      } satisfies TdsCanvasAddFramePayload)
+      canvas.vm.$emit('update:frames', [
+        {
+          id: 'provisional-1',
+          title: 'Provisional',
+          kind: 'html',
+          source: '<div>provisional</div>',
+          deviceId: 'desktop-hd',
+          showShell: true,
+          x: 0,
+          y: 0
+        }
+      ])
+      await vi.advanceTimersByTimeAsync(600)
+      await flushPromises()
+      expect(sessionStoreMocks.savePersistedCanvasSession).not.toHaveBeenCalled()
+
+      // Now resolve hydration with the saved disk session (which intentionally deleted the auto frame).
+      pendingLoad.resolve({
+        status: 'loaded',
+        session: {
+          version: 1,
+          frames: [
+            {
+              id: 'disk-frame-1',
+              title: 'Saved Disk Frame',
+              kind: 'html',
+              source: '<html><body><h1>From Disk</h1></body></html>',
+              deviceId: 'ipad-pro-11',
+              showShell: true,
+              x: 420,
+              y: 180
+            }
+          ],
+          notes: [],
+          selectedFrameId: 'disk-frame-1',
+          history: { blobs: {}, entries: [], cursor: -1 },
+          deletedAutoFrameIds: ['asst-hydrate:fence:0'],
+          antiSlop: false,
+          canvasThemePackId: 'tds-obsidian-cobalt'
+        }
+      })
+      await flushPromises()
+
+      expect(
+        wrapper.get('[data-testid="home-side-canvas-pane"]').attributes('data-hydrating')
+      ).toBe('false')
+      expect(wrapper.find('[data-testid="canvas-session-loading"]').exists()).toBe(false)
+      const frames = canvas.props('frames') as TdsCanvasFrame[]
+      expect(frames).toHaveLength(1)
+      expect(frames[0]).toMatchObject({ id: 'disk-frame-1', x: 420, y: 180 })
+      expect(canvas.props('canvasPattern')).toBe('grid')
+      // Nothing changed relative to disk -> no spurious write.
+      await vi.advanceTimersByTimeAsync(500)
+      await flushPromises()
+      expect(sessionStoreMocks.savePersistedCanvasSession).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

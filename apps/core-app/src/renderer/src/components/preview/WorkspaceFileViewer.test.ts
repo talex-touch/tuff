@@ -2133,4 +2133,81 @@ describe('WorkspaceFileViewer', () => {
       vi.useRealTimers()
     }
   })
+
+  it('wires a deterministic contentDigest derived from HTML preview source and lintAntiSlop into TdsLintPopover auto-fix', async () => {
+    mocks.send.mockImplementation(async (event: unknown) => {
+      if (event === AgentWorkspaceEvents.readFile) {
+        return {
+          path: '/repo/demo/autofix.html',
+          name: 'autofix.html',
+          ext: 'html',
+          kind: 'text',
+          mimeType: 'text/html',
+          size: 240,
+          truncated: false,
+          mtimeMs: Date.now(),
+          text: [
+            '<!doctype html>',
+            '<html><head><style>h1 { background-clip: text; }</style></head>',
+            '<body><img src="https://cdn.example.com/hero.png" /><h1>Hero</h1></body></html>'
+          ].join('\n')
+        }
+      }
+      if (event === TdsCaptureEvents.renderFrame) {
+        return { ok: true, width: 1024, height: 720, durationMs: 5, domProbeResult: [] }
+      }
+      return null
+    })
+
+    const wrapper = mount(WorkspaceFileViewer, {
+      props: {
+        filePath: '/repo/demo/autofix.html',
+        displayPath: 'demo/autofix.html',
+        workspaceRoot: '/repo',
+        aiActionsEnabled: true
+      }
+    })
+    await flushPromises()
+
+    await wrapper.get('[data-testid="tds-lint-trigger"]').trigger('click')
+    await flushPromises()
+
+    const autoFixToggle = wrapper.get('[data-testid="tds-lint-autofix-toggle"]')
+    expect(autoFixToggle.attributes('aria-checked')).toBe('false')
+    expect(wrapper.emitted('ai-action')).toBeUndefined()
+
+    // Opting in fires 1 bounded auto-fix pass for the current HTML + antiSlop digest.
+    await autoFixToggle.trigger('click')
+    await flushPromises()
+    expect(wrapper.emitted('ai-action')).toHaveLength(1)
+    const firstAction = wrapper.emitted('ai-action')![0]![0] as { mode: string; prompt: string }
+    expect(firstAction.mode).toBe('send')
+    expect(firstAction.prompt).toContain('remote-asset-url')
+
+    // Re-opening popover for unchanged content does not loop.
+    await wrapper.get('[data-testid="tds-lint-trigger"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.emitted('ai-action')).toHaveLength(1)
+
+    // Toggling anti-slop changes the computed contentDigest and allows 1 fresh pass.
+    await wrapper.get('[data-testid="tds-lint-antislop-toggle"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.emitted('ai-action')).toHaveLength(2)
+
+    wrapper.unmount()
+
+    // With aiActionsEnabled disabled, the auto-fix switch is hidden.
+    const readonlyWrapper = mount(WorkspaceFileViewer, {
+      props: {
+        filePath: '/repo/demo/autofix.html',
+        displayPath: 'demo/autofix.html',
+        workspaceRoot: '/repo',
+        aiActionsEnabled: false
+      }
+    })
+    await flushPromises()
+    await readonlyWrapper.get('[data-testid="tds-lint-trigger"]').trigger('click')
+    await flushPromises()
+    expect(readonlyWrapper.find('[data-testid="tds-lint-autofix-toggle"]').exists()).toBe(false)
+  })
 })

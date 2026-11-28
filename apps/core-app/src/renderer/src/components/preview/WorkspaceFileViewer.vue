@@ -37,7 +37,12 @@ import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import { SHELL_MENU_CARD } from '~/components/shell/shell-menu-panel'
 import { basenameOfPath } from '~/modules/browser-workspace/preview-url'
-import { buildTdsDomProbeScript, runStaticTdsLint, type TdsLintIssue } from '~/modules/tds-lint'
+import {
+  buildTdsDomProbeScript,
+  computeTdsContentDigest,
+  runStaticTdsLint,
+  type TdsLintIssue
+} from '~/modules/tds-lint'
 import {
   captureFrameAndProbe,
   mergeLintIssues,
@@ -296,6 +301,15 @@ const domLintIssues = ref<TdsLintIssue[]>([])
 const mergedLintIssues = computed<TdsLintIssue[]>(() =>
   mergeLintIssues(staticLintIssues.value, domLintIssues.value)
 )
+const lintContentDigest = computed<string>(() => {
+  if (!showDeviceViewportControls.value) return ''
+  const source = data.value?.text ?? ''
+  if (!source.trim()) return ''
+  const kind = isSvg.value ? 'svg' : 'html'
+  return computeTdsContentDigest(
+    `${resolvedPath.value}\n${kind}\nantiSlop:${lintAntiSlop.value ? '1' : '0'}\n${source}`
+  )
+})
 
 const LIVE_DOM_PROBE_DEBOUNCE_MS = 300
 let domProbeTimer: ReturnType<typeof setTimeout> | null = null
@@ -3422,6 +3436,8 @@ function adjustZoom(delta: number): void {
           v-model:open="lintPopoverOpen"
           v-model:anti-slop="lintAntiSlop"
           :issues="mergedLintIssues"
+          :content-digest="lintContentDigest"
+          :frame-id="resolvedPath"
           :display-path="displayPathForAi"
           :ai-actions-enabled="aiActionsEnabled"
           :sending="sendingAiAction"

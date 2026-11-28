@@ -1,54 +1,3 @@
-<script lang="ts">
-import type {
-  TdsCanvasFrame as ModuleCanvasFrame,
-  TdsCanvasHistoryState as ModuleCanvasHistoryState,
-  TdsCanvasNote as ModuleCanvasNote
-} from '~/components/tds-canvas/types'
-
-interface InMemoryCanvasSession {
-  version: 1
-  frames: ModuleCanvasFrame[]
-  notes: ModuleCanvasNote[]
-  selectedFrameId: string | null
-  history: ModuleCanvasHistoryState
-  deletedAutoFrameIds: string[]
-  antiSlop: boolean
-  canvasThemePackId?: string | null
-}
-
-const MAX_IN_MEMORY_CANVAS_SESSIONS = 32
-/**
- * Process-local in-memory session cache per conversation.
- * Assistant HTML/SVG frame bodies, snapshot history blobs, and pin notes MUST NEVER
- * be persisted to browser `sessionStorage` / `localStorage`.
- */
-const inMemoryCanvasSessions = new Map<string, InMemoryCanvasSession>()
-
-function cloneInMemoryCanvasSession(session: InMemoryCanvasSession): InMemoryCanvasSession {
-  return {
-    version: 1,
-    frames: session.frames.map((frame) => ({ ...frame })),
-    notes: session.notes.map((note) => ({ ...note })),
-    selectedFrameId: session.selectedFrameId,
-    history: {
-      blobs: { ...session.history.blobs },
-      entries: session.history.entries.map((entry) => ({
-        ...entry,
-        frameSnapshots: entry.frameSnapshots.map((snapshot) => ({ ...snapshot }))
-      })),
-      cursor: session.history.cursor
-    },
-    deletedAutoFrameIds: [...session.deletedAutoFrameIds],
-    antiSlop: session.antiSlop,
-    canvasThemePackId: session.canvasThemePackId ?? null
-  }
-}
-
-export function __resetHomeSideCanvasSessionsForTesting(): void {
-  inMemoryCanvasSessions.clear()
-}
-</script>
-
 <script lang="ts" name="HomeSideCanvasPane" setup>
 import type { DeviceCategory, DevicePreset } from '~/components/preview/tds-devices'
 import type { WorkspaceFileAiActionPayload } from '~/components/preview/workspace-file-tree'
@@ -67,6 +16,7 @@ import type {
 import type { ConversationMessage } from '~/modules/conversation/useHomeConversation'
 import type { TdsLintIssue, TdsLintReport } from '~/modules/tds-lint'
 import type { TdsThemePack } from '~/modules/tds-theme'
+import type { InMemoryCanvasSession } from './canvas-session-cache'
 import { TxPopover } from '@talex-touch/tuffex/popover'
 import { isElectronRenderer } from '@talex-touch/utils/env'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
@@ -96,7 +46,12 @@ import {
 } from '~/components/tds-canvas/canvas-session-client'
 import TdsDesignCanvas from '~/components/tds-canvas/TdsDesignCanvas.vue'
 import { buildPreviewIndex } from '~/modules/conversation/preview-index'
-import { buildTdsDomProbeScript, runStaticTdsLint, summarizeLintIssues } from '~/modules/tds-lint'
+import {
+  buildTdsDomProbeScript,
+  computeTdsContentDigest,
+  runStaticTdsLint,
+  summarizeLintIssues
+} from '~/modules/tds-lint'
 import {
   buildCaptureCacheKey,
   captureFrameAndProbe,
@@ -104,6 +59,13 @@ import {
   releaseCaptureSession
 } from '~/modules/tds-lint/live-capture-client'
 import { exportThemePackAsCss, TDS_DEFAULT_THEME_PACK, useTdsThemePack } from '~/modules/tds-theme'
+import {
+  cloneInMemoryCanvasSession,
+  getInMemoryCanvasSessionKey,
+  getPersistedConversationId,
+  readInMemoryCanvasSession,
+  writeInMemoryCanvasSession
+} from './canvas-session-cache'
 
 const props = withDefaults(
   defineProps<{
@@ -385,37 +347,28 @@ function buildStarterFrameSource(
   ].join('\n')
 }
 
-function getSessionMapKey(conversationId: string | null): string {
-  return conversationId?.trim() || 'default'
-}
-
-function readCanvasSession(conversationId: string | null): InMemoryCanvasSession | null {
-  const key = getSessionMapKey(conversationId)
-  const stored = inMemoryCanvasSessions.get(key)
-  if (!stored) return null
-  // Refresh LRU recency
-  inMemoryCanvasSessions.delete(key)
-  inMemoryCanvasSessions.set(key, stored)
-  return cloneInMemoryCanvasSession(stored)
-}
-
-function writeCanvasSession(conversationId: string | null, session: InMemoryCanvasSession): void {
-  const key = getSessionMapKey(conversationId)
-  inMemoryCanvasSessions.delete(key)
-  inMemoryCanvasSessions.set(key, cloneInMemoryCanvasSession(session))
-  while (inMemoryCanvasSessions.size > MAX_IN_MEMORY_CANVAS_SESSIONS) {
-    const oldestKey = inMemoryCanvasSessions.keys().next().value
-    if (oldestKey === undefined) break
-    inMemoryCanvasSessions.delete(oldestKey)
-  }
-}
-
 const {
   activePackId: appActiveThemePackId,
   activePack: appActiveThemePack,
   allPacks: themePacks,
   selectPack: selectAppThemePack
 } = useTdsThemePack()
+
+type RemoteSessionStatus = 'idle' | 'loading' | 'ready' | 'load-error'
+
+interface RemotePersistenceErrorState {
+  kind: 'load' | 'save'
+  code: string
+  message: string
+  permanent: boolean
+}
+
+interface PendingRemotePersistEntry {
+  conversationId: string
+  session: InMemoryCanvasSession
+  revision: number
+  permanentFailure?: boolean
+}
 
 const frames = ref<TdsCanvasFrame[]>([])
 const notes = ref<TdsCanvasNote[]>([])
@@ -432,23 +385,37 @@ const presetCategory = ref<DeviceCategory | 'all'>('all')
 const sendingAiAction = ref(false)
 const frameBitmaps = ref<Record<string, string>>({})
 const domIssuesByFrameId = ref<Record<string, TdsLintIssue[]>>({})
+const remoteSessionStatus = ref<RemoteSessionStatus>('idle')
+const isLoadingRemoteSession = computed(() => remoteSessionStatus.value === 'loading')
+const hasUnsavedRemoteChanges = ref(false)
+const remotePersistenceError = ref<RemotePersistenceErrorState | null>(null)
 
+const MAX_CANVAS_FRAMES = 64
 const CANVAS_CAPTURE_DEBOUNCE_MS = 240
 const CANVAS_SESSION_PERSIST_DEBOUNCE_MS = 350
+const CANVAS_SESSION_PERSIST_RETRY_BASE_MS = 1000
+const MAX_CANVAS_SESSION_PERSIST_RETRIES = 3
 const capturedFrameSignatures = new Map<string, string>()
 let captureTimer: ReturnType<typeof setTimeout> | null = null
 let captureGeneration = 0
 let activeCaptureSessionKey = ''
 
+let isUnmounted = false
 let manualFrameSeq = 0
 let isHydrating = false
 let hydrateGeneration = 0
-let sessionMutationVersion = 0
-let awaitingRemoteHydration = false
-let persistTimer: ReturnType<typeof setTimeout> | null = null
-let pendingRemotePersist: { key: string; session: InMemoryCanvasSession } | null = null
+let persistRevisionSeq = 0
+const pendingPersistByConv = new Map<string, PendingRemotePersistEntry>()
+const persistTimersByConv = new Map<string, ReturnType<typeof setTimeout>>()
+const inFlightPersistByConv = new Set<string>()
+const latestPersistRevisionByConv = new Map<string, number>()
+const retryCountByConv = new Map<string, number>()
+let lastToastedErrorKey = ''
 
-const canvasSessionKey = computed(() => props.conversationId?.trim() || 'default')
+const canvasSessionKey = computed(() => getInMemoryCanvasSessionKey(props.conversationId))
+const activePersistedConversationId = computed<string | null>(() =>
+  getPersistedConversationId(props.conversationId)
+)
 
 function cancelPendingCanvasCapture(): void {
   captureGeneration += 1
@@ -527,6 +494,10 @@ function reconcileConversationFrames(
       continue
     }
 
+    if (updatedExisting.length + newlyAdded.length >= MAX_CANVAS_FRAMES) {
+      continue
+    }
+
     newlyAdded.push({
       id: item.id,
       title: item.title,
@@ -590,35 +561,218 @@ function hasPersistableSessionContent(session: InMemoryCanvasSession): boolean {
   )
 }
 
-function flushPendingRemotePersist(): void {
-  if (persistTimer !== null) {
-    clearTimeout(persistTimer)
-    persistTimer = null
+function matchesErrorCode(errorCode: string, prefix: string): boolean {
+  const normalized = errorCode.trim()
+  return normalized === prefix || normalized.startsWith(`${prefix}:`)
+}
+
+function formatCanvasSaveErrorMessage(errorCode: string): string {
+  if (
+    matchesErrorCode(errorCode, 'CANVAS_SESSION_TOO_LARGE') ||
+    matchesErrorCode(errorCode, 'CANVAS_FRAME_SOURCE_TOO_LARGE') ||
+    matchesErrorCode(errorCode, 'CANVAS_HISTORY_BLOB_TOO_LARGE')
+  ) {
+    return t('home.sidePanel.canvasSessionSaveTooLarge')
   }
-  const pending = pendingRemotePersist
-  pendingRemotePersist = null
-  if (pending && isElectronRenderer()) {
-    void savePersistedCanvasSession(pending.key, pending.session)
+  if (matchesErrorCode(errorCode, 'CANVAS_SESSION_FRAME_LIMIT')) {
+    return t('home.sidePanel.canvasSessionSaveFrameLimit', { max: MAX_CANVAS_FRAMES })
+  }
+  return t('home.sidePanel.canvasSessionSaveFailed')
+}
+
+function clearPersistTimerForConv(convId: string): void {
+  const existing = persistTimersByConv.get(convId)
+  if (existing !== undefined) {
+    clearTimeout(existing)
+    persistTimersByConv.delete(convId)
   }
 }
 
-function scheduleRemotePersist(key: string, session: InMemoryCanvasSession): void {
-  if (!isElectronRenderer()) return
-  pendingRemotePersist = {
-    key,
-    session: cloneInMemoryCanvasSession(session)
+function clearAllPersistTimers(): void {
+  for (const timer of persistTimersByConv.values()) {
+    clearTimeout(timer)
   }
-  if (persistTimer !== null) {
-    clearTimeout(persistTimer)
-  }
-  persistTimer = setTimeout(() => {
-    persistTimer = null
-    const pending = pendingRemotePersist
-    pendingRemotePersist = null
-    if (pending && isElectronRenderer()) {
-      void savePersistedCanvasSession(pending.key, pending.session)
+  persistTimersByConv.clear()
+}
+
+async function dispatchRemotePersistForConversation(convId: string): Promise<void> {
+  clearPersistTimerForConv(convId)
+  const cleanId = convId.trim()
+  if (!cleanId || !isElectronRenderer()) return
+  if (inFlightPersistByConv.has(cleanId)) return
+
+  const entry = pendingPersistByConv.get(cleanId)
+  if (!entry) return
+
+  pendingPersistByConv.delete(cleanId)
+  inFlightPersistByConv.add(cleanId)
+
+  let result: Awaited<ReturnType<typeof savePersistedCanvasSession>>
+  try {
+    result = await savePersistedCanvasSession(entry.conversationId, entry.session)
+  } catch (error) {
+    result = {
+      ok: false,
+      error: error instanceof Error && error.message ? error.message : 'CANVAS_SESSION_SAVE_FAILED',
+      permanent: false
     }
+  } finally {
+    inFlightPersistByConv.delete(cleanId)
+  }
+
+  const hasNewerPending = pendingPersistByConv.has(cleanId)
+  const isLatestForConv = latestPersistRevisionByConv.get(cleanId) === entry.revision
+  const isActiveConv = !isUnmounted && activePersistedConversationId.value === cleanId
+
+  if (result.ok) {
+    retryCountByConv.set(cleanId, 0)
+    if (isActiveConv && isLatestForConv && !hasNewerPending) {
+      hasUnsavedRemoteChanges.value = false
+      if (remotePersistenceError.value?.kind === 'save') {
+        remotePersistenceError.value = null
+        lastToastedErrorKey = ''
+      }
+    }
+    if (hasNewerPending && !isUnmounted && !persistTimersByConv.has(cleanId)) {
+      void dispatchRemotePersistForConversation(cleanId)
+    }
+    return
+  }
+
+  const errorCode = result.error || 'CANVAS_SESSION_SAVE_FAILED'
+
+  // Queued/flushed save raced with conversation deletion — drop silently without retry or toast.
+  if (matchesErrorCode(errorCode, 'CANVAS_SESSION_CONVERSATION_DELETED')) {
+    pendingPersistByConv.delete(cleanId)
+    retryCountByConv.delete(cleanId)
+    clearPersistTimerForConv(cleanId)
+    if (isActiveConv) {
+      hasUnsavedRemoteChanges.value = false
+      if (remotePersistenceError.value?.kind === 'save') {
+        remotePersistenceError.value = null
+        lastToastedErrorKey = ''
+      }
+    }
+    return
+  }
+
+  // Newer edits superseded this failed attempt — never overwrite pending edits with stale state.
+  if (hasNewerPending) {
+    if (isActiveConv) {
+      hasUnsavedRemoteChanges.value = true
+    }
+    if (!isUnmounted && !persistTimersByConv.has(cleanId)) {
+      void dispatchRemotePersistForConversation(cleanId)
+    }
+    return
+  }
+
+  const permanent = Boolean(result.permanent)
+
+  // Keep the latest snapshot marked unsaved until the store confirms ok: true.
+  pendingPersistByConv.set(cleanId, {
+    ...entry,
+    permanentFailure: permanent
+  })
+  if (isActiveConv) {
+    hasUnsavedRemoteChanges.value = true
+  }
+
+  if (!permanent && !isUnmounted) {
+    const nextAttempt = (retryCountByConv.get(cleanId) ?? 0) + 1
+    if (nextAttempt <= MAX_CANVAS_SESSION_PERSIST_RETRIES) {
+      retryCountByConv.set(cleanId, nextAttempt)
+      const delayMs = CANVAS_SESSION_PERSIST_RETRY_BASE_MS * 2 ** (nextAttempt - 1)
+      const timer = setTimeout(() => {
+        persistTimersByConv.delete(cleanId)
+        void dispatchRemotePersistForConversation(cleanId)
+      }, delayMs)
+      persistTimersByConv.set(cleanId, timer)
+      return
+    }
+  }
+
+  const message = formatCanvasSaveErrorMessage(errorCode)
+  if (isActiveConv) {
+    remotePersistenceError.value = {
+      kind: 'save',
+      code: errorCode,
+      message,
+      permanent
+    }
+  }
+  if (!isUnmounted) {
+    const toastKey = `${cleanId}:${errorCode}`
+    if (lastToastedErrorKey !== toastKey) {
+      lastToastedErrorKey = toastKey
+      toast.error(message)
+    }
+  }
+}
+
+function flushPendingRemotePersist(): void {
+  for (const [convId, entry] of Array.from(pendingPersistByConv.entries())) {
+    clearPersistTimerForConv(convId)
+    if (entry.permanentFailure) continue
+    if (isElectronRenderer()) {
+      void dispatchRemotePersistForConversation(convId)
+    }
+  }
+}
+
+function scheduleRemotePersist(conversationId: string, session: InMemoryCanvasSession): void {
+  const cleanId = conversationId.trim()
+  if (!cleanId || !isElectronRenderer()) return
+  persistRevisionSeq += 1
+  const revision = persistRevisionSeq
+  latestPersistRevisionByConv.set(cleanId, revision)
+  retryCountByConv.set(cleanId, 0)
+  pendingPersistByConv.set(cleanId, {
+    conversationId: cleanId,
+    session: cloneInMemoryCanvasSession(session),
+    revision,
+    permanentFailure: false
+  })
+  if (!isUnmounted && activePersistedConversationId.value === cleanId) {
+    hasUnsavedRemoteChanges.value = true
+  }
+  clearPersistTimerForConv(cleanId)
+  const timer = setTimeout(() => {
+    persistTimersByConv.delete(cleanId)
+    void dispatchRemotePersistForConversation(cleanId)
   }, CANVAS_SESSION_PERSIST_DEBOUNCE_MS)
+  persistTimersByConv.set(cleanId, timer)
+}
+
+function retryRemotePersistence(): void {
+  const currentError = remotePersistenceError.value
+  if (!currentError) return
+  if (currentError.kind === 'load') {
+    hydrateSessionForConversation(props.conversationId)
+    return
+  }
+  const persistedId = activePersistedConversationId.value
+  if (!persistedId || !isElectronRenderer()) return
+  retryCountByConv.set(persistedId, 0)
+  lastToastedErrorKey = ''
+  const existing = pendingPersistByConv.get(persistedId)
+  if (existing) {
+    pendingPersistByConv.set(persistedId, {
+      ...existing,
+      permanentFailure: false
+    })
+  } else {
+    persistRevisionSeq += 1
+    latestPersistRevisionByConv.set(persistedId, persistRevisionSeq)
+    pendingPersistByConv.set(persistedId, {
+      conversationId: persistedId,
+      session: cloneInMemoryCanvasSession(buildSessionSnapshot()),
+      revision: persistRevisionSeq,
+      permanentFailure: false
+    })
+  }
+  hasUnsavedRemoteChanges.value = true
+  void dispatchRemotePersistForConversation(persistedId)
 }
 
 function applySessionSnapshot(snapshot: InMemoryCanvasSession | null): void {
@@ -649,11 +803,12 @@ function applySessionSnapshot(snapshot: InMemoryCanvasSession | null): void {
 }
 
 function persistCurrentSession(options: { remote?: boolean } = {}): void {
-  if (isHydrating) return
+  if (isHydrating || remoteSessionStatus.value !== 'ready') return
   const snapshot = buildSessionSnapshot()
-  writeCanvasSession(props.conversationId, snapshot)
-  if (options.remote !== false && !awaitingRemoteHydration && isElectronRenderer()) {
-    scheduleRemotePersist(getSessionMapKey(props.conversationId), snapshot)
+  writeInMemoryCanvasSession(props.conversationId, snapshot)
+  const persistedId = activePersistedConversationId.value
+  if (options.remote !== false && persistedId !== null && isElectronRenderer()) {
+    scheduleRemotePersist(persistedId, snapshot)
   }
 }
 
@@ -662,8 +817,9 @@ function hydrateSessionForConversation(convId: string | null): void {
   cancelPendingCanvasCapture()
   hydrateGeneration += 1
   const generation = hydrateGeneration
-  const targetKey = getSessionMapKey(convId)
-  const nextSessionKey = `canvas:${targetKey}`
+  const memoryKey = getInMemoryCanvasSessionKey(convId)
+  const persistedId = getPersistedConversationId(convId)
+  const nextSessionKey = `canvas:${memoryKey}`
   if (activeCaptureSessionKey && activeCaptureSessionKey !== nextSessionKey) {
     void releaseCaptureSession(activeCaptureSessionKey)
   }
@@ -671,59 +827,91 @@ function hydrateSessionForConversation(convId: string | null): void {
   frameBitmaps.value = {}
   domIssuesByFrameId.value = {}
   capturedFrameSignatures.clear()
+  remotePersistenceError.value = null
+  lastToastedErrorKey = ''
+  hasUnsavedRemoteChanges.value = persistedId
+    ? pendingPersistByConv.has(persistedId) || inFlightPersistByConv.has(persistedId)
+    : false
 
-  awaitingRemoteHydration = false
-  let stored: InMemoryCanvasSession | null = null
-  let reconciledAdded = 0
-  isHydrating = true
-  try {
-    stored = readCanvasSession(convId)
-    applySessionSnapshot(stored)
-    lintOpen.value = false
-    themeMenuOpen.value = false
-    reconciledAdded = reconcileConversationFrames(props.messages)
-  } finally {
-    isHydrating = false
-  }
+  const stored = readInMemoryCanvasSession(convId)
 
-  if (!stored && isElectronRenderer()) {
-    awaitingRemoteHydration = true
-    const mutationBeforeLoad = sessionMutationVersion
-    void loadPersistedCanvasSession(targetKey).then((persisted) => {
-      if (generation !== hydrateGeneration) return
-      awaitingRemoteHydration = false
+  if (!stored && isElectronRenderer() && persistedId !== null) {
+    remoteSessionStatus.value = 'loading'
+    isHydrating = true
+    try {
+      applySessionSnapshot(null)
+      lintOpen.value = false
+      themeMenuOpen.value = false
+      addMenuOpen.value = false
+    } finally {
+      isHydrating = false
+    }
 
-      if (sessionMutationVersion !== mutationBeforeLoad) {
-        persistCurrentSession({ remote: true })
+    void loadPersistedCanvasSession(persistedId).then((result) => {
+      if (isUnmounted || generation !== hydrateGeneration) return
+
+      if (result.status === 'error') {
+        remoteSessionStatus.value = 'load-error'
+        const message = t('home.sidePanel.canvasSessionLoadFailed')
+        remotePersistenceError.value = {
+          kind: 'load',
+          code: result.error,
+          message,
+          permanent: false
+        }
+        toast.error(message)
         return
       }
 
-      if (persisted) {
+      if (result.status === 'loaded') {
         let addedAfterHydrate = 0
         isHydrating = true
         try {
-          applySessionSnapshot(persisted)
+          applySessionSnapshot(result.session)
           addedAfterHydrate = reconcileConversationFrames(props.messages)
         } finally {
           isHydrating = false
         }
+        remoteSessionStatus.value = 'ready'
         const hydratedSnapshot = buildSessionSnapshot()
-        writeCanvasSession(convId, hydratedSnapshot)
+        writeInMemoryCanvasSession(convId, hydratedSnapshot)
         if (addedAfterHydrate > 0) {
-          scheduleRemotePersist(targetKey, hydratedSnapshot)
+          scheduleRemotePersist(persistedId, hydratedSnapshot)
         }
         return
       }
 
+      // Confirmed status === 'missing': safe to seed automatically from chat messages and persist.
+      isHydrating = true
+      try {
+        applySessionSnapshot(null)
+        reconcileConversationFrames(props.messages)
+      } finally {
+        isHydrating = false
+      }
+      remoteSessionStatus.value = 'ready'
       const initialSnapshot = buildSessionSnapshot()
-      writeCanvasSession(convId, initialSnapshot)
+      writeInMemoryCanvasSession(convId, initialSnapshot)
       if (hasPersistableSessionContent(initialSnapshot)) {
-        scheduleRemotePersist(targetKey, initialSnapshot)
+        scheduleRemotePersist(persistedId, initialSnapshot)
       }
     })
     return
   }
 
+  // Already cached in memory, non-Electron renderer, or unidentified/blank conversationId.
+  let reconciledAdded = 0
+  isHydrating = true
+  try {
+    applySessionSnapshot(stored)
+    lintOpen.value = false
+    themeMenuOpen.value = false
+    addMenuOpen.value = false
+    reconciledAdded = reconcileConversationFrames(props.messages)
+  } finally {
+    isHydrating = false
+  }
+  remoteSessionStatus.value = 'ready'
   persistCurrentSession({ remote: reconciledAdded > 0 })
 }
 
@@ -738,15 +926,7 @@ watch(
 watch(
   () => props.messages,
   (nextMessages) => {
-    if (awaitingRemoteHydration) {
-      isHydrating = true
-      try {
-        reconcileConversationFrames(nextMessages)
-      } finally {
-        isHydrating = false
-      }
-      return
-    }
+    if (remoteSessionStatus.value !== 'ready') return
     const added = reconcileConversationFrames(nextMessages)
     if (added > 0) {
       persistCurrentSession()
@@ -766,9 +946,7 @@ watch(
     canvasThemePackId
   ],
   () => {
-    if (isHydrating) return
-    sessionMutationVersion += 1
-    awaitingRemoteHydration = false
+    if (isHydrating || remoteSessionStatus.value !== 'ready') return
     persistCurrentSession()
   },
   { deep: true, flush: 'sync' }
@@ -822,6 +1000,14 @@ const inspectedLintIssues = computed<TdsLintIssue[]>(() => {
   const target = inspectedFrame.value
   if (!target) return []
   return lintReportsByFrameId.value[target.id]?.issues ?? []
+})
+
+const inspectedLintContentDigest = computed<string>(() => {
+  const target = inspectedFrame.value
+  if (!target || !target.source.trim()) return ''
+  return computeTdsContentDigest(
+    `${target.id}\n${target.kind}\nantiSlop:${antiSlopEnabled.value ? '1' : '0'}\n${target.source}`
+  )
 })
 
 const pendingNotes = computed(() =>
@@ -985,6 +1171,8 @@ watch(
 onBeforeUnmount(() => {
   hydrateGeneration += 1
   flushPendingRemotePersist()
+  isUnmounted = true
+  clearAllPersistTimers()
   cancelPendingCanvasCapture()
   if (activeCaptureSessionKey) {
     void releaseCaptureSession(activeCaptureSessionKey)
@@ -1036,10 +1224,12 @@ function getPackSwatchColors(pack: TdsThemePack): [string, string, string] {
 }
 
 function handleSelectCanvasPack(pack: TdsThemePack): void {
+  if (isLoadingRemoteSession.value) return
   canvasThemePackId.value = pack.meta.id
 }
 
 function handleFollowAppThemePack(): void {
+  if (isLoadingRemoteSession.value) return
   canvasThemePackId.value = null
 }
 
@@ -1146,6 +1336,12 @@ function formatPresetOptionDims(preset: DevicePreset): string {
 }
 
 function addBlankFrame(payload: TdsCanvasAddFramePayload): void {
+  if (isLoadingRemoteSession.value) return
+  if (frames.value.length >= MAX_CANVAS_FRAMES) {
+    addMenuOpen.value = false
+    toast.warning(t('home.sidePanel.canvasFrameLimitReached', { max: MAX_CANVAS_FRAMES }))
+    return
+  }
   const preset = getDevicePresetById(payload.deviceId)
   const kind: TdsCanvasFrameKind = payload.kind === 'svg' ? 'svg' : 'html'
   manualFrameSeq += 1
@@ -1181,6 +1377,7 @@ function addPresetFrame(preset: DevicePreset): void {
 }
 
 function handleDeleteFrame(frameId: string): void {
+  if (isLoadingRemoteSession.value) return
   const target = frames.value.find((frame) => frame.id === frameId)
   if (target && target.sourceRef?.startsWith('message:')) {
     if (!deletedAutoFrameIds.value.includes(frameId)) {
@@ -1195,6 +1392,7 @@ function handleDeleteFrame(frameId: string): void {
 }
 
 function handleUpdateFrames(nextFrames: TdsCanvasFrame[]): void {
+  if (isLoadingRemoteSession.value) return
   frames.value = nextFrames
   if (selectedFrameId.value && !nextFrames.some((frame) => frame.id === selectedFrameId.value)) {
     selectedFrameId.value = nextFrames[0]?.id ?? null
@@ -1202,18 +1400,22 @@ function handleUpdateFrames(nextFrames: TdsCanvasFrame[]): void {
 }
 
 function handleUpdateNotes(nextNotes: TdsCanvasNote[]): void {
+  if (isLoadingRemoteSession.value) return
   notes.value = nextNotes
 }
 
 function handleUpdateHistory(nextHistory: TdsCanvasHistoryState): void {
+  if (isLoadingRemoteSession.value) return
   historyState.value = nextHistory
 }
 
 function handleSelectFrame(frameId: string | null): void {
+  if (isLoadingRemoteSession.value) return
   selectedFrameId.value = frameId
 }
 
 function handleOpenLint(frameId: string): void {
+  if (isLoadingRemoteSession.value) return
   selectedFrameId.value = frameId
   lintOpen.value = true
 }
@@ -1224,6 +1426,7 @@ function handleSyncFromChatAndClose(close: () => void): void {
 }
 
 function handleSyncFromChat(): void {
+  if (isLoadingRemoteSession.value || remoteSessionStatus.value === 'load-error') return
   const extracted = collectConversationFrames(props.messages)
   if (extracted.length === 0) {
     toast.info(t('home.sidePanel.canvasSyncNone'))
@@ -1290,6 +1493,7 @@ async function handleSendLintToAi(payload: {
 
 async function handleSendNotesToAi(payload: TdsCanvasSendNotesPayload): Promise<void> {
   if (!payload.prompt.trim()) return
+  const generation = hydrateGeneration
   const sentIds = new Set(payload.noteIds)
   const noteTexts = notes.value
     .filter((note) => sentIds.has(note.id))
@@ -1303,7 +1507,12 @@ async function handleSendNotesToAi(payload: TdsCanvasSendNotesPayload): Promise<
     selectedText: noteTexts || payload.prompt,
     prompt: payload.prompt
   })
-  if (accepted && sentIds.size > 0) {
+  if (
+    accepted &&
+    sentIds.size > 0 &&
+    generation === hydrateGeneration &&
+    remoteSessionStatus.value === 'ready'
+  ) {
     notes.value = notes.value.map((note) =>
       sentIds.has(note.id) ? { ...note, resolved: true } : note
     )
@@ -1335,8 +1544,47 @@ async function handleAskFrameAi(payload: TdsCanvasAskFramePayload): Promise<void
   <section
     class="HomeSideCanvasPane"
     :aria-label="t('home.sidePanel.canvas')"
+    :aria-busy="isLoadingRemoteSession ? 'true' : undefined"
+    :data-hydrating="isLoadingRemoteSession ? 'true' : 'false'"
+    :data-unsaved="hasUnsavedRemoteChanges ? 'true' : 'false'"
     data-testid="home-side-canvas-pane"
   >
+    <div
+      v-if="remotePersistenceError"
+      class="HomeSideCanvasPane-StatusBanner is-error"
+      role="alert"
+      data-testid="canvas-persistence-error"
+      :data-error-kind="remotePersistenceError.kind"
+      :data-error-code="remotePersistenceError.code"
+    >
+      <span
+        class="i-ri-error-warning-line HomeSideCanvasPane-StatusBannerIcon"
+        aria-hidden="true"
+      />
+      <span class="HomeSideCanvasPane-StatusBannerText">{{ remotePersistenceError.message }}</span>
+      <button
+        v-if="!remotePersistenceError.permanent"
+        type="button"
+        class="HomeSideCanvasPane-StatusBannerAction"
+        data-testid="canvas-persistence-retry"
+        @click="retryRemotePersistence"
+      >
+        {{ t('home.sidePanel.canvasSessionRetry') }}
+      </button>
+    </div>
+    <div
+      v-else-if="isLoadingRemoteSession"
+      class="HomeSideCanvasPane-StatusBanner is-loading"
+      role="status"
+      aria-live="polite"
+      data-testid="canvas-session-loading"
+    >
+      <span class="i-ri-loader-4-line HomeSideCanvasPane-StatusBannerIcon" aria-hidden="true" />
+      <span class="HomeSideCanvasPane-StatusBannerText">
+        {{ t('home.sidePanel.canvasSessionLoading') }}
+      </span>
+    </div>
+
     <div class="HomeSideCanvasPane-Stage">
       <TdsDesignCanvas
         :key="canvasSessionKey"
@@ -1377,6 +1625,7 @@ async function handleAskFrameAi(payload: TdsCanvasAskFramePayload): Promise<void
               <button
                 type="button"
                 class="HomeSideCanvasPane-StatusBtn HomeSideCanvasPane-ThemeTrigger"
+                :disabled="isLoadingRemoteSession"
                 :aria-expanded="themeMenuOpen"
                 :aria-label="t('home.sidePanel.canvasThemeTitle')"
                 :title="t('home.sidePanel.canvasThemeTitle')"
@@ -1490,6 +1739,8 @@ async function handleAskFrameAi(payload: TdsCanvasAskFramePayload): Promise<void
             v-model:open="lintOpen"
             v-model:anti-slop="antiSlopEnabled"
             :issues="inspectedLintIssues"
+            :content-digest="inspectedLintContentDigest"
+            :frame-id="inspectedFrame.id"
             :display-path="inspectedFrame.title"
             :ai-actions-enabled="aiActionsEnabled"
             :sending="sendingAiAction"
@@ -1540,6 +1791,7 @@ async function handleAskFrameAi(payload: TdsCanvasAskFramePayload): Promise<void
                 type="button"
                 class="HomeSideCanvasPane-StatusBtn"
                 :class="{ 'is-active': addMenuOpen }"
+                :disabled="isLoadingRemoteSession"
                 :aria-expanded="addMenuOpen"
                 data-testid="canvas-add-frame-trigger"
               >
@@ -1614,6 +1866,7 @@ async function handleAskFrameAi(payload: TdsCanvasAskFramePayload): Promise<void
             type="button"
             role="menuitem"
             class="HomeSideCanvasPane-MoreItem"
+            :disabled="isLoadingRemoteSession || remoteSessionStatus === 'load-error'"
             data-testid="canvas-sync-messages"
             @click="handleSyncFromChatAndClose(close)"
           >
@@ -1637,6 +1890,62 @@ async function handleAskFrameAi(payload: TdsCanvasAskFramePayload): Promise<void
   min-height: 0;
   background: var(--shell-bg);
   color: var(--shell-text-primary);
+}
+
+.HomeSideCanvasPane-StatusBanner {
+  display: flex;
+  flex: none;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 10px;
+  font-size: var(--shell-fs-caption);
+  line-height: 1.4;
+  border-bottom: 1px solid var(--shell-border);
+
+  &.is-error {
+    background: var(--shell-danger-soft);
+    color: var(--shell-danger);
+    border-bottom-color: var(--shell-danger-border);
+  }
+
+  &.is-loading {
+    background: var(--shell-surface);
+    color: var(--shell-text-secondary);
+  }
+}
+
+.HomeSideCanvasPane-StatusBannerIcon {
+  flex: none;
+  font-size: 14px;
+}
+
+.HomeSideCanvasPane-StatusBannerText {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.HomeSideCanvasPane-StatusBannerAction {
+  flex: none;
+  height: 22px;
+  padding: 0 8px;
+  border: none;
+  border-radius: var(--shell-radius-sm);
+  background: var(--shell-bg);
+  color: var(--shell-text-primary);
+  font: inherit;
+  font-size: var(--shell-fs-caption);
+  font-weight: var(--shell-font-weight-medium);
+  cursor: pointer;
+  box-shadow: inset 0 0 0 1px var(--shell-border);
+
+  &:hover {
+    background: var(--shell-surface-2);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--shell-focus-ring);
+    outline-offset: 1px;
+  }
 }
 
 .HomeSideCanvasPane-StatusBtn {

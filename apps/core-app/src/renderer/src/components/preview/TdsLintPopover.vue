@@ -74,8 +74,10 @@ const effectiveAutoFix = computed<boolean>(() => {
   return internalAutoFix.value
 })
 
+const normalizedContentDigest = computed<string>(() => props.contentDigest.trim())
+
 const showAutoFixToggle = computed<boolean>(
-  () => props.aiActionsEnabled || props.autoFix !== undefined || props.autoFixOnError !== undefined
+  () => props.aiActionsEnabled && Boolean(normalizedContentDigest.value)
 )
 
 const counts = computed(() => summarizeLintIssues(props.issues))
@@ -120,6 +122,7 @@ function toggleAntiSlop(): void {
 }
 
 function toggleAutoFix(): void {
+  if (!showAutoFixToggle.value) return
   const next = !effectiveAutoFix.value
   internalAutoFix.value = next
   emit('update:autoFix', next)
@@ -130,17 +133,17 @@ watch(
   [
     effectiveAutoFix,
     () => props.aiActionsEnabled,
-    () => props.contentDigest,
+    normalizedContentDigest,
     () => props.issues,
     () => props.sending,
     () => props.frameId,
     () => props.displayPath
   ],
   () => {
-    if (!props.aiActionsEnabled || !effectiveAutoFix.value || !props.contentDigest) return
+    if (!props.aiActionsEnabled || !effectiveAutoFix.value || !normalizedContentDigest.value) return
     const decision = autoFixTracker.consume({
       enabled: true,
-      contentDigest: props.contentDigest,
+      contentDigest: normalizedContentDigest.value,
       issues: props.issues,
       frameId: props.frameId,
       displayPath: props.displayPath,

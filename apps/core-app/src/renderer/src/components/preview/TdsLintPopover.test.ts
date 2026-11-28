@@ -53,6 +53,7 @@ describe('TdsLintPopover', () => {
       props: {
         issues: [errorIssue],
         aiActionsEnabled: true,
+        contentDigest: computeTdsContentDigest('<img src="https://cdn.example.com/a.png" />'),
         open: true
       },
       global: {
@@ -69,6 +70,46 @@ describe('TdsLintPopover', () => {
     expect(wrapper.emitted('update:autoFix')?.[0]).toEqual([true])
     expect(wrapper.emitted('update:autoFixOnError')?.[0]).toEqual([true])
     expect(toggle.attributes('aria-checked')).toBe('true')
+  })
+
+  it('hides the auto-fix switch and never triggers when contentDigest is empty or aiActionsEnabled is false', async () => {
+    const missingDigestWrapper = mount(TdsLintPopover, {
+      props: {
+        issues: [errorIssue],
+        aiActionsEnabled: true,
+        autoFixOnError: true,
+        contentDigest: '   ',
+        open: true
+      },
+      global: {
+        plugins: [i18n],
+        stubs: { TxPopover: TxPopoverStub }
+      }
+    })
+
+    expect(missingDigestWrapper.find('[data-testid="tds-lint-autofix-toggle"]').exists()).toBe(
+      false
+    )
+    expect(missingDigestWrapper.emitted('auto-fix')).toBeUndefined()
+    expect(missingDigestWrapper.emitted('send-to-ai')).toBeUndefined()
+
+    const disabledAiWrapper = mount(TdsLintPopover, {
+      props: {
+        issues: [errorIssue],
+        aiActionsEnabled: false,
+        autoFixOnError: true,
+        contentDigest: computeTdsContentDigest('<img src="https://cdn.example.com/a.png" />'),
+        open: true
+      },
+      global: {
+        plugins: [i18n],
+        stubs: { TxPopover: TxPopoverStub }
+      }
+    })
+
+    expect(disabledAiWrapper.find('[data-testid="tds-lint-autofix-toggle"]').exists()).toBe(false)
+    expect(disabledAiWrapper.emitted('auto-fix')).toBeUndefined()
+    expect(disabledAiWrapper.emitted('send-to-ai')).toBeUndefined()
   })
 
   it('triggers bounded 1-pass auto-fix only on error issues and never loops on identical digest or warnings', async () => {
