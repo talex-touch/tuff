@@ -1,0 +1,737 @@
+# Plugin index.js Context API
+
+## Overview
+
+Plugin lifecycle handlers receive a typed `IPluginContext`. New plugins should use `context.utils` as the canonical capability surface; the host builds it for the verified calling plugin and applies SDK-version and permission policy before protected operations run.
+
+Legacy `globalThis` utilities remain available to existing CommonJS plugins, but they are a compatibility projection of the same host-owned capabilities. Do not import CoreApp internals or construct raw transport channels to bypass the context facade.
+
+## Canonical lifecycle context
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import type { IPluginLifecycle } from '@talex-touch/utils/plugin/sdk'
+
+  const lifecycle: IPluginLifecycle = {
+  async onInit(context) {
+  const {
+  logger,
+  http,
+  storage,
+  secret,
+  clipboard,
+  channel,
+  dialog,
+  box,
+  feature,
+  quickActions,
+  quickOps,
+  intelligence,
+  screenshot,
+  system,
+  language,
+  lexicon,
+  power,
+  recommend,
+  divisionBox,
+  openUrl
+  } = context.utils
+
+      logger.info(`Loaded ${context.pluginName}`)
+      void [
+        http,
+        storage,
+        secret,
+        clipboard,
+        channel,
+        dialog,
+        box,
+        feature,
+        quickActions,
+        quickOps,
+        intelligence,
+        screenshot,
+        system,
+        language,
+        lexicon,
+        power,
+        recommend,
+        divisionBox,
+        openUrl
+      ]
+    },
+
+      onFeatureTriggered(featureId, query) {
+        // `query` can be a string or a TuffQuery with text/image/files/html inputs.
+        console.log(featureId, query)
+      }
+
+  }
+
+  ## export default lifecycle
+---
+:::
+
+`context` also includes `pluginPath` and plugin `config`. Store secrets through `context.utils.secret`, not normal storage or logs.
+
+## Capability groups
+<!-- markdownlint-disable MD060 -->
+| Context field                    | Purpose                                              | Primary documentation                                                  |
+| -------------------------------- | ---------------------------------------------------- | ---------------------------------------------------------------------- |
+| `box`, `feature`                 | CoreBox window and result-item lifecycle             | [Box](./box.en.mdc), [Feature](./feature.en.mdc)                       |
+| `clipboard`, `storage`, `secret` | Clipboard, plugin data, and protected credentials    | [Clipboard](./clipboard.en.mdc), [Storage](./storage.en.mdc)           |
+| `intelligence`                   | AI capability discovery, invoke, and stream          | [Intelligence](./intelligence.en.mdc)                                  |
+| `screenshot`                     | Permission-gated display, cursor, and region capture | [Screenshot](./screenshot.en.mdc)                                      |
+| `system`                         | Active app and permission-gated selected text        | [Clipboard](./clipboard.en.mdc)                                        |
+| `language`, `lexicon`            | App language and plugin-scoped Domain Lexicon        | [Language SDK](./i18n.en.mdc)                                          |
+| `quickActions`, `quickOps`       | Global actions and bounded built-in tools            | [Quick Actions](./quick-actions.en.mdc), [QuickOps](./quickops.en.mdc) |
+| `divisionBox`, `channel`         | Independent windows and plugin transport             | [DivisionBox](./division-box.en.mdc), [Channel](./channel.en.mdc)      |
+| `power`, `recommend`             | Low-power adaptation and recommendation providers    | [Power](./power.en.mdc), [Recommend](./recommend.en.mdc)               |
+<!-- markdownlint-enable MD060 -->
+Protected capabilities still require the matching `manifest.json` permission declaration and current grant. A field being present on `context.utils` is not proof that every operation is authorized.
+
+## Legacy global compatibility
+
+Existing `index.js` plugins may still read utilities such as `logger`, `clipboard`, `storage`, `feature`, `box`, and `openUrl` from `globalThis`. New lifecycle code should capture `context.utils` in `onInit` instead, because it exposes the complete typed SDK surface, including `secret`, `intelligence`, `screenshot`, `system`, `language`, and `lexicon`.
+
+---
+
+## logger
+
+Plugin logger - logs are saved to the plugin's log directory.
+
+:::TuffCodeBlock{lang="javascript"}
+---
+code: |
+  logger.info('Info message', { extra: 'data' })
+  logger.warn('Warning message')
+  logger.error('Error message', error)
+  logger.debug('Debug message')
+---
+:::
+
+---
+
+## http
+
+HTTP request library (axios-based):
+
+:::TuffCodeBlock{lang="javascript"}
+---
+code: |
+  // GET request
+  const response = await http.get('https://api.example.com/data', {
+  headers: { 'Authorization': 'Bearer token' },
+  signal // AbortSignal for cancellation
+  })
+
+  // POST request
+  const result = await http.post('https://api.example.com/submit', {
+  data: 'payload'
+  }, { signal })
+---
+:::
+
+---
+
+## clipboard
+
+Clipboard operations:
+
+:::TuffCodeBlock{lang="javascript"}
+---
+code: |
+  // Write text
+  clipboard.writeText('Copied content')
+
+  // Read text
+  const text = clipboard.readText()
+
+  // Read image
+  const image = clipboard.readImage()
+
+  // Write image
+  clipboard.writeImage(nativeImage)
+---
+:::
+
+---
+
+## storage
+
+Plugin-specific storage (10MB limit per plugin):
+
+:::TuffCodeBlock{lang="javascript"}
+---
+code: |
+  // Read config file
+  const config = storage.getFile('providers_config')
+
+  // Save config file
+  storage.setFile('providers_config', { key: 'value' })
+
+  // Delete config file
+  storage.deleteFile('old_config')
+
+  // List all files
+  const files = storage.listFiles() // ['file1', 'file2']
+
+  // Watch for config changes
+  const unsubscribe = storage.onDidChange('providers_config', (newConfig) => {
+  console.log('Config updated:', newConfig)
+  })
+
+  // Unsubscribe
+  unsubscribe()
+---
+:::
+
+---
+
+## power
+
+PowerSDK for low-power adaptation:
+
+:::TuffCodeBlock{lang="javascript"}
+---
+code: |
+  // Read current low-power status
+  const status = await power.getLowPowerStatus({ threshold: 25 })
+
+  if (status.lowPower) {
+  logger.info('Skip expensive background tasks')
+  }
+
+  // Listen to status changes
+  const disposePower = power.onLowPowerChanged((nextStatus) => {
+  logger.info('Low power changed', nextStatus)
+  })
+
+  // Optional: stop listening
+  disposePower()
+---
+:::
+
+> Note: In `index.js` context, `power.onLowPowerChanged` currently uses polling (about 60s), and strict real-time push is pending.
+
+---
+
+## recommend
+
+RecommendSDK for registering custom recommendation providers with CoreBox. `registerProvider` and `unregisterProvider` both return a Promise and must be awaited; a provider must implement `onExecute` or registration throws.
+
+:::TuffCodeBlock{lang="javascript"}
+---
+code: |
+  // Register recommendation provider
+  const dispose = await recommend.registerProvider({
+  id: 'my-recommendation',
+  name: 'My Recommendations',
+  canProvide(context) {
+  return context.time.timeSlot === 'morning'
+  },
+  getCandidates(context) {
+  return [{
+  id: 'morning-tip',
+  title: 'Morning Reminder',
+  subtitle: 'Start a new day',
+  icon: { type: 'emoji', value: '☀️' },
+  priority: 75,
+  action: 'show-morning-tip'
+  }]
+  },
+  // true or undefined means the major action was accepted and the host records
+  // one execution; false or a thrown error means failure and nothing is counted.
+  async onExecute(candidate) {
+  if (candidate.action !== 'show-morning-tip') return false
+  return await showMorningTip()
+  }
+  })
+
+  // Unregister provider
+  await dispose()
+  // or
+  await recommend.unregisterProvider('my-recommendation')
+---
+:::
+
+> See [RecommendSDK API](./recommend.en.mdc) for full documentation.
+
+---
+
+## feature
+
+Feature SDK for managing search results:
+
+:::TuffCodeBlock{lang="javascript"}
+---
+code: |
+  // Push search results
+  feature.pushItems([
+  new TuffItemBuilder('item-1')
+  .setTitle('Search Result Title')
+  .setSubtitle('Subtitle')
+  .setIcon({ type: 'file', value: 'assets/icon.svg' })
+  .build()
+  ])
+
+  // Clear current plugin's search results
+  feature.clearItems()
+
+  // Get current plugin's search results
+  const items = feature.getItems()
+---
+:::
+
+---
+
+## box
+
+CoreBox control SDK:
+
+:::TuffCodeBlock{lang="javascript"}
+---
+code: |
+  // Hide CoreBox
+  box.hide()
+
+  // Show CoreBox
+  box.show()
+
+  // Set input content
+  box.setInput('New input content')
+
+  // Get input content
+  const input = box.getInput()
+---
+:::
+
+---
+
+## boxItems
+
+BoxItem management SDK (new API):
+
+:::TuffCodeBlock{lang="javascript"}
+---
+code: |
+  // Push single item
+  boxItems.push(item)
+
+  // Push multiple items
+  boxItems.pushItems([item1, item2])
+
+  // Update specific item
+  boxItems.update('item-id', { title: 'New Title' })
+
+  // Remove specific item
+  boxItems.remove('item-id')
+
+  // Clear all items for this plugin
+  boxItems.clear()
+
+  // Get all items for this plugin
+  const items = boxItems.getItems()
+---
+:::
+
+---
+
+## quickActions / meta
+
+QuickActions SDK registers MetaK / Quick Actions global actions and can call native share from those actions. `meta` is a compatibility alias that points to the same SDK instance. New plugins should prefer `quickActions`.
+
+:::TuffCodeBlock{lang="javascript"}
+---
+code: |
+  quickActions.registerAction({
+  id: 'share-current-item',
+  render: {
+  basic: {
+  title: 'Share current item',
+  subtitle: 'Use the current platform native share target',
+  icon: { type: 'class', value: 'i-ri-share-line' }
+  },
+  group: 'Share'
+  }
+  })
+
+  quickActions.onActionExecute(async ({ actionId, item }) => {
+  if (actionId !== 'share-current-item') return
+
+      const result = await quickActions.shareItem(item, {
+        preferredTargets: ['airdrop', 'system-share', 'mail']
+      })
+
+      if (!result.success) {
+        logger.warn('Native share failed', result.error)
+      }
+
+  ## })
+---
+:::
+
+Common methods:
+
+| Method                                       | Description                                               |
+| -------------------------------------------- | --------------------------------------------------------- |
+| `registerAction(action)`                     | Register a MetaK / Quick Actions global action            |
+| `onActionExecute(handler)`                   | Listen for actions registered by this plugin              |
+| `getNativeShareTargets(payloadType?)`        | Read native share targets available on this platform      |
+| `resolveNativeShareTarget(options?)`         | Resolve a target by payload type and preference order     |
+| `nativeShare(payload, options?)`             | Run native share through Flow Transfer                    |
+| `createSharePayloadFromItem(item, options?)` | Convert a CoreBox item into a Flow payload                |
+| `shareItem(item, options?)`                  | Build item payload, resolve target, and share in one call |
+
+> See [QuickActions SDK](./quick-actions.en.mdc) for full documentation.
+
+---
+
+## plugin
+
+Current plugin info API:
+
+:::TuffCodeBlock{lang="javascript"}
+---
+code: |
+  // Get complete plugin info
+  const info = plugin.getInfo()
+  // { name, version, desc, readme, dev, status, features, issues, ... }
+
+  // Get plugin path
+  const path = plugin.getPath()
+
+  // Get data directory
+  const dataPath = plugin.getDataPath()
+
+  // Get config directory
+  const configPath = plugin.getConfigPath()
+
+  // Get logs directory
+  const logsPath = plugin.getLogsPath()
+
+  // Get temp directory
+  const tempPath = plugin.getTempPath()
+
+  // Get current status
+  const status = plugin.getStatus()
+
+  // Get dev configuration
+  const devInfo = plugin.getDevInfo()
+
+  // Get platform support info
+  const platforms = plugin.getPlatforms()
+---
+:::
+
+---
+
+## plugins
+
+Other plugins API (read-only access):
+
+:::TuffCodeBlock{lang="javascript"}
+---
+code: |
+  // Get all plugins list
+  const allPlugins = await plugins.list()
+
+  // Get specific plugin info
+  const otherPlugin = await plugins.get('other-plugin-name')
+
+  // Get plugin status
+  const status = await plugins.getStatus('other-plugin-name')
+---
+:::
+
+---
+
+## features
+
+Dynamic Feature management:
+
+:::TuffCodeBlock{lang="javascript"}
+---
+code: |
+  // Add Feature dynamically
+  features.addFeature({
+  id: 'dynamic-feature',
+  name: 'Dynamic Feature',
+  desc: 'Runtime-added feature',
+  icon: { type: 'file', value: 'assets/icon.svg' },
+  push: true,
+  commands: [{ type: 'over', value: ['dynamic'] }],
+  priority: 5
+  })
+
+  // Remove Feature
+  features.removeFeature('dynamic-feature')
+
+  // Get all Features
+  const allFeatures = features.getFeatures()
+
+  // Get specific Feature
+  const feature = features.getFeature('feature-id')
+
+  // Set priority
+  features.setPriority('feature-id', 10)
+
+  // Get priority
+  const priority = features.getPriority('feature-id')
+
+  // Get sorted by priority
+  const sorted = features.getFeaturesByPriority()
+---
+:::
+
+Runtime-added features with `icon.type: 'file'` are initialized by the host. Relative values are resolved against the owning plugin root; traversal and missing targets fail closed instead of leaving an unresolved relative path in CoreBox.
+
+---
+
+## channel
+
+IPC channel bridge:
+
+:::TuffCodeBlock{lang="javascript"}
+---
+code: |
+  // Send message to main process
+  const result = await channel.sendToMain('event-name', { data: 'payload' })
+
+  // Send message to renderer process
+  await channel.sendToRenderer('event-name', { data: 'payload' })
+
+  // Listen to main process messages
+  const dispose = channel.onMain('event-name', (data) => {
+  console.log('Received from main:', data)
+  })
+
+  // Listen to renderer process messages
+  const dispose = channel.onRenderer('event-name', (data) => {
+  console.log('Received from renderer:', data)
+  })
+
+  // Access raw channel object
+  channel.raw
+---
+:::
+
+---
+
+## $event
+
+Feature event listeners:
+
+:::TuffCodeBlock{lang="javascript"}
+---
+code: |
+  // Listen to Feature lifecycle
+  $event.onFeatureLifeCycle('feature-id', {
+  onLaunch: (feature) => { console.log('Launched', feature) },
+  onFeatureTriggered: (data, feature) => { console.log('Triggered', data) },
+  onInputChanged: (input) => { console.log('Input changed', input) },
+  onClose: (feature) => { console.log('Closed', feature) }
+  })
+
+  // Remove listener
+  $event.offFeatureLifeCycle('feature-id', callback)
+---
+:::
+
+---
+
+## dialog
+
+System dialogs:
+
+:::TuffCodeBlock{lang="javascript"}
+---
+code: |
+  // Message dialog
+  await dialog.showMessageBox({
+  type: 'info',
+  title: 'Title',
+  message: 'Message content',
+  buttons: ['OK', 'Cancel']
+  })
+
+  // Open file dialog
+  const result = await dialog.showOpenDialog({
+  properties: ['openFile', 'multiSelections'],
+  filters: [{ name: 'Images', extensions: ['jpg', 'png'] }]
+  })
+
+  // Save file dialog
+  const result = await dialog.showSaveDialog({
+  defaultPath: 'file.txt'
+  })
+---
+:::
+
+---
+
+## divisionBox
+
+DivisionBox SDK for creating independent windows:
+
+:::TuffCodeBlock{lang="javascript"}
+---
+code: |
+  // Open DivisionBox
+  const session = await divisionBox.open({
+  url: 'plugin://my-plugin/index.html',
+  title: 'Independent Window',
+  size: 'medium', // 'compact' | 'medium' | 'expanded'
+  keepAlive: true
+  })
+
+  // Close DivisionBox
+  await divisionBox.close(session.sessionId)
+
+  // Listen to state changes
+  divisionBox.onStateChange(session.sessionId, (state) => {
+  console.log('State changed:', state)
+  })
+---
+:::
+
+---
+
+## TuffItemBuilder
+
+Search result builder:
+
+:::TuffCodeBlock{lang="javascript"}
+---
+code: |
+  const item = new TuffItemBuilder('unique-id')
+  .setSource('plugin', 'plugin-features')
+  .setTitle('Title')
+  .setSubtitle('Subtitle')
+  .setIcon({ type: 'file', value: 'assets/icon.svg' })
+  .createAndAddAction('action-id', 'copy', 'Copy', 'Content to copy')
+  .addTag('Tag', 'blue')
+  .setMeta({
+  pluginName: 'my-plugin',
+  featureId: 'my-feature',
+  customData: 'any value'
+  })
+  .build()
+---
+:::
+
+---
+
+## openUrl
+
+Open external links:
+
+:::TuffCodeBlock{lang="javascript"}
+---
+code: |
+  openUrl('https://example.com')
+---
+:::
+
+---
+
+## Lifecycle Hooks
+
+Plugin index.js must export a lifecycle hooks object:
+
+:::TuffCodeBlock{lang="javascript"}
+---
+code: |
+  const pluginLifecycle = {
+  /\*\*
+  _ Called when a Feature is triggered
+  _ @param {string} featureId - Feature ID
+  _ @param {string|TuffQuery} query - Query content
+  _ @param {IPluginFeature} feature - Feature definition
+  _ @param {AbortSignal} signal - For cancellation
+  _/
+  async onFeatureTriggered(featureId, query, feature, signal) {
+  // Compatibility: query can be string or TuffQuery object
+  const queryText = typeof query === 'string' ? query : query?.text
+
+        // Handle Feature logic...
+      },
+
+      /**
+       * Called when a search result item is clicked
+       * @param {TuffItem} item - The clicked item
+       */
+      async onItemAction(item) {
+        if (item.meta?.defaultAction === 'copy') {
+          const copyAction = item.actions.find(a => a.type === 'copy')
+          if (copyAction?.payload) {
+            clipboard.writeText(copyAction.payload)
+            box.hide()
+          }
+        }
+      }
+
+  }
+
+  ## module.exports = pluginLifecycle
+---
+:::
+
+### onItemAction result
+
+`onItemAction` may return nothing, or an object. Three fields tell the host how the action went:
+
+| Field     | Type      | Description                                                                                                                 |
+| --------- | --------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `message` | `string`  | A one-line outcome. Once the action returns, the host shows it as a system notification; without it, nothing is shown.      |
+| `success` | `boolean` | `false` means the action was not done: it does not count as a use, and `message` is shown as a failure hint.                |
+| `status`  | `string`  | `blocked`, `error`, `failed`, `cancelled` and `canceled` are equivalent to `success: false`; the host reads no other value. |
+
+A boolean `success` decides on its own: `success: true` means the action was done whatever `status` says, and `status` is read only when `success` is missing.
+
+:::TuffCodeBlock{lang="javascript"}
+---
+code: |
+  async onItemAction(item) {
+    const copyAction = item.actions.find(a => a.type === 'copy')
+    if (!copyAction?.payload) {
+      return { success: false, message: 'Nothing to copy' }
+    }
+    clipboard.writeText(copyAction.payload)
+    return { success: true, message: 'Copied' }
+  }
+---
+:::
+
+The hint goes through a system notification because CoreBox has usually already closed before the action runs, so there is no window left to show it in. A success notification is silent and titled with the plugin name; a failure notification plays the alert sound and is titled with the plugin name followed by "action failed". At most one notification is shown per action, and none without a `message`.
+
+- `message` is treated as untrusted text: control and invisible characters are not shown, line breaks and runs of whitespace fold into a single space, and anything past 200 characters is cut.
+- To show the plugin's own localized text, return the string that `context.utils.i18n.resolveText()` gives for the current language (requires the `i18n.read` permission). A `$i18n:` message made with `i18n.createMessage()` also works, but the host only resolves its own message keys in the interface language, for example `flowTransfer.copiedToClipboard`; a key the host does not have shows nothing. See [Localization](./i18n.en.mdc).
+- An error thrown by the action is only logged, never shown.
+
+---
+
+## Technical Notes
+
+- Context objects are injected by the main process into the plugin sandbox runtime.
+- Capability limits and permission checks are enforced before exposing APIs.
+
+## Best Practices
+
+1. **Use AbortSignal**: Pass signal parameter in async operations for cancellation support
+2. **Error Handling**: Wrap all async operations with try-catch
+3. **Logging**: Use logger instead of console for debugging and collection
+4. **Storage Limits**: Mind the 10MB storage limit, use tempPath for large files
+5. **TuffQuery Compatibility**: Handle query as both string and object formats
+
+---
+
+## Related Documentation
+
+- [Feature SDK](./feature.en.mdc) - Feature detailed API
+- [DivisionBox API](./division-box.en.mdc) - Independent window system
+- [QuickActions SDK](./quick-actions.en.mdc) - MetaK global actions and native share
+- [PowerSDK](./power.en.mdc) - Low-power adaptation
+- [RecommendSDK](./recommend.en.mdc) - Custom recommendation providers
+- [Flow Transfer API](./flow-transfer.en.mdc) - Plugin data transfer

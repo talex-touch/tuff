@@ -1,0 +1,106 @@
+import type { Ref } from 'vue'
+import { hasWindow } from '@talex-touch/utils/env'
+import { onBeforeUnmount, onMounted } from 'vue'
+
+type TweenVars = gsap.TweenVars
+type GsapContext = gsap.Context
+
+interface UseGsapRevealOptions {
+  /**
+   * CSS selector used to grab elements inside the container.
+   * Defaults to `[data-reveal]`.
+   */
+  targetSelector?: string
+  /**
+   * Base animation values passed to `gsap.from`.
+   */
+  from?: TweenVars
+  /**
+   * Whether the animation should only happen once.
+   */
+  once?: boolean
+  /**
+   * Stagger delay between each element.
+   */
+  stagger?: number
+  /**
+   * Additional ScrollTrigger configuration.
+   */
+  scrollTrigger?: Record<string, unknown>
+}
+
+let scrollTriggerRegistered = false
+
+export function useGsapReveal(
+  container: Ref<HTMLElement | null>,
+  options: UseGsapRevealOptions = {},
+) {
+  let ctx: GsapContext | undefined
+  let disposed = false
+
+  onMounted(async () => {
+    const scope = container.value
+    if (!scope || !hasWindow())
+      return
+
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches)
+      return
+
+    const { default: gsap } = await import('gsap')
+    const { ScrollTrigger } = await import('gsap/ScrollTrigger')
+
+    if (disposed)
+      return
+
+    if (!scrollTriggerRegistered) {
+      gsap.registerPlugin(ScrollTrigger)
+      scrollTriggerRegistered = true
+    }
+
+    const viewHeight = window.innerHeight || document.documentElement.clientHeight
+    const rect = scope.getBoundingClientRect()
+    // Wait for dynamic gsap imports may finish after the section is already visible or passed;
+    // avoid flashing already-visible content back to opacity: 0.
+    if (rect.top <= viewHeight * 0.9)
+      return
+
+    const fallbackFrom: TweenVars = {
+      opacity: 0,
+      autoAlpha: 0,
+      y: 56,
+      duration: 1.15,
+      ease: 'power3.out',
+      filter: 'blur(16px)',
+    }
+
+    ctx = gsap.context(() => {
+      const targetSelector = options.targetSelector ?? '[data-reveal]'
+      const elements = gsap.utils.toArray<HTMLElement>(targetSelector)
+      const fromOptions = options.from ?? {}
+      const clearProps = (fromOptions as { clearProps?: TweenVars['clearProps'] }).clearProps ?? 'filter'
+
+      if (!elements.length)
+        return
+
+      gsap.from(elements, {
+        ...fallbackFrom,
+        ...fromOptions,
+        clearProps,
+        stagger: options.stagger ?? 0.12,
+        scrollTrigger: {
+          trigger: scope,
+          start: 'top 88%',
+          once: options.once ?? true,
+          ...options.scrollTrigger,
+        },
+      })
+    }, scope)
+    ScrollTrigger.refresh()
+  })
+
+  onBeforeUnmount(() => {
+    disposed = true
+    ctx?.revert()
+    ctx = undefined
+  })
+}

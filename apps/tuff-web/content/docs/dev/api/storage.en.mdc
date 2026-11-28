@@ -1,0 +1,310 @@
+# Storage API
+
+## Overview
+
+The Plugin Storage SDK provides:
+
+- File-based persistent storage (`usePluginStorage`)
+- SQLite-based structured storage (`usePluginSqlite`, sdkapi >= 260215)
+
+## Introduction
+
+**Quick Start**
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  import { usePluginStorage } from '@talex-touch/utils/plugin/sdk'
+
+  const storage = usePluginStorage()
+
+  // Save settings
+  await storage.setFile('settings.json', { theme: 'dark', fontSize: 14 })
+
+  // Read settings
+  const settings = await storage.getFile('settings.json')
+  console.log(settings) // { theme: 'dark', fontSize: 14 }
+---
+:::
+
+**SQLite Quick Start (structured data)**
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  import { usePluginSqlite } from '@talex-touch/utils/plugin/sdk'
+
+  const sqlite = usePluginSqlite()
+
+  await sqlite.execute(
+    'CREATE TABLE IF NOT EXISTS todos (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, done INTEGER NOT NULL DEFAULT 0)'
+  )
+
+  await sqlite.execute('INSERT INTO todos (title, done) VALUES (?, ?)', ['Write docs', 0])
+
+  const result = await sqlite.query<{ id: number; title: string; done: number }>(
+    'SELECT id, title, done FROM todos ORDER BY id DESC LIMIT 20'
+  )
+  console.log(result.rows)
+---
+:::
+
+---
+
+## Limits
+
+- **10 MB quota per plugin**; writes past the limit are rejected
+- Data stored in `<userData>/config/plugins/<pluginName>/`
+- Automatic filename sanitization to prevent path traversal attacks
+
+---
+
+## SQLite Permission Requirement
+
+When using `usePluginSqlite()`, your plugin must declare:
+
+:::TuffCodeBlock{lang="json"}
+---
+code: |
+  {
+    "sdkapi": 260626,
+    "permissions": {
+      "required": ["storage.sqlite"],
+      "optional": []
+    },
+    "permissionReasons": {
+      "storage.sqlite": "Store plugin business data in local SQLite database"
+    }
+  }
+---
+:::
+
+---
+
+## API Reference
+
+**Getting Storage Instance**
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  import { usePluginStorage } from '@talex-touch/utils/plugin/sdk'
+
+  const storage = usePluginStorage()
+---
+:::
+
+> **Note**: Must be called within plugin renderer context.
+
+**File Operations**
+
+**`getFile(fileName)`**
+
+Read storage file content.
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const config = await storage.getFile('config.json')
+  // Returns null if file doesn't exist
+---
+:::
+
+---
+
+**SQLite Operations**
+
+**`execute(sql, params?)`**  
+Run insert/update/delete/DDL statements.
+
+**`query<T>(sql, params?)`**  
+Run select statements and return typed rows.
+
+**`transaction(statements)`**  
+Run multiple SQL statements in one transaction (all-or-nothing).
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const sqlite = usePluginSqlite()
+
+  await sqlite.transaction([
+    {
+      sql: 'INSERT INTO todos (title, done) VALUES (?, ?)',
+      params: ['A', 0]
+    },
+    {
+      sql: 'INSERT INTO todos (title, done) VALUES (?, ?)',
+      params: ['B', 0]
+    }
+  ])
+---
+:::
+
+**`setFile(fileName, content)`**
+
+Write to storage file.
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  await storage.setFile('settings.json', { 
+    theme: 'dark',
+    shortcuts: ['Cmd+K']
+  })
+  // Returns { success: true }
+---
+:::
+
+**`deleteFile(fileName)`**
+
+Delete a storage file.
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  await storage.deleteFile('old-cache.json')
+---
+:::
+
+**`listFiles()`**
+
+List all storage files for the plugin.
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const files = await storage.listFiles()
+  // ['settings.json', 'data/cache.json']
+---
+:::
+
+**`clearAll()`**
+
+Clear all storage data for the plugin.
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  await storage.clearAll()
+  // ⚠️ This operation is irreversible
+---
+:::
+
+---
+
+**Advanced Features**
+
+**`getStats()`**
+
+Get storage statistics.
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const stats = await storage.getStats()
+  // {
+  //   totalSize: 1024,
+  //   fileCount: 3,
+  //   limit: 10485760,
+  //   usagePercent: 0.01
+  // }
+---
+:::
+
+**`getTree()`**
+
+Get directory tree structure.
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const tree = await storage.getTree()
+---
+:::
+
+**`getFileDetails(fileName)`**
+
+Get detailed file information.
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const details = await storage.getFileDetails('settings.json')
+---
+:::
+
+**`openFolder()`**
+
+Open plugin storage directory in system file manager.
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  await storage.openFolder()
+---
+:::
+
+---
+
+**Listening to Changes**
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const unsubscribe = storage.onDidChange('settings.json', (data) => {
+    console.log('Config updated:', data)
+  })
+
+  // Stop listening
+  unsubscribe()
+---
+:::
+
+---
+
+## Debug
+
+- **View storage contents**: Use `openFolder()` to inspect files directly
+- **DevTools**: `pnpm core:dev` prints storage change logs in Console
+- **IPC command**: Use `plugin:storage:get-file` for direct queries
+
+## Best Practices
+
+- Namespace files clearly to avoid collisions in shared directories.
+- Batch writes or debounce rapid updates to reduce IO pressure.
+- Keep large blobs in separate files to avoid frequent JSON re-serialization.
+
+## Technical Notes
+
+- Storage uses an isolated directory per plugin with filename sanitization.
+- Reads/writes are executed in the main process via IPC for safety and consistency.
+- SQLite data file is located at `<userData>/modules/plugins/<pluginName>/data/plugin-sdk.sqlite`.
+
+## Type Definitions
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  interface StorageStats {
+    totalSize: number
+    fileCount: number
+    limit: number
+    usagePercent: number
+  }
+
+  interface StorageTreeNode {
+    name: string
+    type: 'file' | 'directory'
+    size?: number
+    children?: StorageTreeNode[]
+  }
+
+  interface FileDetails {
+    name: string
+    size: number
+    createdAt: number
+    modifiedAt: number
+  }
+---
+:::

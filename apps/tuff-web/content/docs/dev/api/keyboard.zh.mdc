@@ -1,0 +1,35 @@
+# Keyboard API
+
+## 当前契约
+
+插件 UI 的键盘交互由插件 renderer 自己处理。请使用 DOM/组件本地键盘事件；如果宿主组件提供了 `hostKeyEvent` 这类 props，则优先使用宿主传入的事件。
+
+`feature.onKeyEvent()`、`onCoreBoxKeyEvent()` 和 raw `core-box:key-event` 通道已退役。该通道没有生产发送端，不再属于受支持扩展面。
+
+## ESC 行为
+
+ESC 仍由 CoreBox 宿主统一处理。插件 UI view 附加后，按下 ESC 会自动退出 UI mode；插件不需要为了 ESC 订阅键盘 channel。
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  // 由 CoreBox 宿主处理，不属于插件 SDK 监听面。
+  uiView.webContents.on('before-input-event', (event, input) => {
+    if (input.key === 'Escape' && input.type === 'keyDown') {
+      coreBoxManager.exitUIMode()
+      event.preventDefault()
+    }
+  })
+---
+:::
+
+## 支持的通道
+
+| 通道 | 方向 | 状态 |
+| --- | --- | --- |
+| `core-box:forward-key-event` | Renderer -> Main | CoreBox renderer 内部 transport |
+| `core-box:get-ui-view-state` | Renderer -> Main | CoreBox renderer 内部 transport |
+
+## 迁移方式
+
+将 `feature.onKeyEvent()` 和 raw `core-box:key-event` 监听替换为插件 UI 组件内的本地键盘处理。对于附加型 widget，如果宿主提供 `hostKeyEvent` prop，请使用该 prop。

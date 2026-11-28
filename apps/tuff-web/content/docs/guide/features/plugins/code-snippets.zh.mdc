@@ -1,0 +1,24 @@
+# 代码片段库（`touch-code-snippets`）
+
+## 适用场景
+- 按语言和标签检索代码模板，支持占位符替换。
+
+## 触发方式
+- Feature ID：`code-snippets.search`
+- Commands：`code / snippet / 代码 / 模板`
+
+## 核心能力
+- 代码片段库：按语言/标签管理与复制模板
+- 支持平台：`win32, darwin, linux`
+
+## 配置与数据
+- 配置/数据文件：`snippets.json`
+- 插件目录：`plugins/touch-code-snippets`
+
+## 权限说明
+- 必需：`clipboard.write`；可选：`clipboard.read`
+
+## 快速上手
+1. 在 CoreBox 输入 `code`。
+2. 看到动作后直接回车执行。
+3. 若涉及权限，按提示授权即可。

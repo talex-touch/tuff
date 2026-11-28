@@ -1,0 +1,65 @@
+# Code Snippets
+
+## CoreBox Command
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  ctx.corebox.registerCommand({
+    id: 'todo.new',
+    title: 'New Todo',
+    run: async ({ query }) => {
+      const title = query || 'New task'
+      await ctx.storage.setItem('lastTask', title)
+      ctx.toast.show({ title: 'Added', message: title })
+    }
+  })
+---
+:::
+
+## Workflow Node
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  ctx.workflow.registerNode('todo.sync', async payload => {
+    const tasks = await ctx.api.fetchTasks()
+    // This handler processes user input. Avoid passing unexpected parameters.
+    return tasks.filter(task => !task.done)
+  })
+---
+:::
+
+## Channel Wrapper
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  export const createChannel = (ctx: PluginContext) => ({
+    ping: (data?: any) => ctx.channel.send('plugin:ping', data),
+    save: (task: Task) => ctx.channel.send('todo:save', task)
+  })
+---
+:::
+
+## Storage Migration
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  export async function migrate(ctx: PluginContext) {
+    const version = (await ctx.storage.getItem('version')) || 0
+    if (version < 2) {
+      const old = await ctx.storage.getItem('tasks')
+      await ctx.storage.setItem('tasks', normalize(old))
+      await ctx.storage.setItem('version', 2)
+    }
+  }
+---
+:::
+
+## Widget Theme Listener
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  ctx.widget.onThemeChange(theme => {
+    document.body.dataset.theme = theme.mode
+  })
+---
+:::

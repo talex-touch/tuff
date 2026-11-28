@@ -1,0 +1,94 @@
+# PowerSDK
+
+## 概述
+
+PowerSDK 用来给插件读取当前省电状态，方便在低电量场景下自动降级高耗能能力。
+
+## 快速开始
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { usePowerSDK } from '@talex-touch/utils/plugin/sdk'
+
+  const power = usePowerSDK()
+
+  const status = await power.getLowPowerStatus()
+  if (status.lowPower) {
+    console.log('切换到轻量模式')
+  }
+---
+:::
+
+## API 参考
+
+### `usePowerSDK()`
+
+在插件渲染上下文中获取 PowerSDK 实例。
+
+### `getLowPowerStatus(options?)`
+
+获取当前省电状态。
+
+**参数**：
+- `threshold?: number`（默认 `20`，范围 `1-100`）
+
+**返回值**：
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `lowPower` | `boolean` | 当前是否处于省电模式 |
+| `onBattery` | `boolean` | 当前是否为电池供电 |
+| `percent` | `number \| null` | 电量百分比，不可用时为 `null` |
+| `threshold` | `number` | 本次计算使用的阈值 |
+
+### `isLowPower(options?)`
+
+便捷方法，等价于 `getLowPowerStatus(options).lowPower`。
+
+### `onLowPowerChanged(callback, options?)`
+
+监听省电状态变化。
+
+**参数**：
+- `threshold?: number`（默认 `20`）
+- `emitImmediately?: boolean`（默认 `true`）
+
+返回取消监听函数。
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const dispose = power.onLowPowerChanged((status) => {
+    console.log('省电状态变化', status)
+  })
+
+  // 后续取消监听
+  dispose()
+---
+:::
+
+## index.js 全局上下文
+
+插件 `index.js` 中可直接使用 `globalThis.power`：
+
+:::TuffCodeBlock{lang="javascript"}
+---
+code: |
+  const status = await power.getLowPowerStatus({ threshold: 25 })
+  if (status.lowPower) {
+    logger.info('低电量时跳过高负载任务')
+  }
+---
+:::
+
+## 技术说明
+
+- 在插件渲染上下文里，`usePowerSDK().onLowPowerChanged` 走 transport 电量事件回调。
+- 在插件 `index.js` 全局上下文（`globalThis.power`）里，`onLowPowerChanged` 当前是轮询策略（约 60 秒），不是严格实时推送。
+
+## 最佳实践
+
+1. `lowPower` 为 `true` 时暂停高耗能后台任务。
+2. `percent` 为 `null` 时提供可接受的兜底策略。
+3. OCR/AI 等重任务建议使用更高阈值（例如 `25`）。

@@ -1,0 +1,1127 @@
+<script setup lang="ts">
+import type { SharedPluginDetail } from '@talex-touch/utils/renderer/shared/plugin-detail'
+import type {
+  FilterCategory,
+  StorePluginContentListResponse,
+  StorePluginContentPackage,
+  StorePluginDetail,
+  StorePluginRatingResponse,
+  StorePluginRatingSummary,
+  StorePluginReview,
+  StorePluginReviewListResponse,
+  StorePluginReviewSubmitResponse,
+  StorePluginSearchResponse,
+  StorePluginSummary,
+} from '~/types/store'
+import { TxAvatar } from '@talex-touch/tuffex/avatar'
+import { TxButton } from '@talex-touch/tuffex/button'
+import { TxEmptyState } from '@talex-touch/tuffex/empty-state'
+import { TxInput } from '@talex-touch/tuffex/input'
+import { TxSkeleton } from '@talex-touch/tuffex/skeleton'
+import { TxSpinner } from '@talex-touch/tuffex/spinner'
+import { TxStatusBadge } from '@talex-touch/tuffex/status-badge'
+import { TxTag } from '@talex-touch/tuffex/tag'
+import { hasWindow } from '@talex-touch/utils/env'
+import { computed, defineAsyncComponent, reactive, ref, watch } from 'vue'
+import StoreItem from '~/components/store/StoreItem.vue'
+import StoreSearch from '~/components/store/StoreSearch.vue'
+import { useStoreCategories } from '~/composables/useStoreCategories'
+import { useStoreFormatters } from '~/composables/useStoreFormatters'
+import { useToast } from '~/composables/useToast'
+import { requestJson } from '~/utils/request'
+import {
+  hasSessionHintCookie,
+  resolveLocaleFromPath,
+  sanitizeRedirectPath,
+  toLocalizedDocsPath,
+  toLocalizedWebPath,
+} from '~/utils/web-route'
+
+const LazyFlipDialog = defineAsyncComponent(() => import('~/components/base/dialog/FlipDialog.vue'))
+const LazyPluginMetaHeader = defineAsyncComponent(() => import('~/components/plugin/PluginMetaHeader.vue'))
+const LazyTxTabs = defineAsyncComponent(() => import('@talex-touch/tuffex/tabs').then(module => module.TxTabs))
+const LazyTxTabItem = defineAsyncComponent(() => import('@talex-touch/tuffex/tabs').then(module => module.TxTabItem))
+const LazySharedPluginDetailReadme = defineAsyncComponent(() => import('@talex-touch/utils/renderer/shared/components').then(module => module.SharedPluginDetailReadme))
+const LazySharedPluginDetailVersions = defineAsyncComponent(() => import('@talex-touch/utils/renderer/shared/components').then(module => module.SharedPluginDetailVersions))
+
+let detailChunksWarmed = false
+function warmDetailOverlayChunks() {
+  if (detailChunksWarmed || !import.meta.client)
+    return
+  detailChunksWarmed = true
+  void import('~/components/base/dialog/FlipDialog.vue')
+  void import('~/components/plugin/PluginMetaHeader.vue')
+  void import('@talex-touch/tuffex/tabs')
+  void import('@talex-touch/utils/renderer/shared/components')
+}
+
+const { t } = useI18n()
+const route = useRoute()
+const toast = useToast()
+
+const currentLocale = computed<'en' | 'zh'>(() => resolveLocaleFromPath(route.path))
+const docsDevLink = computed(() => toLocalizedDocsPath('/docs/dev', currentLocale.value))
+const updatesLink = computed(() => toLocalizedWebPath('/updates', currentLocale.value))
+
+// Zero Auth SDK on public store browsing! Check session lazily ONLY when opening the Reviews tab.
+const authChecked = ref(false)
+const isLoggedIn = ref(false)
+
+async function ensureReviewAuthChecked() {
+  if (authChecked.value || !import.meta.client)
+    return
+  if (!hasSessionHintCookie()) {
+    authChecked.value = true
+    isLoggedIn.value = false
+    return
+  }
+  try {
+    const res = await requestJson<{ user?: { id?: string } | null }>('/api/auth/me')
+    isLoggedIn.value = Boolean(res?.user?.id)
+  }
+  catch {
+    isLoggedIn.value = false
+  }
+  finally {
+    authChecked.value = true
+  }
+}
+
+const filters = reactive({
+  search: '',
+  category: 'all' as FilterCategory,
+})
+
+const searchQuery = computed(() => {
+  const value = route.query.query
+  if (Array.isArray(value))
+    return value[0] ?? ''
+  if (typeof value === 'string')
+    return value
+  return ''
+})
+
+const requestedPluginSlug = computed(() => {
+  const value = route.query.plugin
+  if (Array.isArray(value))
+    return value[0]?.trim() ?? ''
+  if (typeof value === 'string')
+    return value.trim()
+  return ''
+})
+
+const requestedDetailTab = computed<'overview' | 'versions' | 'content' | 'reviews'>(() => {
+  const value = route.query.tab
+  const tab = Array.isArray(value) ? value[0] : value
+  if (tab === 'versions' || tab === 'content' || tab === 'reviews')
+    return tab
+  return 'overview'
+})
+
+const activeSearch = ref(searchQuery.value.trim())
+const activeCategory = ref<FilterCategory>(filters.category)
+
+watch(searchQuery, (value) => {
+  const normalized = value.trim()
+  if (value !== filters.search)
+    filters.search = value
+  if (normalized !== activeSearch.value)
+    activeSearch.value = normalized
+}, { immediate: true })
+
+watch(() => filters.category, (category) => {
+  if (category !== activeCategory.value)
+    activeCategory.value = category
+})
+
+const selectedSlug = ref<string | null>(null)
+const selectedPlugin = ref<StorePluginDetail | null>(null)
+const detailOverlaySource = ref<HTMLElement | null>(null)
+const detailPending = ref(false)
+const detailError = ref<string | null>(null)
+const detailTab = ref<'overview' | 'versions' | 'content' | 'reviews'>('overview')
+const reviews = ref<StorePluginReview[]>([])
+const contentPackages = ref<StorePluginContentPackage[]>([])
+const contentPackagesPending = ref(false)
+const contentPackagesError = ref<string | null>(null)
+const reviewsPending = ref(false)
+const reviewsError = ref<string | null>(null)
+const reviewsMeta = reactive({
+  total: 0,
+  limit: 20,
+  offset: 0,
+})
+const reviewsLoadingMore = ref(false)
+const canLoadMoreReviews = computed(() => reviews.value.length < reviewsMeta.total)
+const reviewSubmitting = ref(false)
+const ratingSummary = ref<StorePluginRatingSummary | null>(null)
+const reviewForm = reactive({
+  rating: 0,
+  title: '',
+  content: '',
+})
+
+function handleSignIn() {
+  if (!hasWindow())
+    return
+  const redirect = sanitizeRedirectPath(route.fullPath || '/store', '/store')
+  window.location.assign(`/sign-in?redirect_url=${encodeURIComponent(redirect)}`)
+}
+const goToDeveloperDocs = () => navigateTo(docsDevLink.value)
+const goToUpdates = () => navigateTo(updatesLink.value)
+
+const STORE_PLUGIN_PAGE_SIZE = 50
+
+function resolveStoreSearchQuery(offset = 0) {
+  return {
+    compact: 1,
+    q: activeSearch.value || undefined,
+    category: activeCategory.value === 'all' ? undefined : activeCategory.value,
+    limit: STORE_PLUGIN_PAGE_SIZE,
+    offset,
+  }
+}
+
+const storeSearchQuery = computed(() => resolveStoreSearchQuery(0))
+
+function applyStoreSearch(value: string) {
+  const normalized = value.trim()
+  if (normalized !== activeSearch.value)
+    activeSearch.value = normalized
+}
+
+const {
+  data: pluginsPayload,
+  pending: pluginsPending,
+  status: pluginsStatus,
+} = await useAsyncData('store-plugins', () =>
+  requestJson<StorePluginSearchResponse>('/api/store/search', {
+    query: storeSearchQuery.value,
+  }),
+{
+  lazy: true,
+  server: false,
+  watch: [storeSearchQuery],
+})
+
+const showPluginsSkeleton = computed(() => pluginsPending.value || pluginsStatus.value === 'idle')
+const pluginsLoadingMore = ref(false)
+
+const { resolveCategoryLabel } = useStoreCategories()
+const { formatDate, formatPackageSize } = useStoreFormatters()
+
+const allPlugins = computed(() => (pluginsPayload.value?.plugins ?? []).filter(plugin => plugin.latestVersion))
+const displayedPluginCount = computed(() => allPlugins.value.length)
+const totalPlugins = computed(() => pluginsPayload.value?.total ?? displayedPluginCount.value)
+const hasActiveStoreFilter = computed(() => Boolean(activeSearch.value) || activeCategory.value !== 'all')
+
+function clearStoreFilters() {
+  filters.search = ''
+  filters.category = 'all'
+  activeSearch.value = ''
+  activeCategory.value = 'all'
+  applyStoreSearch('')
+}
+
+const canLoadMorePlugins = computed(() => displayedPluginCount.value < totalPlugins.value)
+
+async function loadMorePlugins() {
+  if (pluginsPending.value || pluginsLoadingMore.value || !canLoadMorePlugins.value)
+    return
+
+  const requestedSearch = activeSearch.value
+  const requestedCategory = activeCategory.value
+
+  pluginsLoadingMore.value = true
+  try {
+    const response = await requestJson<StorePluginSearchResponse>('/api/store/search', {
+      query: resolveStoreSearchQuery(displayedPluginCount.value),
+    })
+    if (requestedSearch !== activeSearch.value || requestedCategory !== activeCategory.value)
+      return
+    const currentPlugins = pluginsPayload.value?.plugins ?? []
+    const seen = new Set(currentPlugins.map(plugin => plugin.id))
+    const nextPlugins = response.plugins.filter(plugin => plugin.latestVersion && !seen.has(plugin.id))
+    pluginsPayload.value = {
+      plugins: [...currentPlugins, ...nextPlugins],
+      total: response.total,
+      limit: response.limit,
+      offset: response.offset,
+    }
+  }
+  catch (error: unknown) {
+    const fallback = t('store.results.loadMoreFailed')
+    toast.warning(error instanceof Error ? error.message : fallback)
+  }
+  finally {
+    pluginsLoadingMore.value = false
+  }
+}
+
+const ratingAverageText = computed(() => (ratingSummary.value ? ratingSummary.value.average.toFixed(1) : '0.0'))
+const ratingCount = computed(() => ratingSummary.value?.count ?? 0)
+const ratingValue = computed(() => Math.round(ratingSummary.value?.average ?? 0))
+
+const sharedDetail = computed<SharedPluginDetail | null>(() => {
+  const plugin = selectedPlugin.value
+  if (!plugin)
+    return null
+
+  return {
+    id: plugin.id,
+    name: plugin.name,
+    summary: plugin.summary,
+    author: plugin.author ? { name: plugin.author.name, avatarColor: plugin.author.avatarColor } : undefined,
+    category: {
+      id: plugin.category,
+      label: resolveCategoryLabel(plugin.category),
+    },
+    badges: plugin.badges,
+    installs: plugin.installs,
+    official: plugin.isOfficial,
+    trustLevel: plugin.isOfficial ? 'official' : undefined,
+    iconUrl: plugin.iconUrl ?? null,
+    latestVersion: plugin.latestVersion ? { ...plugin.latestVersion } : undefined,
+    versions: plugin.versions?.map(version => ({ ...version })) ?? [],
+    readme: {
+      markdown: plugin.readmeMarkdown ?? plugin.latestVersion?.readmeMarkdown ?? null,
+    },
+  }
+})
+
+function resetReviewState() {
+  reviews.value = []
+  reviewsError.value = null
+  reviewsPending.value = false
+  reviewSubmitting.value = false
+  ratingSummary.value = null
+  reviewForm.rating = 0
+  reviewForm.title = ''
+  reviewForm.content = ''
+}
+
+function resetContentPackageState() {
+  contentPackages.value = []
+  contentPackagesPending.value = false
+  contentPackagesError.value = null
+}
+
+function resolveStarClass(value: number, rating: number) {
+  return value <= rating
+    ? 'i-carbon-star-filled text-amber-500'
+    : 'i-carbon-star StoreDetailStarEmpty'
+}
+
+const pluginDetailCache = new Map<string, StorePluginDetail>()
+const pluginDetailInflight = new Map<string, Promise<StorePluginDetail>>()
+const loadedCommunitySlug = ref<string | null>(null)
+const loadedContentSlug = ref<string | null>(null)
+
+async function loadPluginCommunity(slug: string) {
+  reviewsPending.value = true
+  reviewsError.value = null
+  void ensureReviewAuthChecked()
+  try {
+    const [reviewsResponse, ratingResponse] = await Promise.all([
+      requestJson<StorePluginReviewListResponse>(`/api/store/plugins/${slug}/reviews`, {
+        query: {
+          limit: reviewsMeta.limit,
+          offset: 0,
+        },
+      }),
+      requestJson<StorePluginRatingResponse>(`/api/store/plugins/${slug}/rating`),
+    ])
+    reviews.value = reviewsResponse.reviews ?? []
+    reviewsMeta.total = reviewsResponse.total ?? 0
+    reviewsMeta.limit = reviewsResponse.limit ?? reviewsMeta.limit
+    reviewsMeta.offset = reviewsResponse.offset ?? 0
+    ratingSummary.value = ratingResponse.rating
+  }
+  catch (error: unknown) {
+    if (loadedCommunitySlug.value === slug)
+      loadedCommunitySlug.value = null
+    reviewsError.value = error instanceof Error ? error.message : t('store.detail.reviews.error', 'Unable to load reviews.')
+  }
+  finally {
+    reviewsPending.value = false
+  }
+}
+
+async function loadPluginContentPackages(plugin: StorePluginDetail) {
+  contentPackagesPending.value = true
+  contentPackagesError.value = null
+  try {
+    const response = await requestJson<StorePluginContentListResponse>('/api/store/plugin-content', {
+      query: {
+        pluginId: plugin.slug,
+        limit: 20,
+      },
+    })
+    contentPackages.value = response.packages ?? []
+  }
+  catch (error: unknown) {
+    if (loadedContentSlug.value === plugin.slug)
+      loadedContentSlug.value = null
+    contentPackagesError.value = error instanceof Error
+      ? error.message
+      : t('store.detail.content.error', 'Unable to load shared content.')
+  }
+  finally {
+    contentPackagesPending.value = false
+  }
+}
+
+async function loadMoreReviews() {
+  if (!selectedSlug.value || reviewsLoadingMore.value || reviewsPending.value || !canLoadMoreReviews.value)
+    return
+
+  reviewsLoadingMore.value = true
+  try {
+    const response = await requestJson<StorePluginReviewListResponse>(`/api/store/plugins/${selectedSlug.value}/reviews`, {
+      query: {
+        limit: reviewsMeta.limit,
+        offset: reviews.value.length,
+      },
+    })
+    reviews.value = [...reviews.value, ...(response.reviews ?? [])]
+    reviewsMeta.total = response.total ?? reviewsMeta.total
+    reviewsMeta.limit = response.limit ?? reviewsMeta.limit
+    reviewsMeta.offset = response.offset ?? reviewsMeta.offset
+  }
+  catch (error: unknown) {
+    const fallback = t('store.detail.reviews.loadMoreFailed', 'Failed to load more reviews.')
+    toast.warning(error instanceof Error ? error.message : fallback)
+  }
+  finally {
+    reviewsLoadingMore.value = false
+  }
+}
+
+async function submitReview() {
+  if (!selectedSlug.value)
+    return
+
+  if (!isLoggedIn.value) {
+    toast.warning(t('store.detail.reviews.signInHint', 'Sign in to submit your review.'))
+    return
+  }
+
+  if (reviewForm.rating < 1 || reviewForm.rating > 5) {
+    toast.warning(t('store.detail.reviews.ratingRequired', 'Please provide a rating.'))
+    return
+  }
+
+  const content = reviewForm.content.trim()
+  if (!content) {
+    toast.warning(t('store.detail.reviews.contentRequired', 'Please write your review.'))
+    return
+  }
+
+  reviewSubmitting.value = true
+  try {
+    const response = await requestJson<StorePluginReviewSubmitResponse>(
+      `/api/store/plugins/${selectedSlug.value}/reviews`,
+      {
+        method: 'POST',
+        body: {
+          rating: reviewForm.rating,
+          title: reviewForm.title.trim() || undefined,
+          content,
+        },
+      },
+    )
+
+    ratingSummary.value = response.rating
+    const index = reviews.value.findIndex(item => item.id === response.review.id)
+    if (index >= 0)
+      reviews.value[index] = response.review
+    else
+      reviews.value.unshift(response.review)
+
+    reviewForm.title = ''
+    reviewForm.content = ''
+    toast.success(t('store.detail.reviews.submitSuccess', 'Review submitted.'))
+  }
+  catch (error: unknown) {
+    const fallback = t('store.detail.reviews.submitFailed', 'Failed to submit review.')
+    const message = error instanceof Error ? error.message : fallback
+    toast.error(fallback, message)
+  }
+  finally {
+    reviewSubmitting.value = false
+  }
+}
+
+function fetchPluginDetailCached(slug: string): Promise<StorePluginDetail> {
+  const cached = pluginDetailCache.get(slug)
+  if (cached)
+    return Promise.resolve(cached)
+
+  const existing = pluginDetailInflight.get(slug)
+  if (existing)
+    return existing
+
+  const request = requestJson<{ plugin: StorePluginDetail }>(`/api/store/plugins/${slug}`)
+    .then((response) => {
+      pluginDetailCache.set(slug, response.plugin)
+      return response.plugin
+    })
+    .finally(() => {
+      pluginDetailInflight.delete(slug)
+    })
+
+  pluginDetailInflight.set(slug, request)
+  return request
+}
+
+function handlePrefetchPluginDetail(plugin: StorePluginSummary) {
+  warmDetailOverlayChunks()
+  if (!pluginDetailCache.has(plugin.slug))
+    void fetchPluginDetailCached(plugin.slug).catch(() => undefined)
+}
+
+function createOptimisticPluginDetail(plugin: StorePluginSummary): StorePluginDetail {
+  return {
+    ...plugin,
+    versions: plugin.latestVersion ? [plugin.latestVersion] : [],
+  }
+}
+
+function ensureCommunityLoaded(slug: string) {
+  if (loadedCommunitySlug.value === slug || reviewsPending.value)
+    return
+  loadedCommunitySlug.value = slug
+  return loadPluginCommunity(slug)
+}
+
+function ensureContentLoaded(plugin: StorePluginDetail) {
+  if (loadedContentSlug.value === plugin.slug || contentPackagesPending.value)
+    return
+  loadedContentSlug.value = plugin.slug
+  return loadPluginContentPackages(plugin)
+}
+
+async function openPluginDetailBySlug(
+  slug: string,
+  source: HTMLElement | null = null,
+  seedSummary: StorePluginSummary | null = null,
+) {
+  warmDetailOverlayChunks()
+  selectedSlug.value = slug
+  detailOverlaySource.value = source
+  const cachedDetail = pluginDetailCache.get(slug)
+  selectedPlugin.value = cachedDetail ?? (seedSummary ? createOptimisticPluginDetail(seedSummary) : null)
+  detailPending.value = !cachedDetail
+  detailError.value = null
+  detailTab.value = requestedDetailTab.value
+  loadedCommunitySlug.value = null
+  loadedContentSlug.value = null
+  resetReviewState()
+  resetContentPackageState()
+
+  try {
+    const plugin = cachedDetail ?? await fetchPluginDetailCached(slug)
+    if (selectedSlug.value !== slug)
+      return
+    selectedPlugin.value = plugin
+    if (detailTab.value === 'reviews')
+      void ensureCommunityLoaded(slug)
+    else if (detailTab.value === 'content')
+      void ensureContentLoaded(plugin)
+  }
+  catch (error: unknown) {
+    if (selectedSlug.value === slug)
+      detailError.value = error instanceof Error ? error.message : t('store.detail.error', 'Unable to load plugin details.')
+  }
+  finally {
+    if (selectedSlug.value === slug)
+      detailPending.value = false
+  }
+}
+
+async function openPluginDetail(plugin: StorePluginSummary, source: HTMLElement | null = null) {
+  await openPluginDetailBySlug(plugin.slug, source, plugin)
+}
+
+watch(detailTab, (tab) => {
+  const slug = selectedSlug.value
+  const plugin = selectedPlugin.value
+  if (!slug || !plugin)
+    return
+  if (tab === 'reviews')
+    void ensureCommunityLoaded(slug)
+  else if (tab === 'content')
+    void ensureContentLoaded(plugin)
+})
+
+watch(
+  [requestedPluginSlug, requestedDetailTab, allPlugins],
+  ([slug, _tab, plugins]) => {
+    if (!slug || selectedSlug.value === slug)
+      return
+    const plugin = plugins.find(item => item.slug === slug || item.id === slug)
+    if (plugin) {
+      void openPluginDetail(plugin)
+      return
+    }
+    void openPluginDetailBySlug(slug)
+  },
+  { immediate: true },
+)
+
+watch(requestedDetailTab, (tab) => {
+  if (selectedSlug.value)
+    detailTab.value = tab
+})
+
+function closePluginDetail() {
+  selectedSlug.value = null
+  detailOverlaySource.value = null
+  selectedPlugin.value = null
+  detailError.value = null
+  detailTab.value = 'overview'
+  resetReviewState()
+  resetContentPackageState()
+}
+
+const filteredPlugins = computed(() => allPlugins.value)
+const hasResults = computed(() => displayedPluginCount.value > 0)
+const hasPlugins = computed(() => hasActiveStoreFilter.value || totalPlugins.value > 0)
+
+const resultSummary = computed(() => {
+  const total = totalPlugins.value
+  const count = displayedPluginCount.value
+  if (!total)
+    return ''
+  if (count >= total)
+    return t('store.results.count', { count: total })
+  return t('store.results.filtered', { count, total })
+})
+
+const pageTitle = computed(() => `${t('nav.store')} · Tuff`)
+const pageDescription = computed(() => t('store.hero.subtitle'))
+
+useSeoMeta({
+  title: pageTitle,
+  ogTitle: pageTitle,
+  description: pageDescription,
+  ogDescription: pageDescription,
+})
+</script>
+
+<template>
+  <section class="StorePage">
+    <StoreSearch v-model:filter="filters.category" v-model="filters.search" remote :search-debounce="180" class="w-full" @search="applyStoreSearch">
+      <template v-if="resultSummary" #result>
+        {{ resultSummary }}
+      </template>
+    </StoreSearch>
+
+    <div v-if="showPluginsSkeleton" class="StorePage-Grid" aria-busy="true">
+      <div v-for="index in 4" :key="index" class="StorePage-Skeleton">
+        <div class="StorePage-SkeletonTop">
+          <TxSkeleton variant="rect" :width="46" :height="46" :radius="13" />
+          <div class="StorePage-SkeletonTitle">
+            <TxSkeleton width="52%" :height="15" />
+            <TxSkeleton width="36%" :height="11" />
+          </div>
+          <TxSkeleton width="54px" :height="22" :radius="999" />
+        </div>
+        <div class="StorePage-SkeletonBody">
+          <TxSkeleton width="92%" :height="12" />
+          <TxSkeleton width="68%" :height="12" />
+        </div>
+        <div class="StorePage-SkeletonFoot">
+          <TxSkeleton width="58px" :height="20" :radius="999" />
+          <TxSkeleton width="96px" :height="12" />
+        </div>
+      </div>
+    </div>
+
+    <div v-else class="StorePage-Results">
+      <TxEmptyState
+        v-if="!hasPlugins"
+        variant="empty"
+        surface="card"
+        size="large"
+        :title="t('store.results.none')"
+        :description="t('store.results.noneHint')"
+        :primary-action="{ label: t('nav.developer'), icon: 'i-carbon-code' }"
+        :secondary-action="{ label: t('nav.download'), variant: 'ghost' }"
+        class="StorePage-Empty"
+        @primary="goToDeveloperDocs"
+        @secondary="goToUpdates"
+      />
+      <TxEmptyState
+        v-else-if="!hasResults"
+        variant="search-empty"
+        surface="card"
+        size="large"
+        :title="t('store.results.empty')"
+        :description="t('store.results.emptyHint')"
+        :primary-action="{ label: t('store.results.clearFilters'), variant: 'ghost', icon: 'i-carbon-filter-remove' }"
+        class="StorePage-Empty"
+        @primary="clearStoreFilters"
+      />
+      <div v-else class="StorePage-Grid">
+        <StoreItem
+          v-for="plugin in filteredPlugins"
+          :key="plugin.id"
+          :plugin="plugin"
+          @prefetch-detail="handlePrefetchPluginDetail"
+          @view-detail="openPluginDetail"
+        />
+      </div>
+      <div v-if="canLoadMorePlugins" class="StorePage-More">
+        <TxButton size="sm" :loading="pluginsLoadingMore" @click="loadMorePlugins">
+          {{ t('store.results.loadMore') }}
+        </TxButton>
+      </div>
+    </div>
+
+    <LazyFlipDialog
+      v-if="selectedSlug || detailPending"
+      :model-value="Boolean(selectedSlug)"
+      :reference="detailOverlaySource"
+      size="xl"
+      @update:model-value="(v) => {
+        if (!v)
+          closePluginDetail()
+      }"
+    >
+      <template #header-display>
+        <LazyPluginMetaHeader
+          v-if="selectedPlugin"
+          :plugin="selectedPlugin"
+          :category-label="resolveCategoryLabel(selectedPlugin.category)"
+        />
+        <div v-else class="StoreDetailOverlay-HeaderPlaceholder">
+          <p class="StoreDetailOverlay-HeaderTitle">
+            {{ t('store.detail.title', 'Plugin Details') }}
+          </p>
+          <p class="StoreDetailOverlay-HeaderDesc">
+            {{ detailPending ? t('store.detail.loading') : t('store.detail.error', 'Unable to load plugin details.') }}
+          </p>
+        </div>
+      </template>
+      <template #default>
+        <div class="StoreDetailOverlay-Inner">
+          <div class="StoreDetailOverlay-Body">
+            <div v-if="detailError && !selectedPlugin" class="StoreDetailError mt-4 rounded-xl p-4 text-sm">
+              {{ detailError }}
+            </div>
+            <div v-else-if="detailPending && !selectedPlugin" class="StoreDetailStateText flex items-center justify-center gap-3 py-16 text-sm">
+              <TxSpinner :size="18" />
+              <span>{{ t('store.detail.loading') }}</span>
+            </div>
+            <div v-else-if="selectedPlugin && sharedDetail" class="StoreDetailPlugin">
+              <div v-if="detailError" class="StoreDetailError rounded-xl p-4 text-sm">
+                {{ detailError }}
+              </div>
+              <section class="StoreDetailPlugin-Content">
+                <LazyTxTabs
+                  v-model="detailTab"
+                  placement="top"
+                  borderless
+                  :content-padding="0"
+                  :content-scrollable="false"
+                  indicator-variant="pill"
+                >
+                  <LazyTxTabItem name="overview" icon-class="i-carbon-document">
+                    <template #name>
+                      {{ t('store.detail.tabs.overview', 'Overview') }}
+                    </template>
+                    <div class="space-y-4 py-1">
+                      <div class="StoreDetailPanel p-5">
+                        <div v-if="detailPending && !sharedDetail.readme?.markdown" class="space-y-3 py-2">
+                          <TxSkeleton width="36%" :height="18" />
+                          <TxSkeleton width="92%" :height="13" />
+                          <TxSkeleton width="84%" :height="13" />
+                          <TxSkeleton width="66%" :height="13" />
+                        </div>
+                        <LazySharedPluginDetailReadme
+                          v-else
+                          :readme="sharedDetail.readme"
+                          :title="t('store.detail.readme')"
+                          :empty-text="t('store.detail.noReadme')"
+                        />
+                      </div>
+                    </div>
+                  </LazyTxTabItem>
+
+                  <LazyTxTabItem name="versions" icon-class="i-carbon-data-table">
+                    <template #name>
+                      {{ t('store.detail.tabs.versions', 'Versions') }}
+                    </template>
+                    <div class="space-y-4 py-1">
+                      <div class="StoreDetailPanel p-5">
+                        <LazySharedPluginDetailVersions
+                          :versions="sharedDetail.versions"
+                          :title="t('store.detail.versions')"
+                          :empty-text="t('store.detail.noVersions')"
+                          :download-text="t('store.detail.download')"
+                          :format-date="formatDate"
+                          :format-size="formatPackageSize"
+                        />
+                      </div>
+                    </div>
+                  </LazyTxTabItem>
+
+                  <LazyTxTabItem name="content" icon-class="i-carbon-package">
+                    <template #name>
+                      {{ t('store.detail.tabs.content', 'Content') }}
+                    </template>
+                    <section class="space-y-4 py-1">
+                      <div v-if="contentPackagesPending" class="StoreDetailTextSubtle flex items-center gap-2 py-6 text-sm">
+                        <TxSpinner :size="15" />
+                        <span>{{ t('store.detail.content.loading', 'Loading shared content...') }}</span>
+                      </div>
+                      <div v-else-if="contentPackagesError" class="StoreDetailError rounded-xl p-4 text-sm">
+                        {{ contentPackagesError }}
+                      </div>
+                      <p v-else-if="!contentPackages.length" class="StoreDetailTextSubtle text-sm">
+                        {{ t('store.detail.content.empty', 'No shared content packages yet.') }}
+                      </p>
+                      <div v-else class="space-y-3">
+                        <article
+                          v-for="contentPackage in contentPackages"
+                          :key="contentPackage.id"
+                          class="StoreDetailPanel StoreDetailText p-4 text-sm"
+                        >
+                          <div class="flex flex-wrap items-start justify-between gap-3">
+                            <div class="min-w-0">
+                              <p class="StoreDetailTextStrong text-sm font-semibold">
+                                {{ contentPackage.title }}
+                              </p>
+                              <p v-if="contentPackage.summary" class="StoreDetailTextMuted mt-1 text-xs">
+                                {{ contentPackage.summary }}
+                              </p>
+                            </div>
+                            <TxTag :label="contentPackage.kind" size="sm" icon="i-carbon-package" variant="soft" />
+                          </div>
+                          <div class="StoreDetailTextMuted mt-3 flex flex-wrap items-center gap-3 text-xs">
+                            <span>{{ contentPackage.manifest?.format || contentPackage.kind }}</span>
+                            <span>{{ t('store.detail.content.installs', { count: contentPackage.installCount }) }}</span>
+                            <span>{{ formatDate(contentPackage.publishedAt || contentPackage.updatedAt) }}</span>
+                          </div>
+                        </article>
+                      </div>
+                    </section>
+                  </LazyTxTabItem>
+
+                  <LazyTxTabItem name="reviews" icon-class="i-carbon-chat">
+                    <template #name>
+                      {{ t('store.detail.tabs.reviews', 'Reviews') }}
+                    </template>
+                    <section class="space-y-4 py-1">
+                      <div class="grid gap-4 lg:grid-cols-2">
+                        <div class="StoreDetailPanel StoreDetailPanel--soft StoreDetailText p-4 text-sm">
+                          <div class="flex flex-wrap items-center justify-between gap-3">
+                            <div class="flex items-center gap-2">
+                              <div class="flex items-center gap-1">
+                                <span
+                                  v-for="value in 5"
+                                  :key="`summary-${value}`"
+                                  :class="resolveStarClass(value, ratingValue)"
+                                  class="text-base"
+                                />
+                              </div>
+                              <span class="StoreDetailTextStrong text-lg font-semibold">
+                                {{ ratingAverageText }}
+                              </span>
+                              <span class="StoreDetailTextMuted text-xs">
+                                {{ t('store.detail.reviews.count', { count: ratingCount }) }}
+                              </span>
+                            </div>
+                            <TxTag :label="t('store.detail.reviews.tag')" size="sm" icon="i-carbon-chat" variant="soft" />
+                          </div>
+                          <p class="StoreDetailTextMuted mt-2 text-xs">
+                            {{ t('store.detail.reviews.helper') }}
+                          </p>
+                        </div>
+
+                        <div class="StoreDetailPanel StoreDetailPanel--soft StoreDetailText p-4 text-sm">
+                          <h4 class="StoreDetailTextStrong text-sm font-semibold">
+                            {{ t('store.detail.reviews.writeTitle') }}
+                          </h4>
+                          <div v-if="!authChecked" class="StoreDetailTextSubtle mt-3 text-xs">
+                            {{ t('store.detail.reviews.authLoading', 'Checking sign-in status...') }}
+                          </div>
+                          <div v-else-if="!isLoggedIn" class="StoreDetailTextSubtle mt-3 flex flex-wrap items-center justify-between gap-3 text-sm">
+                            <span>{{ t('store.detail.reviews.signInHint', 'Sign in to submit your review.') }}</span>
+                            <TxButton size="sm" @click="handleSignIn">
+                              {{ t('store.detail.reviews.signInAction', 'Sign in') }}
+                            </TxButton>
+                          </div>
+                          <div v-else class="mt-3 space-y-3">
+                            <div class="flex flex-wrap items-center gap-2">
+                              <span class="StoreDetailTextSubtle text-xs">
+                                {{ t('store.detail.reviews.ratingLabel') }}
+                              </span>
+                              <TxRating v-model="reviewForm.rating" :max-stars="5" />
+                              <span class="StoreDetailTextMuted text-xs">
+                                {{ reviewForm.rating || '-' }}
+                              </span>
+                            </div>
+                            <TxInput v-model="reviewForm.title" :placeholder="t('store.detail.reviews.titlePlaceholder')" />
+                            <TxInput
+                              v-model="reviewForm.content"
+                              type="textarea"
+                              :rows="4"
+                              :placeholder="t('store.detail.reviews.contentPlaceholder')"
+                            />
+                            <div class="flex flex-wrap items-center justify-between gap-3">
+                              <p class="StoreDetailTextMuted text-xs">
+                                {{ t('store.detail.reviews.submitHint') }}
+                              </p>
+                              <TxButton size="sm" :loading="reviewSubmitting" :disabled="reviewSubmitting" @click="submitReview">
+                                {{ t('store.detail.reviews.submit') }}
+                              </TxButton>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div class="space-y-3">
+                        <div v-if="reviewsPending" class="StoreDetailTextSubtle flex items-center gap-2 text-sm">
+                          <TxSpinner :size="15" />
+                          <span>{{ t('store.detail.reviews.loading') }}</span>
+                        </div>
+                        <div v-else-if="reviewsError" class="StoreDetailError rounded-xl p-4 text-sm">
+                          {{ reviewsError }}
+                        </div>
+                        <p v-else-if="!reviews.length" class="StoreDetailTextSubtle text-sm">
+                          {{ t('store.detail.reviews.empty') }}
+                        </p>
+                        <div v-else class="space-y-4">
+                          <article
+                            v-for="review in reviews"
+                            :key="review.id"
+                            class="StoreDetailPanel StoreDetailPanel--review StoreDetailText p-4 text-sm"
+                          >
+                            <div class="flex flex-wrap items-start justify-between gap-3">
+                              <div class="flex items-center gap-3">
+                                <TxAvatar
+                                  :src="review.author?.avatarUrl || undefined"
+                                  :name="review.author?.name || t('store.detail.reviews.anonymous')"
+                                  :size="36"
+                                  shape="circle"
+                                />
+                                <div>
+                                  <p class="StoreDetailTextStrong text-sm font-semibold">
+                                    {{ review.author?.name || t('store.detail.reviews.anonymous') }}
+                                  </p>
+                                  <div class="StoreDetailTextMuted flex flex-wrap items-center gap-2 text-xs">
+                                    <div class="flex items-center gap-1">
+                                      <span
+                                        v-for="value in 5"
+                                        :key="`${review.id}-${value}`"
+                                        :class="resolveStarClass(value, review.rating)"
+                                        class="text-xs"
+                                      />
+                                    </div>
+                                    <span>{{ formatDate(review.createdAt) }}</span>
+                                  </div>
+                                </div>
+                              </div>
+                              <TxStatusBadge
+                                v-if="review.status && review.status !== 'approved'"
+                                :text="t(`store.detail.reviews.status.${review.status}`)"
+                                :status="review.status === 'pending' ? 'warning' : 'danger'"
+                                size="sm"
+                              />
+                            </div>
+                            <div class="mt-3 space-y-1">
+                              <p v-if="review.title" class="StoreDetailTextStrong text-sm font-semibold">
+                                {{ review.title }}
+                              </p>
+                              <p class="StoreDetailText text-sm leading-relaxed">
+                                {{ review.content }}
+                              </p>
+                            </div>
+                          </article>
+                          <div v-if="canLoadMoreReviews" class="flex justify-center pt-2">
+                            <TxButton size="sm" :loading="reviewsLoadingMore" @click="loadMoreReviews">
+                              {{ t('store.detail.reviews.loadMore', 'Load more') }}
+                            </TxButton>
+                          </div>
+                        </div>
+                      </div>
+                    </section>
+                  </LazyTxTabItem>
+                </LazyTxTabs>
+              </section>
+            </div>
+          </div>
+        </div>
+      </template>
+    </LazyFlipDialog>
+  </section>
+</template>
+
+<style lang="scss">
+.StorePage {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  width: 100%;
+}
+
+.StorePage-Results {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.StorePage-Grid {
+  display: grid;
+  gap: 1.125rem;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 21rem), 1fr));
+}
+
+.StorePage-Skeleton {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 18px;
+  border-radius: 20px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.dark .StorePage-Skeleton {
+  border-color: rgba(255, 255, 255, 0.09);
+  background: rgba(20, 23, 30, 0.72);
+}
+
+.StorePage-SkeletonTop {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.StorePage-SkeletonTitle {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.StorePage-SkeletonBody {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 2px 0;
+}
+
+.StorePage-SkeletonFoot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 12px;
+  border-top: 1px solid rgba(15, 23, 42, 0.06);
+}
+
+.dark .StorePage-SkeletonFoot {
+  border-top-color: rgba(255, 255, 255, 0.07);
+}
+
+.StorePage-Empty.tx-empty-state--card {
+  padding-top: 3.5rem;
+  padding-bottom: 3.5rem;
+  border-radius: 1.5rem;
+  border-color: color-mix(in srgb, var(--tx-border-color-lighter, #cbd5e1) 45%, transparent);
+  background: color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 42%, transparent);
+}
+
+.StorePage-More {
+  display: flex;
+  justify-content: center;
+}
+
+.StoreDetailOverlay-Inner {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  max-height: inherit;
+}
+
+.StoreDetailOverlay-Body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 1.2rem clamp(1rem, 3vw, 1.6rem) 1.5rem;
+}
+
+.StoreDetailStateText {
+  color: color-mix(in srgb, var(--tx-text-color-secondary, #4b5563) 88%, transparent);
+}
+
+.StoreDetailOverlay-HeaderTitle {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--tx-text-color, #111827);
+}
+
+.StoreDetailOverlay-HeaderDesc {
+  margin: 4px 0 0;
+  font-size: 0.8125rem;
+  color: color-mix(in srgb, var(--tx-text-color-secondary, #4b5563) 90%, transparent);
+}
+
+.StoreDetailPlugin {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.StoreDetailPlugin-Content {
+  border: 1px solid color-mix(in srgb, var(--tx-border-color-lighter, rgba(120, 120, 120, 0.22)) 100%, transparent);
+  border-radius: 1rem;
+  padding: 0.5rem 0.8rem 0.8rem;
+  background: color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 78%, transparent);
+}
+
+.StoreDetailPanel {
+  border-radius: 1rem;
+  border: 1px solid color-mix(in srgb, var(--tx-border-color-lighter, rgba(120, 120, 120, 0.2)) 100%, transparent);
+  background: color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 90%, transparent);
+}
+
+.StoreDetailPanel--soft {
+  background: color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 86%, transparent);
+}
+
+.StoreDetailPanel--review {
+  background: color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 84%, transparent);
+}
+
+.StoreDetailError {
+  border: 1px solid color-mix(in srgb, var(--tx-color-danger, #ef4444) 26%, transparent);
+  background: color-mix(in srgb, var(--tx-color-danger, #ef4444) 10%, transparent);
+  color: color-mix(in srgb, var(--tx-color-danger, #ef4444) 88%, var(--tx-text-color, #111827) 12%);
+}
+
+.StoreDetailText {
+  color: color-mix(in srgb, var(--tx-text-color, #111827) 86%, transparent);
+}
+
+.StoreDetailTextStrong {
+  color: var(--tx-text-color, #111827);
+}
+
+.StoreDetailTextMuted {
+  color: color-mix(in srgb, var(--tx-text-color-secondary, #4b5563) 90%, transparent);
+}
+
+.StoreDetailTextSubtle {
+  color: color-mix(in srgb, var(--tx-text-color-secondary, #4b5563) 82%, transparent);
+}
+
+.StoreDetailStarEmpty {
+  color: color-mix(in srgb, var(--tx-text-color-secondary, #4b5563) 40%, transparent);
+}
+</style>

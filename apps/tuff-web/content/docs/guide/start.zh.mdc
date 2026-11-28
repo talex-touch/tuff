@@ -1,0 +1,40 @@
+# 快速开始
+
+## 1. 安装与环境
+| 操作系统 | 要求 | 获取方式 |
+| --- | --- | --- |
+| macOS | macOS 13 及以上、Apple Silicon 优化 | 访问 App 内更新通道或 TestFlight 安装包 |
+| Windows | Win11 22621+、支持 WDDM 3.0 | 通过安装器一步到位，默认启用自动更新 |
+| Linux | Ubuntu 22.04+ / Fedora 38+ / Arch 最新滚动 | 提供 AppImage 与 deb 包，命令行校验 SHA-256 |
+
+> 所有版本均已内置 Node.js 22 运行时，无需额外环境。
+
+> Ubuntu 24.04 及以上请选 `.deb` 而不是 AppImage。24.04 默认限制非特权用户命名空间，而 Electron
+> 的沙箱需要它；`.deb` 在安装时会注册一份授予 `userns` 的 AppArmor 配置，AppImage 没有安装步骤，
+> 无处注册。若必须用 AppImage，可用
+> `sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0` 临时放开。
+
+## 2. 初次启动
+1. 打开安装包，勾选「启用 CoreBox 全局快捷键」。
+2. 首次进入会弹出登录窗，支持 Apple ID / GitHub / 邮箱三种方式。
+3. 完成设备信任，即可自动拉取 Workspace 与插件列表。
+
+## 3. 账号与同步
+- **Workspace**：默认创建「个人空间」，你可以为团队或副本创建多套配置。
+- **同步策略**：在设置中选择「即时」或「低频」同步，移动端只在 Wi-Fi 下推送。
+- **数据所有权**：所有内容落在本地 LibSQL 数据库，云端仅同步加密后的配置片段。
+
+## 4. 快捷体验
+- `⌥ + Space` / `Alt + Space`：唤出 CoreBox。如果按下后打开的是别的应用（例如 Raycast、Alfred、ChatGPT），说明这个键已被占用，在设置中换一个快捷键即可。
+- CoreBox 已内置 **App Semantic Alias Catalog / 应用语义别名目录**：搜索 `im`、`chat`、`即时通讯` 可以召回微信、飞书、Telegram 等已安装通讯应用；搜索 `design`、`ps`、`设计` 可以召回 Photoshop、Figma 等设计工具；搜索 `vsc`、`code` 可以召回 VS Code。
+- 长按拖拽 Dock 图标：快速切换 Workspace。
+- 通知中心小部件：查看当前 workflow 队列与插件状态。
+
+## 5. 遇到问题？
+- 系统日志位于 `~/Library/Logs/Tuff` 或 `%LOCALAPPDATA%/Tuff/logs`。
+- 打开 CoreBox 输入 `diagnose` 可生成自检报告。
+- 常见故障可查看《../tips/faq.zh.md》。
+
+## 6. 推荐插件入口
+- 新用户建议从《[推荐插件组合](./features/recommended-plugins.zh.mdc)》开始。
+- 每个内置插件都有单独说明页，见《[内置插件目录](./features/plugins/index.zh.mdc)》。

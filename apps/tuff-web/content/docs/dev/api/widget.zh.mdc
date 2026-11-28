@@ -1,0 +1,267 @@
+# Widget API
+
+## 概述
+
+Widgets 是插件在 CoreBox 或 DivisionBox 中渲染的轻量 UI 组件。
+
+## 介绍
+
+在 manifest 中声明 widget，并在插件目录提供对应的渲染入口。
+
+## 支持的文件类型
+
+| 扩展名      | 说明                     | 处理器                |
+| ----------- | ------------------------ | --------------------- |
+| `.vue`      | Vue 单文件组件           | WidgetVueProcessor    |
+| `.tsx`      | TypeScript JSX           | WidgetTsxProcessor    |
+| `.jsx`      | JavaScript JSX           | WidgetTsxProcessor    |
+| `.ts`       | 纯 TypeScript            | WidgetScriptProcessor |
+| `.js`       | 纯 JavaScript            | WidgetScriptProcessor |
+| `.cjs`      | 预编译 CommonJS          | WidgetScriptProcessor |
+| `.arrow.ts` | TouchWidget ArrowJS beta | WidgetScriptProcessor |
+| `.arrow.js` | TouchWidget ArrowJS beta | WidgetScriptProcessor |
+
+## Widget 类型
+
+| 类型       | 使用场景                      |
+| ---------- | ----------------------------- |
+| 面板型     | 固定在 Workspace，展示复杂 UI |
+| 浮动型     | 悬浮窗，适合快速操作          |
+| 通知中心型 | 以卡片形式展示摘要            |
+
+## Manifest 配置
+
+:::TuffCodeBlock{lang="json"}
+---
+code: |
+  {
+  "type": "widget",
+  "id": "todo.widget",
+  "title": "任务面板",
+  "size": { "width": 4, "height": 3 },
+  "interaction": {
+  "type": "widget",
+  "path": "todo-panel.vue"
+  }
+  }
+---
+:::
+
+## 动态 Feature 复用 Renderer
+
+运行时新增的 feature 没有独立的构建期 widget entry。应通过 `interaction.rendererFeatureId` 指向同一插件中已有的 widget feature。目标 feature 必须声明 `type: "widget"` 与具体 `path`；目标不存在、没有 path 或不是 widget 时，宿主会在执行动态 lifecycle 前 fail closed。
+
+:::TuffCodeBlock{lang="js"}
+---
+code: |
+  features.addFeature({
+  id: "professional-tone",
+  name: "专业语气",
+  desc: "将当前输入改写为职场表达",
+  icon: { type: "file", value: "assets/logo.svg" },
+  push: true,
+  platform: { win32: true, darwin: true, linux: true },
+  commands: [{ type: "match", value: ["professional"] }],
+  interaction: {
+  type: "widget",
+  rendererFeatureId: "assistant-panel",
+  showInput: true,
+  allowInput: true,
+  sendMode: true
+  }
+  })
+---
+:::
+
+宿主会注册预编译的 `assistant-panel` renderer，但 lifecycle 仍收到 `professional-tone`。因此动态 feature 推送的自定义 item 也必须使用目标 widget id，例如 `makeWidgetId(pluginName, "assistant-panel")`，不能引用未构建的动态 widget id。
+
+## TouchWidget beta：ArrowJS
+
+`arrow` runtime 是新的推荐 TouchWidget beta 入口。`interaction.path` 未带扩展名时仍默认 `.vue`；ArrowJS Widget 需要显式写 `.arrow.ts` 或 `.arrow.js`，并标记 `runtime: "arrow"`。
+
+:::TuffCodeBlock{lang="json"}
+---
+code: |
+  {
+  "type": "widget",
+  "id": "todo.arrow",
+  "title": "Arrow 任务面板",
+  "interaction": {
+  "type": "widget",
+  "runtime": "arrow",
+  "path": "todo-panel.arrow.ts"
+  }
+  }
+---
+:::
+
+`widgets/todo-panel.arrow.ts`
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  import { component, html, reactive } from '@arrow-js/core'
+
+  export default component((props) => {
+  const state = reactive({ count: 0 })
+
+    return html`<button @click="${() => state.count++}">
+      ${() => props.payload?.title || 'TouchWidget'} ${() => state.count}
+    </button>`
+
+  ## })
+---
+:::
+
+## TouchWidget beta：WebComponent
+
+`webcomponent` runtime 也是 beta。默认导出可以是已定义的 tag name、`HTMLElement` 子类，或 `{ tagName, define }`。宿主通过 DOM property 传入 `item`、`payload`、`preview`、`widgetId` 与 `hostKeyEvent`。
+
+:::TuffCodeBlock{lang="json"}
+---
+code: |
+  {
+  "type": "widget",
+  "id": "todo.webcomponent",
+  "title": "WebComponent 面板",
+  "interaction": {
+  "type": "widget",
+  "runtime": "webcomponent",
+  "path": "todo-card.ts"
+  }
+  }
+---
+:::
+
+## 文件结构
+
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  my-plugin/
+  ├── widgets/
+  │ ├── todo-panel.vue # Vue SFC
+  │ ├── quick-action.tsx # TSX component
+  │ └── helper.ts # Plain TS module
+  ├── manifest.json
+  └── index.js
+---
+:::
+
+## Vue Widget 示例
+
+`widgets/todo-panel.vue`
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+
+  <div class="todo-panel">
+  <h3>{{ title }}</h3>
+  <ul>
+  <li v-for="item in items" :key="item.id">{{ item.text }}</li>
+  </ul>
+  </div>
+  </template>
+
+  <script setup lang="ts">
+  import { ref } from 'vue'
+  import { usePluginContext } from '@talex-touch/utils/plugin/sdk'
+
+  const ctx = usePluginContext()
+  const title = ref('My Tasks')
+  const items = ref([{ id: 1, text: 'Learn Widgets' }])
+  </script>
+
+  <style scoped>
+  .todo-panel { padding: 16px; }
+  </style>
+---
+:::
+
+## TSX Widget 示例
+
+`widgets/quick-action.tsx`
+:::TuffCodeBlock{lang="tsx"}
+---
+code: |
+  import { defineComponent, ref } from 'vue'
+
+  export default defineComponent({
+  setup() {
+  const count = ref(0)
+  return () => (
+
+  <div class="action-panel">
+  <button onClick={() => count.value++}>
+  Clicked {count.value} times
+  </button>
+  </div>
+  )
+  }
+  })
+---
+:::
+
+## 允许的依赖
+
+Widgets 运行在受控环境，仅允许以下包：
+
+- `vue`
+- `@arrow-js/core`（TouchWidget ArrowJS beta）
+- `@talex-touch/utils`
+- `@talex-touch/utils/plugin`
+- `@talex-touch/utils/plugin/sdk`
+- `@talex-touch/utils/core-box`
+- `@talex-touch/utils/transport`
+- `@talex-touch/utils/common`
+- `@talex-touch/utils/types`
+
+## 通信
+
+- 使用 TuffTransport 进行类型安全的 IPC 通信
+- `ctx.widget.send` 与宿主交换尺寸、主题等信息
+- 可通过 `ctx.storage` 访问插件存储
+
+## 失败态与诊断
+
+Widget 注册失败时，CoreBox 会在原位置显示明确状态，不再只显示空白或调试文本。常见状态包括：
+
+- `Widget 加载中`：renderer 正在等待注册。
+- `Widget renderer 未注册`：宿主尚未收到可用 renderer。
+- `Widget 编译失败`：源码编译或运行时编译器不可用，消息中会展示失败原因。
+- `Widget 渲染失败`：组件已注册但渲染阶段抛错。
+
+主进程会将 widget 失败写入插件 issue，并附带 `pluginName`、`featureId`、`widgetId`、`filePath`、`hash`、`causeCode` 诊断字段。`WIDGET_COMPILER_BINARY_UNAVAILABLE` 表示运行时 esbuild 平台二进制缺失、位于 `app.asar` 内或不可执行；普通源码语法、依赖与编译错误仍使用 `WIDGET_COMPILE_FAILED` 或对应的依赖/路径 issue code。
+
+## 最佳实践
+
+- UI 与交互遵循系统暗/亮模式
+- 避免复杂动画，确保在 16ms 内完成重绘
+- 提供空状态与错误提示，保持体验一致
+- 优先使用 `@talex-touch/utils` 的 hooks
+
+## Dev 模式（远程源码）
+
+当 `dev.enable` 与 `dev.source` 为 true 时，Widget 源码从 dev server 拉取，而不是本地 `widgets/` 目录。解析规则为：
+
+`{dev.address}/widgets/{interaction.path}`（未提供扩展名时默认 `.vue`）。
+
+:::TuffCodeBlock{lang="json"}
+---
+code: |
+  {
+  "dev": {
+  "enable": true,
+  "source": true,
+  "address": "http://localhost:5173/"
+  }
+  }
+---
+:::
+
+远程源码会在每次触发时拉取；文件监听只对本地路径生效。
+
+## 技术说明
+
+- Widget 运行在渲染进程的沙箱环境，依赖受限。
+- 文件处理由 Widget processor 负责。

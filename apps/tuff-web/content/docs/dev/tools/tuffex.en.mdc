@@ -1,0 +1,177 @@
+---
+title: TuffEx
+description: Modern Vue3 component library with beautiful animations
+---
+
+# TuffEx
+
+TuffEx (Chinese name: Ta Fu) is a modern Vue3 component library focused on tactile experience and smooth animations. It's part of the Tuff ecosystem and provides beautiful, interactive UI components.
+
+> **Migration in Progress** - TuffEx is migrating components from Tuff core app. Tech stack upgraded to Vue 3.5 / Vite 6 / TypeScript 5.8.
+
+## Component Gallery
+- **[Tuffex Components](/tuffex/en)** — component catalog, demos, and API (bilingual).
+- **[Component Changelog & Lifecycle](/tuffex/en/changelog)** — component Since versions and per-release updates.
+
+
+## Installation
+
+:::TuffCodeBlock{lang="bash"}
+---
+code: |
+  # npm
+  npm install @talex-touch/tuffex
+
+  # yarn
+  yarn add @talex-touch/tuffex
+
+  # pnpm (recommended)
+  pnpm add @talex-touch/tuffex
+---
+:::
+
+## Quick Start
+
+**Full Import (Legacy)**
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { createApp } from 'vue'
+  import TuffUI from '@talex-touch/tuffex'
+  import '@talex-touch/tuffex/style.css'
+
+  const app = createApp(App)
+  app.use(TuffUI)
+  app.mount('#app')
+---
+:::
+
+Use the full import only for migration work where the application already expects every component style to be present. New pages should prefer the on-demand subpath imports below.
+
+**On-Demand Import (Recommended)**
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { createApp } from 'vue'
+  import TxButton from '@talex-touch/tuffex/button'
+  import TxSwitch from '@talex-touch/tuffex/switch'
+  import TxTag from '@talex-touch/tuffex/tag'
+  import '@talex-touch/tuffex/base.css'
+  import '@talex-touch/tuffex/button/style.css'
+  import '@talex-touch/tuffex/switch/style.css'
+  import '@talex-touch/tuffex/tag/style.css'
+
+  const app = createApp(App)
+  app.use(TxButton)
+  app.use(TxSwitch)
+  app.use(TxTag)
+---
+:::
+
+## Core Features
+
+| Feature | Description |
+|---------|-------------|
+| 🎭 **Living Tactile Experience** | Elastic responses and damping effects for natural interactions |
+| 🌊 **Silky Animation System** | 60fps smooth animations based on Bézier curves |
+| 💎 **Modern Visual Language** | Glassmorphism aesthetics with frosted glass effects |
+| ⚡ **Performance Optimized** | Vue3 Composition API + Tree Shaking, 50%+ smaller bundles |
+| 🔗 **Tuff Ecosystem** | Seamlessly integrated with Tuff desktop application |
+
+## Available Components
+
+**Released**
+
+| Component | Description | Source |
+|-----------|-------------|--------|
+| `TuffButton` | Interactive button with tactile feedback | `button/` |
+| `TuffSwitch` | Toggle switch with smooth animations | `switch/` |
+| `TuffInput` | Input with clearable and textarea support | `input/` |
+| `TuffCheckbox` | Checkbox with SVG tick animation | `checkbox/` |
+| `TuffSelect` | Dropdown select with floating positioning | `select/` |
+| `TuffSelectItem` | Select option item | `select/` |
+| `TuffProgress` | Progress bar with indeterminate mode | `progress/` |
+
+**Planned**
+
+| Component | Description | Source |
+|-----------|-------------|--------|
+| `TuffModal` | Modal dialog with entrance animations | `modal/` |
+| `TxScroll` | Custom scrollbar with native feel | `@talex-touch/tuffex` |
+| `TuffTabs` | Tab navigation with indicator animations | `tabs/` |
+| `TuffMenu` | Menu component | `menu/` |
+
+## Theming
+
+TUFF UI supports custom theming through CSS variables:
+
+:::TuffCodeBlock{lang="css"}
+---
+code: |
+  :root {
+    /* Primary colors */
+    --tx-color-primary: #409eff;
+    --tx-color-primary-light-3: #79bbff;
+
+    /* Text colors */
+    --tx-text-color-primary: #303133;
+    --tx-text-color-secondary: #909399;
+
+    /* Border and radius */
+    --tx-border-color: #dcdfe6;
+    --tx-border-radius-base: 4px;
+
+    /* Transitions */
+    --tx-transition-duration: 0.3s;
+  }
+---
+:::
+
+## Tech Stack
+
+| Technology | Version | Purpose |
+|------------|---------|---------|
+| Vue | 3.5+ | Composition API |
+| TypeScript | 5.8+ | Type safety |
+| Vite | 6.0+ | Build tooling |
+| Sass | 1.89+ | Style preprocessing |
+| VueUse | 13.0+ | Composition utilities |
+
+## Development
+
+:::TuffCodeBlock{lang="bash"}
+---
+code: |
+  # In monorepo root
+  pnpm install
+
+  # Component source package
+  pnpm -C packages/tuffex run build
+  pnpm -C packages/tuffex run test
+  pnpm -C packages/tuffex run typecheck
+
+  # Standalone TuffEx component docs (SSG)
+  pnpm -C apps/tuffex-docs run dev
+---
+:::
+
+## Design Philosophy
+
+1. **Tactile First** - Every component should feel responsive and alive
+2. **Performance** - Animations must never compromise performance
+3. **Accessibility** - WCAG 2.1 AA compliance for all components
+4. **Composability** - Components work together seamlessly
+
+## Related Links
+
+- [GitHub Repository](https://github.com/talex-touch/tuff/tree/master/packages/tuffex)
+- [NPM Package](https://www.npmjs.com/package/@talex-touch/tuffex)
+
+## Browser Support
+
+- Chrome 90+
+- Firefox 88+
+- Safari 14+
+- Edge 90+

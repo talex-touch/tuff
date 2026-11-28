@@ -1,0 +1,564 @@
+# Clipboard SDK
+
+## Overview
+
+The Clipboard SDK lets plugins access system clipboard features, including:
+- **Basic operations**: read/write clipboard content (text, HTML, images, files)
+- **History management**: query, search, and delete clipboard history
+- **Copy & paste**: write content to clipboard and auto-paste into the active app
+- **Selected text**: capture the active app's current text selection without leaving clipboard mutations behind
+- **Automatic tags**: classify text content (URL, API Key, Token, account/password, email) for quick matching
+
+All operations are executed in the main process via TuffTransport to avoid WebContents focus issues.
+
+## Communication Strategy (Transport First)
+
+- `useClipboard()` now uses `ClipboardEvents.*` as the primary transport domain (`getHistory`, `read`, `copyAndPaste`, etc.).
+- Clipboard SDK no longer relies on `clipboard:*` raw channel events as the main path.
+- Plugin code must use the SDK/typed transport entry points. Historical raw `clipboard:*` channel names are migration references only, not a supported extension surface.
+- `system.captureSelection()` uses the typed App/System event and requires a verified plugin with `clipboard.read`; it does not expose a raw selection channel.
+
+## Introduction
+
+**Quick Start**
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { system, useClipboard } from '@talex-touch/utils/plugin/sdk'
+
+  const clipboard = useClipboard()
+
+  // Write text
+  await clipboard.writeText('Hello World')
+
+  // Read clipboard
+  const content = await clipboard.read()
+  console.log(content.text, content.formats)
+
+  // Copy and paste to active app
+  await clipboard.copyAndPaste({ text: 'Pasted content' })
+
+  // Capture selected text from the active app
+  const selection = await system.captureSelection()
+  if (!selection.text) console.warn(selection.issueCode)
+---
+:::
+
+## API Reference
+
+**useClipboard()**
+
+Returns a unified clipboard SDK instance.
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const clipboard = useClipboard()
+---
+:::
+
+---
+
+## Selected Text Capture
+
+**system.captureSelection() / captureSelectedText()**
+
+Capture the current text selection from the active application. The host verifies plugin identity and the `clipboard.read` permission before touching accessibility APIs, shortcuts, or the clipboard. macOS prefers AXSelectedText; the fallback snapshots every clipboard format, issues the platform copy shortcut, and restores the snapshot.
+
+The result includes `text`, `supportLevel`, `capturedAt`, and optional `issueCode`, `issueMessage`, and `limitations`. Treat `empty`, `disabled`, `failed`, and `unsupported` as explicit non-success states. Do not write selected text to ordinary logs, persistent history, or audit metadata.
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { system } from '@talex-touch/utils/plugin/sdk'
+
+  const result = await system.captureSelection()
+  if (!result.text) {
+    console.warn(result.issueCode, result.issueMessage)
+    return
+  }
+
+  // Use result.text only for the user-triggered action.
+---
+:::
+
+---
+
+## Basic Operations
+
+**writeText(text)**
+
+Write plain text to the clipboard.
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  await clipboard.writeText('Hello World')
+---
+:::
+
+**write(options)**
+
+Write multiple formats to the clipboard.
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  // Text + HTML
+  await clipboard.write({
+    text: 'Hello',
+    html: '<b>Hello</b>'
+  })
+
+  // Image (data URL)
+  await clipboard.write({
+    image: 'data:image/png;base64,...'
+  })
+
+  // Files
+  await clipboard.write({
+    files: ['/path/to/file.txt', '/path/to/image.png']
+  })
+---
+:::
+
+**Parameters**:
+| Field | Type | Description |
+| --- | --- | --- |
+| `text` | `string` | Plain text |
+| `html` | `string` | HTML content |
+| `image` | `string` | Image data URL |
+| `files` | `string[]` | File paths |
+
+**read()**
+
+Read current clipboard content.
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const content = await clipboard.read()
+  // {
+  //   text: 'Hello',
+  //   html: '<b>Hello</b>',
+  //   hasImage: false,
+  //   hasFiles: false,
+  //   formats: ['text/plain', 'text/html']
+  // }
+---
+:::
+
+**Returns**:
+| Field | Type | Description |
+| --- | --- | --- |
+| `text` | `string` | Text content |
+| `html` | `string` | HTML content |
+| `hasImage` | `boolean` | Whether image exists |
+| `hasFiles` | `boolean` | Whether files exist |
+| `formats` | `string[]` | Available formats |
+
+**readImage()**
+
+Read image from clipboard.
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const image = await clipboard.readImage()
+  if (image) {
+    console.log(image.dataUrl, image.width, image.height)
+  }
+---
+:::
+
+**Returns**: `{ dataUrl: string, width: number, height: number } | null`
+
+**getHistoryImageUrl(id)**
+
+Resolve the original image URL (`tfile://`) for a history item to avoid large base64 payloads in plugin code.
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const url = await clipboard.getHistoryImageUrl(123)
+  if (url) {
+    console.log('original image:', url)
+  }
+---
+:::
+
+**history.annotate({ id, note, tags })**
+
+Writes the user's own note and tags onto a history item.
+
+The two fields are independent: sending only `note` leaves the tags alone and vice versa, so an editor for one does not have to hold the other to avoid wiping it. Pass `null` or an empty string to clear the note, an empty array to clear the tags.
+
+Resolves with what was **actually stored** — the main process trims, collapses whitespace, de-duplicates case-insensitively and applies the caps (200 characters for the note, 24 per tag, 12 tags). Render the result rather than the text that was typed.
+
+Annotations live in the record's metadata, which the keyword search already matches, so a tag is searchable as soon as it is written.
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const { note, tags } = await clipboard.history.annotate({
+    id: 123,
+    note: 'production key for ego lite',
+    tags: ['prod', 'openai'],
+  })
+---
+:::
+
+**Returns**: `{ updated: boolean, note: string | null, tags: string[] }`. `updated` is `false` when no such record exists.
+
+**previewHistoryImage(id)**
+
+Hand a history image item to the operating system's own previewer (Preview on macOS, the registered default application elsewhere).
+
+Takes a record id rather than a path: the main process resolves the file inside its own clipboard image directory, so a plugin cannot use this to open anything outside it. Returns `false` when the record has no stored image left.
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const opened = await clipboard.previewHistoryImage(123)
+  if (!opened) {
+    console.warn('this record has no image left to preview')
+  }
+---
+:::
+
+**Returns**: `boolean`
+
+**readFiles()**
+
+Read file paths from clipboard.
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const files = await clipboard.readFiles()
+  // ['/path/to/file1.txt', '/path/to/file2.png']
+---
+:::
+
+**clear()**
+
+Clear the clipboard.
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  await clipboard.clear()
+---
+:::
+
+---
+
+## Copy and Paste
+
+**copyAndPaste(options)**
+
+Write content to the clipboard and simulate paste into the active app.
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  // Paste text
+  await clipboard.copyAndPaste({ text: 'Hello' })
+
+  // Paste formatted text
+  await clipboard.copyAndPaste({
+    text: 'Hello',
+    html: '<b>Hello</b>'
+  })
+
+  // Paste image
+  await clipboard.copyAndPaste({
+    image: 'data:image/png;base64,...'
+  })
+
+  // Paste files
+  await clipboard.copyAndPaste({
+    files: ['/path/to/file.txt']
+  })
+
+  // Custom delay and behavior
+  await clipboard.copyAndPaste({
+    text: 'Hello',
+    delayMs: 200,        // delay before paste (default 150ms)
+    hideCoreBox: true    // hide CoreBox before paste (default true)
+  })
+---
+:::
+
+**Parameters**:
+| Field | Type | Description |
+| --- | --- | --- |
+| `text` | `string` | Text content |
+| `html` | `string` | HTML content |
+| `image` | `string` | Image data URL |
+| `files` | `string[]` | File paths |
+| `delayMs` | `number` | Delay before paste |
+| `hideCoreBox` | `boolean` | Hide CoreBox before paste |
+
+**Returns**: `Promise<boolean>` - whether the operation succeeded
+
+---
+
+## History
+
+Access history operations via `clipboard.history`.
+
+**history.getLatest()**
+
+Get the latest clipboard item.
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const latest = await clipboard.history.getLatest()
+  if (latest) {
+    console.log(latest.type, latest.content)
+  }
+---
+:::
+
+**history.getHistory(options)**
+
+Get clipboard history with pagination.
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const { history, total, page, pageSize } = await clipboard.history.getHistory({
+    page: 1,
+    pageSize: 20
+  })
+---
+:::
+
+**history.searchHistory(options)**
+
+Advanced search.
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  // Keyword search
+  const result = await clipboard.history.searchHistory({
+    keyword: 'hello'
+  })
+
+  // Filter by type
+  const textItems = await clipboard.history.searchHistory({
+    type: 'text'
+  })
+
+  // Time range
+  const recent = await clipboard.history.searchHistory({
+    startTime: Date.now() - 24 * 60 * 60 * 1000
+  })
+
+  // Combined filters
+  const filtered = await clipboard.history.searchHistory({
+    type: 'text',
+    isFavorite: true,
+    sourceApp: 'com.apple.Safari',
+    page: 1,
+    pageSize: 10
+  })
+---
+:::
+
+**Search parameters**:
+| Field | Type | Description |
+| --- | --- | --- |
+| `keyword` | `string` | Content keyword |
+| `type` | `'text' \| 'image' \| 'files'` | Type filter |
+| `startTime` | `number` | Start timestamp |
+| `endTime` | `number` | End timestamp |
+| `isFavorite` | `boolean` | Favorite filter |
+| `sourceApp` | `string` | Source app |
+| `page` | `number` | Page number |
+| `pageSize` | `number` | Page size |
+| `sortOrder` | `'asc' \| 'desc'` | Sort order |
+
+**history.setFavorite(options)**
+
+Set favorite status.
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  await clipboard.history.setFavorite({
+    id: 123,
+    isFavorite: true
+  })
+---
+:::
+
+**history.deleteItem(options)**
+
+Delete a history item.
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  await clipboard.history.deleteItem({ id: 123 })
+---
+:::
+
+**history.clearHistory()**
+
+Clear all history.
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  await clipboard.history.clearHistory()
+---
+:::
+
+---
+
+## Listen to Clipboard Changes
+
+**history.onDidChange(callback)**
+
+Listen to clipboard changes.
+
+> **Important**: Plugins must call `box.allowClipboard(types)` first, otherwise no events are emitted.
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { useBox, ClipboardType } from '@talex-touch/utils/plugin/sdk'
+
+  const box = useBox()
+  const clipboard = useClipboard()
+
+  // 1. Enable clipboard monitoring
+  await box.allowClipboard(ClipboardType.TEXT | ClipboardType.IMAGE)
+
+  // 2. Register listener
+  const unsubscribe = clipboard.history.onDidChange((item) => {
+    console.log('Clipboard changed:', item.type, item.content)
+  })
+
+  // 3. Stop listening
+  unsubscribe()
+---
+:::
+
+**ClipboardType enum**:
+| Value | Binary | Description |
+| --- | --- | --- |
+| `TEXT` | `0b0001` | Description for TEXT. |
+| `IMAGE` | `0b0010` | Image |
+| `FILE` | `0b0100` | File |
+
+**Presets**:
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { ClipboardTypePresets } from '@talex-touch/utils/plugin/sdk'
+
+  // Text only
+  await box.allowClipboard(ClipboardTypePresets.TEXT_ONLY)
+
+  // Text + image
+  await box.allowClipboard(ClipboardTypePresets.TEXT_AND_IMAGE)
+
+  // All types
+  await box.allowClipboard(ClipboardTypePresets.ALL)
+---
+:::
+
+---
+
+## Clipboard Item Shape
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  interface PluginClipboardItem {
+    id?: number
+    type: 'text' | 'image' | 'files'
+    content: string           // text / image dataURL / file paths JSON
+    thumbnail?: string        // thumbnail dataURL
+    rawContent?: string       // HTML raw content
+    sourceApp?: string        // source app
+    timestamp?: Date          // timestamp
+    isFavorite?: boolean      // favorite
+    meta?: Record<string, unknown>  // metadata (including tags)
+  }
+---
+:::
+
+---
+
+## Automatic Tags (tags)
+
+When clipboard content is text, the system applies lightweight rules and stores tags in `meta.tags`.
+Tags describe **categories only** and never include raw sensitive values.
+
+**Current tags**:
+- `url`: URL/link
+- `api_key`: API key patterns
+- `token`: Token/Bearer
+- `password`: Password field
+- `account`: Account/username field
+- `email`: Email
+
+**Example**:
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const latest = await clipboard.history.getLatest()
+  const tags = Array.isArray(latest?.meta?.tags) ? latest?.meta?.tags : []
+
+  if (tags.includes('api_key') || tags.includes('password')) {
+    // e.g. warn the user about sensitive content
+  }
+---
+:::
+
+> Tip: For `history.searchHistory()` results, filter by `meta.tags` in your plugin to build more precise matching.
+
+---
+
+## Technical Notes
+
+- Clipboard read/write, history, and auto-paste are executed in the main process via TuffTransport to avoid focus-related failures.
+- History is persisted in the database; `meta`/`metadata` carry extra signals for technical filtering and matching.
+- Automatic tags are lightweight rule-based categories; raw sensitive values are never exposed.
+
+## Migration Guide
+
+**Migrate from useClipboardHistory**
+
+`useClipboardHistory()` is deprecated. Use `useClipboard()` instead:
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  // Old
+  const history = useClipboardHistory()
+  await history.getLatest()
+  await history.applyToActiveApp({ text: 'Hello' })
+
+  // New
+  const clipboard = useClipboard()
+  await clipboard.history.getLatest()
+  await clipboard.copyAndPaste({ text: 'Hello' })
+---
+:::
+
+---
+
+## Best Practices
+
+1. **Use copyAndPaste instead of manual operations**: it handles CoreBox hiding, delays, and cross-platform paste behavior.
+2. **Limit monitoring types**: only enable required types to reduce overhead.
+3. **Unsubscribe promptly**: call `unsubscribe()` when not needed.
+4. **Handle nulls**: `readImage()` and `history.getLatest()` may return `null`.

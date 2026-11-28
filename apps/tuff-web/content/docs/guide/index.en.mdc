@@ -1,0 +1,36 @@
+# Tuff Guide
+
+> A desktop command center built for multi-tasking humans.
+
+## Positioning
+- **Core idea**: CoreBox orchestrates plugins, shortcuts, and sync under one calm surface.
+- **Audience**: Creators, engineers, and knowledge workers juggling devices.
+- **Principles**: Minimal UI, instant feedback, system-grade isolation.
+
+## Feature Matrix
+| Pillar | Capability | Highlights |
+| --- | --- | --- |
+| Launch & Search | CoreBox, smart index, fuzzy routing | ms-level results, custom triggers |
+| CoreBox Workflow | Workflow / AI / Translation | Unified command entry with plugin-composed execution |
+| Content | Clipbox, file drawers, sync | Sandbox isolation + end-to-end encrypted sync |
+| Plugins | Curated + open ecosystem | Manifest-driven, hot reload |
+| Personalization | Workspace, themes, wallpaper, layouts | Multi-screen & multi-account aware |
+
+## Onboarding Path
+1. Follow **[Quick Start](./start.en.mdc)** for install and account basics.
+2. Discover **[Quick Preview](./features/preview.en.mdc)** for CoreBox's built-in instant calculations and conversions.
+3. Read **[Tuff QuickOps](./features/quickops.en.mdc)** for wake locks, timers, network/file diagnostics, and local policy switches.
+4. Read **[CoreBox Capability Status](./features/corebox-workflow.en.mdc)** for current workflow / AI / translation entries.
+5. Open **[Wallpaper & Background](./features/wallpaper.en.mdc)** for personalization setup.
+6. Start with **[Recommended Plugin Bundles](./features/recommended-plugins.en.mdc)** to get a practical stack fast.
+7. Then use **[Built-in Plugin Catalog](./features/plugins/index.en.mdc)** for plugin-by-plugin docs.
+8. Jump into relevant **scenes** (developer, student, creator) for ready-made templates.
+
+## Deep Dive
+- Efficiency tips live in `/tips`.
+- Builders head to `/dev` for manifests, APIs, publishing, and snippets.
+
+## Glossary
+- **CoreBox**: system-grade launcher with multi-window awareness.
+- **Plugin Capsule**: sandboxed container with quota controls.
+- **Workspace**: bundle of layouts, shortcuts, and sync policies.

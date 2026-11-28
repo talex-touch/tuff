@@ -1,0 +1,24 @@
+# Batch Rename (`touch-batch-rename`)
+
+## When to Use
+- Batch rename files with prefix/suffix, replace, and sequence rules.
+
+## Trigger
+- Feature ID: `batch-rename`
+- Commands: `rename / rename-files`
+
+## Core Capabilities
+- Batch rename files with prefix/suffix, numbering, and regex replace.
+- Supported platforms: `win32, darwin, linux`
+
+## Config & Data
+- Config/data files: `last-rename.json`
+- Plugin directory: `plugins/touch-batch-rename`
+
+## Permissions
+- Required: `fs.read, fs.write`
+
+## Quick Start
+1. In CoreBox, type `rename`.
+2. Press Enter on the action you need.
+3. Grant permissions when prompted.

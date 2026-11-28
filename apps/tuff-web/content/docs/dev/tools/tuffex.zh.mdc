@@ -1,0 +1,177 @@
+---
+title: TuffEx
+description: 具有精美动画效果的现代 Vue3 组件库
+---
+
+# TuffEx
+
+TuffEx（中文名：塔芙）是一个专注于触感体验和流畅动画的现代 Vue3 组件库。它是 Tuff 生态系统的一部分，提供美观、交互式的 UI 组件。
+
+> **迁移中** - TuffEx 正在从 Tuff 核心应用迁移组件，技术栈已升级至 Vue 3.5 / Vite 6 / TypeScript 5.8。
+
+## 组件展示
+- **[Tuffex 组件中心](/tuffex/zh)** — 组件清单、Demo 与 API（双语）。
+- **[组件更新日志与版本历程](/tuffex/zh/changelog)** — 记录每个组件自哪个版本引入（Since xx）以及每次发版更新了哪些组件。
+
+
+## 安装
+
+:::TuffCodeBlock{lang="bash"}
+---
+code: |
+  # npm
+  npm install @talex-touch/tuffex
+
+  # yarn
+  yarn add @talex-touch/tuffex
+
+  # pnpm（推荐）
+  pnpm add @talex-touch/tuffex
+---
+:::
+
+## 快速开始
+
+**完整导入（迁移期兼容）**
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { createApp } from 'vue'
+  import TuffUI from '@talex-touch/tuffex'
+  import '@talex-touch/tuffex/style.css'
+
+  const app = createApp(App)
+  app.use(TuffUI)
+  app.mount('#app')
+---
+:::
+
+完整导入只适合已有页面仍依赖全量组件样式的迁移场景。新页面默认使用下面的按需子路径导入。
+
+**按需导入（推荐）**
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { createApp } from 'vue'
+  import TxButton from '@talex-touch/tuffex/button'
+  import TxSwitch from '@talex-touch/tuffex/switch'
+  import TxTag from '@talex-touch/tuffex/tag'
+  import '@talex-touch/tuffex/base.css'
+  import '@talex-touch/tuffex/button/style.css'
+  import '@talex-touch/tuffex/switch/style.css'
+  import '@talex-touch/tuffex/tag/style.css'
+
+  const app = createApp(App)
+  app.use(TxButton)
+  app.use(TxSwitch)
+  app.use(TxTag)
+---
+:::
+
+## 核心特性
+
+| 特性 | 描述 |
+|------|------|
+| 🎭 **生动触感体验** | 弹性响应和阻尼效果，让每次交互都自然且引人入胜 |
+| 🌊 **丝滑动画系统** | 基于贝塞尔曲线的 60fps 流畅动画 |
+| 💎 **现代视觉语言** | 玻璃拟态美学，毛玻璃效果和材质模拟 |
+| ⚡ **性能优化** | Vue3 Composition API + Tree Shaking，包体积减少 50%+ |
+| 🔗 **Tuff 生态集成** | 与 Tuff 桌面应用无缝集成 |
+
+## 可用组件
+
+**已发布**
+
+| 组件 | 描述 | 来源 |
+|------|------|------|
+| `TuffButton` | 带触感反馈的交互按钮 | `button/` |
+| `TuffSwitch` | 流畅动画的开关组件 | `switch/` |
+| `TuffInput` | 输入框，支持 clearable 和 textarea | `input/` |
+| `TuffCheckbox` | 复选框，SVG 动画勾选效果 | `checkbox/` |
+| `TuffSelect` | 下拉选择器，浮动定位 | `select/` |
+| `TuffSelectItem` | 选择器选项 | `select/` |
+| `TuffProgress` | 进度条，支持 indeterminate | `progress/` |
+
+**计划中**
+
+| 组件 | 描述 | 来源 |
+|------|------|------|
+| `TuffModal` | 带入场动画的模态对话框 | `modal/` |
+| `TxScroll` | 原生体验的自定义滚动条 | `@talex-touch/tuffex` |
+| `TuffTabs` | 带指示器动画的标签页 | `tabs/` |
+| `TuffMenu` | 菜单组件 | `menu/` |
+
+## 主题定制
+
+TUFF UI 通过 CSS 变量支持自定义主题：
+
+:::TuffCodeBlock{lang="css"}
+---
+code: |
+  :root {
+    /* 主色调 */
+    --tx-color-primary: #409eff;
+    --tx-color-primary-light-3: #79bbff;
+
+    /* 文本颜色 */
+    --tx-text-color-primary: #303133;
+    --tx-text-color-secondary: #909399;
+
+    /* 边框和圆角 */
+    --tx-border-color: #dcdfe6;
+    --tx-border-radius-base: 4px;
+
+    /* 过渡 */
+    --tx-transition-duration: 0.3s;
+  }
+---
+:::
+
+## 技术栈
+
+| 技术 | 版本 | 用途 |
+|------|------|------|
+| Vue | 3.5+ | Composition API |
+| TypeScript | 5.8+ | 类型安全 |
+| Vite | 6.0+ | 构建工具 |
+| Sass | 1.89+ | 样式预处理 |
+| VueUse | 13.0+ | 组合式工具 |
+
+## 开发
+
+:::TuffCodeBlock{lang="bash"}
+---
+code: |
+  # 在 monorepo 根目录
+  pnpm install
+
+  # 组件源码包
+  pnpm -C packages/tuffex run build
+  pnpm -C packages/tuffex run test
+  pnpm -C packages/tuffex run typecheck
+
+  # 独立 TuffEx 组件文档站（SSG）
+  pnpm -C apps/tuffex-docs run dev
+---
+:::
+
+## 设计理念
+
+1. **触感优先** - 每个组件都应该感觉响应迅速且生动
+2. **性能至上** - 动画绝不能影响性能
+3. **无障碍访问** - 所有组件符合 WCAG 2.1 AA 标准
+4. **可组合性** - 组件无缝协作
+
+## 相关链接
+
+- [GitHub 仓库](https://github.com/talex-touch/tuff/tree/master/packages/tuffex)
+- [NPM 包](https://www.npmjs.com/package/@talex-touch/tuffex)
+
+## 浏览器支持
+
+- Chrome 90+
+- Firefox 88+
+- Safari 14+
+- Edge 90+

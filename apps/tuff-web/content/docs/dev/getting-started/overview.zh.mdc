@@ -1,0 +1,39 @@
+# 开发概览
+
+## 插件模型
+- **BaseModule**：主程序模块生命周期：`created → onInit → start → stop → onDestroy`。
+- **Plugin Capsule**：每个插件对应独立进程，使用 Manifest 描述元数据与入口。
+- **Channel System**：通过 `ChannelType.MAIN` 与 `ChannelType.PLUGIN` 实现 IPC。
+
+## 目录结构
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  apps/core-app/
+  ├── src/main/           # 主进程、模块、通道
+  ├── src/renderer/       # 渲染进程（Vue 3）
+  └── ...
+  plugins/
+  └── my-plugin/
+      ├── manifest.json
+      ├── index.js
+      ├── assets/
+      └── widgets/
+---
+:::
+
+## 生命周期
+1. **加载**：Manifest 被解析，`main` 指向的先导脚本被载入。
+2. **注册**：`index.js` 从 `globalThis` 读取上下文，并导出 `onFeatureTriggered`、`onItemAction` 等 hooks。
+3. **运行**：CoreBox 触发 feature，插件返回 item、渲染 UI 或提供后台服务。
+4. **清理**：停用或卸载时清理定时器、监听器、临时文件和外部资源。
+
+## 沙箱策略
+- 文件访问限制在插件私有目录。
+- 网络请求默认允许 HTTPS，敏感域名需在 Manifest 中声明。
+- 插件可使用 Storage API（每插件 10MB）保存配置。
+
+## 开发体验
+- `pnpm core:dev`：启动 Electron + 插件热重载。
+- `tuff validate --strict`：校验 Manifest、SDK API 版本、分类和权限声明。
+- `tuff build`：构建 `.tpex` 插件包。

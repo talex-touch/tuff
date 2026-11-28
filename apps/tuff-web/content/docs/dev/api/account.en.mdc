@@ -1,0 +1,844 @@
+# Account SDK
+
+## Overview
+
+Account SDK provides user information, subscription status, and quota management capabilities for plugins that need to offer differentiated features based on user identity or subscription tier.
+
+## Introduction
+
+**Quick Start**
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  import { accountSDK, SubscriptionPlan } from '@talex-touch/utils'
+  import { useChannel } from '@talex-touch/utils/plugin/sdk'
+
+  accountSDK.setChannelSend(useChannel().send)
+
+  // Check if user is logged in
+  const isLoggedIn = await accountSDK.isLoggedIn()
+
+  // Get current subscription plan
+  const plan = await accountSDK.getPlan()
+
+  // Check if paid user
+  if (await accountSDK.isPaidUser()) {
+    // Show premium features
+  }
+---
+:::
+
+---
+
+## Subscription Plans
+
+Listed from the lowest tier to the highest; each includes everything in the ones before it.
+
+| Plan | Enum Value | Description |
+|------|------------|-------------|
+| Free | `SubscriptionPlan.FREE` | Basic features with quota limits |
+| Plus | `SubscriptionPlan.PLUS` | More quota, custom models, priority support |
+| Pro | `SubscriptionPlan.PRO` | Higher quota, advanced analytics |
+| Team | `SubscriptionPlan.TEAM` | Team collaboration, management |
+| Enterprise | `SubscriptionPlan.ENTERPRISE` | Highest quota, more team seats |
+
+---
+
+## SDK Reference
+
+**Get SDK Instance**
+
+Account calls work only in a plugin's pages; the Prelude script (`index.js`) cannot reach them. `accountSDK` is a singleton: give it the page's channel before using it.
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  import { accountSDK } from '@talex-touch/utils'
+  import { useChannel } from '@talex-touch/utils/plugin/sdk'
+
+  accountSDK.setChannelSend(useChannel().send)
+  await accountSDK.getProfile()
+---
+:::
+
+A plugin uses these methods, opening the sign-in and account pages included, only after it declares `account.read` in `manifest.json` and the user grants it. Without the grant, `usePluginAccount()` calls reject with `ACCOUNT_PERMISSION_DENIED` and `onDidChange` never calls back; `accountSDK` reads its queries as "none", and its page openers reject. See [Permission System](./permission.en.mdc).
+
+:::TuffCodeBlock{lang="json"}
+---
+code: |
+  {
+    "permissions": {
+      "required": ["account.read"]
+    },
+    "permissionReasons": {
+      "account.read": "Shows your plan and the quota you have left"
+    }
+  }
+---
+:::
+
+::alert{type="warning"}
+**Note**: `accountSDK` reads a failed call as "none": `getProfile()` returns `null` and `isLoggedIn()` returns `false`. To tell signing out from a failed call, or to hear when the sign-in changes, use `usePluginAccount()` below.
+::
+
+---
+
+**Following the Sign-in**
+
+`usePluginAccount()` is the account client for plugin pages. Its calls reject when they fail instead of reading as signed out, and `onDidChange` tells the plugin when the sign-in changes.
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  import { usePluginAccount } from '@talex-touch/utils/plugin/sdk'
+
+  const account = usePluginAccount()
+
+  const stop = account.onDidChange((session) => {
+    // The stored sign-in has not been checked in this run yet, so "signed out" may still turn signed in
+    if (!session.isSettled)
+      return
+    renderUser(session.user) // null when signed out
+  })
+
+  // When the page unmounts
+  stop()
+---
+:::
+
+| Method | Return | Description |
+|--------|--------|-------------|
+| `getProfile()` | `UserProfile \| null` | The signed-in account's profile, `null` when signed out |
+| `getSubscription()` | `Subscription \| null` | Subscription |
+| `getUsage()` | `UsageStats \| null` | Usage |
+| `getFeatures()` | `FeatureFlag[]` | The plan's features: `aiRequests` and `aiTokens` carry their limit in `value` (`-1` for unlimited); `customModels`, `prioritySupport` and `apiAccess` are on or off |
+| `getTeams()` | `Team[]` | The organization the account belongs to, empty when there is none; the personal team is not listed |
+| `openUpgradePage(plan?)` | `void` | Opens the pricing page in the browser, with `plan` outlined when given |
+| `openBillingPage()` | `void` | Opens the team page, where the plan and activation codes are managed |
+| `openAccountSettings()`, `openProfileEditor()` | `void` | Opens the account page |
+| `requestLogin()` | `boolean` | Joins the sign-in when the app is signed in or a sign-in is under way, and opens the sign-in page otherwise. `true` does not mean anyone is signed in yet; `false` means the page could not be opened |
+| `onDidChange(callback)` | `() => void` | Calls back once with the current state, then after every change; returns a function that stops it |
+
+The state `onDidChange` receives (`AccountSessionState`):
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `isSettled` | `boolean` | The stored sign-in has been checked in this run. While `false`, signed out does not mean the account signed out |
+| `isSignedIn` | `boolean` | Signed in |
+| `user` | `{ id: string, name?: string } \| null` | The signed-in account, `null` when signed out |
+
+The state carries no credential and no email, and a change to details it does not carry does not call back.
+
+---
+
+**Auth Token & Device**
+
+What Tuff itself uses to reach the account service. Plugins receive neither the credential nor the device ID; in a plugin these return `null`.
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const token = await accountSDK.getAuthToken()
+  const deviceId = await accountSDK.getDeviceId()
+---
+:::
+
+| Method | Return | Description |
+|--------|--------|-------------|
+| `getAuthToken()` | `string \| null` | Bearer auth token (null if unavailable) |
+| `getDeviceId()` | `string \| null` | Current device id (null if unavailable) |
+
+---
+
+**User Information**
+
+**`getProfile()`**
+
+Get complete user profile.
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const profile = await accountSDK.getProfile()
+  // {
+  //   id: 'user_xxx',
+  //   displayName: 'John Doe',
+  //   email: 'john@example.com',
+  //   avatarUrl: 'https://...',
+  //   emailVerified: true,
+  //   createdAt: 1702123456789,
+  //   twoFactorEnabled: false,
+  //   socialConnections: [...]
+  // }
+---
+:::
+
+| Return | Type | Description |
+|--------|------|-------------|
+| `profile` | `UserProfile \| null` | User profile, `null` if not logged in |
+
+**`isLoggedIn()`**
+
+Check if user is logged in.
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  if (await accountSDK.isLoggedIn()) {
+    // Logged in
+  }
+---
+:::
+
+**`getUserId()`**
+
+Get user ID.
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const userId = await accountSDK.getUserId()
+  // 'user_xxx' or null
+---
+:::
+
+**`getDisplayName()`**
+
+Get display name.
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const name = await accountSDK.getDisplayName()
+  // 'John Doe'
+---
+:::
+
+**`getEmail()`**
+
+Get user email.
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const email = await accountSDK.getEmail()
+  // 'john@example.com'
+---
+:::
+
+**`getAvatarUrl()`**
+
+Get avatar URL.
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const avatar = await accountSDK.getAvatarUrl()
+  // 'https://...'
+---
+:::
+
+---
+
+**Subscription Checks**
+
+**`getPlan()`**
+
+Get current subscription plan.
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const plan = await accountSDK.getPlan()
+  // SubscriptionPlan.PRO
+---
+:::
+
+**`getSubscription()`**
+
+Get full subscription details.
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const subscription = await accountSDK.getSubscription()
+  // {
+  //   id: 'sub_xxx',
+  //   plan: 'pro',
+  //   status: 'active',
+  //   billingCycle: 'monthly',
+  //   quota: { aiRequestsPerWeek: 2000, ... },
+  //   usage: { aiRequestsThisWeek: 123, ... },
+  //   currentPeriodEnd: 1704067200000,
+  //   autoRenew: true
+  // }
+---
+:::
+
+**`isPaidUser()`**
+
+Check if user is a paid subscriber.
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  if (await accountSDK.isPaidUser()) {
+    // Show paid features
+  }
+---
+:::
+
+**`isProOrAbove()`**
+
+Check if Pro tier or higher.
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  if (await accountSDK.isProOrAbove()) {
+    // Pro / Team / Enterprise
+  }
+---
+:::
+
+**`isPlusOrAbove()`**
+
+Check if Plus tier or higher.
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  if (await accountSDK.isPlusOrAbove()) {
+    // Plus / Pro / Team / Enterprise
+  }
+---
+:::
+
+**`isTeamOrAbove()`**
+
+Check if Team tier or higher.
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  if (await accountSDK.isTeamOrAbove()) {
+    // Team / Enterprise
+  }
+---
+:::
+
+**`isEnterprise()`**
+
+Check if Enterprise tier.
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  if (await accountSDK.isEnterprise()) {
+    // Enterprise only
+  }
+---
+:::
+
+**`isTrialing()`**
+
+Check if in trial period.
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  if (await accountSDK.isTrialing()) {
+    const days = await accountSDK.getTrialDaysRemaining()
+    console.log(`Trial ends in ${days} days`)
+  }
+---
+:::
+
+**`getDaysRemaining()`**
+
+Get days remaining in current billing period.
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const days = await accountSDK.getDaysRemaining()
+  // 28
+---
+:::
+
+---
+
+**Quota Checks**
+
+**`getQuota()`**
+
+Get current plan quota limits. AI requests and tokens are counted per week, restarting on Monday at 00:00 UTC as Nexus does; `-1` means unlimited. `aiRequestsPerDay` and `aiTokensPerMonth` are deprecated and carry the same weekly numbers.
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const quota = await accountSDK.getQuota()
+  // {
+  //   aiRequestsPerWeek: 500,
+  //   aiTokensPerWeek: 100000,
+  //   maxPlugins: 20,
+  //   maxStorageBytes: 1073741824,
+  //   customModelAccess: true,
+  //   apiAccess: true,
+  //   ...
+  // }
+---
+:::
+
+**`getUsage()`**
+
+Get current usage statistics. AI usage covers the current week; `aiRequestsToday`, `aiRequestsThisMonth` and `aiTokensThisMonth` are deprecated and carry this week's numbers too.
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const usage = await accountSDK.getUsage()
+  // {
+  //   aiRequestsThisWeek: 123,
+  //   aiTokensThisWeek: 45678,
+  //   storageUsedBytes: 52428800,
+  //   pluginsInstalled: 8
+  // }
+---
+:::
+
+**`checkAiRequestQuota()`**
+
+Check this week's AI request quota. When it runs out, `resetAt` is next Monday at 00:00 UTC.
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const result = await accountSDK.checkAiRequestQuota()
+  if (!result.allowed) {
+    console.log(result.reason) // 'Weekly AI request limit reached'
+    console.log(`Resets at: ${new Date(result.resetAt)}`)
+  } else {
+    console.log(`Remaining: ${result.remaining}`)
+  }
+---
+:::
+
+**`checkAiTokenQuota(estimatedTokens)`**
+
+Check this week's AI token quota.
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const result = await accountSDK.checkAiTokenQuota(1000)
+  if (!result.allowed) {
+    // Quota exceeded
+  }
+---
+:::
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `estimatedTokens` | `number` | Estimated tokens to consume (optional, default 0) |
+
+**`checkStorageQuota(additionalBytes)`**
+
+Check storage quota.
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const result = await accountSDK.checkStorageQuota(1024 * 1024) // 1MB
+  if (!result.allowed) {
+    console.log('Insufficient storage')
+  }
+---
+:::
+
+**`checkPluginQuota()`**
+
+Check plugin installation quota.
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const result = await accountSDK.checkPluginQuota()
+  if (!result.allowed) {
+    console.log('Plugin limit reached')
+  }
+---
+:::
+
+**`getUsagePercentage(type)`**
+
+Get usage percentage for specific quota type.
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const aiUsage = await accountSDK.getUsagePercentage('aiRequests')
+  console.log(`AI usage: ${aiUsage.toFixed(1)}%`)
+
+  const storageUsage = await accountSDK.getUsagePercentage('storage')
+  if (storageUsage > 80) {
+    console.warn('Storage running low')
+  }
+---
+:::
+
+| Parameter | Type | Values |
+|-----------|------|--------|
+| `type` | `string` | `'aiRequests'`, `'aiTokens'`, `'storage'`, `'plugins'` |
+
+---
+
+**Feature Access**
+
+**`hasApiAccess()`**
+
+Check if user has API access.
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  if (await accountSDK.hasApiAccess()) {
+    // Allow API usage
+  }
+---
+:::
+
+**`hasCustomModelAccess()`**
+
+Check if user can use custom models.
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  if (await accountSDK.hasCustomModelAccess()) {
+    // Show custom model options
+  }
+---
+:::
+
+**`hasPrioritySupport()`**
+
+Check if user has priority support.
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  if (await accountSDK.hasPrioritySupport()) {
+    // Show priority support entry
+  }
+---
+:::
+
+**`hasAdvancedAnalytics()`**
+
+Check if user has advanced analytics.
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  if (await accountSDK.hasAdvancedAnalytics()) {
+    // Show analytics dashboard
+  }
+---
+:::
+
+**`hasFeature(featureId)`**
+
+Check if specific feature flag is enabled.
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  if (await accountSDK.hasFeature('beta-ai-v2')) {
+    // Enable beta feature
+  }
+---
+:::
+
+---
+
+**Team Management**
+
+**`getTeams()`**
+
+Gets the organization the account belongs to, at most one; the personal team every account has is not listed. The account service reports no slug or creation time, so `slug` is the `id` and `createdAt` is `0`.
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const teams = await accountSDK.getTeams()
+  // [
+  //   { id: 'team_xxx', name: 'Dev Team', slug: 'team_xxx', role: 'admin', memberCount: 5, createdAt: 0 }
+  // ]
+---
+:::
+
+**`isInTeam()`**
+
+Check if user is in any team.
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  if (await accountSDK.isInTeam()) {
+    // Show team features
+  }
+---
+:::
+
+**`isTeamOwner(teamId?)`**
+
+Check if user is team owner.
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  if (await accountSDK.isTeamOwner()) {
+    // User owns some team
+  }
+
+  if (await accountSDK.isTeamOwner('team_xxx')) {
+    // User owns specific team
+  }
+---
+:::
+
+**`isTeamAdmin(teamId?)`**
+
+Check if user is team admin (includes owner).
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  if (await accountSDK.isTeamAdmin()) {
+    // Show admin features
+  }
+---
+:::
+
+---
+
+**Upgrade & Billing**
+
+**`getUpgradeOptions()`**
+
+Get available upgrade options. They carry no price: Tuff is free during its Pioneer period, and the price fields stay unset until Nexus publishes a price.
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const options = accountSDK.getUpgradeOptions()
+  // [
+  //   { plan: 'plus', name: 'Plus', features: ['500 AI requests/week', ...] },
+  //   { plan: 'pro', name: 'Pro', recommended: true, ... },
+  //   { plan: 'team', name: 'Team', ... }
+  // ]
+---
+:::
+
+**`getPlanComparison()`**
+
+Get plan comparison table.
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const comparison = accountSDK.getPlanComparison()
+  // [
+  //   { feature: 'AI Requests/Week', free: 50, plus: 500, pro: 2000, ... },
+  //   { feature: 'Custom Models', free: false, plus: true, ... }
+  // ]
+---
+:::
+
+**`openUpgradePage(plan?)`**
+
+Opens the pricing page in the browser. Given a `plan`, the pricing page outlines that plan's card.
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  await accountSDK.openUpgradePage() // Open the pricing page
+  await accountSDK.openUpgradePage(SubscriptionPlan.PLUS) // Open the pricing page with Plus outlined
+---
+:::
+
+**`openBillingPage()`**
+
+Opens the team page, where the plan and activation codes are managed.
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  await accountSDK.openBillingPage()
+---
+:::
+
+---
+
+**Account Actions**
+
+**`requestLogin()`**
+
+Asks the user to sign in. When the app is already signed in, or a sign-in is already under way, no new page opens and that sign-in is joined; otherwise the sign-in page opens in the browser. All of those return `true`, possibly before anyone has signed in; `false` means the page could not be opened. The result arrives through `usePluginAccount().onDidChange`.
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  await accountSDK.requestLogin()
+  // Once the user signs in in the browser, onDidChange receives isSignedIn: true
+---
+:::
+
+**`logout()`**
+
+Logout current user. Only Tuff itself can call it; in a plugin it rejects.
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  await accountSDK.logout()
+---
+:::
+
+**`openAccountSettings()`**
+
+Opens the account page, which holds the settings and the profile.
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  await accountSDK.openAccountSettings()
+---
+:::
+
+---
+
+## Technical Notes
+
+- Account SDK reads login state, subscription plan, and quota from the unified account service.
+- Client-side helpers consolidate permission and quota checks to avoid scattered logic.
+
+## Best Practices
+
+**1. Premium Feature Gating**
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  async function showPremiumFeature() {
+    if (!await accountSDK.isPaidUser()) {
+      // Show upgrade prompt
+      const options = accountSDK.getUpgradeOptions()
+      showUpgradeDialog(options)
+      return
+    }
+
+    // Show premium feature
+  }
+---
+:::
+
+**2. Quota Pre-check**
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  async function beforeAiRequest(estimatedTokens: number) {
+    const quotaCheck = await accountSDK.checkAiTokenQuota(estimatedTokens)
+
+    if (!quotaCheck.allowed) {
+      throw new Error(`Quota exceeded: ${quotaCheck.reason}`)
+    }
+
+    // Proceed with request
+  }
+---
+:::
+
+**3. Team Feature Adaptation**
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  async function initTeamFeatures() {
+    if (!await accountSDK.isTeamOrAbove()) {
+      return // Not team tier, skip
+    }
+
+    const teams = await accountSDK.getTeams()
+
+    for (const team of teams) {
+      if (team.role === 'owner' || team.role === 'admin') {
+        // Show admin features
+      }
+    }
+  }
+---
+:::
+
+---
+
+## Type Definitions
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  enum SubscriptionPlan {
+    FREE = 'free',
+    PLUS = 'plus',
+    PRO = 'pro',
+    TEAM = 'team',
+    ENTERPRISE = 'enterprise',
+  }
+
+  interface UserProfile {
+    id: string
+    displayName: string
+    username?: string
+    email: string
+    emailVerified: boolean
+    avatarUrl?: string
+    createdAt: number
+    twoFactorEnabled: boolean
+    socialConnections: SocialConnection[]
+  }
+
+  interface Subscription {
+    id: string
+    plan: SubscriptionPlan
+    status: SubscriptionStatus
+    quota: PlanQuota
+    usage: UsageStats
+    currentPeriodEnd: number
+    autoRenew: boolean
+  }
+
+  interface QuotaCheckResult {
+    allowed: boolean
+    reason?: string
+    remaining?: number
+    resetAt?: number
+  }
+
+  interface AccountSessionState {
+    isSettled: boolean
+    isSignedIn: boolean
+    user: { id: string, name?: string } | null
+  }
+---
+:::
+
+---
+
+## Related Documentation
+
+- [Intelligence API](./intelligence.en.mdc) - AI capabilities
+- [Storage API](./storage.en.mdc) - Plugin data persistence
+- [Plugin Context](./plugin-context.en.mdc) - Plugin global context

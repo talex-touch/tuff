@@ -1,0 +1,510 @@
+# Intelligence SDK
+
+## 概述
+
+Intelligence SDK 提供插件访问 AI 能力的统一接口，支持多种 AI Provider（OpenAI、Anthropic、DeepSeek、SiliconFlow 等）。
+
+## 介绍
+
+**快速开始**
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { intelligence } from '@talex-touch/utils/plugin/sdk'
+
+  const status = await intelligence.getCapabilityStatus({ capabilityId: 'text.chat' })
+  const providers = await intelligence.getProviderModelOptions({ capabilityId: 'text.chat' })
+
+  if (status.available) {
+  const chatRes = await intelligence.text.chat({
+  messages: [{ role: 'user', content: 'Hello!' }]
+  }, {
+  allowedProviderIds: providers.filter(provider => provider.available).map(provider => provider.providerId)
+  })
+  console.log(chatRes.result)
+  }
+---
+:::
+插件运行时 handler 也可以通过 `context.utils.intelligence` 或 `context.utils.plugin.intelligence` 使用同一套能力发现与调用接口，再决定是否渲染 AI 动作。
+
+## 延伸阅读
+
+- `/docs/dev/intelligence`（开发者专章）
+- `/docs/dev/intelligence/configuration`
+- `/docs/dev/intelligence/capabilities`
+- `/docs/dev/intelligence/troubleshooting`
+
+---
+
+## API 参考
+
+**Plugin intelligence SDK**
+
+插件 UI 与生命周期代码应使用 plugin SDK 导出的 `intelligence`，或运行时注入的 `context.utils.intelligence`。两者都会解析到 typed Intelligence domain SDK，并在权限检查调用里携带当前插件的 `sdkapi` marker。
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { intelligence } from '@talex-touch/utils/plugin/sdk'
+
+  void intelligence
+---
+:::
+
+仅 CoreApp renderer 内部代码可以从 `@talex-touch/utils/renderer` 使用 `useIntelligenceSdk()`，通过 TuffTransport 获取同一套 typed domain SDK。
+
+返回值包含以下属性和方法：
+
+| 属性/方法                                                       | 说明                                                                                               |
+| --------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `invoke` / `stream`                                             | 自定义或新注册 Capability ID 的通用能力调用                                                        |
+| `contextInvoke` / `contextStream`                               | 宿主组装的 `text.chat` 执行，接收 new/continue/stateless intent，只返回 metadata-only context 摘要 |
+| `text` / `embedding` / `code`                                   | 文本、向量、代码能力的类型化 wrapper                                                               |
+| `intent` / `sentiment` / `content` / `keywords`                 | 分析类能力的类型化 wrapper                                                                         |
+| `vision` / `image` / `audio`                                    | OCR、图片、音频能力的类型化 wrapper                                                                |
+| `rag` / `search`                                                | RAG、语义搜索、重排序 wrapper                                                                      |
+| `workflow` / `agent`                                            | Workflow 执行与 Agent 运行 wrapper                                                                 |
+| `getCapabilityStatus`                                           | 只读能力可用性检查                                                                                 |
+| `getProviderModelOptions`                                       | 只读 provider/model 发现                                                                           |
+| `ttsSpeak` / `workflow*` / `agent*` / `knowledge*` / `context*` | CoreApp renderer 宿主使用的播放、workflow、agent session、知识库与受治理上下文管理 runtime API     |
+
+CoreApp renderer 宿主 SDK 保留完整上下文管理面。插件 facade 会隐藏 raw `contextPrepareTurn()`，以及 Memory list/save/edit/enable/delete。插件改用 `contextInvoke()` / `contextStream()`：宿主在主进程内完成 ContextPackage prepare、最终复核、预算与 provider message 组装，插件只收到 metadata-only 摘要。`contextEvaluateMemory()` 与 metadata-only checkpoint/package-log 查询仍可使用。插件来源调用被隐藏的 host-only event 会得到 `INTELLIGENCE_HOST_ONLY_CAPABILITY`。
+
+在 workspace/project memory 获得稳定 `scopeRef` 前，宿主管理 UI 仍可查看它们，但它们不会注入 `ContextPackage`。当前只允许 global memory，以及 `sourceSessionId` 精确匹配的 session memory；`ttl` 表示从最近一次保存（`updatedAt`）开始计算的正数毫秒生命周期。
+
+`useIntelligence()` 与 `useIntelligenceStats()` 仍从 renderer barrel 导出，作为 loading/error 状态与统计 helper 的兼容壳。
+
+`getProviderModelOptions` 与实际调用使用同一套 runtime method 检查。Capability binding 优先；未启用 binding 时，内置 OpenAI-compatible provider 会暴露能力专属默认模型，不会把聊天模型泄漏到图片、音频或 embedding-backed 搜索选择器。
+
+---
+
+## 能力调用
+
+Plugin intelligence SDK 暴露 typed domain 方法，不会恢复已裁切的 `chat` 旧别名，也不会暴露 host-only Memory 管理方法。插件入口应先用发现接口判断能力是否可用，再调用对应 wrapper，例如 `intelligence.text.chat(payload, options)`；自定义能力则继续使用 `intelligence.invoke<Result>(capabilityId, payload, options)`。
+
+CoreBox 类对话入口应优先使用 `contextInvoke()` 或 `contextStream()`。当前 contract 只支持 `text.chat`，不会信任调用方提供的 user/assistant history。宿主只保留调用方 system message，再按有界顺序加入已验证的 summary、recent turns、Memory、retrieval context 与当前输入。`mode` 可取 `new`、`continue` 或 `stateless`；继续会话必须携带上一轮安全 context 摘要返回的 `sessionId`。这两个调用都需要 `intelligence.context` 权限，只声明 `intelligence.basic` 不够；`contextEvaluateMemory()` 仍归 `intelligence.basic`。
+
+```typescript
+let contextSessionId: string | undefined;
+
+const execution = await intelligence.contextInvoke({
+  capabilityId: "text.chat",
+  input: "总结当前选中文本",
+  payload: {
+    messages: [{ role: "system", content: "请简洁回答。" }],
+  },
+  context: {
+    mode: contextSessionId ? "continue" : "new",
+    sessionId: contextSessionId,
+    scope: "retrieval",
+    tokenBudget: 1200,
+  },
+});
+
+console.log(execution.invocation.result);
+console.log(execution.context.packageId); // 仅安全 metadata，不含 ContextPackage items
+contextSessionId = execution.context.sessionId;
+```
+
+### Capability ID
+
+| 领域     | Capability ID         | Domain wrapper         | 返回值             |
+| -------- | --------------------- | ---------------------- | ------------------ |
+| 文本     | `text.chat`           | `text.chat()`          | 对话文本           |
+| 文本     | `text.translate`      | `text.translate()`     | 翻译文本           |
+| 文本     | `text.summarize`      | `text.summarize()`     | 摘要文本           |
+| 文本     | `text.rewrite`        | `text.rewrite()`       | 改写文本           |
+| 文本     | `text.grammar`        | `text.grammar()`       | 语法检查结果       |
+| 文本     | `text.classify`       | `text.classify()`      | 分类结果           |
+| 向量     | `embedding.generate`  | `embedding.generate()` | 数字向量           |
+| 代码     | `code.generate`       | `code.generate()`      | 代码生成结果       |
+| 代码     | `code.explain`        | `code.explain()`       | 代码解释结果       |
+| 代码     | `code.review`         | `code.review()`        | 代码审查结果       |
+| 代码     | `code.refactor`       | `code.refactor()`      | 重构结果           |
+| 代码     | `code.debug`          | `code.debug()`         | 调试结果           |
+| 分析     | `intent.detect`       | `intent.detect()`      | 意图识别结果       |
+| 分析     | `sentiment.analyze`   | `sentiment.analyze()`  | 情感分析结果       |
+| 分析     | `content.extract`     | `content.extract()`    | 内容/实体提取结果  |
+| 分析     | `keywords.extract`    | `keywords.extract()`   | 关键词提取结果     |
+| 视觉     | `vision.ocr`          | `vision.ocr()`         | OCR 结果           |
+| 视觉     | `image.caption`       | `image.caption()`      | 图片描述结果       |
+| 视觉     | `image.analyze`       | `image.analyze()`      | 图片分析结果       |
+| 视觉     | `image.translate.e2e` | `image.translateE2e()` | 端到端图片翻译结果 |
+| 视觉     | `image.generate`      | `image.generate()`     | 图片生成结果       |
+| 视觉     | `image.edit`          | `image.edit()`         | 图片编辑结果       |
+| 音频     | `audio.tts`           | `audio.tts()`          | TTS 结果           |
+| 音频     | `audio.stt`           | `audio.stt()`          | 语音转文字结果     |
+| 音频     | `audio.transcribe`    | `audio.transcribe()`   | 音频转写结果       |
+| RAG      | `rag.query`           | `rag.query()`          | RAG 查询结果       |
+| RAG      | `search.semantic`     | `search.semantic()`    | 语义搜索结果       |
+| RAG      | `search.rerank`       | `search.rerank()`      | 重排序结果         |
+| Workflow | `workflow.execute`    | `workflow.execute()`   | Workflow 执行结果  |
+| Agent    | `agent.run`           | `agent.run()`          | Agent 运行结果     |
+
+Workflow 执行与 Agent 运行是内部编排能力。声明 `text.chat` 的 provider 即可参与运行，无需重复声明 `workflow.execute` 或 `agent.run`；若这两个能力没有已启用的专用 binding，provider 发现和模型选择会继承已启用的 `text.chat` binding。
+
+`useIntelligence()` 的旧 renderer wrapper 仍可用于 loading/error 状态与旧调用点，但新的插件和 renderer 代码应优先使用 typed domain SDK wrapper 与能力发现。
+
+### AI 对话
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { useIntelligenceSdk } from '@talex-touch/utils/renderer'
+
+  const intelligence = useIntelligenceSdk()
+  const status = await intelligence.getCapabilityStatus({ capabilityId: 'text.chat' })
+  const providers = await intelligence.getProviderModelOptions({ capabilityId: 'text.chat' })
+
+  if (status.available) {
+  const result = await intelligence.text.chat({
+  messages: [
+  { role: 'system', content: '你是一个翻译助手' },
+  { role: 'user', content: '翻译：Hello World' }
+  ],
+  temperature: 0.7,
+  maxTokens: 1000
+  }, {
+  allowedProviderIds: providers.filter(provider => provider.available).map(provider => provider.providerId)
+  })
+
+      console.log(result.result)
+      console.log(result.usage)
+
+  ## }
+---
+:::
+
+### OCR 文字识别
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const result = await intelligence.vision.ocr({
+  source: {
+  type: 'data-url',
+  dataUrl: 'data:image/png;base64,...'
+  },
+  language: 'zh-CN',
+  includeLayout: true,
+  includeKeywords: true
+  })
+
+  ## console.log(result.result.text)
+---
+:::
+
+**Image Source 类型**：
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const sourceDataUrl = { type: 'data-url', dataUrl: 'data:image/png;base64,...' } as const
+  const sourceFile = { type: 'file', filePath: '/path/to/image.png' } as const
+  const sourceBase64 = { type: 'base64', base64: '...' } as const
+
+  ## console.log(sourceDataUrl.type, sourceFile.type, sourceBase64.type)
+---
+:::
+
+### RAG 重排序
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const result = await intelligence.search.rerank({
+  query: '搜索查询',
+  documents: searchResults,
+  topK: 5
+  })
+
+  ## console.log(result.result)
+---
+:::
+
+### 通用调用
+
+自定义能力或尚未提供 domain wrapper 的新注册 Capability ID，仍可直接使用 `invoke`：
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const result = await intelligence.invoke('custom.extract-json', {
+  text: 'name: Ada Lovelace'
+  })
+
+  ## console.log(result.result)
+---
+:::
+
+### 调用选项
+
+`invoke(capabilityId, payload, options)` 的第三个参数使用下列对象；`text.chat(payload, options)` 等类型化 wrapper 的第二个参数复用同一对象：
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  interface IntelligenceInvokeOptions {
+  strategy?: string // 策略 ID
+  modelPreference?: string[] // 优先模型列表
+  costCeiling?: number // 成本上限
+  latencyTarget?: number // 目标延迟 (ms)
+  timeout?: number // 超时时间 (ms)
+  stream?: boolean // 是否流式输出
+  preferredProviderId?: string // 优先 Provider
+  allowedProviderIds?: string[] // 允许的 Provider 列表
+  promptTemplate?: string // text.chat 的显式 system prompt 模板
+  promptVariables?: Record<string, unknown> // 模板 Mustache 变量
+  }
+
+  const \_invokeOptions: IntelligenceInvokeOptions = {}
+  void \_invokeOptions
+---
+:::
+`strategy` 的优先级低于显式 `preferredProviderId` 和 `modelPreference`。支持 `adaptive-default`（默认）、`rule-based-default`、`round-robin`：前两个目前都按 capability binding / provider 的稳定 priority 顺序路由，不是基于延迟或成本的优化器；`round-robin` 会按每个 capability 的已排序可用 provider 轮换，并按同一循环顺序尝试后备 provider。旧值 `adaptive`、`priority` 会分别归一化为前两个值；未知策略会安全回退到稳定的 priority 路由。
+
+### AI Command Prompt 模板
+
+插件定义 AI Command 时，可将 `promptTemplate` 和 `promptVariables` 作为一等调用选项传入。显式模板优先于 legacy metadata 形式和 capability 已配置 binding；宿主只渲染一次，并在路由切换到后备 provider 时保留同一模板。
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const status = await intelligence.getCapabilityStatus({ capabilityId: 'text.chat' })
+  if (!status.available) throw new Error(status.reason || 'AI 不可用')
+
+  const selectedText = '为最新变更编写发布说明。'
+  const response = await intelligence.text.chat(
+  { messages: [{ role: 'user', content: selectedText }] },
+  {
+  promptTemplate: '请面向{{audience}}，以{{tone}}语气改写输入。',
+  promptVariables: { audience: '开发者', tone: '简洁' },
+  },
+  )
+
+  ## console.log(response.result)
+---
+:::
+
+插件 manifest 必须声明 `intelligence.basic`，并在展示动作前执行 capability discovery。模板变量会进入 provider 输入，禁止放入凭证或 secret；审计只保留 prompt hash，不保留原始模板。
+
+### 响应结构
+
+所有 `invoke` 调用都返回统一的响应结构：
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  interface IntelligenceInvokeResult<T> {
+  result: T // 结果数据
+  usage: {
+  promptTokens: number
+  completionTokens: number
+  totalTokens: number
+  cost?: number
+  }
+  model: string // 使用的模型
+  latency: number // 请求延迟 (ms)
+  traceId: string // 追踪 ID
+  provider: string // 使用的 Provider
+  }
+
+  const \_invokeResult = {} as IntelligenceInvokeResult<string>
+  void \_invokeResult
+---
+:::
+
+### Stream 事件
+
+`stream()` 与 `contextStream()` 使用 callback，并返回 `Promise<StreamController>`；当前 runtime 只允许 chat capability 进入 stream。controller 暴露 `streamId`、`cancelled` 与 `cancel()`。
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  let answer = ''
+  let finalRoute: { traceId?: string; provider?: string; model?: string } = {}
+
+  const controller = await intelligence.stream<string>(
+  'text.chat',
+  {
+  messages: [{ role: 'user', content: '请总结这段文本。' }]
+  },
+  {
+  onDelta(delta, event) {
+  answer += delta
+  finalRoute = {
+  traceId: event.traceId,
+  provider: event.provider,
+  model: event.model
+  }
+  },
+  onUsage(usage, event) {
+  finalRoute = {
+  traceId: event.traceId,
+  provider: event.provider,
+  model: event.model
+  }
+  console.log(usage.totalTokens)
+  },
+  onEnd(event) {
+  finalRoute = {
+  traceId: event.traceId,
+  provider: event.provider,
+  model: event.model
+  }
+  console.log(answer, finalRoute, event.metadata?.latency)
+  },
+  onError(error) {
+  console.error(error)
+  }
+  }
+  )
+
+  // owning UI 销毁时调用 controller.cancel()。
+  void controller
+---
+:::
+
+调用方必须把 event 边界视为 transport 细节：
+
+- `start` 可能先携带客户端 provisional routing metadata；最终后端路由应取 `delta`、`usage` 或 `end` 中最近的非空 `traceId`、`provider`、`model`。
+- 最终 usage 通过 `onUsage` 交付；最终 latency 位于 `end.metadata.latency`。
+- provider 可以在没有文本 delta 时结束；UI 必须独立消费 `usage` / `end`，不能把空 delta 当作失败。
+- 默认 Nexus provider 使用已认证 `/api/v1/intelligence/stream` SSE，逐步透传真实 provider token delta、后端路由 metadata 与 terminal usage。只允许在首个可见 delta 前 retry/fallback；已输出 delta 后的失败直接上抛，避免回放重复文本。不能依赖 delta 数量或切分粒度。
+- 未上报后端 metadata 的 provider 继续兼容，因此 route 字段都是可选值。
+
+## 完整示例
+
+**翻译插件**
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { intelligence, useClipboard } from '@talex-touch/utils/plugin/sdk'
+
+  const clipboard = useClipboard()
+
+  async function translateAndPaste(content: string, targetLang: string) {
+  const status = await intelligence.getCapabilityStatus({ capabilityId: 'text.translate' })
+  if (!status.available) return
+
+      const result = await intelligence.text.translate({
+        text: content,
+        targetLang
+      })
+
+      await clipboard.copyAndPaste({ text: result.result })
+
+  }
+
+  void translateAndPaste
+---
+:::
+
+**OCR 识别插件**
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { intelligence } from '@talex-touch/utils/plugin/sdk'
+
+  async function recognizeText(imageDataUrl: string) {
+  // 与上例相同的能力发现门：未配置 provider 时该能力不可用。
+  const status = await intelligence.getCapabilityStatus({ capabilityId: 'vision.ocr' })
+  if (!status.available) return null
+
+  const result = await intelligence.vision.ocr({
+  source: { type: 'data-url', dataUrl: imageDataUrl },
+  includeKeywords: true
+  })
+
+      return {
+        text: result.result.text,
+        keywords: result.result.keywords
+      }
+
+  }
+
+  void recognizeText
+---
+:::
+
+---
+
+## 状态管理
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { watch } from 'vue'
+  import { useIntelligence } from '@talex-touch/utils/renderer'
+
+  const { isLoading, lastError } = useIntelligence()
+
+  watch(isLoading, loading => console.log('loading', loading))
+  watch(lastError, error => console.log('error', error))
+---
+:::
+
+---
+
+## Provider 类型
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  enum IntelligenceProviderType {
+  OPENAI = 'openai',
+  ANTHROPIC = 'anthropic',
+  DEEPSEEK = 'deepseek',
+  SILICONFLOW = 'siliconflow',
+  LOCAL = 'local',
+  CUSTOM = 'custom'
+  }
+
+  void IntelligenceProviderType.OPENAI
+---
+:::
+
+---
+
+## 能力类型
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { IntelligenceCapabilityType } from '@talex-touch/utils/types/intelligence'
+
+  // 文本
+  void IntelligenceCapabilityType.CHAT // 'chat'
+  void IntelligenceCapabilityType.GRAMMAR_CHECK // 'grammar-check'
+
+  // 代码
+  void IntelligenceCapabilityType.CODE_GENERATE // 'code-generate'
+  void IntelligenceCapabilityType.CODE_DEBUG // 'code-debug'
+
+  // 分析
+  void IntelligenceCapabilityType.INTENT_DETECT // 'intent-detect'
+  void IntelligenceCapabilityType.SENTIMENT_ANALYZE // 'sentiment-analyze'
+
+  // 视觉
+  void IntelligenceCapabilityType.VISION_OCR // 'vision-ocr'
+  void IntelligenceCapabilityType.IMAGE_TRANSLATE_E2E // 'image-translate-e2e'
+
+  // RAG / Workflow
+  void IntelligenceCapabilityType.SEMANTIC_SEARCH // 'semantic-search'
+  void IntelligenceCapabilityType.AGENT // 'agent'
+---
+:::
+
+## 最佳实践
+
+- 根据配额与订阅状态选择能力，避免调用失败。
+- 对用户输入做敏感信息脱敏，必要时提示确认。
+- 对高频调用做缓存与限流，控制成本。
+
+## 技术原理
+
+- Intelligence SDK 在渲染进程封装调用，由主进程负责路由到具体 Provider。
+- 统一返回结构包含耗时与 token 统计，便于监控与优化。

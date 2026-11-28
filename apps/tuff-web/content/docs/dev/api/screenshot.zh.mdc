@@ -1,0 +1,75 @@
+# Screenshot SDK
+
+## 概述
+
+Screenshot SDK 通过 `context.utils.screenshot` 与镜像 `context.utils.plugin.screenshot` 提供权限门禁的宿主 facade。插件可探测支持状态、枚举显示器，并捕获指针所在显示器、指定显示器或 global-DIP 区域。
+
+宿主负责 native addon、屏幕录制权限、generation/坐标映射、剪贴板策略、临时资源和 `tfile` 授权。插件不会收到 native binding、protocol carrier、attachment bytes、原始路径、base64 或 data URL。
+
+## 权限
+
+所有截图操作都必须声明 `window.capture`。传入 `writeClipboard: true` 时，还必须声明并获得 `clipboard.write`。
+
+:::TuffCodeBlock{lang="json"}
+---
+code: |
+  {
+    "sdkapi": 260713,
+    "permissions": {
+      "required": ["window.capture"],
+      "optional": ["clipboard.write"]
+    }
+  }
+---
+:::
+
+宿主在主进程验证 plugin context 与权限。缺少声明、缺少 grant 或 context 未验证时，会在截图或剪贴板变更前 fail closed。
+
+## 快速开始
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const screenshot = context.utils.screenshot
+  const support = await screenshot.getSupport()
+  if (!support.supported) return
+
+  const displays = await screenshot.listDisplays()
+  const capture = await screenshot.capture({
+    target: 'display',
+    displayId: displays[0]?.id,
+    writeClipboard: false
+  })
+
+  preview.src = capture.tfileUrl
+---
+:::
+
+## API
+
+### `getSupport()`
+
+返回有界 capability metadata，例如 `supported`、`platform`、`engine` 与 `reason`。这些字段是运行时探测结果；不能仅根据操作系统名称推断支持状态。
+
+### `listDisplays()`
+
+返回宿主 global DIP 坐标空间中的显示器 descriptor。ID 是 opaque 的，拓扑刷新后可能变化。region 使用 global DIP 坐标，并要求宽高为正有限数。
+
+### `capture(request?)`
+
+public target：
+
+- `cursor-display`：捕获当前指针最近的显示器。
+- `display`：捕获指定 `displayId`。
+- `region`：捕获 global DIP 中的 `region`；`displayId` 可作为选择流程 metadata。
+
+request 没有 output selector。成功结果始终包含必填 `tfileUrl`，以及图片尺寸、耗时、大小和剪贴板状态。renderer 应直接把该 URL 用于媒体元素或宿主支持 Fetch 的 API。
+
+`writeClipboard: true` 会请求宿主在校验 `clipboard.write` 后复制图片；plugin 不会获得 clipboard 或 native-image 对象。
+
+## 安全约束
+
+- 只使用 typed SDK。不得构造 `NativeEvents`、raw channel、`NapiCarrier`、protocol subpath 或 `.node` loader。
+- 不得把 `tfileUrl` 解码为本地路径；canonicalization 与 allowlist 由宿主 protocol handler 负责。
+- 不得把截图、OCR 文本、含敏感路径的 URL、request payload 或图片字节写入日志、同步存储、analytics 或错误消息。
+- capability unavailable 或 permission denied 时没有 legacy/runtime fallback；应展示宿主返回的恢复状态。

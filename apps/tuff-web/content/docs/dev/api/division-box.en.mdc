@@ -1,0 +1,367 @@
+# DivisionBox API
+
+## Overview
+DivisionBox is a lightweight sub-window system based on `WebContentsView`, used for plugin UI, tools, and debug panels.
+
+## Introduction
+This document covers the currently shipped capabilities (open/close/state + lifecycle events). Advanced layouts are out of scope.
+
+> Permission note: DivisionBox is gated by the Permission Center. Plugins must request `window.create`.
+
+## Core Concepts
+**Lifecycle states**
+
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  prepare → attach → active → inactive → detach → destroy
+---
+:::
+
+| State | Description |
+|------|------|
+| `prepare` | Preparing resources |
+| `attach` | Attached to window |
+| `active` | Active interaction |
+| `inactive` | Inactive, can be cached |
+| `detach` | Detached from window |
+| `destroy` | Destroyed and released |
+
+**DivisionBox config**
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  interface DivisionBoxConfig {
+    url: string
+    title: string
+    icon?: string
+    size?: 'compact' | 'medium' | 'expanded'
+    keepAlive?: boolean
+    pluginId?: string
+    header?: {
+      show: boolean
+      title?: string
+      icon?: string
+    }
+    ui?: {
+      showInput?: boolean
+      inputPlaceholder?: string
+      showResults?: boolean
+      initialInput?: string
+    }
+  }
+---
+:::
+
+## Shortcuts
+
+| Shortcut | Action |
+|--------|------|
+| `Command/Ctrl+D` | Detach current item into DivisionBox |
+
+## Usage
+**Plugin SDK (recommended)**
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { useDivisionBox } from '@talex-touch/utils/plugin/sdk'
+
+  const divisionBox = useDivisionBox()
+  const { sessionId } = await divisionBox.open({
+    url: 'https://example.com/tool',
+    title: 'My Tool',
+    size: 'medium',
+    keepAlive: true
+  })
+
+  const unsubscribe = divisionBox.onLifecycleChange((event) => {
+    console.log(event.sessionId, event.oldState, event.newState)
+  })
+
+  await divisionBox.close(sessionId)
+  unsubscribe()
+---
+:::
+
+**Open from renderer**
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { useTuffTransport } from '@talex-touch/utils/transport'
+  import { DivisionBoxEvents } from '@talex-touch/utils/transport/events'
+
+  const transport = useTuffTransport()
+  const response = await transport.send(DivisionBoxEvents.open, {
+    url: 'plugin://my-plugin/panel.html',
+    title: 'My Panel',
+    icon: 'ri:dashboard-line',
+    size: 'medium',
+    keepAlive: true,
+    pluginId: 'my-plugin'
+  })
+---
+:::
+
+**Close**
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  await divisionBox.close(sessionId, {
+    delay: 0,
+    animation: false,
+    force: false
+  })
+---
+:::
+
+**Get session state**
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const response = await transport.send(DivisionBoxEvents.getState, { sessionId })
+---
+:::
+
+**Update session state**
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  await transport.send(DivisionBoxEvents.updateState, {
+    sessionId,
+    key: 'scrollY',
+    value: 150
+  })
+---
+:::
+
+## API Reference
+**open(config)**
+Opens a new DivisionBox window.
+
+**close(sessionId, options?)**
+Closes the session; `force` ignores `keepAlive`.
+
+**onStateChange(handler)**
+Subscribes to simplified state changes.
+
+**onLifecycleChange(handler)**
+Subscribes to full lifecycle transitions.
+
+**updateState(sessionId, key, value)**
+Stores session state data.
+
+**getState(sessionId, key)**
+Reads session state data.
+
+## URL Protocols
+
+| Protocol | Description | Example |
+|------|------|------|
+| `plugin://` | Plugin assets | `plugin://my-plugin/index.html` |
+| `file://` | Local files | `file:///path/to/file.html` |
+| `http(s)://` | Web resources | `https://example.com` |
+| `tuff://` | Built-in pages | `tuff://detached?itemId=xxx` |
+
+## Flow Transfer Integration
+
+:::TuffCodeBlock{lang="json"}
+---
+code: |
+  {
+    "flowTargets": [
+      {
+        "id": "open-in-panel",
+        "name": "Open in panel",
+        "supportedTypes": ["json", "text"],
+        "featureId": "open-panel"
+      }
+    ]
+  }
+---
+:::
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  function onFeatureTriggered(featureId: string, query: TuffQuery) {
+    if (isFlowTriggered(query)) {
+      const flowData = extractFlowData(query)
+      divisionBox.open({
+        url: `/viewer.html?sessionId=${flowData.sessionId}`,
+        title: 'View Data'
+      })
+    }
+  }
+---
+:::
+
+## IPC Channels
+
+| Channel | Direction | Description |
+|------|------|------|
+| `division-box:open` | Renderer → Main | Open session |
+| `division-box:close` | Renderer → Main | Close session |
+| `division-box:get-state` | Renderer → Main | Get state |
+| `division-box:update-state` | Renderer → Main | Update state |
+| `division-box:get-active-sessions` | Renderer → Main | List active sessions |
+| `division-box:state-changed` | Main → Renderer | State change notice |
+| `division-box:session-destroyed` | Main → Renderer | Session destroyed |
+
+## Resource Limits
+
+Enforced by the main process in `apps/core-app/src/main/modules/division-box/manager.ts`; treat these as the authority rather than the numbers here.
+
+| Limit | Value | Meaning |
+| --- | ---: | --- |
+| `MAX_ACTIVE_SESSIONS` | 5 | Live sessions globally, matching the window pool. Opening past it throws `DivisionBoxErrorCode.LIMIT_EXCEEDED`. |
+| `MAX_CACHED_SESSIONS` | 5 | `keepAlive` sessions held in the LRU cache. Beyond it the least recently used is evicted and destroyed. |
+| `MAX_VIEWS_PER_SESSION` | 3 | Reserved upper bound. The current runtime flow attaches at most one view per session. |
+
+## Technical Notes
+- DivisionBox is managed by the main process using `WebContentsView`.
+- The SDK wraps IPC events and normalizes lifecycle updates.
+
+## Lifecycle in Detail
+
+The state machine is `prepare → attach → active → inactive → detach → destroy`, declared as `DivisionBoxState` in `packages/utils/types/division-box.ts`.
+
+### prepare
+
+The initial state of a session, between the `open()` call and window creation.
+
+**Entered when**
+- `divisionBox.open(config)` is called **and** passes the preflight checks below. A rejected open never reaches this state.
+- The main process then assigns a session id and constructs the session.
+
+**Resources**
+- The global session cap is checked *before* anything is allocated.
+- A session id is generated and the session registered in the session map.
+- The config is validated and defaults applied; the plugin owner is resolved before any window is constructed.
+- With `keepAlive`, a state-change handler is installed. It does not put the session in the LRU cache yet — the cache entry is added when the session first reaches `inactive`, refreshed on return to `active`, and removed on `destroy`.
+
+**Failures**
+
+All three reject the `open()` call; none of them produce a session that then transitions.
+
+- Global session cap reached → `DivisionBoxError(LIMIT_EXCEEDED)`, thrown before the session id is generated.
+- A UI view requested without an owning `pluginId`, or with a `pluginId` that resolves to no loaded plugin → `DivisionBoxError(CONFIG_ERROR)`.
+- A non-authoritative caller requesting a UI view, or a `pluginId` that does not match the calling plugin → `DivisionBoxError(PERMISSION_DENIED)`, raised at the IPC boundary before the manager is reached.
+
+### attach
+
+Reached once the window exists and the view is attached to it.
+
+**Entered when**
+- A `WebContentsView` is created and attached to the window.
+- The plugin UI begins loading (`did-start-loading`).
+
+**Resources**
+- The view is created and the URL loaded.
+- IPC listeners are registered.
+- When detaching from CoreBox, ownership of the existing UI view is transferred rather than reloaded.
+
+**Failures**
+- `did-fail-load` → the session moves to `destroy`.
+- `render-process-gone` → the session moves to `destroy`.
+
+### active
+
+The user is interacting with the DivisionBox.
+
+**Entered when**
+- The window takes focus.
+- The page finishes loading (`did-finish-load`).
+- Focus returns from `inactive`.
+
+**Resources**
+- Steady state. IPC is safe to use here.
+
+### inactive
+
+The window lost focus or is occluded.
+
+**Entered when**
+- The window emits `blur`.
+- Another DivisionBox or CoreBox window covers it.
+
+**Resources**
+- With `keepAlive: false`, deferred destruction may be scheduled.
+- With `keepAlive: true`, resources are retained at lower priority.
+- The LRU cache may reclaim low-priority sessions from here.
+
+**Failures**
+- Prolonged inactivity can trigger memory-pressure reclamation.
+- Past `MAX_CACHED_SESSIONS`, the least recently used session is destroyed.
+
+### detach
+
+The window closed, or the session was explicitly detached.
+
+**Entered when**
+- `divisionBox.close(sessionId)` is called.
+- The user closes the window.
+- A resource limit forces teardown.
+
+**Resources**
+- With `keepAlive: true`, the session is already in the LRU cache from its first `inactive`, and can be restored from there.
+- With `keepAlive: false`, it proceeds straight to `destroy`.
+- The view and its associated resources are released.
+
+**Failures**
+- The close animation can be interrupted with `force: true`.
+- A full cache means immediate destruction instead of caching.
+
+### destroy
+
+Terminal state; resources are fully released.
+
+**Entered when**
+- `detach` completes with `keepAlive: false`.
+- A `keepAlive` session is evicted by the LRU cache.
+- Memory pressure or a resource limit forces teardown.
+
+**Resources**
+- All associated resources are released.
+- The session is removed from the session map and the LRU cache.
+- IPC listeners are unregistered.
+- `division-box:session-destroyed` is emitted.
+
+**Failures**
+- Nothing should throw here. A failed release is logged and does not block the transition — a stuck session would be worse than a leaked handle.
+
+### State transitions
+
+```mermaid
+stateDiagram-v2
+    [*] --> prepare: open()
+    prepare --> attach: window created
+    attach --> active: window focused
+    active --> inactive: window blurred
+    inactive --> active: window refocused
+    inactive --> detach: close() / reclaim
+    active --> detach: close() / reclaim
+    attach --> detach: close() / reclaim
+    detach --> [*]: keepAlive=false
+    detach --> prepare: keepAlive=true, restored
+    prepare --> destroy: load failure
+    attach --> destroy: load failure / crash
+    active --> destroy: crash
+    inactive --> destroy: LRU eviction / memory pressure
+    destroy --> [*]
+```
+
+## Best Practices
+- Enable `keepAlive` for frequently used panels.
+- Choose `size` based on content density.
+- Persist user state via `updateState/getState`.
+- Release resources on `inactive` and `destroy` states.
+
+## Related Docs
+- [Flow Transfer API](./flow-transfer.en.mdc)
+- [Plugin Manifest](../reference/manifest.en.mdc)

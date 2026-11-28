@@ -1,0 +1,18 @@
+<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+        <linearGradient id="myGradient" gradientTransform="rotate(45)">
+            <stop offset="0%" stop-color="#199FFE" />
+            <stop offset="100%" stop-color="#810DC6" />
+        </linearGradient>
+        <filter id="blurFilter" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur in="SourceGraphic" stdDeviation="5" />
+        </filter>
+        <radialGradient id="outerGradient" cx="50%" cy="50%" r="50%" fx="50%" fy="50%">
+            <stop offset="0%" stop-color="#D73E4D" stop-opacity="0.4" />
+            <stop offset="100%" stop-color="#7F007F" stop-opacity="0.4" />
+        </radialGradient>
+    </defs>
+    <rect x="15" y="15" width="70" height="70" rx="30" fill="none" stroke="#4C4CFF" stroke-width="2" filter="url(#blurFilter)" />
+    <circle cx="50" cy="50" r="32" fill="none" stroke="url(#outerGradient)" stroke-width="4" />
+    <path d="M30,70 C35,65 45,65 50,70 Q55,75 60,70 L70,60 C75,55 75,45 70,40 L60,30 Q55,25 50,30 Q45,35 40,30 L30,40 C25,45 25,55 30,60 Z" fill="url(#myGradient)" filter="url(#blurFilter)" />
+</svg>

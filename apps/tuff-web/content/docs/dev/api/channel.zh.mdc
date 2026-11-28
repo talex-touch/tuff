@@ -1,0 +1,86 @@
+# Channel API（已退役）
+
+::alert{type="warning"}
+**新开发已退役：** 本页只用于识别迁移期旧 Channel 代码。当前插件必须使用 [TuffTransport](./transport.zh.mdc)，以及 [Box SDK](./box.zh.mdc)、[Clipboard SDK](./clipboard.zh.mdc)、[Bridge Hooks](./bridge-hooks.zh.mdc) 等领域 SDK。
+::
+
+## 当前契约
+
+Channel API 不再是新插件开发支持的扩展面。
+
+| 旧表面 | 当前替代 |
+|--------|----------|
+| 字符串事件发送 | `transport.send(TuffEvent, payload)` |
+| 字符串事件监听 | `transport.on(TuffEvent, handler)` 或插件 bridge hooks |
+| CoreBox 输入监听 | `onCoreBoxInputChange()` |
+| CoreBox 剪贴板监听 | `onCoreBoxClipboardChange()` |
+| 同步发送 | 已由 hard-cut 移除 |
+
+## 迁移模式
+
+在同一次变更中把字符串事件名替换为 typed event 对象，不保留 Channel 与 TuffTransport 双轨路径。
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  import { useTuffTransport, CoreBoxEvents } from '@talex-touch/utils/transport'
+
+  const transport = useTuffTransport()
+
+  const result = await transport.send(CoreBoxEvents.search.query, {
+    query: { text: 'hello' }
+  })
+---
+:::
+
+## 事件订阅
+
+CoreBox 输入和剪贴板更新优先使用 bridge hooks，因为它们包含启动期事件缓存。
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  import { onCoreBoxInputChange } from '@talex-touch/utils/plugin/sdk'
+
+  onCoreBoxInputChange(({ data, meta }) => {
+    console.log(data.query.text, meta.fromCache)
+  })
+---
+:::
+
+## 已退役内置名称
+
+这些名称可能仍出现在历史插件代码或迁移说明中，但不再是推荐 API 表面。
+
+| 已退役名称 | 替代入口 |
+|------------|----------|
+| `core-box:input-change` | `onCoreBoxInputChange()` |
+| `core-box:clipboard-change` | `onCoreBoxClipboardChange()` |
+| `plugin:storage:update` | 通过 SDK / TuffTransport 使用 `PluginEvents.storage.update` |
+
+`core-box:key-event` 已完全退役。该通道没有生产发送端，不允许用于插件键盘处理。
+
+## 同步表面移除
+
+同步发送已由 hard-cut 移除。插件 renderer SDK 不再暴露同步 channel 方法；旧运行时代码调用会以 `plugin_channel_send_sync_removed` 明确失败。
+
+## 类型形态
+
+当前 renderer 侧代码应使用 `ITuffTransport` 事件 API，而不是 Channel interface：
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  interface ITuffTransport {
+    send<TEvent extends TuffEvent<any, any>>(
+      event: TEvent,
+      payload: EventRequest<TEvent>
+    ): Promise<EventResponse<TEvent>>
+
+    on<TEvent extends TuffEvent<any, any>>(
+      event: TEvent,
+      handler: (payload: EventRequest<TEvent>) => EventResponse<TEvent> | Promise<EventResponse<TEvent>>
+    ): () => void
+  }
+---
+:::

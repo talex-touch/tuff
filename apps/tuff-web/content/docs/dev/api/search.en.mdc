@@ -1,0 +1,533 @@
+---
+title: Search Matching API
+description: API documentation for the CoreBox search matching system, including pinyin matching, fuzzy search, and highlighting
+---
+
+# Search Matching API
+
+## Overview
+The CoreBox search system provides powerful matching capabilities:
+
+- **Pinyin Matching**: Search `fanyi` to match `translate`
+- **Initial Abbreviations**: Search `fy` to match `translate`
+- **Fuzzy Matching**: Typo-tolerant search, e.g., `helol` matches `hello`
+- **Highlighting**: Highlight matched portions in search results
+
+## Introduction
+Search matching combines Feature metadata, keywords, and clipboard inputs to drive ranking and highlights in CoreBox.
+
+## SemanticAliasSDK
+
+Recognition marker: **App Semantic Alias Catalog / 应用语义别名目录**. Starting with `sdkapi: 260626`, developers can import `SemanticAliasSDK` helpers from `@talex-touch/utils/plugin/sdk` or `@talex-touch/utils/search` to normalize short aliases, category terms, Chinese/English synonyms, and common abbreviations before merging them into existing `keywords`, `searchTokens`, or provider write paths.
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { buildSemanticAliasPayload } from '@talex-touch/utils/plugin/sdk'
+
+  const semantic = buildSemanticAliasPayload({
+    existingKeywords: ['todo'],
+    aliases: ['td'],
+    categories: ['office', '办公'],
+    synonyms: ['待办', '任务'],
+  })
+
+  export const feature = {
+    id: 'todo.new',
+    name: 'Create Todo',
+    desc: 'Create a local todo from input text',
+    keywords: semantic.keywords,
+    searchTokens: semantic.searchTokens,
+  }
+---
+:::
+
+This SDK is a pure declaration/normalization helper. It does not auto-register providers, scan local applications, open external links, or change the SQLite schema. The built-in CoreApp app catalog uses the same alias token source, so `matchAlias`, highlighting, and ranking explanations stay aligned.
+
+## Indexed Source Types
+
+`@talex-touch/utils/search` also exports shared types for local indexed search sources. They describe the lifecycle of App, File, Everything, Browser Data, Quicklinks, and similar sources; they do not replace CoreBox Feature matching.
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import type {
+    IndexedSource,
+    IndexedSourceDescriptor,
+    IndexedSourceEvidence,
+    IndexedSourceHealth,
+    IndexedSourceRecord,
+    SearchProviderDescriptor,
+    SearchProviderUserConfig,
+  } from '@talex-touch/utils/search'
+---
+:::
+
+The first contract covers:
+
+- source descriptor: platform, priority, storage mode, privacy level, and capabilities.
+- source health: ready/degraded/unsupported, permission, itemCount, watch state, and reconcile state.
+- source evidence: platform sub-source, root count, itemCount, last check time, and failure reason.
+- records: stable ID, title, path or URI, keywords, tags, and metadata.
+- lifecycle: scan, watch event, reconcile, search, open, and clearIndex.
+
+Plugins or CoreApp sources that need long-lived indexing should reuse these types before adding custom scan/watch/rebuild state.
+
+`IndexedSourceDescriptor.admission` defines source admission: `owner` (core / official-plugin / third-party-plugin), `permissionScopes`, `defaultState`, `requiresUserConsent`, `clearable`, and `rebuildable`. `getIndexedSourceAdmissionIssues()` and `isIndexedSourceAdmissionReady()` are pure SDK validators. They currently catch high-privacy sources that silently default-enable, Browser Data sources without high privacy or browser-data scope, external-fast sources without external-tool scope, third-party external-fast sources, non-clearable sqlite-index sources, and watch sources that lack reconcile support. `resolveIndexedSourceTaskEligibility()` further combines descriptor, health, and `task: "scan" | "watch" | "reconcile"` into an `{ eligible, reason }` result for pre-scheduling source maintenance or watch handling. `resolveIndexedSourceMaintenanceActions()` derives scan / reconcile / reset action enablement and blocked reasons from diagnostics so Settings, no-result recovery, and official plugin settings can use the same button policy. `resolveIndexedSourceRecoveryRecommendation()` turns admission/lifecycle issues, permission or disabled states, failed/stalled progress, recent failed/skipped tasks, and degraded/error health into a read-only recovery recommendation such as wait, grant-permission, enable-provider, scan, reconcile, reset, or inspect-*; it is diagnostic guidance only, does not execute maintenance, and does not replace a durable job scheduler.
+
+`getIndexedSourceLifecycleIssues()` / `isIndexedSourceLifecycleReady()` validate whether source descriptor capabilities actually have matching handlers: `scan` must exist; declaring `watch` / `reconcile` / `search` / `reset` / `clear` / `open` requires `handleWatchEvent` / `reconcile` / `search` / `resetIndex` / `clearIndex` / `open`; providing a handler without declaring the corresponding capability emits `handler-provided-without-capability`. CoreApp `IndexingRuntime.registerSource()` currently logs these lifecycle contract issues as warnings and does not block legacy sources; `IndexedSourceDiagnostics.lifecycleIssues` and Settings Contract chips expose the same issue list. New official plugin sources should clear these issues before registration so Settings does not expose a capability that has no runtime entry point.
+
+`IndexedSourceDiagnostics.admissionIssues` exposes the SDK admission validator result from `getIndexedSourceAdmissionIssues()` next to runtime health. CoreApp `IndexingRuntime.registerSource()` logs admission contract issues as warnings, and Settings shows them as Admission chips before lifecycle contract chips. A source that is skipped by runtime task eligibility because of high privacy, Browser Data, external-fast, persistence, or watch/reconcile policy can therefore explain the policy failure without waiting for a scan/watch/reconcile task to run.
+
+Use `getIndexedSourceContractIssues()` / `isIndexedSourceContractReady()` when a tool needs one source contract check. It returns `{ admission, lifecycle, ready }` so plugin tooling, Settings, and runtime code do not need to stitch admission and lifecycle rules independently.
+
+When reading source health fails, use `getIndexedSourceErrorMessage()` / `buildIndexedSourceErrorHealth()` to produce one shared error-health shape. The default output uses `status: "error"`, `permissionState: "not-required"`, `watchState: "unavailable"`, and `reconcileState: "failed"`, and maps thrown errors or non-Error values into `lastError`; source adapters can pass permission, watch/reconcile, or reason context when needed. CoreApp diagnostics now reuse this helper, so runtimes, official plugin sources, and developer tooling should not hand-roll their own error-health fallback.
+
+Diagnostics summary aggregation should use `summarizeIndexedSourceHealth()` / `buildIndexedSourceDiagnosticsSummary()`. These helpers standardize `total`, `byStatus`, `ready`, `degraded`, and `unavailable`; unavailable always includes disabled, unsupported, permission-required, and error. CoreApp `SourceDiagnosticsService` now reuses this helper, so future plugin runtimes, official source settings, or developer tooling should not redefine summary semantics independently.
+
+Source diagnostics snapshot caching should use `IndexedSourceSnapshotCacheService`. It provides short TTL, concurrent load de-duplication, failed-load non-caching, and explicit clear semantics. It is meant for sharing local scan output across health/roots/evidence during one diagnostics refresh so Browser Data / profile sources do not reread the same local files repeatedly. Maintenance paths such as scan, reconcile, watch, and reset should still clear the cache and read a fresh snapshot.
+
+Profile/browser-like sources should use `IndexedSourceProfileDiagnosticsService` to turn per-profile, per-browser, or similar sub-source diagnostics into `IndexedSourceEvidence` and `IndexedSourceRoot`. The helper standardizes rootCount, roots, itemCount, ready/degraded/error/unsupported status, reason, metadata, and granted watch roots. Browser Bookmarks now reuses this helper; future Browser History, VSCode profile, or Obsidian vault sources should not duplicate the same evidence/root mapping.
+
+Watch root routing should also use SDK helpers: `normalizeIndexedSourcePathForMatch()` / `isIndexedSourcePathInsideRoot()` centralize path normalization and platform case-sensitivity, while `resolveIndexedSourceRootSkipReason()` / `resolveIndexedSourceWatchRootRoute()` map denied or promptable roots to `root-permission:*` skipped reasons. CoreApp's `WatchEventRouter` now reuses these helpers, so plugin sources should not copy root matching or permission-skip logic. Path-based source watch path/root policy should also use `normalizeIndexedWatchPath()` / `getIndexedWatchDepthForPath()`, `resolveIndexedWatchRootSet()`, `isIndexedWatchPathOwned()`, and `filterIndexedWatchPendingPermissionPaths()` for watch path normalization, default depth, root de-duplication, root/child ownership, and pending-permission root filtering; real watcher registration and permission reads still live at the CoreApp watcher boundary.
+
+The SDK also provides source descriptor templates: `createQuicklinksIndexedSourceDescriptor()`, `createBrowserBookmarksIndexedSourceDescriptor()`, `createBrowserHistoryIndexedSourceDescriptor()`, `createSystemSettingsIndexedSourceDescriptor()`, and `createIndexedSourceDescriptorTemplate()`. The Quicklinks template is official-plugin owned, low privacy, sqlite-index backed, fast, clearable, and rebuildable. The Browser Bookmarks and Browser History templates are official-plugin owned, high privacy, sqlite-index backed, deferred, disabled by default, explicit-consent gated, browser-data + file-system scoped, clearable, and rebuildable. The System Settings template is core owned, low privacy, ephemeral, fast, uses the system-index scope, is not clearable, and is rebuildable. These helpers standardize descriptor/admission defaults for later source implementations. Quicklinks now has a low-privacy runtime skeleton and links official quicklink push providers to source enablement through `indexedSourceId: "quicklinks"`, but the real plugin-backed persistent feed, user-facing clear/rebuild, and Settings evidence are still incomplete. Browser Data and System Settings also cannot be claimed complete from templates alone.
+
+Plugins may also declare indexed source lifecycle intent through `manifest.indexedSources`. This field is parsed and validated as manifest metadata only: it does not auto-register a runtime source and does not read real files. The SDK helper `resolveIndexedSourceManifestDescriptors()` normalizes declarations into `IndexedSourceDescriptor` values and reuses admission policy plus permission mapping: `browser-data` requires `fs.read`, and `file-system` requires `fs.index`; Browser Data sources must be official-plugin owned, high privacy, disabled/ask by default, and explicitly consent-gated. CoreApp's loader exposes valid declarations on plugin state and records `INDEXED_SOURCE_*` issues in plugin diagnostics so Settings and developer tools can explain why a source has not entered runtime yet.
+
+Search Providers also have a public SDK boundary: `SearchProviderDescriptor` describes providers that can enter CoreBox root results, `SearchProviderUserConfig` stores user-facing `enabled/order`, and `normalizeSearchProviderUserConfigs()` merges descriptors with saved user config for Settings runtime display. Plugin provider registration should use `SearchProviderRegistrationPolicy` to express owner, mode, permission scopes, default state, and consent: third-party push providers must declare the `root-results` scope, `defaultState: "ask"`, and `requiresUserConsent: true`; third-party indexed providers require explicit user consent, and high-privacy providers cannot silently default-enable. Official plugin providers may declare `indexedSourceId` to link themselves to a runtime indexed source; Browser Data source ids such as `browser-bookmarks` / `browser-history` can only be claimed by official-plugin providers, preventing third-party providers from bypassing the high-privacy boundary. The SDK helper `getSearchProviderIdsForIndexedSource()` resolves source-to-provider links from provider descriptors; `isSearchProviderEnabledByConfig()` is the strict provider-level enablement guard and only returns true after descriptor defaults plus saved user config resolve to `enabled === true`; `isIndexedSourceEnabledByProviderConfig()` maps a source id plus linked provider ids to explicit user enablement and only treats `enabled === true` as enabled, so ask/default states cannot be mistaken for consent. The SDK helper `resolveSearchProviderPermissionIds()` maps `root-results` to the plugin manifest permission `search.root-results`; `getSearchProviderManifestCoverage()` audits whether push features have explicit provider declarations, `deriveSearchProvidersFromPushFeatures()` exposes the legacy `push: true` compatibility-provider derivation, and `resolveSearchProviderManifestDescriptors()` combines manifest provider normalization, policy decisions, missing-permission detection, and compatibility derivation in one SDK resolver. CoreApp's loader now reuses that resolver so plugin SDKs, runtime behavior, and validation tooling do not maintain separate rules. CoreApp also checks the permission on `plugin.feature.pushItems()` / `boxItems.push()` root-result write paths, so undeclared or ungranted plugins cannot push content into CoreBox root results.
+
+Plugins should explicitly declare `searchProviders` in `manifest.json` so CoreApp can validate policy and permissions during loading. A plugin may declare multiple push providers and connect each provider to a concrete feature with `featureId`; when pushed items carry `meta.featureId`, CoreApp automatically writes the matching `meta.searchProviderId` so Settings can enable or disable a single provider precisely. Legacy plugins that still use `push: true` features without explicit `searchProviders` get one derived compatibility provider descriptor per push feature and a `SEARCH_PROVIDER_DERIVED_FROM_PUSH_FEATURE` warning. That path is for migration only, not the recommended shape for new plugins. Providers missing `search.root-results` or blocked by registration policy are recorded as issues and are not exposed to the later provider registry.
+
+`pnpm plugins:validate` emits migration warnings for plugins that still use `push: true` without `manifest.searchProviders`, and prints explicit-provider coverage for push plugins. This check is visibility-only for now and is not a hard gate; new plugins and official plugin migrations should clear these warnings first. Repository push plugins now have explicit provider coverage and no longer rely on the legacy derived-provider path.
+
+:::TuffCodeBlock{lang="json"}
+---
+code: |
+  {
+    "permissions": {
+      "required": ["search.root-results"]
+    },
+    "searchProviders": [
+      {
+        "id": "touch-translation.results",
+        "displayName": "Translation Results",
+        "mode": "push",
+        "permissionScopes": ["root-results"],
+        "defaultState": "ask",
+        "requiresUserConsent": true,
+        "pushesToRootResults": true
+      }
+    ]
+  }
+---
+:::
+
+Official Browser Data plugins can link an immediate push provider with runtime source diagnostics by declaring both `indexedSources` lifecycle intent and provider `indexedSourceId`:
+
+:::TuffCodeBlock{lang="json"}
+---
+code: |
+  {
+    "permissions": {
+      "required": ["fs.read", "fs.index", "search.root-results"]
+    },
+    "indexedSources": [
+      {
+        "id": "browser-bookmarks",
+        "template": "browser-bookmarks",
+        "displayName": "Browser Bookmarks",
+        "admission": {
+          "owner": "official-plugin"
+        }
+      }
+    ],
+    "searchProviders": [
+      {
+        "id": "touch-browser-data.browser-bookmarks",
+        "displayName": "Browser Bookmarks",
+        "kind": "browser-bookmark",
+        "owner": "official-plugin",
+        "mode": "push",
+        "permissionScopes": ["root-results", "browser-data"],
+        "defaultState": "ask",
+        "requiresUserConsent": true,
+        "pushesToRootResults": true,
+        "indexedSourceId": "browser-bookmarks"
+      }
+    ]
+  }
+---
+:::
+
+The Provider Registry combines Core indexed sources with loaded plugin `searchProviders` so Settings can show one enablement and ordering list. Push-mode plugin providers with `defaultState: "ask"` or `requiresUserConsent: true` are not allowed to write root results until their provider config resolves to `enabled === true`; the manifest permission gate is only the minimum runtime permission, not user consent. Disabling a push-mode plugin provider blocks future `boxItems.push()` / `boxItems.pushItems()` / `boxItems.update()` writes from that provider into CoreBox root results; other providers from the same plugin can still push when enabled. `boxItems.update()` first reads the existing item's `meta.searchProviderId` for the provider-state guard, so updates do not need to repeat the provider id in every payload. `remove` / `clear` remains allowed so plugins can clean stale items. Plugin-pushed items carry `meta.searchProviderId`, and the CoreBox root-result store only keeps provider-tagged items visible when their provider config resolves to `enabled === true`; legacy untagged items remain visible for migration compatibility. Existing push results are filtered and ordered by provider config during sync and batch upserts. Saving provider config in Settings refreshes the root-result sync.
+
+`SearchProviderConfigResponse.issues` exposes provider registry diagnostics for SDK consumers and Settings. It includes plugin loader `SEARCH_PROVIDER_*` issues, such as missing `search.root-results` permission, policy-blocked providers, migration-only derived providers, invalid declarations, plus registry-level `SEARCH_PROVIDER_ID_COLLISION` entries when a plugin tries to reuse an existing provider id. Blocked providers are still excluded from `availableProviders`, but the issue list explains why they did not enter root results.
+
+Browser Bookmarks / History Browser Data sources should be official plugin providers rather than long-lived CoreApp built-ins. `touch-browser-data` now explicitly declares the `touch-browser-data.browser-bookmarks` push provider and enters Settings provider management with `root-results` / `browser-data` scopes. CoreApp's current Browser Bookmarks source remains a runtime skeleton and migration diagnostics sample. It does not scan real browser files by default, but it dynamically reads the unified provider config and only enters the scanner-backed enabled path when the user explicitly enables `browser-bookmarks` or the official `touch-browser-data.browser-bookmarks` provider. The real indexed source, persistent rebuild, watch-root registration, and user-facing clear flows still need to move to the official plugin side under user consent.
+
+`IndexedSourceReconcileReasons` defines SDK-level standard reconcile reason codes: scheduled, manual-repair, watch-gap, watch-recovery, file-watch-root-recovered, health-repair, schema-migration, external-refresh, and reconcile-not-supported. `IndexedSourceReconcileRequest.reason` should prefer these standard values; the type still accepts source-specific strings so CoreApp providers and official plugins can preserve detailed diagnostics during migration.
+
+`IndexedSourceScanReasons` defines SDK-level standard scan reason codes: startup, manual-rebuild, scheduled, watch-recovery, schema-migration, and health-repair. `IndexedSourceScanRequest.reason` should prefer these standard values so App/File/Everything/Browser Data sources do not keep spreading hard-coded reason strings during the runtime migration.
+
+`IndexedSourceResetReasons` defines SDK-level standard runtime reset reason codes: manual-rebuild, schema-migration, integrity-repair, health-repair, and user-clear. `IndexedSourceResetRequest.reason` should prefer these standard values so runtime `lastReset` diagnostics and FileProvider reset helpers share one stable reason set.
+
+`IndexedSource.resetIndex()` is the runtime reset entry, described by `IndexedSourceResetRequest` and `IndexedSourceResetResult`. It clears source runtime index state, such as `scan_progress`, so later scan/reconcile can repair the source. It is not the same as user-facing `clearIndex()`. CoreApp's `IndexingRuntime.resetSourceRuntimeState()` calls this entry and records diagnostics `lastReset`, including the reset reason, jobId, queuedAt, whether the search index was cleared, whether scan_progress was cleared, and related row counts. `clearSearchIndex` is handled at the runtime store boundary: the runtime first calls `IndexStoreAdapter.clearSource(sourceId)` for the shared SearchIndex, then passes `clearSearchIndex: false` to source-local `resetIndex()` so sources do not each depend on SearchIndexService. Reset also reuses the `IndexedSourceTaskRunGate` owned by the runtime; when the same source reset is already running, a second request returns an `IndexedSourceResetResult` with `error: "reset-already-running"` and records diagnostics instead of clearing SearchIndex or invoking source-local reset again.
+
+Renderer settings should use the `settings.indexedSource` typed SDK for long-lived indexed source maintenance. This SDK maps `AppEvents.indexedSource.diagnostics/reset/reconcile/scan` and accepts `sourceId`, standard scan/reconcile/reset reasons, and clear flags, reusing the same runtime diagnostics and task state instead of adding private IPC for File, App, Browser Bookmarks, or future Quicklinks sources. Maintenance button availability should come from `resolveIndexedSourceMaintenanceActions()`; CoreApp runtime also reruns `resolveIndexedSourceTaskEligibility()` for single-source scan/reconcile entries, so disabled, permission-required, unsupported, or admission-invalid sources cannot bypass the scheduling guard through Settings. It also exposes `providerConfigGet/providerConfigUpdate` so Settings can read and save indexed provider enablement and ordering; `SearchProviderConfigResponse.sourceLinks` returns `{ sourceId, providerIds[] }[]` so Settings can understand runtime source to provider links as structured transport data. SearchEngineCore's default provider pool reads this config, skips disabled providers, orders enabled providers by `order`, and includes the provider config signature in the search cache key. Active provider mode keeps its existing semantics and is not interrupted by global settings; this config is a user preference and does not replace runtime permission guards.
+
+CoreApp's Windows App scanner now returns grouped scan results by sub-source: Start Menu, UWP/Get-StartApps, Uninstall Registry, App Paths Registry, and Steam manifests. The legacy app search path still flattens and deduplicates those grouped results; AppProvider Windows evidence prefers those grouped results and uses the public `IndexedSourceGroupedEvidenceService` to surface each sub-source ready/degraded state, empty / error reason, sourceLabel, and scanner metadata. App watch-roots evidence reuses `IndexedSourceRootEvidenceService` for rootCount, roots, and empty reason. AppProvider only keeps platform key/label, the manual synthetic row, watch-root path reading, and DB metadata fallback. The grouping mainly serves diagnostics, source evidence, and the future runtime store migration.
+
+The App source `scan()` path now returns `IndexedSourceRecordBatch`: CoreApp maps `ScannedAppInfo` into `IndexedSourceRecord`, reuses `IndexedWriteRuntimeEmitterService.buildBatch()` for the same runtime batch mapper used by emitted batches, then lets the runtime `ScanScheduler` and `SearchIndexStoreAdapter` write into the existing search index. Plugins or official sources should follow the same record batch contract instead of creating provider-private, unobservable index write paths.
+
+The File source `scan()` path now also returns `IndexedSourceRecordBatch`: FileProvider maps file rows inserted during full scan and reconciliation into `kind: "file"` `IndexedSourceRecord` values, then `FileIndexedSource.scan()` yields them to the runtime store boundary. FileProvider's internal worker writes remain in place for now and will keep migrating toward the shared store boundary in later slices.
+
+App and File source watch deltas now return increments that the runtime store can consume directly: add/change attempts to return `IndexedSourceDelta.record`, while delete returns `stableKey/path`, and these watch deltas share the same `IndexedWriteRuntimeEmitterService` build helpers as App scan batches. Global `FILE_ADDED` / `FILE_CHANGED` / `FILE_UNLINKED` events, plus macOS App directory add/delete events, are now bridged by SearchEngineCore into `IndexingRuntime.routeWatchEventWithResult()`. Watch delta accept gating, normalized-key coalescing, delete dominance, prepare-flush gating, and serialized flush scheduling now live in the public `@talex-touch/utils/search` `IndexingWatchDeltaQueueService`; `FileProviderIncrementalQueueService` only adapts File semantics and `manual` metadata merging; incremental delete path normalization, existing-row lookup, DB delete delegation, SearchIndex removal, and success logging now live in the generic `IndexedWriteDeleteExecutorService`, and reconciliation deletes now reuse the same resolved-record delete entry; reconciliation worker reconcile and main-thread fallback diff now live in `FileProviderReconciliationDiffService`, producing one added/updated/deleted calculation result; existing-root reconciliation DB row reads, directory scans, diff orchestration, delete/update/insert delegation, progress, stats, and completed-path reporting now live in `FileProviderReconciliationRunService`; reconciliation delete/update source-level delta emission and changed/deleted result reporting now live in `FileProviderReconciliationDeleteService` / `FileProviderReconciliationUpdateService`, while FileProvider only injects the existing delete/update executors and record mapper; stale watch-root cleanup now lives in `FileProviderCleanupDeleteService`, reusing the same delete-executor shape while injecting files-table deletes, embedding cleanup, `scan_progress` cleanup, SearchIndex removal, and cleanup progress; full-scan root scanning, scan progress, event-loop yield, file-row payload mapping, insert delegation, and completed-path reporting now live in `FileProviderFullScanRunService`; full-scan insert/upsert AIMD batching, idle pacing, side-effect dispatch, record batch emission, progress updates, and added-count reporting now live in `FileProviderFullScanInsertService`; reconciliation-add chunked upsert, side-effect dispatch, record batch emission, delta emission, and progress updates now live in `FileProviderReconciliationInsertService`, with `upsertSearchIndexFiles` and source delta semantics injected by FileProvider; incremental add/change record building, existing-row lookup, insert/update execution, and manual-summary orchestration now live in `FileProviderIncrementalWriteService`; insert/update/unchanged/manual-summary planning lives in the generic `IndexedWritePlanService`, while `FileProviderIncrementalWritePlannerService` only adapts File rows; incremental insert/upsert persist callbacks, inserted-row side-effect dispatch, and success logging now live in the generic `IndexedWriteInsertExecutorService`; chunked update idle/capacity waits, per-record updates, refreshed-row reads, side-effect dispatch, and progress logging now live in the generic `IndexedWriteUpdateExecutorService`; post-write keyword/icon extension processing and content-index scheduling now live in the generic `IndexedWriteSideEffectService`, while `FileProviderWriteSideEffectService` only adapts File naming; index-worker context gating, chunk dispatch, deferred dispatch, and failure isolation now live in the generic `IndexedWorkerSchedulerService`, while `FileProviderIndexSchedulerService` only adapts file-row to worker-payload mapping and large-file background-content policy; index-worker result progress/fileUpdate/indexItem mapping into persist payloads now lives in the public `@talex-touch/utils/search` `IndexedWorkerPersistEntryMapperService`, while `FileProviderIndexPersistEntryMapperService` only adapts File worker results; worker status summary, short-TTL caching, concurrent status load dedupe, and failed-load cache skipping now live in the public `IndexedWorkerStatusSnapshotService`, while `FileProviderWorkerStatusService` only adapts File worker status loading; index-worker flush backlog delay, sqlite-busy retry, exponential backoff, jitter, and failure retry reason decisions now live in the public `@talex-touch/utils/search` `IndexedWriteFlushRetryService`, while `FileProviderIndexFlushRetryService` only keeps SQLite busy classification and FileProvider reason mapping; flush execution, worker readiness gating, DB backpressure, `persistAndIndex`, commit/rollback, and duration recording now live in the generic `IndexedWriteFlushExecutorService`, which now returns source-agnostic `reason` / `error` / `metadata`; flush timers, in-progress guards, idle snapshots, failure retry scheduling, and successful drain-remaining scheduling now live in the generic `IndexedWriteFlushRuntimeService`; `FileProviderIndexRuntimeService` only adapts FileProvider-specific result metadata and logging; pending/inflight enqueue, take, commit, rollback, and size accounting now live in the public `@talex-touch/utils/search` `IndexedWriteBufferService`, while `FileProviderIndexFlushBufferService` only adapts file worker results by `fileId`; the latest flush snapshot now lives in `IndexedWriteFlushSnapshotService`, and `file-provider:index-flush` evidence exposes flushed / worker-not-ready / failed state, pending/inflight counts, retry reason, error, and duration; actual files-table persistence, flush trace wiring, and FTS write semantics still live at the FileProvider / SearchIndex worker boundary for the next migration slice.
+
+File Index progress remaining time is estimated by the public `@talex-touch/utils/search` `IndexingProgressEstimatorService`, while FileProvider only adapts `FileIndexStage` idle/completed terminal states through `FileProviderProgressEstimatorService`: it prefers stage-local smoothed throughput for ETA; when there are not enough speed samples yet but the stage already has stable elapsed progress, it can emit a conservative elapsed-progress fallback with a safety multiplier so early indexing does not stay without a remaining-time estimate for too long. ETA is still suppressed during stage switches, backward progress, cold starts, or very low progress, so Settings does not show large remaining-time jumps caused by scan/index/reconcile transitions or short-term speed spikes. `FileIndexProgress` / `FileIndexStatus` also expose optional `estimateStatus`, `speedSampleCount`, and `estimateBasis`, so UI can distinguish unknown, stabilizing, estimated, stalled, and complete states, as well as whether ETA came from stage-speed, elapsed-progress, stalled, or complete. Progress stream throttling is handled by the public `IndexingProgressStream` SDK helpers, while FileProvider only adapts the `FileIndexProgress` payload; first payloads, terminal stages, max silence, min interval, and progress/current/total changes use one shared rule set.
+
+`WatchEventRouter` isolates single-source handler failures and store delta write failures, and returns route result stats: matched sources, handled/failed sources, applied/failed deltas, and error summaries. The runtime records `lastWatch.jobId/queuedAt` for applied deltas, handler/store failures, and skipped sources, so watcher routes share the same task identity model as scan/reconcile/reset. `IndexedSource.shouldHandleWatchEvent()` lets a source decide whether a watch/recovery path belongs to it; when it returns false, the runtime records a `source-watch-filtered` skipped reason instead of calling the source handler. The existing `routeWatchEvent()` compatibility entry still returns deltas.
+
+Batch scans also have failure isolation in `ScanScheduler`: `scanSourcesWithResult()` returns successful sources, failed sources, batches, records, and error summaries, so one source scan failure does not fail the whole batch. Single-source `scanSource()` now also passes through the runtime eligibility guard; blocked sources record skipped diagnostics instead of invoking their scanner. `IndexingRuntime` records scan job ids and queuedAt for single-source scans, batch failures, and skipped sources, and writes them into diagnostics `lastScan` so Settings/CoreBox trace can distinguish individual scan executions. `IndexingRuntime` owns one shared `IndexedSourceTaskRunGate` and injects it into `ScanScheduler` and `ReconcileScheduler`; reset uses the same gate as well. The current behavior still rejects same-source same-kind tasks while one is running, while leaving one decision boundary for later retry, debounce, and durable job history.
+
+`ReconcileScheduler` is the minimal reconcile task entry between `IndexingRuntime` and `ReconcileEngine`. It currently records job ids, queuedAt, reason, and rootCount without changing source reconcile algorithms. Batch reconciliation still has failure isolation in `ReconcileEngine`: `reconcileSourcesWithResult()` returns successful sources, failed sources, added/changed/deleted/skipped/error totals, and failure summaries, so one source reconcile failure does not fail the whole batch. Single-source `reconcileSource()` now also passes through the runtime eligibility guard; blocked sources record skipped diagnostics instead of invoking their reconcile handler. A source can now return add/change/delete repairs in `IndexedSourceReconcileResult.deltas`; the runtime applies them through the same store adapter and writes `appliedDeltas`, `failedDeltas`, and `deltaErrors` back into the result and diagnostics. `IndexedSourceReconcileRequest.reason` records the trigger reason; runtime `lastReconcile` keeps `reason`, `rootCount`, `jobId`, and `queuedAt` so Settings/CoreBox can distinguish scheduled, manual repair, and watch-root recovery reconciles.
+
+`IndexedSourceDiagnostics` can carry the latest runtime task state: `lastScan`, `lastWatch`, `lastReconcile`, and `lastReset`. All four task states include runtime jobId / queuedAt. It can also carry bounded in-memory `recentTasks`, ordered newest first, with scan/watch/reconcile/reset kind, status, jobId, queuedAt, error, and summary fields as a transition layer for Settings / trace source-level task history. The SDK exposes `appendIndexedSourceTaskHistory()`, `updateIndexedSourceTaskState()`, and `DEFAULT_INDEXED_SOURCE_TASK_HISTORY_LIMIT`, so CoreApp runtime and future official plugin indexed sources should reuse the same newest-first / bounded trimming and last* task-state update rules instead of reassembling lastScan/lastWatch/lastReconcile/lastReset plus history per source. Diagnostics can also carry source-level `progress`, covering stage, current/total, percent, estimatedRemainingMs, estimatedCompletionAt, averageItemsPerSecond, speedSampleCount, and estimateBasis; the File indexed source now adapts FileProvider indexing status into this field. These fields come from runtime memory, are not a persistent source of truth, are not written to JSON sync payloads, and do not replace source health.
+
+The Settings File Index diagnostics area renders `recentTasks` as recent task chips for scan/watch/reconcile/reset and maps succeeded / failed / skipped to one shared tone model. The chips explain `summary` fields for scan records/batches, watch delta/action, reconcile add/change/delete/skipped, and reset clear flags. Future trace panels or official plugin settings surfaces should reuse this display contract instead of reinterpreting task history independently.
+
+The same area also renders `IndexedSourceDiagnostics.progress` as a source progress chip. It maps unknown / idle / running / stabilizing / estimated / stalled / complete / failed to the shared tone model and shows stage, percent, current/total, remaining time, ETA, speed, sample count, estimateBasis, and reason. The File source currently adapts this field from FileProvider indexing status; future Browser Bookmarks, Quicklinks, Obsidian, or VSCode sources only need to implement `IndexedSource.getProgress()` for Settings to reuse the same UI and ETA semantics instead of adding provider-specific progress panels.
+
+The same diagnostics area also renders `resolveIndexedSourceRecoveryRecommendation()` as a source recovery chip. The chip only explains whether the next step is permission, provider enablement, waiting, scan, reconcile, reset, or contract/source inspection. It does not execute actions; actual scan/reconcile/reset buttons still use `resolveIndexedSourceMaintenanceActions()` and the runtime eligibility guard.
+
+The same diagnostics area also renders source `evidence` as prioritized evidence chips: degraded / permission-required / error evidence first, then ready evidence. File source scan-progress, integrity, and index-flush evidence can therefore surface flush backlog, retry reason, worker-not-ready, duration, and related stall details through unified Settings diagnostics without adding FileProvider-specific UI. The renderer helper consumes existing metadata by evidence id and formats scan completed/failed/pending-permission, flush pending/inflight/entries/duration, and integrity FTS/files/rebuild/orphan keyword fields into stable chip summaries instead of exposing raw metadata in Settings.
+
+`@talex-touch/utils/search` exposes `IndexingProgressEstimatorService` and Indexing Progress Stream helpers as shared indexing progress primitives. The former estimates remaining time from smoothed throughput within the current source stage and hides unreliable ETA on terminal stages, stage switches, backward progress, cold starts, and low-progress samples; when a stage has enough elapsed progress but not enough speed samples, it reports a conservative elapsed-progress fallback. It also reports estimate status, speed sample count, and `estimateBasis`, avoiding a precise-looking ETA from one transient speed sample or stale ETA when progress stalls. The stream helpers control progress payload frequency. CoreApp keeps a compatibility re-export for legacy imports, while FileProvider now imports the SDK primitives directly, adapts `FileIndexStage` idle/completed terminal states plus the `FileIndexProgress` payload, and exposes the result through `IndexedSource.getProgress()` into unified diagnostics. Future Browser Bookmarks, Quicklinks, Obsidian, or VSCode source progress UI should reuse the same SDK rule set.
+
+`@talex-touch/utils/search` also exposes `IndexingWatchDeltaQueueService` as a shared watcher delta queue primitive. It coalesces add/change/delete updates by normalized key, lets delete dominate later change events, keeps pending entries when a source is not ready to flush, and serializes flush execution; source-specific metadata is merged through an injectable coalesce hook. CoreApp keeps a compatibility re-export for legacy imports, while FileProvider now imports the SDK queue directly and only adapts the `manual` flag. `normalizeIndexedWatchPath()` and `getIndexedWatchDepthForPath()` are also exposed as watch path policy primitives. `resolveIndexedWatchRootSet()`, `isIndexedWatchPathOwned()`, and `filterIndexedWatchPendingPermissionPaths()` handle base/extra root normalization and de-duplication, root-or-child ownership, shared-prefix false-positive protection, and exact-root pending-permission filtering. FileProvider now only adapts platform typing, the real watcher, settings persistence, and pending path reads. Future official plugin sources should reuse these SDK primitives instead of copying provider-private watcher queues, default depth policy, or root ownership rules.
+
+`@talex-touch/utils/search` also exposes `resolveIndexedScanEligibility()` / `toIndexedScanTimestamp()` as shared auto-scan eligibility primitives. They calculate never-scanned roots, stale roots, and the latest scan timestamp from watch roots, completed scan rows, the auto-scan interval, and the current time. FileProvider still owns reading the real `scan_progress` table and user auto-scan settings; the SDK does not know about Drizzle, SQLite, or FileProvider table shape. Future Obsidian, VSCode, Browser Bookmarks, and similar sources should reuse this policy when they need the same new-root / stale-root / lastScannedAt decision.
+
+`resolveIndexedScanStrategy()` is the matching scan strategy primitive. It splits watch roots and a completed path set into first-time full-scan roots and existing-root reconciliation roots. FileProvider still owns completed-path loading, event-loop yielding, and timing/logging; the SDK only expresses the source-agnostic routing rule. Path-based runtime sources should reuse this strategy instead of reimplementing the “completed roots reconcile, incomplete roots full scan” split.
+
+`resolveIndexedAutoScanPreflight()` centralizes auto-scan preflight skip reason priority, including disabled, initializing, missing-context, no-paths, app-busy, search-active, and interval. FileProvider runs early preflight before reading `scan_progress`, so initialization or missing context does not trigger DB reads; only after early gates pass does it read scan eligibility and ask the SDK for the interval decision. The real `appTaskGate`, search activity, and `deviceIdleService` idle/battery checks remain at the CoreApp boundary and do not move into the SDK.
+
+`@talex-touch/utils/search` also exposes `IndexedWriteFlushExecutorService`, `IndexedWriteFlushRuntimeService`, `buildIndexedWriteFlushFailureSnapshot()`, and `IndexedWriteFlushEvidenceService` as shared write flush primitives. The executor owns buffer take/rollback/commit, readiness gating, capacity waits, persist delegation, duration recording, and source-agnostic result metadata. `mapIndexedWriteFlushExecutorResult()` maps executor results into adapter-owned statuses and numeric metadata fields, such as mapping `not-ready` to FileProvider's `worker-not-ready` and extracting `withContent`. The runtime owns flush timers, unavailable/no-pending/flush-in-progress idle snapshots, in-progress deferral, failure retry scheduling, and successful drain-remaining scheduling. The failure snapshot helper combines an error, attached flushResult, pending/inflight sizes, and retry metadata into a failed snapshot. The evidence service maps the latest flush snapshot into `IndexedSourceEvidence` ready/degraded status, itemCount, and metadata without knowing the backing DB or worker. `IndexedWriteBufferService` handles explicit-key pending/inflight buffers, while `IndexedEntryKeyedWriteBufferService` lets worker payloads enter the same enqueue/take/commit/rollback semantics through a key selector. This fits File's fileId today and future Browser/Quicklinks url/id payload keys. CoreApp only keeps compatibility re-exports for legacy imports, while FileProvider injects SQLite busy metadata, worker readiness, `persistAndIndex`, File status mapping, retry metadata, and the `file-provider:index-flush` id/label from its adapter layer; `FileProviderIndexFlushBufferService` now only keeps the file worker result `fileId` key selector.
+
+`@talex-touch/utils/search` also exposes `IndexedWritePlanService` as a path-record write planning primitive. It splits incoming path records into insert/update/unchanged sets, applies timestamp tolerance, computes normalized manual summaries, and keeps update-record shaping injectable. CoreApp keeps a compatibility re-export, while FileProvider now imports the SDK planner directly and only adapts File row update fields. This primitive is intended for path-based indexed sources such as File, Obsidian, and VSCode; non-path sources such as Browser Bookmarks should keep their own record diff shape.
+
+`@talex-touch/utils/search` also exposes `IndexedWriteInsertExecutorService` as a source-agnostic insert executor. It skips empty batches, delegates persistence, dispatches inserted rows, and logs inserted counts through injected callbacks without depending on SQLite, SearchIndex, or File row types. CoreApp keeps a compatibility re-export, while FileProvider now imports the SDK executor directly and only injects File persistence plus side-effect dispatch.
+
+`@talex-touch/utils/search` also exposes `IndexedWriteDeleteExecutorService` as a path-record delete executor. It normalizes and deduplicates raw paths, resolves existing records, delegates record deletion, calls an injected `removeIndexedArtifacts` cleanup hook, and returns deleted ids/paths. The SDK surface avoids SearchIndex naming; CoreApp keeps a compatibility wrapper for legacy `removeSearchIndexItems` deps, while FileProvider and cleanup/reconciliation delete flows keep their existing File-specific cleanup wiring.
+
+`@talex-touch/utils/search` also exposes `IndexedWriteUpdateExecutorService` as an injected-queue update executor. It chunks update records, waits before each chunk, delegates per-record updates, refreshes updated rows, dispatches side effects, and logs chunk duration through injected clock/formatter callbacks. The SDK only defines the `runQueue(chunks, handler, options)` protocol; CoreApp still injects its adaptive queue and File-specific backpressure policy.
+
+`@talex-touch/utils/search` also exposes `IndexedWriteRuntimeEmitterService` as a runtime-output primitive. It maps persisted records into `IndexedSourceRecordBatch`, add/change `IndexedSourceDelta` values, delete delta paths, and progress snapshots, and it can build record batches or add/change/delete deltas directly for scan/watch handlers that do not have an emit sink. It does not depend on SQLite, SearchIndex, File rows, or worker types. FileProvider full scan insert, reconciliation insert/update/delete, stale cleanup delete, App scan/watch, Browser Bookmarks scan/reconcile/watch refresh, and the Quicklinks scan/reconcile/watch skeleton now reuse this helper and only inject File/App/Bookmark/Quicklink row mappers, existing upsert/update/delete callbacks, runtime callbacks, and source-specific reasons. Future Obsidian or VSCode reconciliation writes should reuse this primitive instead of duplicating record batch / delta / progress output plumbing.
+
+`@talex-touch/utils/search` also exposes `IndexedWorkerPersistEntryMapperService` as a shared worker-result to persist-payload mapping primitive. It centralizes progress null-normalization, fileUpdate content-hash defaults, embedding model/vector projection, and generic `indexItem` passthrough without depending on CoreApp's SearchIndex worker types. CoreApp keeps a compatibility re-export, while FileProvider now imports the SDK mapper directly and only passes its index worker results into that mapper.
+
+`@talex-touch/utils/search` also exposes `IndexedWriteSideEffectService` as a shared post-write side-effect dispatcher. It runs extension processing asynchronously and schedules indexing immediately; extension processing failures are logged without blocking later index worker dispatch, and source-specific failure wording is injectable. CoreApp keeps a compatibility re-export, while FileProvider now imports the SDK dispatcher directly and only keeps File extension processing, index scheduling, and File-specific log wording.
+
+`@talex-touch/utils/search` also exposes `IndexedWorkerSchedulerService` as a shared worker scheduling primitive. It owns worker context gating, chunk dispatch, deferred dispatch, and failure isolation without depending on CoreApp worker types. CoreApp keeps a compatibility re-export, while FileProvider now imports the SDK scheduler directly and only keeps file-row to worker-payload mapping, large-file background-content policy, and File-specific log wording.
+
+Runtime batch scan/reconcile and watch route now call `resolveIndexedSourceTaskEligibility()` before scheduling work or handling events. Sources are skipped when admission issues exist, when the matching capability is absent, when health is disabled / unsupported / permission-required / error, or when permissionState is denied / promptable. Root-based watch routing also checks the matched `IndexedSourceRoot.permissionState`; denied / promptable roots only return `root-permission:*` skipped evidence and do not enter the source handler. Batch/route results include skipped source counts and reasons, and diagnostics `lastScan` / `lastWatch` / `lastReconcile` records `skipped:*` so Settings and trace can explain why a source was not maintained or did not respond. High-privacy Browser Data sources therefore rely on one runtime guard instead of adapter-local empty scans.
+
+File source roots now map FileSystemWatcher pending paths owned by FileProvider watch roots to `permissionState: "promptable"` with the `file-index-watch-root-pending-permission` reason. When any such root exists, File source health becomes `permission-required` and watchState becomes `pending-permission`. This prevents unauthorized directories from looking like active watch roots and lets the runtime root guard skip them with the same `root-permission:*` semantics.
+
+When `FileSystemWatcher` sees a pending path become accessible again, it emits `FILE_WATCH_ROOT_RECOVERED`. SearchEngineCore first applies the File source `shouldHandleWatchEvent()` ownership filter, then triggers `IndexingRuntime.reconcileSource("file-provider", { reason: "file-watch-root-recovered", roots: [recoveredRoot] })` only for FileProvider watch roots. Permission recovery therefore becomes runtime `lastReconcile.reason/rootCount` diagnostics instead of remaining internal watcher state.
+
+The App source `reconcile()` path now returns real `IndexedSourceReconcileResult` stats. `added`, `changed`, `deleted`, `skipped`, and `errors` come from full sync diffing and macOS mdls repair instead of fixed zero counters. New sources should report reconciliation results with the same semantics.
+
+The File source `reconcile()` path now also reports real stats: new-root full scans count `added`, existing-root reconciliation counts `added`, `changed`, `deleted`, and `skipped`, and stale watch-root cleanup counts `deleted`. Existing-root reconciliation also maps added, changed, and deleted file rows into `IndexedSourceDelta` values for the runtime store adapter, so reconcile can repair the shared search index instead of only updating FileProvider's internal table or reporting counters. File workers and internal write queues still live inside FileProvider and will migrate toward the runtime store boundary in later slices.
+
+File source evidence also exposes `file-provider:scan-progress`, `file-provider:integrity`, and `file-provider:index-flush`. The public `IndexedSourceProgressEvidenceService` owns the shared progress evidence policy for ready / warming / degraded / permission-required status and reason selection, and the public `IndexedSourceProgressStoreService` owns completed-root summary, empty delete/upsert skips, upsert readiness gating, and upsert result reporting. `FileProviderScanProgressService` keeps only File-specific `scan_progress` table select/delete wiring, worker `upsertScanProgress` injection, and metadata mapping. `FileProviderScanStrategyService` owns completed-root reads, new full-scan path selection, reconciliation path selection, and strategy logging; the evidence summarizes watch roots, pending roots, pending permission roots, completed / failed / skipped file index progress, and embedding counts. The public `IndexedSourceIntegrityService` owns the source-row versus indexed-row ratio policy, runtime reset decision, SearchIndex clear flag, orphan cleanup call, duration, and snapshot mapping; `FileProviderIntegrityService` keeps only FTS/files row-count queries, runtime reset injection, orphan `keyword_mappings` cleanup, and File-named integrity evidence mapping. The integrity evidence records the latest FTS rows, files rows, whether a full re-scan was scheduled, whether stale FTS rows or scan_progress were cleared, and how many orphan keywords were removed. Index-flush evidence records the latest content index worker flush status, entries, pending/inflight counts, retry reason, error, and duration; the latest flush snapshot is stored by the generic `IndexedWriteFlushSnapshotService`, then converted into source evidence by `IndexedWriteFlushEvidenceService`, while FileProvider only keeps the `file-provider:index-flush` id/label and File status adaptation. Settings/CoreBox diagnostics can therefore explain why the source is warming, waiting for directory permission, why integrity repair triggered a re-scan, or why worker flush has not written content into the search index without depending on FileProvider-only logs.
+
+FileProvider reset actions are also being consolidated. Manual rebuild, schema migration, and integrity mismatch now go through `FileProviderRuntimeResetService` when clearing `scan_progress` or the provider search index. The shared `IndexedSourceResetExecutorService` owns reset step orchestration, search-index/source-progress cleanup decisions, timestamps, and the SDK-standard `IndexedSourceResetResult`; FileProvider only injects provider search-index cleanup plus File-specific `scan_progress` row count/delete wiring. This keeps reset semantics reusable for Browser Bookmarks / Quicklinks without moving FileProvider's SQLite details into the SDK.
+
+FileIndexedSource now exposes `resetIndex()`, so CoreApp can call `IndexingRuntime.resetSourceRuntimeState("file-provider", ...)` and reach the same FileProvider reset helper. This path is for runtime maintenance; it does not replace Settings manual rebuild and still relies on later scan/reconcile to repair the index.
+
+After SearchEngineCore initializes the indexed runtime, it injects a reset delegate into FileProvider. FileProvider manual rebuild, schema migration, and integrity mismatch repair prefer that delegate and enter `IndexingRuntime.resetSourceRuntimeState("file-provider", { reason })`; FileIndexedSource then calls back into the FileProvider reset helper. Without a delegate they fall back to the internal helper. This avoids a direct FileProvider dependency on the runtime singleton while making those reset actions visible in `lastReset` diagnostics.
+
+Browser Bookmarks now has a runtime skeleton: the `browser-bookmarks` descriptor uses `privacy: "high"`, `owner: "official-plugin"`, `defaultState: "disabled"`, and `permissionScopes: ["browser-data", "file-system"]`. CoreApp now has a pure Chromium Bookmarks scanner for Chrome / Edge / Brave / Arc profile discovery, `Bookmarks` JSON parsing, non-http(s) URL filtering, URL dedupe, and read-failed/not-found/unsupported diagnostics. In explicit-enabled paths it maps bookmarks into `kind: "browser-bookmark"` `IndexedSourceRecordBatch` values, exposes scanner-backed health/evidence/roots, maps profile/browser diagnostics into roots/evidence through `IndexedSourceProfileDiagnosticsService`, and reuses `IndexedSourceSnapshotCacheService` so one diagnostics refresh does not reread Bookmarks files for health, roots, and evidence separately; scan batches, small-full-refresh reconcile deltas, and Bookmarks watch refresh deltas now reuse `IndexedWriteRuntimeEmitterService`, and `resetIndex()` exposes source-level user-clear / health-repair diagnostics while shared SearchIndex cleanup stays in the runtime store boundary. The default registered source still reports disabled/pending migration, but enablement now lives in a lightweight config resolver: it dynamically reads the unified provider config for `browser-bookmarks` / `touch-browser-data.browser-bookmarks`, and does not read real browser files while those providers are not explicitly enabled. Persistent rebuild, watch roots, and user-facing clear are not complete yet.
+
+Quicklinks now has a low-privacy runtime skeleton too: the `quicklinks` descriptor uses `owner: "official-plugin"`, `privacy: "low"`, `storage: "sqlite-index"`, and `defaultState: "enabled"`. The registered CoreApp skeleton supports injected quicklink snapshots for scan batches, reconcile/watch change deltas, source-level health/evidence, and reset/open/clear lifecycle contracts; scan/reconcile/watch output already reuses `IndexedWriteRuntimeEmitterService`. The default empty source reports degraded `quicklinks-empty` diagnostics without reading plugin storage or pretending content exists. `touch-browser-bookmarks.quicklinks` and `touch-dev-toolbox.dev-toolbox` now declare `indexedSourceId: "quicklinks"`, and CoreApp maps those linked provider configs to source enablement; Quicklinks stays enabled by default, reports `quicklinks-provider-disabled` when the core `quicklinks` provider is explicitly disabled, and returns to enabled when any linked official provider is explicitly enabled. The real official-plugin persistent feed, user-facing clear/rebuild, and Settings evidence still need to be connected.
+
+## Search Tokens
+
+Plugin Features automatically generate search tokens upon registration, including:
+
+- Original name (lowercase)
+- Full pinyin
+- Pinyin initials
+- Keywords
+- Command values
+
+**Custom Keywords**
+
+Add `keywords` to Features in `manifest.json` to enhance search matching:
+
+:::TuffCodeBlock{lang="json"}
+---
+code: |
+  {
+    "features": [
+      {
+        "id": "translate",
+        "name": "translate",
+        "desc": "Translate selected text",
+        "keywords": ["translate", "translation", "fanyi", "fy"]
+      }
+    ]
+  }
+---
+:::
+
+## Match Types & Priority
+
+The search engine matches in the following priority order:
+
+| Priority | Match Type | Score Range | Description |
+|----------|------------|-------------|-------------|
+| 1 | Exact | 1000 | Title exactly matches query |
+| 2 | Prefix | 800-900 | Title starts with query |
+| 3 | Token | 600-950 | Pinyin/initials/keyword match |
+| 4 | Contains | 600-700 | Title contains query |
+| 5 | Description | 400 | Query found in description |
+| 6 | Fuzzy | 0-500 | Typo-tolerant match |
+
+## Highlighting
+
+Search results include a `matchResult` field for UI highlighting:
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  interface MatchRange {
+    start: number  // Start position
+    end: number    // End position (exclusive)
+  }
+
+  // In TuffItem.meta.extension
+  interface FeatureExtension {
+    matchResult?: MatchRange[]
+    searchTokens?: string[]
+  }
+---
+:::
+
+**Using Highlighting in Renderer**
+
+The BoxItem component automatically handles `matchResult` highlighting:
+
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <h5
+    class="text-sm font-semibold truncate"
+    v-html="getHighlightedHTML(
+      render.basic?.title || '',
+      props.item.meta?.extension?.matchResult
+    )"
+  />
+---
+:::
+
+The `getHighlightedHTML` function wraps matched regions in `<span>` tags:
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  function getHighlightedHTML(
+    text: string,
+    matchedIndices?: MatchRange[],
+    opts?: {
+      className?: string   // Highlight CSS class
+      base?: 0 | 1        // Index base
+      inclusiveEnd?: boolean
+    }
+  ): string
+---
+:::
+
+## Using Search Matching in Plugins
+
+**Using matchFeature Function**
+
+The `matchFeature` function from `@talex-touch/utils/search` enables custom search:
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { matchFeature } from '@talex-touch/utils/search'
+
+  const result = matchFeature({
+    title: 'translate',
+    desc: 'Translate selected text',
+    searchTokens: ['translate', 'fanyi', 'fy', 'translate'],
+    query: 'fanyi',
+    enableFuzzy: true
+  })
+
+  if (result.matched) {
+    console.log('Match type:', result.matchType)
+    console.log('Match score:', result.score)
+    console.log('Highlight ranges:', result.matchRanges)
+  }
+---
+:::
+
+**FeatureMatchResult Interface**
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  interface FeatureMatchResult {
+    /** Whether matched */
+    matched: boolean
+    /** Match score (0-1000) */
+    score: number
+    /** Match type */
+    matchType: 'exact' | 'token' | 'prefix' | 'contains' | 'fuzzy' | 'none'
+    /** Highlight ranges */
+    matchRanges: MatchRange[]
+    /** Matched token (for debugging) */
+    matchedToken?: string
+  }
+---
+:::
+
+## Fuzzy Matching API
+
+**fuzzyMatch Function**
+
+For typo-tolerant search:
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { fuzzyMatch, indicesToRanges } from '@talex-touch/utils/search'
+
+  const result = fuzzyMatch('hello', 'helol', 2)
+
+  if (result.matched) {
+    console.log('Score:', result.score)
+    console.log('Matched indices:', result.matchedIndices)
+
+    // Convert to highlight ranges
+    const ranges = indicesToRanges(result.matchedIndices)
+  }
+---
+:::
+
+**FuzzyMatchResult Interface**
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  interface FuzzyMatchResult {
+    /** Whether matched */
+    matched: boolean
+    /** Match score (0-1) */
+    score: number
+    /** Array of matched character indices */
+    matchedIndices: number[]
+  }
+---
+:::
+
+## Command Matching
+
+The Feature `commands` field is used for precise trigger matching:
+
+:::TuffCodeBlock{lang="json"}
+---
+code: |
+  {
+    "features": [
+      {
+        "id": "search-web",
+        "name": "Search Web",
+        "commands": [
+          { "type": "over" },
+          { "type": "match", "value": ["g ", "google "] },
+          { "type": "contain", "value": "search" },
+          { "type": "regex", "value": "^s\\s+" }
+        ]
+      }
+    ]
+  }
+---
+:::
+
+Command types:
+
+| Type | Description | Example |
+|------|-------------|---------|
+| `over` | Always match | Shows in empty search results |
+| `match` | Prefix match | `g hello` matches `g ` |
+| `contain` | Contains match | `I want to search` matches `search` |
+| `regex` | Regex match | `s hello` matches `^s\\s+` |
+
+## Clipboard State Sync
+
+Search queries include current clipboard state:
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  interface TuffQuery {
+    text: string
+    inputs?: TuffQueryInput[]
+  }
+
+  interface TuffQueryInput {
+    type: TuffInputType  // 'text' | 'image' | 'files' | 'html'
+    content: string
+    thumbnail?: string
+    rawContent?: string
+    metadata?: Record<string, unknown>
+  }
+---
+:::
+
+**Declaring Accepted Input Types**
+
+Declare `acceptedInputTypes` in Features to receive clipboard content:
+
+:::TuffCodeBlock{lang="json"}
+---
+code: |
+  {
+    "features": [
+      {
+        "id": "image-ocr",
+        "name": "Image OCR",
+        "acceptedInputTypes": ["image"]
+      }
+    ]
+  }
+---
+:::
+
+Supported input types:
+- `text` - Plain text
+- `image` - Image (Base64)
+- `files` - File path list
+- `html` - HTML rich text
+
+## Best Practices
+
+1. **Provide multilingual keywords**: Include both English and Chinese in `keywords`
+2. **Use meaningful Feature names**: Names automatically generate pinyin tokens
+3. **Declare acceptedInputTypes**: Explicitly state what input types your Feature can handle
+4. **Use appropriate command types**: `over` for general features, `match` for specific prefix triggers
+
+## Technical Notes
+- Search tokens are generated at Feature registration and feed the scoring pipeline.
+- `matchFeature` and `fuzzyMatch` return match types, scores, and highlight ranges for rendering.
+
+## Related Links
+
+- [Feature API](/docs/dev/api/feature)
+- [Box API](/docs/dev/api/box)
+- [Manifest Configuration](/docs/dev/reference/manifest)
