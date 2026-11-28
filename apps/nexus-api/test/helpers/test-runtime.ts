@@ -9,7 +9,6 @@ import { createUser, setUserRole } from '../../server/utils/authStore'
 import { signBrowserSessionToken } from '../../server/utils/sessionJwt'
 
 export const TEST_AUTH_SECRET = 'test-nexus-api-auth-secret-32-bytes-minimum!'
-export const TEST_ENCRYPT_KEY = 'test-nexus-api-encrypt-key-32-bytes-minimum!'
 export const TEST_SECURE_STORE_KEY = 'test-nexus-api-provider-store-key-32-bytes!'
 
 function normalizeBindParam(value: unknown): string | number | bigint | Uint8Array | null {
@@ -298,9 +297,7 @@ export function createTestEvent(options: TestEventOptions = {}): H3Event {
     AUTH_SECRET: TEST_AUTH_SECRET,
     APP_AUTH_JWT_SECRET: TEST_AUTH_SECRET,
     AUTH_ORIGIN: 'https://tuff.tagzxia.com',
-    NUXT_INTELLIGENCE_ENCRYPT_KEY: TEST_ENCRYPT_KEY,
     PROVIDER_REGISTRY_SECURE_STORE_KEY: TEST_SECURE_STORE_KEY,
-    NOTIFICATION_WEB_PUSH_PUBLIC_KEY: 'BTestVapidPublicKey1234567890',
     ...(options.env || {}),
   }
 

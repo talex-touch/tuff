@@ -37,100 +37,9 @@ export interface DeviceAuthInfoResponse {
   currentIp?: string | null
 }
 
-export interface SubscriptionStatusResponse {
-  plan: string
-  expiresAt: string | null
-  activatedAt: string | null
-  isActive: boolean
-  features: {
-    aiRequests: { limit: number, used: number }
-    aiTokens: { limit: number, used: number }
-    customModels: boolean
-    prioritySupport: boolean
-    apiAccess: boolean
-  }
-  team: {
-    id: string
-    name: string
-    type: 'personal' | 'organization' | string
-    role: string
-    collaborationEnabled: boolean
-    seats: { used: number, total: number }
-    permissions: {
-      canInvite: boolean
-      canManageMembers: boolean
-      canDisband: boolean
-      canCreateTeam: boolean
-    }
-  }
-}
-
 export interface LocalizedText {
   en: string
   zh: string
-}
-
-export interface CreditSummaryResponse {
-  month?: string
-  balance?: number
-  quota?: number
-  used?: number
-  remaining?: number
-  user?: {
-    quota: number
-    used: number
-  }
-  personal?: {
-    balance?: number
-    quota?: number
-    used?: number
-  }
-  team?: {
-    balance?: number
-    quota?: number
-    used?: number
-  }
-  teamContext?: {
-    id: string
-    name: string
-    type: string
-    hasTeamPool: boolean
-  } | null
-  boost?: {
-    eligible?: boolean
-    claimed?: boolean
-    claimedThisMonth?: boolean
-    canClaimNow?: boolean
-    amount?: number
-  } | null
-}
-
-export interface CreditLedgerEntry {
-  id: string
-  userId?: string
-  user_id?: string
-  userEmail?: string | null
-  scope?: string
-  scope_id?: string
-  delta: number
-  balanceAfter?: number | null
-  balance_after?: number | null
-  reason: string
-  action?: string | null
-  model?: string | null
-  createdAt?: string
-  created_at?: string
-}
-
-export interface CreditPricingRule {
-  capability: string
-  creditsPerUnit: number
-  minCredits: number
-  reserveMultiplier: number
-  upstreamCostUsdPerUnit?: number | null
-  unit?: string
-  active: boolean
-  updatedAt?: string | null
 }
 
 export interface ApiKeyItem {
@@ -168,49 +77,6 @@ export interface ConnectedDevice {
   lastSeenAt?: string | null
   createdAt?: string | null
   ip?: string | null
-}
-
-export interface SyncSessionItem {
-  device_id: string
-  expires_at: string
-  last_cursor: number
-  last_push_at: string | null
-  last_pull_at: string | null
-  last_error_code: string | null
-}
-
-export interface StorageStatusResponse {
-  quota?: {
-    plan_tier?: string
-    limits?: {
-      storage_limit_bytes?: number
-      object_limit?: number
-      item_limit?: number
-      device_limit?: number
-    }
-    usage?: {
-      used_storage_bytes?: number
-      used_objects?: number
-      used_devices?: number
-    }
-    usedBytes?: number
-    limitBytes?: number
-  }
-  usedBytes?: number
-  limitBytes?: number
-  keyrings?: Array<{
-    id?: string
-    keyring_id?: string
-    device_id?: string
-    deviceId?: string
-    version?: number
-    status?: string
-    created_at?: string
-    createdAt?: string
-  }>
-  keyringCount?: number
-  latestSession?: SyncSessionItem | null
-  generatedAt?: string
 }
 
 export interface PluginVersionItem {
@@ -252,96 +118,6 @@ export interface SigningKeyItem {
   status?: 'active' | 'overlap' | 'revoked' | string
   validFrom?: string | null
   validUntil?: string | null
-  createdAt?: string | null
-}
-
-export interface TeamMemberItem {
-  id: string
-  userId: string
-  name: string
-  email: string
-  role: string
-  status: string
-  joinedAt?: string | null
-}
-
-export interface TeamInviteItem {
-  id: string
-  email: string
-  role: string
-  status: string
-  expiresAt?: string | null
-  createdAt?: string | null
-}
-
-export interface ReceivedTeamInvitation {
-  id: string
-  teamId?: string
-  teamName?: string
-  organizationId?: string
-  organizationName?: string
-  role: string
-  status: string
-  expiresAt?: string | null
-  createdAt?: string | null
-}
-
-export interface DashboardTeamResponse {
-  team: {
-    id: string
-    name: string
-    type: 'personal' | 'organization' | string
-    role: string
-    plan?: string
-    collaborationEnabled: boolean
-    seats: { used: number, total: number }
-    quota?: {
-      aiRequests: { used: number, limit: number }
-      aiTokens: { used: number, limit: number }
-      weekStartDate?: string
-    }
-    permissions: {
-      canInvite: boolean
-      canManageMembers: boolean
-      canDisband: boolean
-      canCreateTeam: boolean
-    }
-    members: TeamMemberItem[]
-    invites: TeamInviteItem[]
-    receivedInvites: ReceivedTeamInvitation[]
-    pendingInvites?: number
-  }
-}
-
-export interface NotificationItem {
-  id: string
-  title: string
-  body?: string | null
-  message?: string | null
-  action?: string | null
-  resourceType?: string | null
-  category?: string | null
-  level?: string | null
-  status?: 'unread' | 'read' | string
-  read?: boolean
-  readAt?: string | null
-  occurredAt?: string | null
-  createdAt: string
-}
-
-export interface NotificationsListResponse {
-  notifications?: NotificationItem[]
-  items?: NotificationItem[]
-  unreadCount: number
-  pagination?: PaginationMeta
-  total?: number
-}
-
-export interface PushSubscriptionItem {
-  id: string
-  endpoint: string
-  userAgent?: string | null
-  deviceLabel?: string | null
   createdAt?: string | null
 }
 
@@ -559,38 +335,4 @@ export interface AdminAiUsageResponse {
   byProvider?: AdminAiUsageRow[]
   byModel?: AdminAiUsageRow[]
   rows?: AdminAiUsageRow[]
-}
-
-export interface ActivationCodeItem {
-  id: string
-  code: string
-  plan: string
-  duration_days?: number
-  durationDays?: number
-  max_uses?: number
-  maxUses?: number
-  uses?: number
-  used_count?: number
-  status: 'active' | 'exhausted' | 'expired' | 'revoked' | string
-  expires_at?: string | null
-  expiresAt?: string | null
-  created_at?: string | null
-  createdAt?: string | null
-}
-
-export interface AdminSubscriptionItem {
-  user: {
-    id: string
-    email: string
-    name: string | null
-    role: string
-    status: string
-    createdAt: string
-  }
-  subscription: {
-    plan: string
-    activatedAt: string | null
-    expiresAt: string | null
-    isActive: boolean
-  }
 }

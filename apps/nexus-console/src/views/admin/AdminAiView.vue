@@ -111,7 +111,7 @@ const providerColumns = computed<DataTableColumn<AdminAiProvider>[]>(() => [
   { key: 'capabilities', title: t('admin.capabilitiesLabel'), minWidth: 160 },
   { key: 'models', title: t('admin.modelCol'), minWidth: 180 },
   { key: 'credentialConfigured', title: t('admin.credentialStatusCol'), minWidth: 130 },
-  { key: 'quota', title: t('dashboard.creditQuota'), minWidth: 120 },
+  { key: 'quota', title: t('admin.quotaCol'), minWidth: 120 },
   { key: 'actions', title: t('common.actions'), type: 'actions', align: 'right', minWidth: 230 },
 ])
 

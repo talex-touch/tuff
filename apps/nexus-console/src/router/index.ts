@@ -47,12 +47,6 @@ export const consoleRoutes: RouteRecordRaw[] = [
     meta: { requiresAuth: true, shell: 'auth', titleKey: 'auth.deviceAuthTitle' },
   },
   {
-    path: '/team/join',
-    name: 'team-join',
-    component: () => import('@/views/auth/TeamJoinView.vue'),
-    meta: { requiresAuth: true, shell: 'auth', titleKey: 'auth.teamJoinTitle' },
-  },
-  {
     path: '/dashboard',
     name: 'dashboard-overview',
     component: () => import('@/views/dashboard/DashboardOverviewView.vue'),
@@ -75,24 +69,6 @@ export const consoleRoutes: RouteRecordRaw[] = [
     name: 'dashboard-plugins',
     component: () => import('@/views/dashboard/DashboardPluginsView.vue'),
     meta: { requiresAuth: true, shell: 'console', titleKey: 'nav.plugins' },
-  },
-  {
-    path: '/dashboard/team',
-    name: 'dashboard-team',
-    component: () => import('@/views/dashboard/DashboardTeamView.vue'),
-    meta: { requiresAuth: true, shell: 'console', titleKey: 'nav.team' },
-  },
-  {
-    path: '/dashboard/credits',
-    name: 'dashboard-credits',
-    component: () => import('@/views/dashboard/DashboardCreditsView.vue'),
-    meta: { requiresAuth: true, shell: 'console', titleKey: 'nav.credits' },
-  },
-  {
-    path: '/dashboard/notifications',
-    name: 'dashboard-notifications',
-    component: () => import('@/views/dashboard/DashboardNotificationsView.vue'),
-    meta: { requiresAuth: true, shell: 'console', titleKey: 'nav.notifications' },
   },
   {
     path: '/admin',
@@ -123,12 +99,6 @@ export const consoleRoutes: RouteRecordRaw[] = [
     name: 'admin-ai',
     component: () => import('@/views/admin/AdminAiView.vue'),
     meta: { requiresAuth: true, requiresAdmin: true, shell: 'console', titleKey: 'nav.adminAi' },
-  },
-  {
-    path: '/admin/credits',
-    name: 'admin-credits',
-    component: () => import('@/views/admin/AdminCreditsView.vue'),
-    meta: { requiresAuth: true, requiresAdmin: true, shell: 'console', titleKey: 'nav.adminCredits' },
   },
   {
     path: '/:pathMatch(.*)*',

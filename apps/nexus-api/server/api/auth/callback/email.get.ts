@@ -11,7 +11,6 @@ import {
   restorePendingDeletionIfWithinWindow,
   useVerificationToken,
 } from '../../../utils/authStore'
-import { ensurePersonalTeam } from '../../../utils/creditsStore'
 
 export default defineEventHandler(async (event) => {
   const baseUrl = resolveAuthBaseUrl(event)
@@ -40,7 +39,6 @@ export default defineEventHandler(async (event) => {
       emailVerified: new Date().toISOString(),
       emailState: 'verified',
     })
-    await ensurePersonalTeam(event, user.id)
   }
 
   await issueBrowserSessionForUser(event, user, 'email')

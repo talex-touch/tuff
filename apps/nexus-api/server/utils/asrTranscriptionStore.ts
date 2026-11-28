@@ -4,13 +4,6 @@ import { Buffer } from 'node:buffer'
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto'
 import { createError } from 'h3'
 import { readCloudflareBindings, resolveObjectBucket } from './cloudflare'
-import {
-  computeCreditCharge,
-  computeCreditReservation,
-  parseCreditPricingRuleSnapshot,
-  serializeCreditPricingRule,
-  type CreditPricingRule,
-} from './creditPricingStore'
 import { deleteStorageObject, getStorageObject, putStorageObject, type StorageObjectMemory } from './storageObjectStore'
 import { defineD1Schema, ensureD1Schema } from './d1Schema'
 
@@ -23,7 +16,6 @@ const ASR_RESULT_OBJECT_PREFIX = 'asr-result'
 const FILETRANS_INPUT_UNIT_PRICE_CNY_PER_SECOND = 0.00022
 const ASR_RESULT_CLEANUP_BATCH_LIMIT = 100
 const ASR_RESULT_CLEANUP_MAX_BATCH_LIMIT = 500
-const CREDIT_LEDGER_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 const memoryStorage: StorageObjectMemory = new Map()
 
@@ -51,12 +43,6 @@ export interface AsrRequestRecord {
   billedSeconds: number | null
   providerCostCny: number | null
   failureCode: string | null
-  /**
-   * The price this request was admitted under. The hold is a quote, so settlement
-   * reads this instead of the price in force when the provider finished; null only for
-   * requests that were already in flight when the column shipped.
-   */
-  pricing: CreditPricingRule | null
   createdAt: string
   updatedAt: string
 }
@@ -117,8 +103,6 @@ export interface AsrRequestIdentityInput {
 export interface CreateAsrRequestInput extends AsrRequestIdentityInput {
   providerId: string
   durationSeconds: number
-  /** Effective price for this capability; resolved by the caller from the pricing table. */
-  pricing: CreditPricingRule
   /** Synchronous providers consume the request body directly and must not persist a source copy. */
   storeHandoff?: boolean
 }
@@ -247,7 +231,6 @@ function mapRequest(row: AsrRequestRow): AsrRequestRecord {
     billedSeconds: row.billed_seconds == null ? null : Number(row.billed_seconds),
     providerCostCny: row.provider_cost_cny == null ? null : Number(row.provider_cost_cny),
     failureCode: row.failure_code,
-    pricing: parseCreditPricingRuleSnapshot(row.pricing_snapshot),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
@@ -308,24 +291,6 @@ export function countTranscriptUnits(transcript: string): number {
   }
   if (latinWord) units += 2
   return units
-}
-
-export function calculateFiletransCredits(
-  pricing: CreditPricingRule,
-  transcript: string,
-  billedSeconds: number,
-): number {
-  if (!Number.isFinite(billedSeconds) || billedSeconds <= 0) throw new Error('ASR_PROVIDER_METERING_INVALID')
-  return computeCreditCharge(pricing, {
-    seconds: billedSeconds,
-    units: countTranscriptUnits(transcript),
-  })
-}
-
-export function calculateFiletransReservation(pricing: CreditPricingRule, durationSeconds: number): number {
-  if (!Number.isFinite(durationSeconds) || durationSeconds <= 0 || durationSeconds > ASR_MAX_DURATION_SECONDS)
-    throw createError({ statusCode: 400, statusMessage: 'Audio duration is invalid.' })
-  return computeCreditReservation(pricing, { seconds: durationSeconds })
 }
 
 export function calculateFiletransProviderCost(billedSeconds: number): number {
@@ -474,7 +439,8 @@ export async function createAsrRequest(event: H3Event, input: CreateAsrRequestIn
   const idempotencyKey = normalizeAsrIdempotencyKey(input.idempotencyKey)
   const requestHash = hashAsrRequest(input)
   const durationSeconds = Number(input.durationSeconds)
-  const reservedCredits = calculateFiletransReservation(input.pricing, durationSeconds)
+  if (!Number.isFinite(durationSeconds) || durationSeconds <= 0 || durationSeconds > ASR_MAX_DURATION_SECONDS)
+    throw createError({ statusCode: 400, statusMessage: 'Audio duration is invalid.' })
   const id = `asr_${randomUUID()}`
   const deliveryToken = randomBytes(32).toString('base64url')
   const now = new Date()
@@ -494,15 +460,14 @@ export async function createAsrRequest(event: H3Event, input: CreateAsrRequestIn
     deliveryTokenHash: hashHex(deliveryToken),
     deliveryExpiresAt: expiresAt.toISOString(),
     providerTaskId: null,
-    status: 'pending' as const,
-    reservedCredits,
+    status: 'reserved' as const,
+    reservedCredits: 0,
     reservationLedgerId: null,
     chargedCredits: null,
     creditsReleasedAt: null,
     billedSeconds: null,
     providerCostCny: null,
     failureCode: null,
-    pricing: input.pricing,
     createdAt: now.toISOString(),
     updatedAt: now.toISOString(),
   }
@@ -543,7 +508,7 @@ export async function createAsrRequest(event: H3Event, input: CreateAsrRequestIn
       record.failureCode,
       record.createdAt,
       record.updatedAt,
-      serializeCreditPricingRule(input.pricing),
+      null,
     )
     .run()
   if (Number(insert.meta?.changes ?? 0) !== 1) {
@@ -578,43 +543,6 @@ export async function createAsrRequest(event: H3Event, input: CreateAsrRequestIn
   return { request: record, deliveryToken, created: true }
 }
 
-export async function markAsrReserved(
-  event: H3Event,
-  requestId: string,
-  reservationLedgerId: string,
-): Promise<AsrRequestRecord> {
-  if (!CREDIT_LEDGER_ID_PATTERN.test(reservationLedgerId))
-    throw new Error('ASR_RESERVATION_LEDGER_ID_INVALID')
-  return await transitionAsrRequest(event, requestId, ['pending'], 'reserved', { reservationLedgerId })
-}
-
-export async function setAsrReservationLedgerId(
-  event: H3Event,
-  requestId: string,
-  reservationLedgerId: string,
-): Promise<AsrRequestRecord> {
-  if (!CREDIT_LEDGER_ID_PATTERN.test(reservationLedgerId))
-    throw new Error('ASR_RESERVATION_LEDGER_ID_INVALID')
-  const database = getD1Database(event)
-  await ensureAsrSchema(database)
-  const id = assertAsrId(requestId)
-  const row = await database
-    .prepare(
-      `UPDATE ${ASR_REQUESTS_TABLE}
-       SET reservation_ledger_id = ?, updated_at = ?
-       WHERE id = ? AND status IN ('reserved', 'dispatching') AND reservation_ledger_id IS NULL
-       RETURNING *`,
-    )
-    .bind(reservationLedgerId, new Date().toISOString(), id)
-    .first<AsrRequestRow>()
-  if (row) return mapRequest(row)
-  // Nothing to set: the same ledger was recorded before, or the request moved on.
-  const request = await getAsrRequest(event, id)
-  if (!request || request.reservationLedgerId !== reservationLedgerId)
-    throw new Error('ASR_REQUEST_STATE_CONFLICT')
-  return request
-}
-
 export async function markAsrDispatching(
   event: H3Event,
   requestId: string,
@@ -633,7 +561,7 @@ export async function markAsrSettled(
 ): Promise<AsrRequestRecord> {
   if (
     !Number.isInteger(chargedCredits) ||
-    chargedCredits <= 0 ||
+    chargedCredits < 0 ||
     !Number.isFinite(billedSeconds) ||
     billedSeconds <= 0 ||
     !Number.isFinite(providerCostCny) ||
@@ -657,7 +585,7 @@ export async function markAsrSettledFromReserved(
 ): Promise<AsrRequestRecord> {
   if (
     !Number.isInteger(chargedCredits) ||
-    chargedCredits <= 0 ||
+    chargedCredits < 0 ||
     !Number.isFinite(billedSeconds) ||
     billedSeconds <= 0 ||
     !Number.isFinite(providerCostCny) ||
@@ -669,28 +597,6 @@ export async function markAsrSettledFromReserved(
     billedSeconds,
     providerCostCny,
   })
-}
-
-export async function markAsrCreditsReleased(event: H3Event, requestId: string): Promise<AsrRequestRecord> {
-  const database = getD1Database(event)
-  await ensureAsrSchema(database)
-  const id = assertAsrId(requestId)
-  const releasedAt = new Date().toISOString()
-  const row = await database
-    .prepare(
-      `UPDATE ${ASR_REQUESTS_TABLE}
-       SET credits_released_at = ?, updated_at = ?
-       WHERE id = ? AND status = 'settled' AND credits_released_at IS NULL
-       RETURNING *`,
-    )
-    .bind(releasedAt, releasedAt, id)
-    .first<AsrRequestRow>()
-  if (row) return mapRequest(row)
-  // Nothing to mark: released before (a resumed settlement), or not settled at all.
-  const request = await getAsrRequest(event, id)
-  if (!request || request.status !== 'settled' || !request.creditsReleasedAt)
-    throw new Error('ASR_REQUEST_STATE_CONFLICT')
-  return request
 }
 
 export async function markAsrReleased(
@@ -895,10 +801,9 @@ export async function listAsrSettlementMaintenanceRequests(
     .prepare(
       `SELECT * FROM ${ASR_REQUESTS_TABLE}
        WHERE delivery_expires_at <= ?
-         AND (
-           (status = 'reserved' AND provider_task_id IS NULL AND result_deleted_at IS NULL)
-           OR (status = 'settled' AND credits_released_at IS NULL)
-         )
+         AND status = 'reserved'
+         AND provider_task_id IS NULL
+         AND result_deleted_at IS NULL
        ORDER BY delivery_expires_at ASC
        LIMIT ?`,
     )

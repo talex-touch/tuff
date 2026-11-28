@@ -32,9 +32,6 @@ const navItems = computed<SidebarNavItem[]>(() => {
     { value: '/dashboard/account', label: t('nav.account'), group: 'user', icon: 'i-carbon-user-avatar' },
     { value: '/dashboard/devices', label: t('nav.devices'), group: 'user', icon: 'i-carbon-laptop' },
     { value: '/dashboard/plugins', label: t('nav.plugins'), group: 'user', icon: 'i-carbon-plug' },
-    { value: '/dashboard/team', label: t('nav.team'), group: 'user', icon: 'i-carbon-group' },
-    { value: '/dashboard/credits', label: t('nav.credits'), group: 'user', icon: 'i-carbon-currency' },
-    { value: '/dashboard/notifications', label: t('nav.notifications'), group: 'user', icon: 'i-carbon-notification' },
   ]
   if (session.isAdmin.value) {
     items.push(
@@ -43,7 +40,6 @@ const navItems = computed<SidebarNavItem[]>(() => {
       { value: '/admin/store', label: t('nav.adminStore'), group: 'admin', icon: 'i-carbon-store' },
       { value: '/admin/releases', label: t('nav.adminReleases'), group: 'admin', icon: 'i-carbon-rocket' },
       { value: '/admin/ai', label: t('nav.adminAi'), group: 'admin', icon: 'i-carbon-machine-learning-model' },
-      { value: '/admin/credits', label: t('nav.adminCredits'), group: 'admin', icon: 'i-carbon-wallet' },
     )
   }
   return items

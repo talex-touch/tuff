@@ -41,8 +41,7 @@ export default defineNitroConfig({
     dirsScanOptions: {
       fileFilter(file) {
         const normalized = file.replace(/\\/g, '/')
-        return !normalized.endsWith('/server/utils/billing/index.ts')
-          && !normalized.endsWith('/server/utils/telemetryRetentionCore.ts')
+        return !normalized.endsWith('/server/utils/telemetryRetentionCore.ts')
           && !normalized.endsWith('.test.ts')
       },
     },
@@ -90,9 +89,6 @@ export default defineNitroConfig({
     providerRegistry: {
       secureStoreKey: process.env.PROVIDER_REGISTRY_SECURE_STORE_KEY,
     },
-    notificationWebPush: {
-      publicKey: process.env.NOTIFICATION_WEB_PUSH_PUBLIC_KEY,
-    },
     releaseDownload: {
       secret: process.env.RELEASE_DOWNLOAD_SIGNING_SECRET || '',
       fallbackSecret: authSecret,
@@ -104,9 +100,6 @@ export default defineNitroConfig({
       secret: process.env.ADMINSECRET || process.env.ADMIN_SECRET,
     },
     public: {
-      notificationWebPush: {
-        publicKey: process.env.NOTIFICATION_WEB_PUSH_PUBLIC_KEY,
-      },
       siteUrl: process.env.NUXT_PUBLIC_SITE_URL || 'https://tuff.tagzxia.com',
     },
   },

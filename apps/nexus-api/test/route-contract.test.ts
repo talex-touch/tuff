@@ -25,7 +25,7 @@ function walkFiles(dir: string): string[] {
 describe('nexus-api route & architecture contract guard', () => {
   const apiRoutes = walkFiles(apiRoot).map(f => relative(apiRoot, f).replace(/\\/g, '/')).sort()
 
-  it('has zero forbidden governance, checkin, runtime docs, oauth-idp, or ip-ban routes', () => {
+  it('has zero forbidden governance, team, credits, sync, notifications, checkin, runtime docs, oauth-idp, or ip-ban routes', () => {
     const forbiddenPrefixes = [
       'admin/emergency/',
       'admin/oob/',
@@ -35,22 +35,35 @@ describe('nexus-api route & architecture contract guard', () => {
       'admin/doc-comments/',
       'admin/telemetry/ip-blocks',
       'admin/analytics',
+      'admin/credits/',
+      'admin/codes/',
+      'admin/subscriptions/',
       'dashboard/governance/',
       'dashboard/intelligence/',
       'dashboard/provider-registry/',
       'dashboard/oauth/',
       'dashboard/notifications/',
-      'dashboard/storage/alerts/',
-      'dashboard/storage/channels/',
-      'dashboard/storage/credentials',
-      'dashboard/storage/policies',
-      'dashboard/storage/details',
-      'dashboard/storage/status',
+      'dashboard/storage/',
+      'dashboard/team',
       'dashboard/privacy-export-jobs/',
       'dashboard/account-deletion/',
       'dashboard/telemetry/',
       'dashboard/updates/fx-rate/',
-      'credits/checkin',
+      'team/',
+      'credits/',
+      'codes/',
+      'subscriptions/',
+      'subscription/',
+      'quotas/',
+      'v1/quotas/',
+      'v1/sync/',
+      'v1/keys/',
+      'v1/devices/attest',
+      'sync/',
+      'keys/',
+      'devices/attest',
+      'storage/',
+      'notifications/',
       'docs/',
       'content/',
       'notes/',
@@ -62,6 +75,7 @@ describe('nexus-api route & architecture contract guard', () => {
 
     const offending = apiRoutes.filter(route =>
       forbiddenPrefixes.some(prefix => route.startsWith(prefix))
+      || /^admin\/users\/[^/]+\/(?:credits|subscription)\./.test(route)
       || /\.test\.ts$/.test(route)
       || /(?:^|\/)__tests__(?:\/|$)/.test(route),
     )
@@ -69,7 +83,7 @@ describe('nexus-api route & architecture contract guard', () => {
     expect(offending).toEqual([])
   })
 
-  it('exposes all critical CI, core-app, console, and Module A/B/C/D routes', () => {
+  it('exposes all critical CI, core-app, console, and Module A/C/D routes', () => {
     const requiredRoutes = [
       // Clean H3 Auth & Device Flow
       'auth/session.get.ts',
@@ -114,8 +128,7 @@ describe('nexus-api route & architecture contract guard', () => {
       'dashboard/plugins.get.ts',
       'dashboard/plugin-signing-keys.get.ts',
       'plugins/assets/[key].get.ts',
-      // Tier 2 v1
-      'v1/sync/handshake.post.ts',
+      // AI Audio & Scene Execution (credit-free)
       'v1/ai/audio/handoff/[requestId].get.ts',
       'v1/scenes/[id]/run.post.ts',
       // Module A: Exchange & Unified AI Gateway Admin
@@ -133,14 +146,6 @@ describe('nexus-api route & architecture contract guard', () => {
       'admin/ai/scenes/[id].put.ts',
       'admin/ai/scenes/[id].delete.ts',
       'admin/ai/usage.get.ts',
-      // Module B: Slim Notifications + Sync Storage
-      'notifications/index.get.ts',
-      'notifications/read.post.ts',
-      'notifications/push.get.ts',
-      'notifications/push.post.ts',
-      'notifications/push/[id].delete.ts',
-      'dashboard/storage/index.get.ts',
-      'dashboard/storage/sessions.get.ts',
       // Module C: Privacy & Single-step Deletion / Sync Export
       'user/me.delete.ts',
       'user/me/export.get.ts',
@@ -158,7 +163,7 @@ describe('nexus-api route & architecture contract guard', () => {
     expect(missing).toEqual([])
   })
 
-  it('has zero Nuxt, Vue, @nuxt/content, or @sidebase/nuxt-auth dependencies or server imports', () => {
+  it('has zero Nuxt, Vue, @nuxt/content, or @sidebase/nuxt-auth dependencies or retired server imports', () => {
     const pkg = JSON.parse(readFileSync(join(appRoot, 'package.json'), 'utf8'))
     const allDepNames = [
       ...Object.keys(pkg.dependencies || {}),
@@ -168,7 +173,7 @@ describe('nexus-api route & architecture contract guard', () => {
     expect(allDepNames.filter(dep => forbiddenDeps.includes(dep))).toEqual([])
 
     const serverFiles = walkFiles(serverRoot).filter(f => /\.[cm]?ts$/.test(f))
-    const badImportPattern = /(?:from|import)\s+['"](?:#imports|nuxt|vue|@nuxt\/content|@sidebase\/nuxt-auth|next-auth|.*(?:platformGovernanceStore|adminAuditStore|ipSecurityStore|uploadGovernance|notificationDispatcher))['"]/
+    const badImportPattern = /(?:from|import)\s+['"](?:#imports|nuxt|vue|@nuxt\/content|@sidebase\/nuxt-auth|next-auth|.*(?:platformGovernanceStore|adminAuditStore|ipSecurityStore|uploadGovernance|notificationDispatcher|creditsStore|creditPricingStore|subscriptionStore|planCatalog|teamStore|teamContext|teamInviteValidation|syncStoreV1|syncErrors|deviceAttestStore|browserNotificationInboxStore|browserPushSubscriptionStore))['"]/
     const violations: string[] = []
     for (const file of serverFiles) {
       const content = readFileSync(file, 'utf8')

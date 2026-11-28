@@ -61,7 +61,7 @@ describe('console router guards & route inventory', () => {
   it('allows admin users into all /admin/* views', async () => {
     setSessionUserForTest(ADMIN_ACCOUNT)
     const router = createConsoleRouter(createMemoryHistory())
-    for (const adminPath of ['/admin', '/admin/users', '/admin/store', '/admin/releases', '/admin/ai', '/admin/credits']) {
+    for (const adminPath of ['/admin', '/admin/users', '/admin/store', '/admin/releases', '/admin/ai']) {
       await router.push(adminPath)
       expect(router.currentRoute.value.path).toBe(adminPath)
     }
@@ -85,32 +85,32 @@ describe('console router guards & route inventory', () => {
     expect(resolveSafeRedirectUrl('/device-auth?code=1234')).toBe('/device-auth?code=1234')
   })
 
-  it('exposes the exact razor route inventory without deleted governance/checkin/oauth routes', () => {
+  it('exposes the exact razor route inventory without deleted team/credits/notifications/governance/checkin/oauth routes', () => {
     const paths = consoleRoutes.map(r => r.path)
     const expected = [
       '/sign-in',
       '/verify',
       '/verify-waiting',
       '/device-auth',
-      '/team/join',
       '/dashboard',
       '/dashboard/account',
       '/dashboard/devices',
       '/dashboard/plugins',
-      '/dashboard/team',
-      '/dashboard/credits',
-      '/dashboard/notifications',
       '/admin',
       '/admin/users',
       '/admin/store',
       '/admin/releases',
       '/admin/ai',
-      '/admin/credits',
     ]
     for (const p of expected)
       expect(paths).toContain(p)
 
     const forbidden = [
+      '/team/join',
+      '/dashboard/team',
+      '/dashboard/credits',
+      '/dashboard/notifications',
+      '/admin/credits',
       '/admin/emergency',
       '/admin/governance',
       '/admin/risk',

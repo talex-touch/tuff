@@ -63,7 +63,7 @@ describe('API client contract & deleted-route guard', () => {
     expect(() => assertSameOriginApiPath('/other/path')).toThrow()
   })
 
-  it('calls exact redesigned nexus-api endpoints for Modules A/B/C/D and Device Flow', async () => {
+  it('calls exact redesigned nexus-api endpoints for Modules A/C/D and Device Flow', async () => {
     const fetchMock = vi.fn().mockImplementation(() =>
       Promise.resolve(new Response(JSON.stringify({ ok: true }), {
         status: 200,
@@ -82,12 +82,7 @@ describe('API client contract & deleted-route guard', () => {
       bindings: [],
     })
     await consoleApi.getAiUsage({ days: 30 })
-    await consoleApi.listNotifications({ page: 1, limit: 20 })
-    await consoleApi.markNotificationsRead({ all: true })
-    await consoleApi.subscribePush({ endpoint: 'https://push.example/1', keys: { p256dh: 'a', auth: 'b' } })
-    await consoleApi.unsubscribePush('sub-1')
-    await consoleApi.getStorageStatus()
-    await consoleApi.listStorageSessions({ page: 1, limit: 10 })
+    await consoleApi.listDevices()
     await consoleApi.exportMyData()
     await consoleApi.deleteMyAccount({ confirm: 'DELETE_MY_DATA' })
     await consoleApi.refreshExchangeRates()
@@ -109,12 +104,7 @@ describe('API client contract & deleted-route guard', () => {
       'POST /api/admin/ai/providers/prov-1/check',
       'PUT /api/admin/ai/scenes',
       'GET /api/admin/ai/usage?days=30',
-      'GET /api/notifications?page=1&limit=20',
-      'POST /api/notifications/read',
-      'POST /api/notifications/push',
-      'DELETE /api/notifications/push/sub-1',
-      'GET /api/dashboard/storage',
-      'GET /api/dashboard/storage/sessions?page=1&limit=10',
+      'GET /api/devices',
       'GET /api/user/me/export',
       'DELETE /api/user/me',
       'POST /api/admin/exchange/refresh',
@@ -134,7 +124,7 @@ describe('API client contract & deleted-route guard', () => {
     })
   })
 
-  it('contains zero references to deleted governance, checkin, oauth-idp, docs-runtime, or /_i18n/ endpoints', () => {
+  it('contains zero references to deleted team, credits, sync, notifications, governance, checkin, oauth-idp, docs-runtime, or /_i18n/ endpoints', () => {
     const forbiddenSubstrings = [
       'admin/emergency',
       'admin/governance',
@@ -145,15 +135,21 @@ describe('API client contract & deleted-route guard', () => {
       'admin/oob',
       'admin/doc-comments',
       'admin/telemetry/ip-blocks',
+      'admin/credits',
+      'admin/codes',
+      'admin/subscriptions',
       'dashboard/oauth',
       'oauth/authorize',
       'oauth/token',
-      'dashboard/storage/policies',
-      'dashboard/storage/channels',
-      'dashboard/notifications/channels',
+      'dashboard/storage',
+      'dashboard/team',
+      'team/invitations',
+      'dashboard/notifications',
+      'notifications/',
       'dashboard/privacy-export-jobs',
       'account-deletion/terms-session',
-      'credits/checkin',
+      'credits/',
+      'subscription/',
       'dashboard/intelligence/ip-bans',
       'fx-rate',
       '/_i18n/',

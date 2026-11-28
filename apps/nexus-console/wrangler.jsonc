@@ -14,9 +14,7 @@
     { "pattern": "tuff.tagzxia.com/dashboard", "zone_name": "tagzxia.com" },
     { "pattern": "tuff.tagzxia.com/dashboard/*", "zone_name": "tagzxia.com" },
     { "pattern": "tuff.tagzxia.com/admin", "zone_name": "tagzxia.com" },
-    { "pattern": "tuff.tagzxia.com/admin/*", "zone_name": "tagzxia.com" },
-    { "pattern": "tuff.tagzxia.com/team", "zone_name": "tagzxia.com" },
-    { "pattern": "tuff.tagzxia.com/team/*", "zone_name": "tagzxia.com" }
+    { "pattern": "tuff.tagzxia.com/admin/*", "zone_name": "tagzxia.com" }
   ],
   "assets": {
     "directory": "dist",

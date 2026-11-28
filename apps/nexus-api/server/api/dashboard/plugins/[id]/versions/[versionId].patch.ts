@@ -1,7 +1,6 @@
 import { createError, defineEventHandler, readBody } from 'h3'
 import { requireAuthOrApiKey } from '../../../../../utils/auth'
 import { getUserById } from '../../../../../utils/authStore'
-import { storeBrowserNotification } from '../../../../../utils/browserNotificationInboxStore'
 import { getPluginById, setPluginVersionStatus } from '../../../../../utils/pluginsStore'
 
 const ALLOWED_VERSION_STATUSES = ['pending', 'approved', 'rejected'] as const
@@ -34,28 +33,6 @@ export default defineEventHandler(async (event) => {
     actorRole: 'admin',
     reason: status === 'rejected' ? (reason || null) : null,
   })
-
-  if (plugin.userId) {
-    const action = status === 'approved'
-      ? 'plugin.version.approved'
-      : status === 'rejected'
-        ? 'plugin.version.rejected'
-        : 'plugin.version.pending'
-    await storeBrowserNotification(event, {
-      userId: plugin.userId,
-      action,
-      title: `Plugin ${plugin.name} v${version.version} ${status}`,
-      body: reason || `Version ${version.version} of ${plugin.name} was marked as ${status}.`,
-      resourceType: 'plugin',
-      resourceId: id,
-      metadata: {
-        pluginSlug: plugin.slug,
-        versionId,
-        version: version.version,
-        status,
-      },
-    }).catch(() => {})
-  }
 
   return { version }
 })

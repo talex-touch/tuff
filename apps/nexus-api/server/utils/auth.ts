@@ -20,7 +20,6 @@ import {
 import { validateApiKey } from './apiKeyStore'
 import { hasRequiredScope, isAdminOnlyApiKeyScope } from './apiKeyScopes'
 import { readCloudflareBindings } from './cloudflare'
-import { ensurePersonalTeam } from './creditsStore'
 import { assertRuntimeCredential, isLocalDevelopmentRuntime, selectRuntimeCredential } from './runtimeCredentialPolicy'
 import { resolveSessionAuthSecret } from './sessionAuthSecret'
 import {
@@ -87,7 +86,6 @@ async function resolveSessionUserByEmail(event: H3Event, email: string, name: st
       emailVerified: new Date().toISOString(),
       emailState: 'verified',
     })
-    await ensurePersonalTeam(event, user.id)
     return user
   }
   catch {

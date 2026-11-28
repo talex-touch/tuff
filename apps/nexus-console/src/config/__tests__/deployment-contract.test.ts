@@ -38,7 +38,8 @@ describe('Cloudflare Static Assets & Vite bundle contracts', () => {
     expect(patterns).toContain('tuff.tagzxia.com/device-auth')
     expect(patterns).toContain('tuff.tagzxia.com/dashboard/*')
     expect(patterns).toContain('tuff.tagzxia.com/admin/*')
-    expect(patterns).toContain('tuff.tagzxia.com/team/*')
+    expect(patterns).not.toContain('tuff.tagzxia.com/team')
+    expect(patterns).not.toContain('tuff.tagzxia.com/team/*')
   })
 
   it('emits /* no-cache shell first and detaches Cache-Control for immutable /_console/* assets', () => {

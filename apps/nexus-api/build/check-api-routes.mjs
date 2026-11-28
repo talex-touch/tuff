@@ -22,22 +22,35 @@ const forbiddenRoutePrefixes = [
   'admin/doc-comments/',
   'admin/telemetry/ip-blocks',
   'admin/analytics',
+  'admin/credits/',
+  'admin/codes/',
+  'admin/subscriptions/',
   'dashboard/governance/',
   'dashboard/intelligence/',
   'dashboard/provider-registry/',
   'dashboard/oauth/',
   'dashboard/notifications/',
-  'dashboard/storage/alerts/',
-  'dashboard/storage/channels/',
-  'dashboard/storage/credentials',
-  'dashboard/storage/policies',
-  'dashboard/storage/details',
-  'dashboard/storage/status',
+  'dashboard/storage/',
+  'dashboard/team',
   'dashboard/privacy-export-jobs/',
   'dashboard/account-deletion/',
   'dashboard/telemetry/',
   'dashboard/updates/fx-rate/',
-  'credits/checkin',
+  'team/',
+  'credits/',
+  'codes/',
+  'subscriptions/',
+  'subscription/',
+  'quotas/',
+  'v1/quotas/',
+  'v1/sync/',
+  'v1/keys/',
+  'v1/devices/attest',
+  'sync/',
+  'keys/',
+  'devices/attest',
+  'storage/',
+  'notifications/',
   'docs/',
   'content/',
   'notes/',
@@ -45,6 +58,10 @@ const forbiddenRoutePrefixes = [
   'telemetry/messages',
   'pageview',
   'login-history',
+]
+
+const forbiddenRoutePatterns = [
+  /^admin\/users\/[^/]+\/(?:credits|subscription)\./,
 ]
 
 function walkFiles(dir) {
@@ -67,7 +84,10 @@ function walkFiles(dir) {
 
 const files = walkFiles(apiRoot).map(file => relative(apiRoot, file).replace(/\\/g, '/')).sort()
 const forbiddenFiles = files.filter(file => forbiddenFilePatterns.some(pattern => pattern.test(file)))
-const forbiddenRoutes = files.filter(file => forbiddenRoutePrefixes.some(prefix => file.startsWith(prefix)))
+const forbiddenRoutes = files.filter(file =>
+  forbiddenRoutePrefixes.some(prefix => file.startsWith(prefix))
+  || forbiddenRoutePatterns.some(pattern => pattern.test(file)),
+)
 
 if (forbiddenFiles.length > 0 || forbiddenRoutes.length > 0) {
   if (forbiddenFiles.length) {

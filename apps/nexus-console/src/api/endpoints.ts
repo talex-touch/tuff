@@ -1,42 +1,29 @@
 import { apiDelete, apiGet, apiPatch, apiPost, apiPut } from './http'
 import type {
-  ActivationCodeItem,
   AdminAiProvider,
   AdminAiScene,
   AdminAiSceneBinding,
   AdminAiUsageResponse,
   AdminStoreReviewItem,
-  AdminSubscriptionItem,
   AdminUsageResponse,
   AdminUserItem,
   ApiKeyItem,
   AuthUser,
   ConnectedDevice,
-  CreditLedgerEntry,
-  CreditPricingRule,
-  CreditSummaryResponse,
   DashboardPluginItem,
-  DashboardTeamResponse,
   DeviceAuthInfoResponse,
   ExchangeLatestResponse,
-  NotificationsListResponse,
   PaginationMeta,
   PrivacySettings,
-  PushSubscriptionItem,
-  ReceivedTeamInvitation,
   ReleaseItem,
   SecuritySettings,
   SigningKeyItem,
-  StorageStatusResponse,
-  SubscriptionStatusResponse,
-  SyncSessionItem,
-  TeamInviteItem,
   UpdateAnnouncementItem,
 } from './types'
 
 /**
  * Single source of truth for every same-origin /api/* endpoint consumed by apps/nexus-console.
- * Strictly aligned with apps/nexus-api (zero governance/checkin/oauth-idp/docs-runtime endpoints).
+ * Strictly aligned with the slimmed apps/nexus-api route surface.
  */
 export const API_ROUTES = {
   auth: {
@@ -77,10 +64,6 @@ export const API_ROUTES = {
     trust: '/api/devices/trust',
     revoke: '/api/devices/revoke',
   },
-  storage: {
-    status: '/api/dashboard/storage',
-    sessions: '/api/dashboard/storage/sessions',
-  },
   plugins: {
     list: '/api/dashboard/plugins',
     create: '/api/dashboard/plugins',
@@ -91,33 +74,6 @@ export const API_ROUTES = {
       `/api/dashboard/plugins/${encodeURIComponent(id)}/versions/${encodeURIComponent(versionId)}`,
     signingKeys: '/api/dashboard/plugin-signing-keys',
     signingKeyById: (keyId: string) => `/api/dashboard/plugin-signing-keys/${encodeURIComponent(keyId)}`,
-  },
-  team: {
-    overview: '/api/dashboard/team',
-    create: '/api/dashboard/team/create',
-    disband: '/api/dashboard/team/disband',
-    quota: '/api/dashboard/team/quota',
-    creditsUsage: '/api/dashboard/team/credits/usage',
-    invites: '/api/dashboard/team/invites',
-    inviteById: (id: string) => `/api/dashboard/team/invites/${encodeURIComponent(id)}`,
-    invitations: '/api/team/invitations',
-    invitationById: (id: string) => `/api/team/invitations/${encodeURIComponent(id)}`,
-    acceptInvitation: (id: string) => `/api/team/invitations/${encodeURIComponent(id)}/accept`,
-  },
-  credits: {
-    subscriptionStatus: '/api/subscription/status',
-    subscriptionActivate: '/api/subscription/activate',
-    summary: '/api/credits/summary',
-    ledger: '/api/credits/ledger',
-    pricing: '/api/credits/pricing',
-    models: '/api/credits/models',
-    claim: '/api/credits/claim',
-  },
-  notifications: {
-    list: '/api/notifications',
-    read: '/api/notifications/read',
-    push: '/api/notifications/push',
-    pushById: (id: string) => `/api/notifications/push/${encodeURIComponent(id)}`,
   },
   admin: {
     usage: '/api/admin/usage',
@@ -142,13 +98,6 @@ export const API_ROUTES = {
     aiScenes: '/api/admin/ai/scenes',
     aiSceneById: (id: string) => `/api/admin/ai/scenes/${encodeURIComponent(id)}`,
     aiUsage: '/api/admin/ai/usage',
-    creditsPricing: '/api/admin/credits/pricing',
-    creditsLedger: '/api/admin/credits/ledger',
-    codes: '/api/admin/codes',
-    generateCodes: '/api/admin/codes/generate',
-    codeById: (id: string) => `/api/admin/codes/${encodeURIComponent(id)}`,
-    subscriptions: '/api/admin/subscriptions',
-    grantSubscription: '/api/admin/subscriptions/grant',
   },
 } as const
 
@@ -201,7 +150,7 @@ export const consoleApi = {
   deleteApiKey: (id: string) =>
     apiDelete<{ success?: boolean }>(API_ROUTES.account.apiKeyById(id)),
 
-  // ─── Devices & Sync Storage ───────────────────────────────────────────────
+  // ─── Devices ──────────────────────────────────────────────────────────────
   listDevices: () => apiGet<ConnectedDevice[] | { devices: ConnectedDevice[] }>(API_ROUTES.devices.list),
   renameDevice: (payload: { deviceId: string, name: string }) =>
     apiPost<{ success?: boolean }>(API_ROUTES.devices.rename, payload),
@@ -209,12 +158,6 @@ export const consoleApi = {
     apiPost<{ success?: boolean }>(API_ROUTES.devices.trust, payload),
   revokeDevice: (payload: { deviceId: string }) =>
     apiPost<{ success?: boolean }>(API_ROUTES.devices.revoke, payload),
-  getStorageStatus: () => apiGet<StorageStatusResponse>(API_ROUTES.storage.status),
-  listStorageSessions: (params?: { page?: number, limit?: number }) =>
-    apiGet<{ sessions?: SyncSessionItem[], items?: SyncSessionItem[], pagination?: PaginationMeta, total?: number }>(
-      API_ROUTES.storage.sessions,
-      params,
-    ),
 
   // ─── Plugins & Signing Keys ───────────────────────────────────────────────
   listMyPlugins: (params?: { status?: string }) =>
@@ -237,70 +180,6 @@ export const consoleApi = {
     apiPost<{ key?: SigningKeyItem }>(API_ROUTES.plugins.signingKeys, payload),
   revokeSigningKey: (keyId: string) =>
     apiDelete<{ key?: SigningKeyItem }>(API_ROUTES.plugins.signingKeyById(keyId)),
-
-  // ─── Team & Invitations ───────────────────────────────────────────────────
-  getTeamOverview: () => apiGet<DashboardTeamResponse>(API_ROUTES.team.overview),
-  createTeam: (payload: { name: string }) =>
-    apiPost<DashboardTeamResponse>(API_ROUTES.team.create, payload),
-  disbandTeam: () => apiPost<{ disbanded?: boolean, success?: boolean }>(API_ROUTES.team.disband, {}),
-  listTeamInvites: () => apiGet<{ invites: TeamInviteItem[] }>(API_ROUTES.team.invites),
-  createTeamInvite: (payload: { target: string, role: 'admin' | 'member', expiresInDays?: number }) =>
-    apiPost<{ invite: TeamInviteItem }>(API_ROUTES.team.invites, payload),
-  revokeTeamInvite: (id: string) =>
-    apiDelete<{ success?: boolean }>(API_ROUTES.team.inviteById(id)),
-  getTeamCreditsUsage: () =>
-    apiGet<{
-      scope?: string
-      month?: string
-      totalUsed?: number
-      totalQuota?: number
-      used?: number
-      totalCredits?: number
-      users?: Array<Record<string, unknown>>
-    }>(
-      API_ROUTES.team.creditsUsage,
-    ),
-  listMyInvitations: () =>
-    apiGet<{ invitations?: ReceivedTeamInvitation[], invites?: ReceivedTeamInvitation[] }>(API_ROUTES.team.invitations),
-  getInvitationDetail: (id: string) =>
-    apiGet<{ invitation?: ReceivedTeamInvitation, invite?: ReceivedTeamInvitation }>(API_ROUTES.team.invitationById(id)),
-  acceptInvitation: (id: string, loginToken?: string) =>
-    apiPost<{ joined: boolean, team?: { id: string, name: string, role: string } }>(
-      API_ROUTES.team.acceptInvitation(id),
-      {},
-      loginToken ? { 'x-login-token': loginToken } : undefined,
-    ),
-
-  // ─── Credits & Subscriptions (ZERO checkin!) ──────────────────────────────
-  getSubscriptionStatus: () => apiGet<SubscriptionStatusResponse>(API_ROUTES.credits.subscriptionStatus),
-  activateSubscriptionCode: (payload: { code: string }) =>
-    apiPost<{ plan?: string, expiresAt?: string | null }>(API_ROUTES.credits.subscriptionActivate, payload),
-  getCreditSummary: () => apiGet<CreditSummaryResponse>(API_ROUTES.credits.summary),
-  listCreditLedger: (params?: { page?: number, limit?: number }) =>
-    apiGet<{ entries?: CreditLedgerEntry[], items?: CreditLedgerEntry[], pagination?: PaginationMeta, total?: number }>(
-      API_ROUTES.credits.ledger,
-      params,
-    ),
-  getCreditPricing: () => apiGet<{ unit?: string, rules?: CreditPricingRule[], pricing?: CreditPricingRule[] }>(
-    API_ROUTES.credits.pricing,
-  ),
-  claimCreditCode: (payload?: { code?: string }) =>
-    apiPost<{ claimed?: boolean, delta?: number, summary?: CreditSummaryResponse }>(
-      API_ROUTES.credits.claim,
-      payload ?? {},
-    ),
-
-  // ─── Slim Notifications & WebPush (4 endpoints) ───────────────────────────
-  listNotifications: (params?: { page?: number, limit?: number, status?: 'all' | 'unread' | 'read' }) =>
-    apiGet<NotificationsListResponse>(API_ROUTES.notifications.list, params),
-  markNotificationsRead: (payload: { ids?: string[], all?: boolean }) =>
-    apiPost<{ ok?: boolean, updated?: number, unreadCount?: number }>(API_ROUTES.notifications.read, payload),
-  listPushSubscriptions: () =>
-    apiGet<{ subscriptions?: PushSubscriptionItem[], items?: PushSubscriptionItem[], vapidPublicKey?: string | null, enabled?: boolean }>(API_ROUTES.notifications.push),
-  subscribePush: (payload: { endpoint: string, keys: { p256dh: string, auth: string }, deviceLabel?: string }) =>
-    apiPost<{ ok?: boolean, subscription?: PushSubscriptionItem }>(API_ROUTES.notifications.push, payload),
-  unsubscribePush: (id: string) =>
-    apiDelete<{ success?: boolean, ok?: boolean }>(API_ROUTES.notifications.pushById(id)),
 
   // ─── Admin: Usage Analytics (6 dimensions) ────────────────────────────────
   getAdminUsage: (days = 30) => apiGet<AdminUsageResponse>(API_ROUTES.admin.usage, { days }),
@@ -435,36 +314,4 @@ export const consoleApi = {
     apiDelete<{ success?: boolean }>(API_ROUTES.admin.aiSceneById(id)),
   getAiUsage: (params?: { days?: number, providerId?: string }) =>
     apiGet<AdminAiUsageResponse>(API_ROUTES.admin.aiUsage, params),
-
-  // ─── Admin: Credits, Codes & Subscriptions ────────────────────────────────
-  listAdminCreditPricing: () =>
-    apiGet<{ unit: string, rules: CreditPricingRule[] }>(API_ROUTES.admin.creditsPricing),
-  updateAdminCreditPricing: (payload: {
-    capability: string
-    creditsPerUnit?: number
-    minCredits?: number
-    reserveMultiplier?: number
-    upstreamCostUsdPerUnit?: number | null
-    active?: boolean
-  }) => apiPatch<{ rule: CreditPricingRule }>(API_ROUTES.admin.creditsPricing, payload),
-  listAdminCreditLedger: (params: { page?: number, limit?: number, q?: string }) =>
-    apiGet<{ entries: CreditLedgerEntry[], pagination: PaginationMeta }>(API_ROUTES.admin.creditsLedger, params),
-  listAdminCodes: (params: { page?: number, limit?: number, q?: string, plan?: string, status?: string }) =>
-    apiGet<{ codes: ActivationCodeItem[], pagination: PaginationMeta }>(API_ROUTES.admin.codes, params),
-  generateAdminCodes: (payload: {
-    plan: string
-    durationDays: number
-    maxUses?: number
-    expiresInDays?: number
-    count: number
-  }) => apiPost<{ success: boolean, codes: ActivationCodeItem[] }>(API_ROUTES.admin.generateCodes, payload),
-  updateAdminCodeStatus: (id: string, status: 'active' | 'revoked') =>
-    apiPatch<{ code: ActivationCodeItem }>(API_ROUTES.admin.codeById(id), { status }),
-  listAdminSubscriptions: (params: { page?: number, limit?: number, q?: string, status?: string, role?: string }) =>
-    apiGet<{ subscriptions: AdminSubscriptionItem[], pagination: PaginationMeta }>(
-      API_ROUTES.admin.subscriptions,
-      params,
-    ),
-  grantAdminSubscription: (payload: { email?: string, userId?: string, plan: string, durationDays: number }) =>
-    apiPost<{ userId: string, plan: string, expiresAt: string | null }>(API_ROUTES.admin.grantSubscription, payload),
 }

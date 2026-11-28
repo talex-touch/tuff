@@ -17,7 +17,6 @@ export const EXTERNAL_APP_PREFIXES = [
   '/device-auth',
   '/dashboard',
   '/admin',
-  '/team',
   '/api',
 ] as const
 

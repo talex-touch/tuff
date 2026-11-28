@@ -11,7 +11,6 @@ import {
   listUserLinkedAccounts,
 } from './authStore'
 import { readCloudflareBindings } from './cloudflare'
-import { listCreditLedger, listUserTeams } from './creditsStore'
 
 export const ACCOUNT_DELETION_CONFIRM_PHRASE = 'DELETE_MY_DATA'
 export const ACCOUNT_DELETION_TERMS_VERSION = '2026-11-28'
@@ -87,18 +86,6 @@ function sanitizeDevices(rows: Awaited<ReturnType<typeof listDevices>>) {
     createdAt: row.createdAt,
     revokedAt: row.revokedAt,
   }))
-}
-
-async function listExistingTables(db: D1Database, tableNames: readonly string[]): Promise<Set<string>> {
-  if (!tableNames.length)
-    return new Set()
-  const placeholders = tableNames.map((_, index) => `?${index + 1}`).join(', ')
-  const { results } = await db.prepare(`
-    SELECT name
-    FROM sqlite_master
-    WHERE type = 'table' AND name IN (${placeholders})
-  `).bind(...tableNames).all<{ name?: string }>()
-  return new Set((results ?? []).map(row => row.name).filter((name): name is string => Boolean(name)))
 }
 
 async function readUserTelemetryExport(db: D1Database, userId: string) {
@@ -187,7 +174,7 @@ async function readUserProviderUsageExport(db: D1Database, userId: string) {
 
   try {
     const { results } = await db.prepare(`
-      SELECT id, provider_id, capability, status, duration_seconds, billed_seconds, charged_credits, created_at, updated_at
+      SELECT id, provider_id, capability, status, duration_seconds, billed_seconds, created_at, updated_at
       FROM asr_transcription_requests
       WHERE user_id = ?1
       ORDER BY created_at DESC
@@ -199,7 +186,6 @@ async function readUserProviderUsageExport(db: D1Database, userId: string) {
       status: string
       duration_seconds: number
       billed_seconds: number | null
-      charged_credits: number | null
       created_at: string
       updated_at: string
     }>()
@@ -210,7 +196,6 @@ async function readUserProviderUsageExport(db: D1Database, userId: string) {
       status: row.status,
       durationSeconds: row.duration_seconds,
       billedSeconds: row.billed_seconds,
-      chargedCredits: row.charged_credits,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     }))
@@ -221,49 +206,6 @@ async function readUserProviderUsageExport(db: D1Database, userId: string) {
   }
 
   return { intelligenceAudits, asrRequests }
-}
-
-async function readUserSyncExportSummary(db: D1Database, userId: string) {
-  const existing = await listExistingTables(db, ['sync_quotas_v1', 'sync_items_v1', 'sync_blobs_v1', 'sync_sessions_v1'])
-  const readCount = async (table: string) => {
-    if (!existing.has(table))
-      return 0
-    const row = await db.prepare(`SELECT COUNT(*) AS total FROM ${table} WHERE user_id = ?1`).bind(userId).first<{ total?: number }>()
-    return Number(row?.total ?? 0)
-  }
-
-  const quotaRow = existing.has('sync_quotas_v1')
-    ? await db.prepare(`
-        SELECT storage_limit_bytes, used_storage_bytes, object_limit, used_objects, item_limit, device_limit, used_devices, updated_at
-        FROM sync_quotas_v1
-        WHERE user_id = ?1
-        LIMIT 1
-      `).bind(userId).first<Record<string, unknown>>()
-    : null
-
-  const [itemCount, blobCount, sessionCount] = await Promise.all([
-    readCount('sync_items_v1'),
-    readCount('sync_blobs_v1'),
-    readCount('sync_sessions_v1'),
-  ])
-
-  return {
-    quota: quotaRow
-      ? {
-          storageLimitBytes: Number(quotaRow.storage_limit_bytes ?? 0),
-          usedStorageBytes: Number(quotaRow.used_storage_bytes ?? 0),
-          objectLimit: Number(quotaRow.object_limit ?? 0),
-          usedObjects: Number(quotaRow.used_objects ?? 0),
-          itemLimit: Number(quotaRow.item_limit ?? 0),
-          deviceLimit: Number(quotaRow.device_limit ?? 0),
-          usedDevices: Number(quotaRow.used_devices ?? 0),
-          updatedAt: quotaRow.updated_at ?? null,
-        }
-      : null,
-    itemCount,
-    blobCount,
-    sessionCount,
-  }
 }
 
 export async function buildUserPrivacyExport(event: H3Event, userId: string): Promise<Record<string, unknown>> {
@@ -277,21 +219,15 @@ export async function buildUserPrivacyExport(event: H3Event, userId: string): Pr
     passkeys,
     apiKeys,
     linkedAccounts,
-    teams,
-    creditLedger,
     telemetry,
     providerUsage,
-    syncSummary,
   ] = await Promise.all([
     listDevices(event, userId),
     listPasskeys(event, userId),
     listApiKeys(event, userId),
     listUserLinkedAccounts(event, userId),
-    listUserTeams(event, userId),
-    listCreditLedger(event, userId),
     readUserTelemetryExport(db, userId),
     readUserProviderUsageExport(db, userId),
-    readUserSyncExportSummary(db, userId),
   ])
 
   return redactPrivateExportFields({
@@ -319,11 +255,8 @@ export async function buildUserPrivacyExport(event: H3Event, userId: string): Pr
     passkeys: sanitizePasskeys(passkeys as any[]),
     apiKeys,
     linkedAccounts,
-    teams,
-    creditLedger,
     telemetry,
     providerUsage,
-    syncSummary,
   }) as Record<string, unknown>
 }
 

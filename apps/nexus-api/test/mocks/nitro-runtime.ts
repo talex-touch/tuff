@@ -19,9 +19,6 @@ let mockConfig: Record<string, any> = {
   providerRegistry: {
     secureStoreKey: 'test-provider-secure-store-key-32chars',
   },
-  notificationWebPush: {
-    publicKey: 'test-vapid-public-key',
-  },
   releaseDownload: {
     secret: 'test-release-download-secret-16chars',
     fallbackSecret: 'test-auth-secret-minimum-16-chars',
@@ -33,7 +30,6 @@ let mockConfig: Record<string, any> = {
     secret: '',
   },
   public: {
-    notificationWebPush: { publicKey: 'test-vapid-public-key' },
     siteUrl: 'https://tuff.tagzxia.com',
   },
 }

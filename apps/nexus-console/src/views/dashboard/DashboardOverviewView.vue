@@ -7,13 +7,12 @@ import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { consoleApi } from '@/api/endpoints'
 import { resolveErrorMessage } from '@/api/http'
-import type { CreditSummaryResponse, StorageStatusResponse, SubscriptionStatusResponse } from '@/api/types'
 import ConsolePageShell from '@/components/ConsolePageShell.vue'
 import ConsoleSection from '@/components/ConsoleSection.vue'
 import ConsoleStatGrid from '@/components/ConsoleStatGrid.vue'
 import type { ConsoleStatItem } from '@/components/ConsoleStatGrid.vue'
 import { useSession } from '@/composables/useSession'
-import { formatBytes, formatNumber } from '@/utils/format'
+import { formatNumber } from '@/utils/format'
 
 const { t, locale } = useI18n()
 const route = useRoute()
@@ -22,53 +21,25 @@ const session = useSession()
 
 const loading = ref(true)
 const errorMessage = ref<string | null>(null)
-const subscription = ref<SubscriptionStatusResponse | null>(null)
-const credits = ref<CreditSummaryResponse | null>(null)
 const devicesCount = ref(0)
-const storage = ref<StorageStatusResponse | null>(null)
+const pluginsCount = ref(0)
 
 const adminDenied = computed(() => route.query.denied === 'admin')
 
-const creditUsed = computed(() => {
-  const c = credits.value
-  return c?.user?.used ?? c?.used ?? c?.personal?.used ?? 0
-})
-
-const creditBalance = computed(() => {
-  const c = credits.value
-  if (c?.user)
-    return Math.max(0, (c.user.quota ?? 0) - (c.user.used ?? 0))
-  return c?.balance ?? c?.remaining ?? c?.personal?.balance ?? 0
-})
-
-const storageUsedBytes = computed(() =>
-  storage.value?.quota?.usage?.used_storage_bytes
-  ?? storage.value?.quota?.usedBytes
-  ?? storage.value?.usedBytes
-  ?? 0,
-)
-
-const storageLimitBytes = computed(() =>
-  storage.value?.quota?.limits?.storage_limit_bytes
-  ?? storage.value?.quota?.limitBytes
-  ?? storage.value?.limitBytes
-  ?? 0,
-)
-
 const statItems = computed<ConsoleStatItem[]>(() => [
   {
-    key: 'plan',
-    label: t('dashboard.planCard'),
-    value: subscription.value?.plan || 'FREE',
-    meta: subscription.value?.isActive ? t('common.active') : t('common.disabled'),
-    iconClass: 'i-carbon-badge',
+    key: 'email',
+    label: t('dashboard.emailStatus'),
+    value: session.user.value?.emailVerified ? t('dashboard.verified') : t('dashboard.unverified'),
+    meta: session.user.value?.email || undefined,
+    iconClass: 'i-carbon-email',
   },
   {
-    key: 'credits',
-    label: t('dashboard.creditsCard'),
-    value: formatNumber(creditBalance.value, locale.value),
-    meta: `${t('dashboard.creditUsed')}: ${formatNumber(creditUsed.value, locale.value)}`,
-    iconClass: 'i-carbon-currency',
+    key: 'passkeys',
+    label: t('dashboard.passkeysEnrolled'),
+    value: formatNumber(session.user.value?.passkeyCount ?? 0, locale.value),
+    meta: session.user.value?.role || 'user',
+    iconClass: 'i-carbon-password',
   },
   {
     key: 'devices',
@@ -77,13 +48,10 @@ const statItems = computed<ConsoleStatItem[]>(() => [
     iconClass: 'i-carbon-laptop',
   },
   {
-    key: 'storage',
-    label: t('dashboard.syncCard'),
-    value: formatBytes(storageUsedBytes.value),
-    meta: storageLimitBytes.value > 0
-      ? `/ ${formatBytes(storageLimitBytes.value)}`
-      : undefined,
-    iconClass: 'i-carbon-cloud',
+    key: 'plugins',
+    label: t('dashboard.pluginsCard'),
+    value: formatNumber(pluginsCount.value, locale.value),
+    iconClass: 'i-carbon-plug',
   },
 ])
 
@@ -91,25 +59,19 @@ async function loadOverview() {
   loading.value = true
   errorMessage.value = null
   try {
-    const [subRes, creditRes, devicesRes, storageRes] = await Promise.allSettled([
-      consoleApi.getSubscriptionStatus(),
-      consoleApi.getCreditSummary(),
+    const [devicesRes, pluginsRes] = await Promise.allSettled([
       consoleApi.listDevices(),
-      consoleApi.getStorageStatus(),
+      consoleApi.listMyPlugins(),
     ])
-    if (subRes.status === 'fulfilled')
-      subscription.value = subRes.value
-    if (creditRes.status === 'fulfilled')
-      credits.value = creditRes.value
     if (devicesRes.status === 'fulfilled') {
       const list = Array.isArray(devicesRes.value) ? devicesRes.value : devicesRes.value.devices ?? []
       devicesCount.value = list.filter(d => !d.revokedAt).length
     }
-    if (storageRes.status === 'fulfilled')
-      storage.value = storageRes.value
+    if (pluginsRes.status === 'fulfilled')
+      pluginsCount.value = pluginsRes.value.total ?? pluginsRes.value.plugins?.length ?? 0
 
-    if (subRes.status === 'rejected' && creditRes.status === 'rejected')
-      errorMessage.value = resolveErrorMessage(subRes.reason, t('common.loadFailed'))
+    if (devicesRes.status === 'rejected' && pluginsRes.status === 'rejected')
+      errorMessage.value = resolveErrorMessage(devicesRes.reason, t('common.loadFailed'))
   }
   finally {
     loading.value = false
@@ -171,9 +133,6 @@ onMounted(() => void loadOverview())
           </TxButton>
           <TxButton variant="secondary" size="sm" @click="router.push('/dashboard/plugins')">
             {{ t('nav.plugins') }}
-          </TxButton>
-          <TxButton variant="secondary" size="sm" @click="router.push('/dashboard/credits')">
-            {{ t('nav.credits') }}
           </TxButton>
           <TxButton v-if="session.isAdmin.value" variant="primary" size="sm" @click="router.push('/admin')">
             {{ t('nav.adminUsage') }}

@@ -14,7 +14,6 @@ import {
   logLoginAttempt,
   restorePendingDeletionIfWithinWindow,
 } from './authStore'
-import { ensurePersonalTeam } from './creditsStore'
 import { oauthEmailProvesMailboxControl } from './oauthEmailTrust'
 import { resolveSessionAuthSecret } from './sessionAuthSecret'
 import {
@@ -243,7 +242,6 @@ export async function completeOAuthUserSignIn(
     emailVerified: hasRealEmail ? new Date().toISOString() : null,
     emailState: hasRealEmail ? 'verified' : 'missing',
   })
-  await ensurePersonalTeam(event, user.id)
   await linkAccount(event, user.id, input.provider, input.providerAccountId)
   await issueBrowserSessionForUser(event, user, input.provider)
   return user
