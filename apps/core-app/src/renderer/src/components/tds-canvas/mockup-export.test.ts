@@ -47,6 +47,13 @@ vi.mock('@talex-touch/tuffex/popover', () => ({
   }
 }))
 
+vi.mock('@talex-touch/tuffex/touch-surface', () => ({
+  TxTouchSurface: {
+    props: ['surface', 'engine'],
+    template: '<div :data-touch-surface="surface" :data-glass-engine="engine"><slot /></div>'
+  }
+}))
+
 vi.mock('@talex-touch/tuffex/modal', () => ({
   TxModal: {
     props: ['modelValue', 'title', 'width', 'surface', 'closeLabel'],
@@ -909,11 +916,13 @@ describe('TdsMockupExportDialog & TdsDesignCanvas themeCss / canvasPattern / exp
   })
 
   it('wires themeCss, canvasPattern, and Export Mockup toolbar action in TdsDesignCanvas', async () => {
-    // Empty frames -> export button disabled
+    // Empty frames -> export button disabled inside bottom statusbar overflow menu
     const emptyWrapper = mount(TdsDesignCanvas, {
       props: { frames: [], canvasPattern: 'paper-grain' }
     })
     await flushPromises()
+    await emptyWrapper.get('[data-testid="tds-canvas-more-trigger"]').trigger('click')
+    await nextTick()
     expect(
       emptyWrapper.get('[data-testid="tds-canvas-export-mockup"]').attributes('disabled')
     ).toBeDefined()
@@ -945,6 +954,8 @@ describe('TdsMockupExportDialog & TdsDesignCanvas themeCss / canvasPattern / exp
     expect(iframeSrcdoc).toContain('--shell-primary: #0f766e;')
     expect(iframeSrcdoc).toContain("default-src 'none'")
 
+    await wrapper.get('[data-testid="tds-canvas-more-trigger"]').trigger('click')
+    await nextTick()
     await wrapper.get('[data-testid="tds-canvas-export-mockup"]').trigger('click')
     await nextTick()
     expect(wrapper.find('[data-testid="tds-mockup-export-dialog"]').exists()).toBe(true)

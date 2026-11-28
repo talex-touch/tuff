@@ -112,6 +112,12 @@ const TdsDesignCanvasStub = vi.hoisted(() => ({
       >
         {{ frame.title }}
       </div>
+      <footer class="stub-statusbar">
+        <slot name="status-left" />
+        <slot name="status-pending-notes" />
+        <slot name="status-add" />
+        <slot name="status-more-items" :close="() => {}" />
+      </footer>
     </div>
   `
 }))
