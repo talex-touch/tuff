@@ -1,9 +1,81 @@
 import { usePluginNetwork } from '@talex-touch/utils/plugin/sdk'
 
-const DEFAULT_API_BASE_URL = 'https://netease-cloud-music-api-umber-theta.vercel.app/'
+const STORAGE_KEY_API_BASE_URL = 'touch-music.api-base-url'
 const DEFAULT_TIMEOUT_MS = 60_000
+const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]', '::1'])
 
 let cachedClient = null
+let configuredApiBaseUrl = ''
+
+export function normalizeMusicApiBaseUrl(rawUrl) {
+  const trimmed = typeof rawUrl === 'string' ? rawUrl.trim() : ''
+  if (!trimmed) {
+    return ''
+  }
+  let parsed
+  try {
+    parsed = new URL(trimmed)
+  }
+  catch {
+    const invalid = new Error(`Invalid Touch Music API base URL: ${trimmed}`)
+    invalid.code = 'MUSIC_API_BASE_URL_INVALID'
+    throw invalid
+  }
+  const isHttps = parsed.protocol === 'https:'
+  const isLocalHttp = parsed.protocol === 'http:' && LOOPBACK_HOSTS.has(parsed.hostname.toLowerCase())
+  if (!isHttps && !isLocalHttp) {
+    const insecure = new Error('Touch Music API base URL must use https:// (or http:// on localhost)')
+    insecure.code = 'MUSIC_API_BASE_URL_INSECURE'
+    throw insecure
+  }
+  return parsed.toString().endsWith('/') ? parsed.toString() : `${parsed.toString()}/`
+}
+
+export function setMusicApiBaseUrl(rawUrl) {
+  configuredApiBaseUrl = rawUrl ? normalizeMusicApiBaseUrl(rawUrl) : ''
+  try {
+    if (typeof localStorage !== 'undefined') {
+      if (configuredApiBaseUrl) {
+        localStorage.setItem(STORAGE_KEY_API_BASE_URL, configuredApiBaseUrl)
+      }
+      else {
+        localStorage.removeItem(STORAGE_KEY_API_BASE_URL)
+      }
+    }
+  }
+  catch {
+    // Storage may be unavailable in tests or restricted contexts.
+  }
+  return configuredApiBaseUrl
+}
+
+export function getMusicApiBaseUrl() {
+  if (configuredApiBaseUrl) {
+    return configuredApiBaseUrl
+  }
+  const globalOverride = typeof globalThis !== 'undefined' && typeof globalThis.__TOUCH_MUSIC_API_BASE_URL__ === 'string'
+    ? globalThis.__TOUCH_MUSIC_API_BASE_URL__
+    : ''
+  if (globalOverride.trim()) {
+    return normalizeMusicApiBaseUrl(globalOverride)
+  }
+  const envBase = typeof import.meta !== 'undefined' && import.meta.env && typeof import.meta.env.VITE_TOUCH_MUSIC_API_BASE_URL === 'string'
+    ? import.meta.env.VITE_TOUCH_MUSIC_API_BASE_URL
+    : ''
+  if (envBase.trim()) {
+    return normalizeMusicApiBaseUrl(envBase)
+  }
+  try {
+    const stored = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_KEY_API_BASE_URL) : ''
+    if (stored && stored.trim()) {
+      return normalizeMusicApiBaseUrl(stored)
+    }
+  }
+  catch {
+    // Ignore storage read errors.
+  }
+  return ''
+}
 
 function getPluginNetwork() {
   if (!cachedClient) {
@@ -27,11 +99,22 @@ export function resetPluginNetworkClient() {
   cachedClient = null
 }
 
-export function buildRequestUrl(pathOrUrl, params) {
-  const base = DEFAULT_API_BASE_URL.endsWith('/') ? DEFAULT_API_BASE_URL : `${DEFAULT_API_BASE_URL}/`
-  const resolved = typeof pathOrUrl === 'string' && /^https?:\/\//i.test(pathOrUrl)
-    ? pathOrUrl
-    : new URL(String(pathOrUrl ?? '').replace(/^\/+/, ''), base).toString()
+export function buildRequestUrl(pathOrUrl, params, explicitBaseUrl) {
+  let resolved
+  if (typeof pathOrUrl === 'string' && /^https?:\/\//i.test(pathOrUrl)) {
+    resolved = pathOrUrl
+  }
+  else {
+    const base = explicitBaseUrl ? normalizeMusicApiBaseUrl(explicitBaseUrl) : getMusicApiBaseUrl()
+    if (!base) {
+      const missing = new Error(
+        'Touch Music API base URL is not configured. Configure VITE_TOUCH_MUSIC_API_BASE_URL or call setMusicApiBaseUrl(url).',
+      )
+      missing.code = 'MUSIC_API_BASE_URL_NOT_CONFIGURED'
+      throw missing
+    }
+    resolved = new URL(String(pathOrUrl ?? '').replace(/^\/+/, ''), base).toString()
+  }
 
   const url = new URL(resolved)
   if (params && typeof params === 'object') {

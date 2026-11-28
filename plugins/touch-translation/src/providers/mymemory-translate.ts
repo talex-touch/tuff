@@ -1,4 +1,5 @@
 import type { TranslationProvider, TranslationProviderRequest, TranslationResult } from '../types/translation'
+import { validateProviderApiUrl } from '../utils/url-validation'
 import { getPluginNetworkClient } from './plugin-network-client'
 
 interface MyMemoryConfig {
@@ -36,6 +37,11 @@ export class MyMemoryTranslateProvider implements TranslationProvider {
     const { text, targetLanguage: to, sourceLanguage: from } = request
 
     try {
+      const urlCheck = validateProviderApiUrl(this.config.apiUrl)
+      if (!urlCheck.valid || !urlCheck.normalized) {
+        throw new Error(urlCheck.error || 'MyMemory API URL 无效')
+      }
+
       const sourceLanguage = from && from !== 'auto'
         ? this.mapLanguageCode(from)
         : /[\u3400-\u9FFF]/u.test(text)
@@ -54,7 +60,7 @@ export class MyMemoryTranslateProvider implements TranslationProvider {
       const response = await getPluginNetworkClient().request<any>({
         method: 'GET',
         responseType: 'json',
-        url: `${this.config.apiUrl}?${params}`,
+        url: `${urlCheck.normalized}?${params}`,
         headers: {
           Accept: 'application/json',
         },

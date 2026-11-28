@@ -630,6 +630,89 @@ function normalizeNumericToken(rawNum) {
   return String(rounded)
 }
 
+const ACTIVE_SVG_TAG_NAMES = [
+  'script',
+  'foreignObject',
+  'iframe',
+  'object',
+  'embed',
+  'applet',
+  'handler',
+  'animate',
+  'set',
+  'animateMotion',
+  'animateTransform',
+  'audio',
+  'video',
+  'meta',
+  'link',
+  'base',
+]
+const ACTIVE_SVG_PAIRED_RE = new RegExp(`<(${ACTIVE_SVG_TAG_NAMES.join('|')})\\b[^>]*>[\\s\\S]*?<\\/\\1\\s*>`, 'gi')
+const ACTIVE_SVG_SINGLE_RE = new RegExp(`<\\/?(?:${ACTIVE_SVG_TAG_NAMES.join('|')})\\b[^>]*>`, 'gi')
+const ACTIVE_EVENT_ATTR_RE = /\s+on[\w-]*\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi
+const URI_ATTR_RE = /\s+((?:xlink:)?href|src|action|formaction|from|to|values)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/gi
+const STYLE_ATTR_RE = /\s+style\s*=\s*(?:"([^"]*)"|'([^']*)')/gi
+const UNSAFE_CSS_VALUE_RE = /javascript\s*:|vbscript\s*:|expression\s*\(|@import|behavior\s*:|url\s*\(\s*(?:['"]\s*)?(?:javascript|vbscript|data)\s*:/i
+const JS_IDENTIFIER_RE = /^[a-z_$][\w$]*$/i
+
+function decodeBasicHtmlEntities(value) {
+  return String(value ?? '')
+    .replace(/&#x([0-9a-f]+);?/gi, (_, hex) => {
+      const code = Number.parseInt(hex, 16)
+      return Number.isFinite(code) ? String.fromCodePoint(code) : ''
+    })
+    .replace(/&#(\d+);?/g, (_, dec) => {
+      const code = Number.parseInt(dec, 10)
+      return Number.isFinite(code) ? String.fromCodePoint(code) : ''
+    })
+    .replace(/&colon;/gi, ':')
+    .replace(/&tab;/gi, '\t')
+    .replace(/&newline;/gi, '\n')
+}
+
+function isUnsafeUriValue(rawValue) {
+  const decoded = decodeBasicHtmlEntities(rawValue)
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\u0000-\u0020]+/g, '')
+    .toLowerCase()
+  return (
+    decoded.startsWith('javascript:')
+    || decoded.startsWith('vbscript:')
+    || decoded.startsWith('data:')
+  )
+}
+
+function sanitizeSvgContent(rawSvg) {
+  let svg = String(rawSvg ?? '').trim()
+  // Extract only the first <svg>...</svg> block non-greedily so intervening tags between
+  // multiple <svg> elements cannot be merged into the output.
+  const svgSliceMatch = /<svg\b[\s\S]*?<\/svg>/i.exec(svg)
+  if (svgSliceMatch) {
+    svg = svgSliceMatch[0]
+  }
+
+  let prev = ''
+  for (let pass = 0; pass < 6 && svg !== prev; pass += 1) {
+    prev = svg
+    svg = svg.replace(ACTIVE_SVG_PAIRED_RE, '')
+    svg = svg.replace(ACTIVE_SVG_SINGLE_RE, '')
+    svg = svg.replace(/<style\b[^>]*>([\s\S]*?)<\/style\s*>/gi, (full, body) => (
+      UNSAFE_CSS_VALUE_RE.test(body) ? '' : full
+    ))
+    svg = svg.replace(ACTIVE_EVENT_ATTR_RE, '')
+    svg = svg.replace(URI_ATTR_RE, (full, _attrName, dbl, sgl, bare) => {
+      const val = dbl ?? sgl ?? bare ?? ''
+      return isUnsafeUriValue(val) ? '' : full
+    })
+    svg = svg.replace(STYLE_ATTR_RE, (full, dbl, sgl) => {
+      const val = dbl ?? sgl ?? ''
+      return UNSAFE_CSS_VALUE_RE.test(val) ? '' : full
+    })
+  }
+  return svg
+}
+
 function optimizeSvg(rawInput) {
   const original = String(rawInput ?? '').trim()
   const beforeBytes = utf8ByteLength(original)
@@ -647,11 +730,8 @@ function optimizeSvg(rawInput) {
   svg = svg.replace(/<inkscape:perspective\b[^>]*\/>/gi, '')
   svg = svg.replace(/<desc\b[^>]*>\s*<\/desc>/gi, '')
 
-  // Extract from <svg ...> through </svg> if surrounded by extra text
-  const svgSliceMatch = /<svg\b[\s\S]*<\/svg>/i.exec(svg)
-  if (svgSliceMatch) {
-    svg = svgSliceMatch[0]
-  }
+  // 3b. Extract single <svg> non-greedily and strip active/scriptable SVG constructs
+  svg = sanitizeSvgContent(svg)
 
   // 4. Strip editor namespaces & redundant attributes
   svg = svg.replace(/\s+(?:xmlns:(?:inkscape|sodipodi|sketch|dc|cc|rdf|serif|i|graph|x)|(?:inkscape|sodipodi|sketch|serif):[\w-]+|data-name|xml:space|enable-background)\s*=\s*(?:"[^"]*"|'[^']*')/gi, '')
@@ -703,7 +783,8 @@ function optimizeSvg(rawInput) {
     return `<svg${nextAttrs}>`
   })
 
-  svg = svg.trim()
+  // Final active-content sanitization pass after tag normalization
+  svg = sanitizeSvgContent(svg).trim()
   const afterBytes = utf8ByteLength(svg)
   const savedBytes = Math.max(0, beforeBytes - afterBytes)
   const savedPercent = beforeBytes > 0 ? Math.round((savedBytes / beforeBytes) * 1000) / 10 : 0
@@ -730,9 +811,16 @@ function convertStyleAttrToJsx(styleText) {
       const colon = decl.indexOf(':')
       if (colon <= 0)
         return null
-      const prop = kebabToCamel(decl.slice(0, colon).trim().toLowerCase())
-      const value = decl.slice(colon + 1).trim().replace(/'/g, '\\\'')
-      return `${prop}: '${value}'`
+      const rawProp = decl.slice(0, colon).trim().toLowerCase()
+      const rawValue = decl.slice(colon + 1).trim()
+      if (!rawProp || !rawValue || UNSAFE_CSS_VALUE_RE.test(rawValue))
+        return null
+      const prop = kebabToCamel(rawProp)
+      const key = JS_IDENTIFIER_RE.test(prop) ? prop : JSON.stringify(prop)
+      const value = JSON.stringify(rawValue)
+        .replace(/\u2028/g, '\\u2028')
+        .replace(/\u2029/g, '\\u2029')
+      return `${key}: ${value}`
     })
     .filter(Boolean)
   return `style={{ ${entries.join(', ')} }}`
@@ -740,7 +828,8 @@ function convertStyleAttrToJsx(styleText) {
 
 function svgToReactJsx(svgString, componentName = 'SvgIcon') {
   const safeName = toPascalCase(componentName)
-  const jsx = svgString.replace(/<([a-z][\w:-]*)(?:(\s[^>]*)|(\/))?>/gi, (full, tag, rawAttrs, bareSlash) => {
+  const sanitized = sanitizeSvgContent(svgString)
+  const jsx = sanitized.replace(/<([a-z][\w:-]*)(?:(\s[^>]*)|(\/))?>/gi, (full, tag, rawAttrs, bareSlash) => {
     let attrs = rawAttrs || ''
     let selfClose = bareSlash || ''
     if (attrs.endsWith('/')) {
@@ -751,6 +840,7 @@ function svgToReactJsx(svgString, componentName = 'SvgIcon') {
       return full
     let nextAttrs = attrs
       .replace(/\s+style\s*=\s*"([^"]*)"/gi, (_, styleVal) => ` ${convertStyleAttrToJsx(styleVal)}`)
+      .replace(/\s+style\s*=\s*'([^']*)'/gi, (_, styleVal) => ` ${convertStyleAttrToJsx(styleVal)}`)
       .replace(/\s+([a-z_:][\w:.-]*)\s*=\s*("[^"]*"|'[^']*')/gi, (attrFull, attrName, attrVal) => {
         const lower = attrName.toLowerCase()
         if (lower.startsWith('data-') || lower.startsWith('aria-'))
@@ -787,7 +877,10 @@ function svgToReactJsx(svgString, componentName = 'SvgIcon') {
 
 function svgToVueSfc(svgString, componentName = 'SvgIcon') {
   const safeName = toPascalCase(componentName)
-  const templated = svgString.replace(/<svg\b([^>]*)>/i, '<svg$1 :class="props.class">')
+  const sanitized = sanitizeSvgContent(svgString)
+    .replace(/<\/template\b/gi, '&lt;/template')
+    .replace(/<\/script\b/gi, '&lt;/script')
+  const templated = sanitized.replace(/<svg\b([^>]*)>/i, '<svg$1 :class="props.class">')
   return [
     '<script setup lang="ts">',
     `defineOptions({ name: '${safeName}' })`,
@@ -801,7 +894,8 @@ function svgToVueSfc(svgString, componentName = 'SvgIcon') {
 }
 
 function svgToCssDataUri(svgString) {
-  const encoded = svgString
+  const sanitized = sanitizeSvgContent(svgString)
+  const encoded = sanitized
     .replace(/%/g, '%25')
     .replace(/#/g, '%23')
     .replace(/"/g, '\'')
@@ -815,7 +909,7 @@ function svgToCssDataUri(svgString) {
 }
 
 function svgToBase64DataUrl(svgString) {
-  return `data:image/svg+xml;base64,${encodeBase64Utf8(svgString)}`
+  return `data:image/svg+xml;base64,${encodeBase64Utf8(sanitizeSvgContent(svgString))}`
 }
 
 function stripCommandPrefix(rawQuery) {

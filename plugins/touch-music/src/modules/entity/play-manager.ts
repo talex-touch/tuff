@@ -37,23 +37,35 @@ export class PlayManager {
   async play() {
     if (!this.isPause)
       return
-    this.isPause = false
-
     if (!this.song) {
-      const song = this.playList[++this.playIndex]
-
-      const res = await axios.get(`/song/url?id=${song.id}`)
-
-      if (res.code !== 200) {
-        console.log(res)
-        throw new Error('Failed to get song url!')
+      const nextIndex = this.playIndex + 1
+      const song = nextIndex >= 0 && nextIndex < this.playList.length
+        ? this.playList[nextIndex]
+        : undefined
+      if (!song) {
+        this.isPause = true
+        return
       }
 
-      const playSong = new PlaySong(song._originData, res.data)
+      this.isPause = false
+      try {
+        const res = await axios.get(`/song/url?id=${song.id}`)
 
-      console.log(this, playSong)
+        if (!res || res.code !== 200 || !Array.isArray(res.data) || !res.data[0]?.url) {
+          throw new Error('Failed to get song url!')
+        }
 
-      this.song = playSong
+        const playSong = new PlaySong(song._originData, res.data)
+        this.playIndex = nextIndex
+        this.song = playSong
+      }
+      catch (error) {
+        this.isPause = true
+        throw error
+      }
+    }
+    else {
+      this.isPause = false
     }
 
     this.song.play()
@@ -64,7 +76,7 @@ export class PlayManager {
       return
     this.isPause = true
 
-    this.song.pause()
+    this.song?.pause()
   }
 
   addSong(song: SingleSong) {
@@ -72,7 +84,11 @@ export class PlayManager {
   }
 
   addSongs(songs: SingleSong[]) {
-    this.playList = songs
+    this.song?.pause()
+    this.song = null
+    this.isPause = true
+    this.playIndex = -1
+    this.playList.splice(0, this.playList.length, ...songs)
   }
 }
 

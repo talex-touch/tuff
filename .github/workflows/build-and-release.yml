@@ -1559,11 +1559,13 @@ jobs:
       - name: Generate Release Notes
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ steps.release-info.outputs.tag }}
+          TARGET_REF: ${{ steps.release-info.outputs.target_ref }}
         run: |
           node scripts/generate-release-notes.mjs \
-            --tag "${{ steps.release-info.outputs.tag }}" \
-            --repo "${{ github.repository }}" \
-            --target-ref "${{ steps.release-info.outputs.target_ref }}" \
+            --tag "${RELEASE_TAG}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --target-ref "${TARGET_REF}" \
             --output-dir "generated-release-notes"
 
       - name: Generate Release Test Summary
@@ -1672,8 +1674,8 @@ jobs:
             exit 1
           fi
 
-          if ! echo "${TAG}" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+([-.].*)?$'; then
-            echo "Invalid TAG format: ${TAG}. Expected format like v2.4.7"
+          if ! echo "${TAG}" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$'; then
+            echo "Invalid TAG format: ${TAG}. Expected format like v2.4.7 or v2.4.7-beta.1"
             exit 1
           fi
 
@@ -1735,6 +1737,8 @@ jobs:
 
       - name: Download and validate release manifest
         shell: bash
+        env:
+          EXPECTED_ROLLBACK_FROM_VERSION: ${{ steps.sync-rollback.outputs.from_version }}
         run: |
           set -euo pipefail
           manifest_url=$(jq -er 'first(.assets[] | select(.name=="tuff-release-manifest.json")).browser_download_url' /tmp/github-release.json)
@@ -1745,7 +1749,7 @@ jobs:
             -o /tmp/tuff-release-manifest.json
           node scripts/update-validate-release-manifest.mjs \
             --manifest /tmp/tuff-release-manifest.json \
-            --expected-rollback-from-version "${{ steps.sync-rollback.outputs.from_version }}"
+            --expected-rollback-from-version "${EXPECTED_ROLLBACK_FROM_VERSION}"
           jq -e --arg tag "${TAG}" '.release.tag == $tag' /tmp/tuff-release-manifest.json >/dev/null
 
       - name: Generate Release Notes
@@ -1757,10 +1761,11 @@ jobs:
             --output-dir "/tmp/generated-release-notes"
 
       - name: Resolve release notes payload
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
         run: |
           set -euo pipefail
 
-          VERSION="${{ steps.meta.outputs.version }}"
           generated_zh="/tmp/generated-release-notes/update_${VERSION}.zh.md"
           generated_en="/tmp/generated-release-notes/update_${VERSION}.en.md"
 
@@ -1863,6 +1868,9 @@ jobs:
           EOF
 
       - name: Upsert Nexus release metadata
+        env:
+          RELEASE_CHANNEL: ${{ steps.sync-rollback.outputs.channel }}
+          RELEASE_VERSION: ${{ steps.meta.outputs.version }}
         run: |
           source /tmp/nexus-sync-helpers.sh
           notes_json=$(cat /tmp/nexus-release-notes.json)
@@ -1876,8 +1884,8 @@ jobs:
           create_payload=$(jq -n \
             --arg tag "${TAG}" \
             --arg name "Release ${TAG}" \
-            --arg channel "${{ steps.sync-rollback.outputs.channel }}" \
-            --arg version "${{ steps.meta.outputs.version }}" \
+            --arg channel "${RELEASE_CHANNEL}" \
+            --arg version "${RELEASE_VERSION}" \
             --arg rollbackFromVersion "${rollback_from_version}" \
             --argjson rollbackCompatible "${rollback_compatible}" \
             --argjson notes "${notes_json}" \

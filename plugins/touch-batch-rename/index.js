@@ -41,13 +41,246 @@ function hasControlCharacter(value) {
   return false
 }
 
+const WINDOWS_FORBIDDEN_CHARS_RE = /[<>:"/\\|?*]/
+const WINDOWS_RESERVED_NAME_RE = /^(?:CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\.|$)/i
+const MAX_REGEX_QUANTIFIER_BOUND = 64
+
 function isValidTargetName(value) {
   if (typeof value !== 'string' || value.length === 0 || value.length > MAX_TARGET_NAME_LENGTH)
     return false
   if (value === '.' || value === '..')
     return false
-  if (/[\\/]/.test(value) || hasControlCharacter(value))
+  if (WINDOWS_FORBIDDEN_CHARS_RE.test(value) || hasControlCharacter(value))
     return false
+  if (/[. ]$/.test(value))
+    return false
+  if (WINDOWS_RESERVED_NAME_RE.test(value))
+    return false
+  return true
+}
+
+function readSimpleQuantifier(pattern, index) {
+  const ch = pattern[index]
+  if (ch === '*' || ch === '+') {
+    const lazy = pattern[index + 1] === '?'
+    return { endIndex: index + (lazy ? 2 : 1), unbounded: true, infinite: true, min: ch === '+' ? 1 : 0, max: Infinity }
+  }
+  if (ch === '?') {
+    const lazy = pattern[index + 1] === '?'
+    return { endIndex: index + (lazy ? 2 : 1), unbounded: false, infinite: false, min: 0, max: 1 }
+  }
+  if (ch === '{') {
+    const match = /^\{(\d+)(?:,(\d*))?\}\??/.exec(pattern.slice(index))
+    if (match) {
+      const min = Number.parseInt(match[1], 10)
+      const hasComma = match[0].includes(',')
+      const max = !hasComma ? min : (match[2] === '' ? Infinity : Number.parseInt(match[2], 10))
+      return { endIndex: index + match[0].length, unbounded: max === Infinity || max >= 4, infinite: max === Infinity, min, max }
+    }
+  }
+  return null
+}
+
+function isSafeReplaceRegex(pattern) {
+  if (typeof pattern !== 'string' || pattern.length === 0 || pattern.length > 96)
+    return false
+  if (/(?:\.\*|\.\+){2,}/.test(pattern))
+    return false
+
+  let inClass = false
+  let classStart = -1
+  const stack = []
+  let prevUnbounded = false
+
+  for (let i = 0; i < pattern.length; i += 1) {
+    const ch = pattern[i]
+    if (ch === '\\') {
+      const next = pattern[i + 1]
+      const atom = next ? `\\${next}` : '\\'
+      i += next ? 1 : 0
+      if (inClass)
+        continue
+      const isBackref = /^\\[1-9]$/.test(atom) || (next === 'k' && pattern[i + 1] === '<')
+      if (stack.length > 0) {
+        const top = stack[stack.length - 1]
+        top.branches[top.branches.length - 1] += atom
+        if (isBackref)
+          top.hasBackref = true
+      }
+      const q = readSimpleQuantifier(pattern, i + 1)
+      if (q) {
+        if (q.max !== Infinity && q.max > MAX_REGEX_QUANTIFIER_BOUND)
+          return false
+        if (isBackref && q.max >= 2)
+          return false
+        if (q.unbounded && prevUnbounded)
+          return false
+        if (stack.length > 0) {
+          const top = stack[stack.length - 1]
+          if (q.unbounded)
+            top.hasUnbounded = true
+          if (q.infinite)
+            top.hasInfinite = true
+          if (q.max >= 2 && q.max > q.min)
+            top.hasVariableRepeat = true
+          if (q.max >= 2)
+            top.depth = Math.max(top.depth, 1)
+        }
+        prevUnbounded = q.unbounded
+        i = q.endIndex - 1
+      }
+      else {
+        prevUnbounded = false
+      }
+      continue
+    }
+    if (ch === '[' && !inClass) {
+      inClass = true
+      classStart = i
+      continue
+    }
+    if (ch === ']' && inClass) {
+      inClass = false
+      const clsToken = pattern.slice(classStart, i + 1)
+      if (stack.length > 0) {
+        const top = stack[stack.length - 1]
+        top.branches[top.branches.length - 1] += clsToken
+      }
+      const q = readSimpleQuantifier(pattern, i + 1)
+      if (q) {
+        if (q.max !== Infinity && q.max > MAX_REGEX_QUANTIFIER_BOUND)
+          return false
+        if (q.unbounded && prevUnbounded)
+          return false
+        if (stack.length > 0) {
+          const top = stack[stack.length - 1]
+          if (q.unbounded)
+            top.hasUnbounded = true
+          if (q.infinite)
+            top.hasInfinite = true
+          if (q.max >= 2 && q.max > q.min)
+            top.hasVariableRepeat = true
+          if (q.max >= 2)
+            top.depth = Math.max(top.depth, 1)
+        }
+        prevUnbounded = q.unbounded
+        i = q.endIndex - 1
+      }
+      else {
+        prevUnbounded = false
+      }
+      continue
+    }
+    if (inClass)
+      continue
+
+    if (ch === '(') {
+      let skip = i + 1
+      if (pattern[skip] === '?') {
+        const rest = pattern.slice(skip)
+        if (rest.startsWith('?<=') || rest.startsWith('?<!')) {
+          skip += 3
+        }
+        else if (rest.startsWith('?:') || rest.startsWith('?=') || rest.startsWith('?!')) {
+          skip += 2
+        }
+        else if (rest.startsWith('?<')) {
+          const close = pattern.indexOf('>', skip + 2)
+          if (close > skip)
+            skip = close + 1
+        }
+      }
+      stack.push({ hasUnbounded: false, hasInfinite: false, hasVariableRepeat: false, hasBackref: false, depth: 0, branches: [''] })
+      prevUnbounded = false
+      i = skip - 1
+      continue
+    }
+    if (ch === '|' && stack.length > 0) {
+      stack[stack.length - 1].branches.push('')
+      prevUnbounded = false
+      continue
+    }
+    if (ch === ')' && stack.length > 0) {
+      const group = stack.pop()
+      const q = readSimpleQuantifier(pattern, i + 1)
+      if (q) {
+        if (q.max !== Infinity && q.max > MAX_REGEX_QUANTIFIER_BOUND)
+          return false
+        if (q.unbounded && (group.hasUnbounded || group.hasVariableRepeat || group.hasBackref))
+          return false
+        if (q.max >= 2 && group.hasInfinite)
+          return false
+        if (q.max >= 2 && group.depth >= 2 && (group.hasVariableRepeat || q.max > q.min))
+          return false
+        if (q.unbounded && group.branches.length > 1) {
+          const normalized = group.branches.map(b => b.trim()).filter(Boolean)
+          const unique = new Set(normalized)
+          if (unique.size < normalized.length)
+            return false
+          for (let aIdx = 0; aIdx < normalized.length; aIdx += 1) {
+            for (let bIdx = aIdx + 1; bIdx < normalized.length; bIdx += 1) {
+              if (normalized[aIdx].startsWith(normalized[bIdx]) || normalized[bIdx].startsWith(normalized[aIdx]))
+                return false
+            }
+          }
+        }
+        if (stack.length > 0) {
+          const parent = stack[stack.length - 1]
+          if (q.unbounded || group.hasUnbounded)
+            parent.hasUnbounded = true
+          if (q.infinite || group.hasInfinite)
+            parent.hasInfinite = true
+          if ((q.max >= 2 && q.max > q.min) || group.hasVariableRepeat)
+            parent.hasVariableRepeat = true
+          if (group.hasBackref)
+            parent.hasBackref = true
+          parent.depth = Math.max(parent.depth, group.depth + (q.max >= 2 ? 1 : 0))
+        }
+        i = q.endIndex - 1
+      }
+      else if (stack.length > 0) {
+        const parent = stack[stack.length - 1]
+        if (group.hasUnbounded)
+          parent.hasUnbounded = true
+        if (group.hasInfinite)
+          parent.hasInfinite = true
+        if (group.hasVariableRepeat)
+          parent.hasVariableRepeat = true
+        if (group.hasBackref)
+          parent.hasBackref = true
+        parent.depth = Math.max(parent.depth, group.depth)
+      }
+      prevUnbounded = false
+      continue
+    }
+
+    if (stack.length > 0) {
+      stack[stack.length - 1].branches[stack[stack.length - 1].branches.length - 1] += ch
+    }
+    const q = readSimpleQuantifier(pattern, i + 1)
+    if (q) {
+      if (q.max !== Infinity && q.max > MAX_REGEX_QUANTIFIER_BOUND)
+        return false
+      if (q.unbounded && prevUnbounded)
+        return false
+      if (stack.length > 0) {
+        const top = stack[stack.length - 1]
+        if (q.unbounded)
+          top.hasUnbounded = true
+        if (q.infinite)
+          top.hasInfinite = true
+        if (q.max >= 2 && q.max > q.min)
+          top.hasVariableRepeat = true
+        if (q.max >= 2)
+          top.depth = Math.max(top.depth, 1)
+      }
+      prevUnbounded = q.unbounded
+      i = q.endIndex - 1
+    }
+    else if (ch !== '^' && ch !== '$') {
+      prevUnbounded = false
+    }
+  }
   return true
 }
 
@@ -96,7 +329,7 @@ function parseReplaceRule(value) {
     const lastSlash = from.lastIndexOf('/')
     const pattern = from.slice(1, lastSlash)
     const flags = from.slice(lastSlash + 1)
-    if (pattern.length > 96 || !/^[gimuy]*$/.test(flags))
+    if (pattern.length > 96 || !/^[gimuy]*$/.test(flags) || !isSafeReplaceRegex(pattern))
       return null
     try {
       return { type: 'regex', regex: new RegExp(pattern, flags), to }
@@ -230,12 +463,13 @@ function buildRenamePlan(paths, rules, now = new Date()) {
   items.forEach((entry) => {
     if (entry.invalid)
       return
-    targetPathCounts.set(entry.targetPath, (targetPathCounts.get(entry.targetPath) ?? 0) + 1)
+    const collisionKey = entry.targetPath.toLowerCase()
+    targetPathCounts.set(collisionKey, (targetPathCounts.get(collisionKey) ?? 0) + 1)
   })
 
   const collisions = []
   items.forEach((entry) => {
-    if (!entry.invalid && (targetPathCounts.get(entry.targetPath) ?? 0) > 1) {
+    if (!entry.invalid && (targetPathCounts.get(entry.targetPath.toLowerCase()) ?? 0) > 1) {
       entry.collision = true
       collisions.push(entry.targetPath)
     }
@@ -491,10 +725,18 @@ const pluginLifecycle = {
       const fsFacade = resolveFilesystem()
       if (!fsFacade || typeof fsFacade.renameBatch !== 'function')
         return blocked('capability-unavailable', '文件系统重命名能力不可用')
+      previewCacheByFeature.delete(featureId)
       try {
         await fsFacade.renameBatch(pending.map(entry => ({ source: entry.source, targetName: entry.targetName })))
+      }
+      catch (error) {
+        const code = stableErrorCode(error, 'BATCH_RENAME_APPLY_FAILED')
+        logger.error(`[touch-batch-rename] ${code}`)
+        return blocked(code, '批量重命名失败')
+      }
+      try {
         await plugin.storage.setFile(LAST_RENAME_FILE, {
-          items: pending.map(entry => ({
+          items: [...pending].reverse().map(entry => ({
             source: entry.targetPath,
             targetName: entry.sourceName,
           })),
@@ -503,9 +745,16 @@ const pluginLifecycle = {
         return { externalAction: true, success: true, status: 'completed' }
       }
       catch (error) {
-        const code = stableErrorCode(error, 'BATCH_RENAME_APPLY_FAILED')
-        logger.error(`[touch-batch-rename] ${code}`)
-        return blocked(code, '批量重命名失败')
+        const code = stableErrorCode(error, 'BATCH_RENAME_UNDO_LOG_FAILED')
+        logger?.warn?.(`[touch-batch-rename] ${code}`)
+        return {
+          externalAction: true,
+          success: true,
+          status: 'completed',
+          undoLogSaved: false,
+          warning: code,
+          message: '批量重命名已完成，但撤销日志写入失败',
+        }
       }
     }
 
@@ -516,18 +765,33 @@ const pluginLifecycle = {
       const fsFacade = resolveFilesystem()
       if (!fsFacade || typeof fsFacade.renameBatch !== 'function')
         return blocked('capability-unavailable', '文件系统重命名能力不可用')
+      let entries
       try {
-        const entries = normalizeUndoEntries(await plugin.storage.getFile(LAST_RENAME_FILE))
+        entries = normalizeUndoEntries(await plugin.storage.getFile(LAST_RENAME_FILE))
         if (entries.length === 0)
           return blocked('undo-empty', '没有可撤销的重命名事务')
         await fsFacade.renameBatch(entries)
-        await plugin.storage.setFile(LAST_RENAME_FILE, { items: [], createdAt: Date.now() })
-        return { externalAction: true, success: true, status: 'completed' }
       }
       catch (error) {
         const code = stableErrorCode(error, 'BATCH_RENAME_UNDO_FAILED')
         logger.error(`[touch-batch-rename] ${code}`)
         return blocked(code, '撤销重命名失败')
+      }
+      try {
+        await plugin.storage.setFile(LAST_RENAME_FILE, { items: [], createdAt: Date.now() })
+        return { externalAction: true, success: true, status: 'completed' }
+      }
+      catch (error) {
+        const code = stableErrorCode(error, 'BATCH_RENAME_UNDO_LOG_CLEAR_FAILED')
+        logger?.warn?.(`[touch-batch-rename] ${code}`)
+        return {
+          externalAction: true,
+          success: true,
+          status: 'completed',
+          undoLogCleared: false,
+          warning: code,
+          message: '撤销重命名已完成，但清理撤销日志失败',
+        }
       }
     }
   },

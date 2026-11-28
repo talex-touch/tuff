@@ -58,4 +58,40 @@ describe('ProviderConfigModal secret storage gate', () => {
     expect(wrapper.emitted('close')).toBeUndefined()
     expect(wrapper.text()).toContain('secure-store-unavailable')
   })
+
+  it('blocks saving a cleartext external http:// API URL', async () => {
+    sdkMocks.secret.health.mockResolvedValue({
+      backend: 'keychain',
+      available: true,
+      degraded: false,
+    })
+
+    const wrapper = mount(ProviderConfigModal, {
+      global: {
+        stubs: {
+          Teleport: true,
+          Transition: false,
+        },
+      },
+      props: {
+        show: true,
+        provider: {
+          id: 'deepl',
+          name: 'DeepL',
+          enabled: true,
+          config: {
+            apiUrl: 'http://api-free.deepl.com/v2/translate',
+            apiKey: 'secret-deepl-key',
+          },
+        } as any,
+      },
+    })
+
+    const saveButton = wrapper.findAll('button').find(button => button.text() === '保存')
+    await saveButton!.trigger('click')
+    await vi.dynamicImportSettled()
+
+    expect(wrapper.emitted('save')).toBeUndefined()
+    expect(wrapper.text()).toContain('HTTPS')
+  })
 })

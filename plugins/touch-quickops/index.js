@@ -210,6 +210,10 @@ const HIGH_RISK_FLOW_ACTIONS = [
   },
 ]
 
+// Only SAFE_FLOW_ACTIONS may be dispatched directly by this plugin via flow.dispatch.
+// Confirmation-gated and high-risk actions must never be dispatched from plugin actions.
+const DISPATCHABLE_FLOW_TARGET_IDS = new Set(SAFE_FLOW_ACTIONS.map(action => action.targetId))
+
 function locale() {
   try {
     return plugin.getLocale() === 'en-US' ? 'en' : 'zh'
@@ -1848,6 +1852,22 @@ function projectItemsForHost(items) {
       ...(item.subtitle ? { subtitle: item.subtitle } : {}),
       ...(item.icon ? { icon: item.icon } : {}),
     }
+    const isValidatedDeveloperPreview = item.meta?.mode === 'developer-preview'
+      && item.render?.mode === 'custom'
+      && item.render?.custom?.type === 'vue'
+      && item.render?.custom?.content === PREVIEW_COMPONENT_NAME
+      && Boolean(item.render?.custom?.data && typeof item.render.custom.data === 'object')
+    const render = isValidatedDeveloperPreview
+      ? {
+          mode: 'custom',
+          custom: {
+            type: 'vue',
+            content: PREVIEW_COMPONENT_NAME,
+            data: item.render.custom.data,
+          },
+          ...(basic?.title ? { basic } : {}),
+        }
+      : { mode: 'default', basic }
     const actions = Array.isArray(item.actions)
       ? item.actions.map(action => ({
           id: action.id,
@@ -1870,9 +1890,15 @@ function projectItemsForHost(items) {
       id: item.id,
       source: item.source,
       ...(item.kind ? { kind: item.kind } : {}),
+      ...(isValidatedDeveloperPreview && item.className === 'core-preview-card'
+        ? { className: item.className }
+        : {}),
+      ...(isValidatedDeveloperPreview && Number.isFinite(item.finalScore)
+        ? { finalScore: item.finalScore }
+        : {}),
       ...(actions.length ? { actions } : {}),
       meta,
-      render: { mode: 'default', basic },
+      render,
       ...(item.scoring ? { scoring: item.scoring } : {}),
     }
   })
@@ -1978,6 +2004,21 @@ const pluginLifecycle = {
         success: false,
         status: 'blocked',
         reason: 'invalid-flow-action',
+      }
+    }
+
+    if (
+      typeof payload.targetId !== 'string'
+      || !DISPATCHABLE_FLOW_TARGET_IDS.has(payload.targetId)
+      || payload.options.preferredTarget !== payload.targetId
+      || (payload.payload?.data?.targetId !== undefined && payload.payload.data.targetId !== payload.targetId)
+    ) {
+      return {
+        externalAction: true,
+        success: false,
+        status: 'blocked',
+        targetId: typeof payload.targetId === 'string' ? payload.targetId : undefined,
+        reason: 'disallowed-flow-target',
       }
     }
 

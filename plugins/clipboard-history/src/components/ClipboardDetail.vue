@@ -15,15 +15,24 @@ import {
   resolveDetailImagePreview,
   resolveListImageSrc,
 } from '~/utils/clipboard-items'
-import { detectSecret, getClipboardDisplayTitle, getClipboardPreviewText } from '~/utils/clipboard-shapes'
+import {
+  detectSecret,
+  getClipboardDisplayTitle,
+  getClipboardPreviewText,
+  hasPrivateKeySecret,
+} from '~/utils/clipboard-shapes'
 import { useMaskHostIp } from '~/utils/use-disclosure-state'
 
-const props = defineProps<{
-  item: PluginClipboardItem | null
-  resolvedImageUrl?: string | null
-  resolvingImageUrl?: boolean
-  sourceApplication?: ResolvedApplication | null
-}>()
+const props = withDefaults(
+  defineProps<{
+    item: PluginClipboardItem | null
+    resolvedImageUrl?: string | null
+    resolvingImageUrl?: boolean
+    sourceApplication?: ResolvedApplication | null
+    maskHostIp?: boolean | null
+  }>(),
+  { maskHostIp: null },
+)
 
 const emit = defineEmits<{
   (event: 'copyText', value: string): void
@@ -33,7 +42,8 @@ const emit = defineEmits<{
 }>()
 
 /** 插件存储只在这一处读，往下当 prop 传——组件内部读的话开关就没法从外部翻转，也就测不到。 */
-const maskHostIp = useMaskHostIp()
+const persistedMaskHostIp = useMaskHostIp()
+const maskHostIp = computed(() => props.maskHostIp ?? persistedMaskHostIp.value)
 
 const summary = computed(() => (props.item ? getClipboardSummary(props.item) : null))
 const sourceInfo = computed(() =>
@@ -50,8 +60,12 @@ const collapsedDirs = ref<ReadonlySet<string>>(new Set())
  */
 const secret = computed(() => detectSecret(props.item?.content))
 const revealSecret = ref(false)
-const canRevealSecret = computed(() => Boolean(secret.value) && secret.value?.kind !== 'private-key')
-const previewText = computed(() => (props.item ? getClipboardPreviewText(props.item, revealSecret.value) : ''))
+const canRevealSecret = computed(
+  () => Boolean(secret.value) && secret.value?.kind !== 'private-key' && !hasPrivateKeySecret(props.item?.content),
+)
+const previewText = computed(() =>
+  props.item ? getClipboardPreviewText(props.item, revealSecret.value, { maskHostIp: maskHostIp.value }) : '',
+)
 
 watch(
   () => props.item?.id,
@@ -227,7 +241,7 @@ function readableTextOn(color: string): string {
               <img
                 :key="imageRetryNonce"
                 :src="imagePreview.src || undefined"
-                :alt="getClipboardDisplayTitle(item)"
+                :alt="getClipboardDisplayTitle(item, { maskHostIp })"
                 class="preview-img"
                 :class="{ thumbnail: imagePreview.isThumbnailOnly }"
                 @error="handleImageError"

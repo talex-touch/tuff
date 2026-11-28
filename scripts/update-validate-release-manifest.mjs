@@ -58,6 +58,9 @@ function isMetaAssetName(filename) {
 
 const release = payload?.release
 const version = release?.version
+const escapedVersion = typeof version === 'string'
+  ? version.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  : ''
 const schemaVersion = payload?.schemaVersion
 const artifacts = Array.isArray(payload?.artifacts) ? payload.artifacts : []
 
@@ -185,7 +188,6 @@ for (const [index, artifact] of artifacts.entries()) {
     }
 
     if (typeof name === 'string' && typeof version === 'string') {
-      const escapedVersion = version.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
       const canonicalCorePattern = new RegExp(
         `^tuff-core-${escapedVersion}-(win32|darwin|linux)-(x64|arm64|universal)(-setup)?\\.(exe|dmg|AppImage|deb|zip)$`,
         'i',
@@ -222,7 +224,7 @@ for (const [index, artifact] of artifacts.entries()) {
     )
     if (typeof name === 'string' && typeof version === 'string') {
       const rendererPattern = new RegExp(
-        `^tuff-renderer-${version}\\.zip$`,
+        `^tuff-renderer-${escapedVersion}\\.zip$`,
         'i',
       )
       requireField(
@@ -243,7 +245,7 @@ for (const [index, artifact] of artifacts.entries()) {
     )
     if (typeof name === 'string' && typeof version === 'string') {
       const extensionsPattern = new RegExp(
-        `^tuff-extensions-${version}\\.zip$`,
+        `^tuff-extensions-${escapedVersion}\\.zip$`,
         'i',
       )
       requireField(

@@ -222,8 +222,8 @@ test('apply sends one exact rename transaction before persisting bounded undo en
   ])
   assert.equal(storageCalls.length, 1)
   assert.deepEqual(storageCalls[0].value.items, [
-    { source: '/approved/renamed-alpha.txt', targetName: 'alpha.txt' },
     { source: '/approved/renamed-beta.md', targetName: 'beta.md' },
+    { source: '/approved/renamed-alpha.txt', targetName: 'alpha.txt' },
   ])
 })
 
@@ -385,4 +385,61 @@ test('drops stale async trigger results when superseded by a newer trigger', asy
   const result = await action('batch-rename-race', 'apply')
   assert.equal(result.status, 'completed')
   assert.deepEqual(filesystemCalls, [[{ source: '/approved/beta.txt', targetName: 'fresh-beta.txt' }]])
+})
+
+test('blocks case-insensitive collisions, Windows forbidden/reserved names, ReDoS regexes, double-apply, and separates undo-log write errors', async () => {
+  // 1. Case-folded collision (Doc.txt vs doc.txt)
+  await lifecycle.onFeatureTriggered('batch-rename-case', {
+    text: 'replace:Alpha->doc replace:Beta->Doc',
+    inputs: [{ type: 'files', content: JSON.stringify(['/approved/Alpha.txt', '/approved/Beta.txt']) }],
+  })
+  const caseRes = await action('batch-rename-case', 'apply')
+  assert.equal(caseRes.status, 'blocked')
+  assert.equal(caseRes.reason, 'target-collision')
+
+  // 2. Windows forbidden characters, trailing dot, and reserved device names
+  for (const rule of ['prefix:bad:name-', 'prefix:bad*name-', 'replace:alpha->CON', 'replace:alpha->NUL.txt', 'suffix:.']) {
+    await lifecycle.onFeatureTriggered('batch-rename-win', {
+      text: rule,
+      inputs: [{ type: 'files', content: JSON.stringify(['/approved/alpha']) }],
+    })
+    const winRes = await action('batch-rename-win', 'apply')
+    assert.equal(winRes.status, 'blocked', rule)
+    assert.equal(winRes.reason, 'invalid-target-name', rule)
+  }
+
+  // 3. ReDoS regex in replace rule is rejected without hanging
+  const longName = `${'a'.repeat(35)}!`
+  const started = Date.now()
+  await lifecycle.onFeatureTriggered('batch-rename-redos', {
+    text: 'replace:/(a+)+$/->x',
+    inputs: [{ type: 'files', content: JSON.stringify([`/approved/${longName}.txt`]) }],
+  })
+  assert.ok(Date.now() - started < 250, 'ReDoS rule must be skipped before regex execution')
+  const redosApply = await action('batch-rename-redos', 'apply')
+  assert.equal(redosApply.reason, 'no-changes')
+
+  // 4. Clearing preview cache prevents stale double-apply
+  await preview('batch-rename-once', ['/approved/a.txt', '/approved/b.txt'])
+  const firstApply = await action('batch-rename-once', 'apply')
+  assert.equal(firstApply.status, 'completed')
+  const secondApply = await action('batch-rename-once', 'apply')
+  assert.equal(secondApply.status, 'blocked')
+  assert.equal(secondApply.reason, 'preview-missing')
+
+  // 5. Undo-log write failure after disk rename succeeds does not report rename failure
+  const originalSetFile = globalThis.plugin.storage.setFile
+  globalThis.plugin.storage.setFile = async () => {
+    throw new Error('storage full')
+  }
+  try {
+    await preview('batch-rename-log-err', ['/approved/c.txt'])
+    const res = await action('batch-rename-log-err', 'apply')
+    assert.equal(res.success, true)
+    assert.equal(res.status, 'completed')
+    assert.equal(res.undoLogSaved, false)
+  }
+  finally {
+    globalThis.plugin.storage.setFile = originalSetFile
+  }
 })

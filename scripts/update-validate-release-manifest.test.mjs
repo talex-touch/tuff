@@ -444,4 +444,49 @@ describe('update release manifest validator', () => {
       },
     )
   })
+
+  it('escapes version dots when validating renderer and extensions archive filenames', () => {
+    const manifestPath = writeManifest({
+      schemaVersion: 2,
+      release: {
+        version: '2.4.12-beta.8',
+        channel: 'BETA',
+        tag: 'v2.4.12-beta.8',
+        rollbackFromVersion: '2.4.12-beta.7',
+        rollbackCompatible: false,
+      },
+      artifacts: [
+        {
+          component: 'core',
+          name: 'tuff-core-2.4.12-beta.8-win32-x64-setup.exe',
+          platform: 'win32',
+          arch: 'x64',
+          sha256: 'a'.repeat(64),
+          signature: 'tuff-core-2.4.12-beta.8-win32-x64-setup.exe.sig',
+        },
+        {
+          component: 'renderer',
+          name: 'tuff-renderer-2X4X12-betaX8.zip',
+          sha256: 'b'.repeat(64),
+          coreRange: '>=2.4.0',
+        },
+        {
+          component: 'extensions',
+          name: 'tuff-extensions-2X4X12-betaX8.zip',
+          sha256: 'c'.repeat(64),
+          coreRange: '>=2.4.0',
+        },
+      ],
+    })
+
+    assert.throws(
+      () => runValidator(manifestPath),
+      (error) => {
+        const output = `${error.stdout ?? ''}\n${error.stderr ?? ''}`
+        assert.match(output, /artifacts\[1\]\.name does not match renderer naming spec/)
+        assert.match(output, /artifacts\[2\]\.name does not match extensions naming spec/)
+        return true
+      },
+    )
+  })
 })

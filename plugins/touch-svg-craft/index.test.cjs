@@ -171,7 +171,7 @@ test('converts SVG to React JSX with camelCase attributes, className, xlinkHref,
   assert.match(jsx, /strokeWidth="2"/)
   assert.match(jsx, /strokeLinecap="round"/)
   assert.match(jsx, /xlinkHref="#sym"/)
-  assert.match(jsx, /style=\{\{ fill: '#fff', strokeOpacity: '0\.8' \}\}/)
+  assert.match(jsx, /style=\{\{ fill: "#fff", strokeOpacity: "0\.8" \}\}/)
   assert.match(jsx, /\{\.\.\.props\}>/)
 })
 
@@ -372,4 +372,34 @@ test('guards against stale trigger generations and halts publishing on onDestroy
   await mod2.onDestroy()
   releaseDestroy()
   assert.equal(await pending, false)
+})
+
+test('strips active SVG elements/handlers/javascript schemes, extracts single SVG non-greedily, and prevents Vue/JSX breakout', async () => {
+  const { mod, state } = setupHarness()
+  const malicious = [
+    '<svg viewBox="0 0 24 24" onload="alert(1)">',
+    '  <script>alert("xss")</script>',
+    '  <foreignObject><div>html</div></foreignObject>',
+    '  <a href="javascript:alert(2)" xlink:href="  JAVASCRIPT:alert(3)"><path d="M0 0" onclick="evil()" style="font-family: \\\' } , alert(4) //"/></a>',
+    '  <text></template><script>alert(5)</script></text>',
+    '</svg>',
+    '<script>between()</script>',
+    '<svg viewBox="0 0 10 10"><rect width="10" height="10"/></svg>',
+  ].join('\n')
+
+  await mod.onFeatureTriggered('svg-craft', malicious)
+  const rawSvg = state.pushed.find(i => i.id === 'svg-craft-out-raw').actions[0].payload.text
+  const vueSfc = state.pushed.find(i => i.id === 'svg-craft-out-vue').actions[0].payload.text
+  const jsx = state.pushed.find(i => i.id === 'svg-craft-out-jsx').actions[0].payload.text
+
+  assert.doesNotMatch(rawSvg, /<script|foreignObject|onload=|onclick=|javascript:|between\(|<rect/i)
+  assert.equal((rawSvg.match(/<svg\b/gi) || []).length, 1)
+
+  // Vue SFC must contain exactly one closing </template> and no injected <script> inside template
+  const templateSection = vueSfc.slice(vueSfc.indexOf('<template>'))
+  assert.equal((templateSection.match(/<\/template>/gi) || []).length, 1)
+  assert.doesNotMatch(templateSection, /<script/i)
+
+  // JSX style uses JSON.stringify so backslash+quote cannot break out of string literal
+  assert.match(jsx, /style=\{\{ fontFamily: "\\\\' \} , alert\(4\) \/\/" \}\}/)
 })

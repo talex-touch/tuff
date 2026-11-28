@@ -1,4 +1,5 @@
 import type { TranslationProvider, TranslationProviderRequest, TranslationResult } from '../types/translation'
+import { validateProviderApiUrl } from '../utils/url-validation'
 import { getPluginNetworkClient } from './plugin-network-client'
 
 export class BingTranslateProvider implements TranslationProvider {
@@ -15,6 +16,11 @@ export class BingTranslateProvider implements TranslationProvider {
   async translate(request: TranslationProviderRequest): Promise<TranslationResult> {
     const { text, targetLanguage: targetLang = 'zh-Hans', sourceLanguage: sourceLang = 'auto' } = request
     try {
+      const urlCheck = validateProviderApiUrl(this.config.apiUrl)
+      if (!urlCheck.valid || !urlCheck.normalized) {
+        throw new Error(urlCheck.error || 'Bing 翻译 API URL 无效')
+      }
+
       const params = new URLSearchParams({
         'api-version': '3.0',
         'to': targetLang,
@@ -27,7 +33,7 @@ export class BingTranslateProvider implements TranslationProvider {
       const response = await getPluginNetworkClient().request<any>({
         method: 'POST',
         responseType: 'json',
-        url: `${this.config.apiUrl}?${params}`,
+        url: `${urlCheck.normalized}?${params}`,
         headers: {
           'Ocp-Apim-Subscription-Key': this.config.apiKey,
           'Ocp-Apim-Subscription-Region': this.config.region,

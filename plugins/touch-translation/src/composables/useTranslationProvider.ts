@@ -18,6 +18,7 @@ import { MyMemoryTranslateProvider } from '../providers/mymemory-translate'
 import { TencentTranslateProvider } from '../providers/tencent-translate'
 import { TuffIntelligenceTranslateProvider } from '../providers/tuffintelligence-translate'
 import { migrateLegacyProviderCredentials } from '../utils/provider-credential-migration'
+import { validateProviderApiUrl } from '../utils/url-validation'
 
 const providers = reactive<Map<string, TranslationProvider>>(new Map())
 const isInitialized = ref(false)
@@ -57,10 +58,6 @@ export function stripProviderSecrets(providerId: string, config: Record<string, 
     delete next[field]
   }
   return next
-}
-
-function hasProviderSecretFields(providerId: string, config: Record<string, any>): boolean {
-  return (PROVIDER_SECRET_FIELDS[providerId] || []).some(field => field in config)
 }
 
 export function useTranslationProvider() {
@@ -256,7 +253,8 @@ export function useTranslationProvider() {
     }
   }
 
-  // 更新提供者配置（fail-closed：先写密钥，失败时保持原配置并回滚）
+  // 更新提供者配置（原子化提交：先写新密钥并快照旧密钥，配置持久化失败时回滚安全存储与内存配置；
+  // 清理旧密钥在配置持久化之后或失败回滚时恢复）
   const updateProviderConfig = async (
     id: string,
     config: Record<string, any>,
@@ -266,11 +264,43 @@ export function useTranslationProvider() {
       return { success: false, error: '未找到对应的翻译源配置' }
     }
 
+    if (typeof config.apiUrl === 'string' && config.apiUrl.trim().length > 0) {
+      const urlCheck = validateProviderApiUrl(config.apiUrl)
+      if (!urlCheck.valid) {
+        return { success: false, error: urlCheck.error || '翻译源 API URL 无效' }
+      }
+    }
+
     const previousConfig = { ...provider.config }
     const previousLegacy = pendingLegacyCredentials[id] ? { ...pendingLegacyCredentials[id] } : undefined
-    const hasSecrets = hasProviderSecretFields(id, config)
+    const secretFields = (PROVIDER_SECRET_FIELDS[id] || []).filter(field => field in config)
+    const hasSecrets = secretFields.length > 0
 
+    const previousVaultSnapshot: Array<{ key: string, value: string | null }> = []
     if (hasSecrets) {
+      for (const field of secretFields) {
+        const key = getProviderSecretKey(id, field)
+        let existing: string | null = null
+        try {
+          const stored = await secret.get(key)
+          existing = typeof stored === 'string' && stored.trim() ? stored : null
+        }
+        catch {
+          const fallback = previousConfig[field]
+          existing = typeof fallback === 'string' && fallback.trim() ? fallback : null
+        }
+        previousVaultSnapshot.push({ key, value: existing })
+      }
+    }
+
+    const nonClearingEntries = secretFields
+      .map((field) => {
+        const value = typeof config[field] === 'string' ? config[field] : ''
+        return { field, key: getProviderSecretKey(id, field), value: value.trim() ? value : null }
+      })
+    const onlyClearingSecrets = hasSecrets && nonClearingEntries.every(entry => entry.value === null)
+
+    if (hasSecrets && !onlyClearingSecrets) {
       const secretResult = await saveProviderSecrets(id, config)
       if (!secretResult.success) {
         return secretResult
@@ -283,6 +313,17 @@ export function useTranslationProvider() {
 
     try {
       await saveProvidersConfig()
+      if (onlyClearingSecrets) {
+        const clearResult = await saveProviderSecrets(id, config)
+        if (!clearResult.success) {
+          provider.config = previousConfig
+          if (previousLegacy) {
+            pendingLegacyCredentials[id] = previousLegacy
+          }
+          await saveProvidersConfig().catch(() => undefined)
+          return clearResult
+        }
+      }
       if (hasSecrets) {
         provider.config = await mergeProviderSecrets(id, stripProviderSecrets(id, nextConfig))
       }
@@ -292,6 +333,14 @@ export function useTranslationProvider() {
       provider.config = previousConfig
       if (previousLegacy) {
         pendingLegacyCredentials[id] = previousLegacy
+      }
+      if (hasSecrets && !onlyClearingSecrets && previousVaultSnapshot.length > 0) {
+        try {
+          await secret.setMany(previousVaultSnapshot)
+        }
+        catch {
+          // Best-effort vault rollback
+        }
       }
       return {
         success: false,
@@ -318,7 +367,7 @@ export function useTranslationProvider() {
     })
   }
 
-  // 重置所有提供者配置（fail-closed：先清理安全存储中的密钥，失败时不清空内存或存储配置）
+  // 重置所有提供者配置（fail-closed：清理密钥失败则中止；配置持久化失败则回滚安全存储与内存配置）
   const resetProvidersConfig = async (): Promise<{ success: boolean, error?: string }> => {
     const snapshots = new Map<string, { enabled: boolean, config?: Record<string, any> }>()
     providers.forEach((provider, id) => {
@@ -330,6 +379,25 @@ export function useTranslationProvider() {
     const previousLegacy: PendingLegacyCredentials = Object.fromEntries(
       Object.entries(pendingLegacyCredentials).map(([id, creds]) => [id, { ...creds }]),
     )
+
+    const previousVaultEntries: Array<{ key: string, value: string | null }> = []
+    for (const [providerId, fields] of Object.entries(PROVIDER_SECRET_FIELDS)) {
+      for (const field of fields) {
+        const key = getProviderSecretKey(providerId, field)
+        let storedValue: string | null = null
+        try {
+          const value = await secret.get(key)
+          storedValue = typeof value === 'string' && value.trim() ? value : null
+        }
+        catch {
+          const fallback = snapshots.get(providerId)?.config?.[field]
+          storedValue = typeof fallback === 'string' && fallback.trim() ? fallback : null
+        }
+        if (storedValue !== null) {
+          previousVaultEntries.push({ key, value: storedValue })
+        }
+      }
+    }
 
     const secretResult = await deleteAllProviderSecrets()
     if (!secretResult.success) {
@@ -399,6 +467,14 @@ export function useTranslationProvider() {
         }
       })
       pendingLegacyCredentials = previousLegacy
+      if (previousVaultEntries.length > 0) {
+        try {
+          await secret.setMany(previousVaultEntries)
+        }
+        catch {
+          // Best-effort vault rollback
+        }
+      }
       return {
         success: false,
         error: error instanceof Error && error.message ? error.message : '重置翻译源配置失败',

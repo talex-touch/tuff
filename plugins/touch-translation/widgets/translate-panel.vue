@@ -600,13 +600,32 @@ function isProviderAudioPlaying(provider: ProviderState): boolean {
   return playingProviderId.value === provider.id
 }
 
+const SAFE_AUDIO_DATA_URI_RE = /^data:audio\/[a-z0-9.+-]+(?:;[a-z0-9.=+-]+)*,/i
+
+function isSafeAudioUrl(rawUrl: string): boolean {
+  const trimmed = rawUrl.trim()
+  if (!trimmed) {
+    return false
+  }
+  if (SAFE_AUDIO_DATA_URI_RE.test(trimmed)) {
+    return true
+  }
+  try {
+    const parsed = new URL(trimmed)
+    return parsed.protocol === 'https:' || parsed.protocol === 'blob:'
+  }
+  catch {
+    return false
+  }
+}
+
 async function toggleProviderAudio(provider: ProviderState): Promise<void> {
   let audioUrl = getProviderAudioUrl(provider)
   if (!audioUrl && canSpeakProvider(provider)) {
     audioUrl = await synthesizeProviderAudio(provider)
   }
 
-  if (!audioUrl || typeof Audio !== 'function') {
+  if (!audioUrl || !isSafeAudioUrl(audioUrl) || typeof Audio !== 'function') {
     return
   }
 

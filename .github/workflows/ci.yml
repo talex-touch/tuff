@@ -56,9 +56,11 @@ jobs:
       # A contribution policy, so it only makes sense on the incoming change, not on the branch.
       - name: Fail on foreign lockfile changes
         if: ${{ github.event_name == 'pull_request' && steps.filter_not_allowed.outputs.change == 'true' }}
+        env:
+          CHANGE_FILES: ${{ steps.filter_not_allowed.outputs.change_files }}
         run: |
           echo "Foreign lockfile changes are not accepted in this PR workflow:"
-          echo '${{ steps.filter_not_allowed.outputs.change_files }}'
+          printf '%s\n' "${CHANGE_FILES}"
           exit 1
 
   docs_verify:

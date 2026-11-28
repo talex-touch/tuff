@@ -247,4 +247,54 @@ describe('touch-translation provider secret storage', () => {
       secretKey: 'synthetic-legacy-key',
     })
   })
+
+  it('rolls back vault secrets if config persistence fails during updateProviderConfig or resetProvidersConfig', async () => {
+    const vault = useStatefulVault()
+    sdkMocks.storage.getFile.mockResolvedValue(LEGACY_TENCENT)
+    sdkMocks.storage.setFile.mockResolvedValue({ success: true })
+
+    const { useTranslationProvider } = await import('./src/composables/useTranslationProvider')
+    const translationProvider = useTranslationProvider()
+    await settle()
+
+    expect(vault.get('providers.tencent.secretKey')).toBe('synthetic-legacy-key')
+
+    // 1. Storage failure during updateProviderConfig rolls vault back to previous key
+    sdkMocks.storage.setFile.mockRejectedValueOnce(new Error('disk-full'))
+    const updateRes = await translationProvider.updateProviderConfig('tencent', {
+      apiUrl: 'https://tmt.tencentcloudapi.com',
+      region: 'ap-beijing',
+      secretId: 'new-id',
+      secretKey: 'new-key',
+    })
+    expect(updateRes.success).toBe(false)
+    expect(vault.get('providers.tencent.secretId')).toBe('synthetic-legacy-id')
+    expect(vault.get('providers.tencent.secretKey')).toBe('synthetic-legacy-key')
+
+    // 2. Storage failure during resetProvidersConfig restores wiped vault keys
+    sdkMocks.storage.setFile.mockRejectedValueOnce(new Error('disk-full'))
+    const resetRes = await translationProvider.resetProvidersConfig()
+    expect(resetRes.success).toBe(false)
+    expect(vault.get('providers.tencent.secretId')).toBe('synthetic-legacy-id')
+    expect(vault.get('providers.tencent.secretKey')).toBe('synthetic-legacy-key')
+  })
+
+  it('rejects cleartext external http:// apiUrl in updateProviderConfig before writing vault secrets', async () => {
+    useStatefulVault()
+    sdkMocks.storage.getFile.mockResolvedValue(undefined)
+    sdkMocks.storage.setFile.mockResolvedValue({ success: true })
+
+    const { useTranslationProvider } = await import('./src/composables/useTranslationProvider')
+    const translationProvider = useTranslationProvider()
+    await settle()
+
+    sdkMocks.secret.setMany.mockClear()
+    const res = await translationProvider.updateProviderConfig('deepl', {
+      apiUrl: 'http://api-free.deepl.com/v2/translate',
+      apiKey: 'secret-key',
+    })
+    expect(res.success).toBe(false)
+    expect(res.error).toContain('HTTPS')
+    expect(sdkMocks.secret.setMany).not.toHaveBeenCalled()
+  })
 })

@@ -2,6 +2,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 import ClipboardDetail from './ClipboardDetail.vue'
+import ClipboardSidebar from './ClipboardSidebar.vue'
 
 /**
  * 主题色是从缩略图现场提取的，jsdom 里没有 canvas，所以真实提取永远返回空数组。
@@ -117,5 +118,47 @@ describe('clipboardDetail palette rail', () => {
 
     vi.useRealTimers()
     wrapper.unmount()
+  })
+})
+
+describe('clipboardDetail & ClipboardSidebar security and host-IP masking', () => {
+  it('hides reveal toggle and never exposes PEM private key even when preceded by another critical token', () => {
+    const keyBody = 'MIIEowIBAAKCAQEAxLoNGoOfHmSecretMaterial'
+    const mixed = `ghp_1234567890abcdefghijklmnopqrstuvwxyz\n-----BEGIN RSA PRIVATE KEY-----\n${keyBody}\n-----END RSA PRIVATE KEY-----`
+    const wrapper = mount(ClipboardDetail, {
+      props: {
+        item: { id: 99, type: 'text', content: mixed },
+      },
+    })
+
+    expect(wrapper.find('.reveal-toggle').exists()).toBe(false)
+    expect(wrapper.html()).not.toContain(keyBody)
+    wrapper.unmount()
+  })
+
+  it('propagates maskHostIp=false to ClipboardDetail preview and ClipboardSidebar titles', () => {
+    const sshItem = { id: 100, type: 'text' as const, content: 'ssh deploy@10.0.3.14 -p 2222' }
+
+    const maskedDetail = mount(ClipboardDetail, { props: { item: sshItem, maskHostIp: true } })
+    expect(maskedDetail.get('.text-preview').text()).not.toContain('10.0.3.14')
+    maskedDetail.unmount()
+
+    const unmaskedDetail = mount(ClipboardDetail, { props: { item: sshItem, maskHostIp: false } })
+    expect(unmaskedDetail.get('.text-preview').text()).toContain('10.0.3.14')
+    unmaskedDetail.unmount()
+
+    const unmaskedSidebar = mount(ClipboardSidebar, {
+      props: {
+        sections: [{ key: 'today', label: '今天', count: 1, items: [sshItem] }],
+        selectedId: 100,
+        loading: false,
+        loadingMore: false,
+        hasMore: false,
+        maskHostIp: false,
+      },
+    })
+    expect(unmaskedSidebar.get('.item-preview').text()).toContain('10.0.3.14')
+    expect(unmaskedSidebar.get('.item-preview').attributes('title')).toContain('10.0.3.14')
+    unmaskedSidebar.unmount()
   })
 })
