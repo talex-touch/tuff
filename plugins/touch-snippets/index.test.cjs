@@ -424,7 +424,8 @@ test('preserves literal $ replacement patterns in {{clipboard}} and filters quot
         { id: 'npm', title: 'npm', content: 'npm_1234567890abcdefghijklmnopqrstuvwxyz', tags: [] },
         { id: 'jwt', title: 'JWT', content: jwt, tags: [] },
         { id: 'db', title: 'DB', content: 'postgres://admin:supersecret@db.internal:5432/app', tags: [] },
-        { id: 'pgp', title: 'PGP', content: '-----BEGIN ENCRYPTED PRIVATE KEY-----\nabc\n-----END ENCRYPTED PRIVATE KEY-----', tags: [] },
+        { id: 'enc-key', title: 'Encrypted', content: '-----BEGIN ENCRYPTED PRIVATE KEY-----\nabc\n-----END ENCRYPTED PRIVATE KEY-----', tags: [] },
+        { id: 'pgp-block', title: 'PGP', content: '-----BEGIN PGP PRIVATE KEY BLOCK-----\nmQENBF...\n-----END PGP PRIVATE KEY BLOCK-----', tags: [] },
       ],
     }],
   ])
@@ -460,5 +461,5 @@ test('preserves literal $ replacement patterns in {{clipboard}} and filters quot
 
   assert.equal(publishedPayloads.length, 1)
   assert.deepEqual(publishedPayloads[0].payload.pack.snippets.map(s => s.id), ['tmpl'])
-  assert.equal(publishedPayloads[0].payload.pack.skippedSensitiveCount, 9)
+  assert.equal(publishedPayloads[0].payload.pack.skippedSensitiveCount, 10)
 })

@@ -75,10 +75,251 @@ function readSimpleQuantifier(pattern, index) {
       const min = Number.parseInt(match[1], 10)
       const hasComma = match[0].includes(',')
       const max = !hasComma ? min : (match[2] === '' ? Infinity : Number.parseInt(match[2], 10))
-      return { endIndex: index + match[0].length, unbounded: max === Infinity || max >= 4, infinite: max === Infinity, min, max }
+      return { endIndex: index + match[0].length, unbounded: max === Infinity || (max > min && max >= 4), infinite: max === Infinity, min, max }
     }
   }
   return null
+}
+
+const MAX_REGEX_BRANCHING = 64
+
+function addAsciiRangeToSet(set, startCode, endCode) {
+  const lo = Math.max(0, Math.min(startCode, endCode))
+  const hi = Math.min(127, Math.max(startCode, endCode))
+  for (let code = lo; code <= hi; code += 1)
+    set.add(code)
+}
+
+function addEscapeClassToSet(set, escapeChar) {
+  if (escapeChar === 'd') {
+    addAsciiRangeToSet(set, 48, 57)
+    return true
+  }
+  if (escapeChar === 'D') {
+    for (let c = 0; c <= 127; c += 1) {
+      if (c < 48 || c > 57)
+        set.add(c)
+    }
+    return true
+  }
+  if (escapeChar === 'w') {
+    addAsciiRangeToSet(set, 48, 57)
+    addAsciiRangeToSet(set, 65, 90)
+    addAsciiRangeToSet(set, 97, 122)
+    set.add(95)
+    return true
+  }
+  if (escapeChar === 'W') {
+    for (let c = 0; c <= 127; c += 1) {
+      const isWord = (c >= 48 && c <= 57) || (c >= 65 && c <= 90) || (c >= 97 && c <= 122) || c === 95
+      if (!isWord)
+        set.add(c)
+    }
+    return true
+  }
+  if (escapeChar === 's') {
+    for (const c of [9, 10, 11, 12, 13, 32])
+      set.add(c)
+    return true
+  }
+  if (escapeChar === 'S') {
+    const spaces = new Set([9, 10, 11, 12, 13, 32])
+    for (let c = 0; c <= 127; c += 1) {
+      if (!spaces.has(c))
+        set.add(c)
+    }
+    return true
+  }
+  return false
+}
+
+function parseRegexCharClassSet(token) {
+  if (!token || token[0] !== '[' || token[token.length - 1] !== ']')
+    return null
+  const inner = token.slice(1, -1)
+  const negated = inner.startsWith('^')
+  const body = negated ? inner.slice(1) : inner
+  const set = new Set()
+
+  const readAtom = (pos) => {
+    if (body[pos] === '\\' && pos + 1 < body.length) {
+      const next = body[pos + 1]
+      if ('dDwWsS'.includes(next))
+        return { kind: 'class', escape: next, nextPos: pos + 2 }
+      const escapeCodes = { n: 10, r: 13, t: 9, f: 12, v: 11, 0: 0 }
+      const code = Object.prototype.hasOwnProperty.call(escapeCodes, next) ? escapeCodes[next] : next.charCodeAt(0)
+      return { kind: 'char', code, nextPos: pos + 2 }
+    }
+    return { kind: 'char', code: body.charCodeAt(pos), nextPos: pos + 1 }
+  }
+
+  let idx = 0
+  while (idx < body.length) {
+    const item = readAtom(idx)
+    if (item.kind === 'class') {
+      addEscapeClassToSet(set, item.escape)
+      idx = item.nextPos
+      continue
+    }
+    if (item.nextPos + 1 < body.length && body[item.nextPos] === '-') {
+      const endItem = readAtom(item.nextPos + 1)
+      if (endItem.kind === 'char') {
+        addAsciiRangeToSet(set, item.code, endItem.code)
+        idx = endItem.nextPos
+        continue
+      }
+    }
+    if (item.code <= 127)
+      set.add(item.code)
+    idx = item.nextPos
+  }
+
+  if (negated) {
+    const inverted = new Set()
+    for (let c = 0; c <= 127; c += 1) {
+      if (!set.has(c))
+        inverted.add(c)
+    }
+    return { wildcard: false, chars: inverted }
+  }
+  return { wildcard: false, chars: set }
+}
+
+function regexCharSetForAtom(atom) {
+  if (!atom)
+    return null
+  if (atom === '.')
+    return { wildcard: true, chars: null }
+  if (atom.startsWith('[') && atom.endsWith(']'))
+    return parseRegexCharClassSet(atom)
+  if (atom.startsWith('\\') && atom.length >= 2) {
+    const ch = atom[1]
+    if ('dDwWsS'.includes(ch)) {
+      const set = new Set()
+      addEscapeClassToSet(set, ch)
+      return { wildcard: false, chars: set }
+    }
+    if ('bBAZz'.includes(ch))
+      return null
+    if (/^\\[1-9]\d*$|^\\k<[^>]+>$/.test(atom) || ch === 'p' || ch === 'P')
+      return { wildcard: true, chars: null }
+    const code = ch.charCodeAt(0)
+    return { wildcard: false, chars: new Set(code <= 127 ? [code] : []) }
+  }
+  if (atom.length === 1) {
+    const code = atom.charCodeAt(0)
+    return { wildcard: false, chars: new Set(code <= 127 ? [code] : []) }
+  }
+  return null
+}
+
+function regexCharSetsOverlap(a, b) {
+  if (!a || !b)
+    return false
+  if (a.wildcard || b.wildcard)
+    return true
+  if (!a.chars || !b.chars || a.chars.size === 0 || b.chars.size === 0)
+    return false
+  for (const code of a.chars) {
+    if (b.chars.has(code))
+      return true
+  }
+  return false
+}
+
+function mergeRegexCharSets(a, b) {
+  if (!a)
+    return b
+  if (!b)
+    return a
+  if (a.wildcard || b.wildcard)
+    return { wildcard: true, chars: null }
+  const merged = new Set(a.chars)
+  for (const code of b.chars)
+    merged.add(code)
+  return { wildcard: false, chars: merged }
+}
+
+function readLeadingRegexAtom(branch) {
+  let pos = 0
+  while (pos < branch.length) {
+    const ch = branch[pos]
+    if (ch === '^' || ch === '$') {
+      pos += 1
+      continue
+    }
+    if (ch === '(') {
+      pos += 1
+      if (branch[pos] === '?') {
+        const rest = branch.slice(pos)
+        if (rest.startsWith('?:')) {
+          pos += 2
+        }
+        else if (rest.startsWith('?<') && !rest.startsWith('?<=') && !rest.startsWith('?<!')) {
+          const close = branch.indexOf('>', pos + 2)
+          if (close > pos)
+            pos = close + 1
+        }
+        else {
+          return null
+        }
+      }
+      continue
+    }
+    if (ch === '[') {
+      let escaped = false
+      for (let i = pos + 1; i < branch.length; i += 1) {
+        if (escaped) {
+          escaped = false
+          continue
+        }
+        if (branch[i] === '\\') {
+          escaped = true
+          continue
+        }
+        if (branch[i] === ']')
+          return branch.slice(pos, i + 1)
+      }
+      return null
+    }
+    if (ch === '\\') {
+      const next = branch[pos + 1]
+      if (!next)
+        return '\\'
+      const token = `\\${next}`
+      if (token === '\\b' || token === '\\B') {
+        pos += 2
+        continue
+      }
+      return token
+    }
+    return ch
+  }
+  return null
+}
+
+function regexBranchesOverlap(branches) {
+  if (branches.length < 2)
+    return false
+  const normalized = branches.map(b => b.trim())
+  if (normalized.some(b => b.length === 0))
+    return true
+  const unique = new Set(normalized)
+  if (unique.size < normalized.length)
+    return true
+  for (let aIdx = 0; aIdx < normalized.length; aIdx += 1) {
+    for (let bIdx = aIdx + 1; bIdx < normalized.length; bIdx += 1) {
+      const a = normalized[aIdx]
+      const b = normalized[bIdx]
+      if (a.startsWith(b) || b.startsWith(a))
+        return true
+      const leadA = readLeadingRegexAtom(a)
+      const leadB = readLeadingRegexAtom(b)
+      if (leadA && leadB && regexCharSetsOverlap(regexCharSetForAtom(leadA), regexCharSetForAtom(leadB)))
+        return true
+    }
+  }
+  return false
 }
 
 function isSafeReplaceRegex(pattern) {
@@ -90,7 +331,101 @@ function isSafeReplaceRegex(pattern) {
   let inClass = false
   let classStart = -1
   const stack = []
-  let prevUnbounded = false
+  const topScope = {
+    prevQuant: null,
+    adjacentOverlapAltBranching: 1,
+  }
+  let totalOverlapAltGroups = 0
+
+  const currentScope = () => (stack.length > 0 ? stack[stack.length - 1] : topScope)
+
+  const recordVariableSpan = (entryQuant, exitQuant) => {
+    const scope = currentScope()
+    const prev = scope.prevQuant
+    if (prev && entryQuant && regexCharSetsOverlap(prev.charSet, entryQuant.charSet)) {
+      if (prev.unbounded || entryQuant.unbounded)
+        return false
+      const nextProduct = Math.min(1e9, prev.chainProduct * entryQuant.chainProduct)
+      if (nextProduct > MAX_REGEX_BRANCHING)
+        return false
+      scope.prevQuant = {
+        charSet: mergeRegexCharSets(prev.charSet, exitQuant.charSet),
+        unbounded: false,
+        chainProduct: nextProduct,
+      }
+      return true
+    }
+    scope.prevQuant = exitQuant
+    return true
+  }
+
+  const recordAtomQuantifier = (atomToken, q, isBackref) => {
+    const scope = currentScope()
+    const isAnchor = atomToken === '^' || atomToken === '$' || atomToken === '\\b' || atomToken === '\\B'
+    const atomSet = isAnchor ? null : regexCharSetForAtom(atomToken)
+    if (stack.length > 0 && atomSet) {
+      const top = stack[stack.length - 1]
+      top.allCharSet = mergeRegexCharSets(top.allCharSet, atomSet)
+    }
+
+    if (q) {
+      if (q.max !== Infinity && q.max > MAX_REGEX_QUANTIFIER_BOUND)
+        return false
+      if (isBackref && q.max >= 2)
+        return false
+      const isVariable = q.infinite || q.max > q.min
+      const span = q.infinite ? MAX_REGEX_BRANCHING + 1 : Math.max(1, q.max - q.min + 1)
+      if (stack.length > 0) {
+        const top = stack[stack.length - 1]
+        if (q.unbounded)
+          top.hasUnbounded = true
+        if (q.infinite)
+          top.hasInfinite = true
+        if (q.max >= 2 && q.max > q.min)
+          top.hasVariableRepeat = true
+        if (q.max >= 2)
+          top.depth = Math.max(top.depth, 1)
+      }
+      if (isVariable && atomSet) {
+        const quantInfo = {
+          charSet: atomSet,
+          unbounded: q.unbounded,
+          chainProduct: span,
+        }
+        if (stack.length > 0) {
+          const top = stack[stack.length - 1]
+          if (!top.sawRequiredPrefix && top.branches.length === 1) {
+            top.leadingQuant = top.leadingQuant
+              ? {
+                  charSet: mergeRegexCharSets(top.leadingQuant.charSet, quantInfo.charSet),
+                  unbounded: top.leadingQuant.unbounded || quantInfo.unbounded,
+                  chainProduct: Math.min(1e9, top.leadingQuant.chainProduct * quantInfo.chainProduct),
+                }
+              : quantInfo
+          }
+          if (q.min >= 1)
+            top.sawRequiredPrefix = true
+        }
+        if (!recordVariableSpan(quantInfo, quantInfo))
+          return false
+        if (q.min >= 1)
+          scope.adjacentOverlapAltBranching = 1
+      }
+      else if (q.min >= 1) {
+        if (stack.length > 0)
+          stack[stack.length - 1].sawRequiredPrefix = true
+        scope.prevQuant = null
+        scope.adjacentOverlapAltBranching = 1
+      }
+    }
+    else if (!isAnchor) {
+      if (stack.length > 0)
+        stack[stack.length - 1].sawRequiredPrefix = true
+      scope.prevQuant = null
+      scope.adjacentOverlapAltBranching = 1
+    }
+    return true
+  }
 
   for (let i = 0; i < pattern.length; i += 1) {
     const ch = pattern[i]
@@ -108,30 +443,10 @@ function isSafeReplaceRegex(pattern) {
           top.hasBackref = true
       }
       const q = readSimpleQuantifier(pattern, i + 1)
-      if (q) {
-        if (q.max !== Infinity && q.max > MAX_REGEX_QUANTIFIER_BOUND)
-          return false
-        if (isBackref && q.max >= 2)
-          return false
-        if (q.unbounded && prevUnbounded)
-          return false
-        if (stack.length > 0) {
-          const top = stack[stack.length - 1]
-          if (q.unbounded)
-            top.hasUnbounded = true
-          if (q.infinite)
-            top.hasInfinite = true
-          if (q.max >= 2 && q.max > q.min)
-            top.hasVariableRepeat = true
-          if (q.max >= 2)
-            top.depth = Math.max(top.depth, 1)
-        }
-        prevUnbounded = q.unbounded
+      if (!recordAtomQuantifier(atom, q, isBackref))
+        return false
+      if (q)
         i = q.endIndex - 1
-      }
-      else {
-        prevUnbounded = false
-      }
       continue
     }
     if (ch === '[' && !inClass) {
@@ -147,34 +462,17 @@ function isSafeReplaceRegex(pattern) {
         top.branches[top.branches.length - 1] += clsToken
       }
       const q = readSimpleQuantifier(pattern, i + 1)
-      if (q) {
-        if (q.max !== Infinity && q.max > MAX_REGEX_QUANTIFIER_BOUND)
-          return false
-        if (q.unbounded && prevUnbounded)
-          return false
-        if (stack.length > 0) {
-          const top = stack[stack.length - 1]
-          if (q.unbounded)
-            top.hasUnbounded = true
-          if (q.infinite)
-            top.hasInfinite = true
-          if (q.max >= 2 && q.max > q.min)
-            top.hasVariableRepeat = true
-          if (q.max >= 2)
-            top.depth = Math.max(top.depth, 1)
-        }
-        prevUnbounded = q.unbounded
+      if (!recordAtomQuantifier(clsToken, q, false))
+        return false
+      if (q)
         i = q.endIndex - 1
-      }
-      else {
-        prevUnbounded = false
-      }
       continue
     }
     if (inClass)
       continue
 
     if (ch === '(') {
+      const isLookaround = /^\(\?(?:=|!|<=|<!)/.test(pattern.slice(i))
       let skip = i + 1
       if (pattern[skip] === '?') {
         const rest = pattern.slice(skip)
@@ -190,19 +488,49 @@ function isSafeReplaceRegex(pattern) {
             skip = close + 1
         }
       }
-      stack.push({ hasUnbounded: false, hasInfinite: false, hasVariableRepeat: false, hasBackref: false, depth: 0, branches: [''] })
-      prevUnbounded = false
+      stack.push({
+        hasUnbounded: false,
+        hasInfinite: false,
+        hasVariableRepeat: false,
+        hasBackref: false,
+        depth: 0,
+        branches: [''],
+        prevQuant: null,
+        leadingQuant: null,
+        allCharSet: null,
+        sawRequiredPrefix: false,
+        adjacentOverlapAltBranching: 1,
+        isLookaround,
+      })
       i = skip - 1
       continue
     }
     if (ch === '|' && stack.length > 0) {
-      stack[stack.length - 1].branches.push('')
-      prevUnbounded = false
+      const top = stack[stack.length - 1]
+      top.branches.push('')
+      top.prevQuant = null
+      top.leadingQuant = null
+      top.sawRequiredPrefix = false
+      top.adjacentOverlapAltBranching = 1
       continue
     }
     if (ch === ')' && stack.length > 0) {
       const group = stack.pop()
       const q = readSimpleQuantifier(pattern, i + 1)
+      const outerScope = currentScope()
+      const hasOverlappingAlt = group.branches.length > 1 && regexBranchesOverlap(group.branches)
+
+      if (hasOverlappingAlt && !group.isLookaround) {
+        const repeatCount = q ? Math.min(q.infinite ? 16 : Math.max(1, q.max), 16) : 1
+        totalOverlapAltGroups += repeatCount
+        if (totalOverlapAltGroups >= 7)
+          return false
+        const altFactor = Math.min(1e9, Math.max(2, group.branches.length) ** repeatCount)
+        outerScope.adjacentOverlapAltBranching = Math.min(1e9, outerScope.adjacentOverlapAltBranching * altFactor)
+        if (outerScope.adjacentOverlapAltBranching > MAX_REGEX_BRANCHING)
+          return false
+      }
+
       if (q) {
         if (q.max !== Infinity && q.max > MAX_REGEX_QUANTIFIER_BOUND)
           return false
@@ -212,18 +540,8 @@ function isSafeReplaceRegex(pattern) {
           return false
         if (q.max >= 2 && group.depth >= 2 && (group.hasVariableRepeat || q.max > q.min))
           return false
-        if (q.unbounded && group.branches.length > 1) {
-          const normalized = group.branches.map(b => b.trim()).filter(Boolean)
-          const unique = new Set(normalized)
-          if (unique.size < normalized.length)
-            return false
-          for (let aIdx = 0; aIdx < normalized.length; aIdx += 1) {
-            for (let bIdx = aIdx + 1; bIdx < normalized.length; bIdx += 1) {
-              if (normalized[aIdx].startsWith(normalized[bIdx]) || normalized[bIdx].startsWith(normalized[aIdx]))
-                return false
-            }
-          }
-        }
+        if (hasOverlappingAlt && (q.unbounded || q.max >= 4))
+          return false
         if (stack.length > 0) {
           const parent = stack[stack.length - 1]
           if (q.unbounded || group.hasUnbounded)
@@ -235,51 +553,93 @@ function isSafeReplaceRegex(pattern) {
           if (group.hasBackref)
             parent.hasBackref = true
           parent.depth = Math.max(parent.depth, group.depth + (q.max >= 2 ? 1 : 0))
+          if (group.allCharSet)
+            parent.allCharSet = mergeRegexCharSets(parent.allCharSet, group.allCharSet)
+        }
+        if (!group.isLookaround) {
+          const isVariable = q.infinite || q.max > q.min
+          const span = q.infinite ? MAX_REGEX_BRANCHING + 1 : Math.max(1, q.max - q.min + 1)
+          if (isVariable && group.allCharSet) {
+            const quantInfo = {
+              charSet: group.allCharSet,
+              unbounded: q.unbounded,
+              chainProduct: span,
+            }
+            if (stack.length > 0 && !outerScope.sawRequiredPrefix && outerScope.branches.length === 1) {
+              outerScope.leadingQuant = outerScope.leadingQuant
+                ? {
+                    charSet: mergeRegexCharSets(outerScope.leadingQuant.charSet, quantInfo.charSet),
+                    unbounded: outerScope.leadingQuant.unbounded || quantInfo.unbounded,
+                    chainProduct: Math.min(1e9, outerScope.leadingQuant.chainProduct * quantInfo.chainProduct),
+                  }
+                : quantInfo
+            }
+            if (!recordVariableSpan(quantInfo, quantInfo))
+              return false
+          }
+          else if (q.min >= 1) {
+            outerScope.prevQuant = null
+          }
+          if (stack.length > 0 && q.min >= 1)
+            outerScope.sawRequiredPrefix = true
+          if (!hasOverlappingAlt && q.min >= 1)
+            outerScope.adjacentOverlapAltBranching = 1
         }
         i = q.endIndex - 1
       }
-      else if (stack.length > 0) {
-        const parent = stack[stack.length - 1]
-        if (group.hasUnbounded)
-          parent.hasUnbounded = true
-        if (group.hasInfinite)
-          parent.hasInfinite = true
-        if (group.hasVariableRepeat)
-          parent.hasVariableRepeat = true
-        if (group.hasBackref)
-          parent.hasBackref = true
-        parent.depth = Math.max(parent.depth, group.depth)
+      else {
+        if (stack.length > 0) {
+          const parent = stack[stack.length - 1]
+          if (group.hasUnbounded)
+            parent.hasUnbounded = true
+          if (group.hasInfinite)
+            parent.hasInfinite = true
+          if (group.hasVariableRepeat)
+            parent.hasVariableRepeat = true
+          if (group.hasBackref)
+            parent.hasBackref = true
+          parent.depth = Math.max(parent.depth, group.depth)
+          if (group.allCharSet)
+            parent.allCharSet = mergeRegexCharSets(parent.allCharSet, group.allCharSet)
+        }
+        if (!group.isLookaround) {
+          if (group.branches.length === 1 && (group.leadingQuant || group.prevQuant)) {
+            if (stack.length > 0 && !outerScope.sawRequiredPrefix && outerScope.branches.length === 1 && group.leadingQuant) {
+              outerScope.leadingQuant = outerScope.leadingQuant
+                ? {
+                    charSet: mergeRegexCharSets(outerScope.leadingQuant.charSet, group.leadingQuant.charSet),
+                    unbounded: outerScope.leadingQuant.unbounded || group.leadingQuant.unbounded,
+                    chainProduct: Math.min(1e9, outerScope.leadingQuant.chainProduct * group.leadingQuant.chainProduct),
+                  }
+                : group.leadingQuant
+            }
+            if (group.leadingQuant) {
+              if (!recordVariableSpan(group.leadingQuant, group.prevQuant))
+                return false
+            }
+            else {
+              outerScope.prevQuant = group.prevQuant
+            }
+          }
+          else {
+            outerScope.prevQuant = null
+          }
+          if (stack.length > 0 && group.sawRequiredPrefix)
+            outerScope.sawRequiredPrefix = true
+          if (!hasOverlappingAlt && group.sawRequiredPrefix)
+            outerScope.adjacentOverlapAltBranching = 1
+        }
       }
-      prevUnbounded = false
       continue
     }
 
-    if (stack.length > 0) {
+    if (stack.length > 0)
       stack[stack.length - 1].branches[stack[stack.length - 1].branches.length - 1] += ch
-    }
     const q = readSimpleQuantifier(pattern, i + 1)
-    if (q) {
-      if (q.max !== Infinity && q.max > MAX_REGEX_QUANTIFIER_BOUND)
-        return false
-      if (q.unbounded && prevUnbounded)
-        return false
-      if (stack.length > 0) {
-        const top = stack[stack.length - 1]
-        if (q.unbounded)
-          top.hasUnbounded = true
-        if (q.infinite)
-          top.hasInfinite = true
-        if (q.max >= 2 && q.max > q.min)
-          top.hasVariableRepeat = true
-        if (q.max >= 2)
-          top.depth = Math.max(top.depth, 1)
-      }
-      prevUnbounded = q.unbounded
+    if (!recordAtomQuantifier(ch, q, false))
+      return false
+    if (q)
       i = q.endIndex - 1
-    }
-    else if (ch !== '^' && ch !== '$') {
-      prevUnbounded = false
-    }
   }
   return true
 }

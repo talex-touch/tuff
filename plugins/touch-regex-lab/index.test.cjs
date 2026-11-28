@@ -365,6 +365,11 @@ test('ReDoS guard blocks overlapping char-class alternations, bounded nesting, a
     '/\\w+\\w+\\w+!/ :: aaaaaaaaaaaaaaaaaaaaaaaa',
     '/[a-z]+[a-z]+!/ :: aaaaaaaaaaaaaaaaaaaaaaaa',
     '/(a+)\\1+$/ :: aaaaaaaaaaaaaaaaaaaaaaaa!',
+    '/(a+)(a+)(a+)(a+)!/ :: aaaaaaaaaaaaaaaaaaaaaaaa',
+    '/(?:a*)(?:a*)(?:a*)(?:a*)b/ :: aaaaaaaaaaaaaaaaaaaaaaaa',
+    '/([a-z]a|[a-f]a)+$/ :: aaaaaaaaaaaaaaaaaaaaaaaa!',
+    '/a{0,3}a{0,3}a{0,3}a{0,3}a{0,3}a{0,3}a{0,3}a{0,3}!/ :: aaaaaaaaaaaaaaaaaaaaaaaa',
+    `/${'(a|a)'.repeat(20)}b/ :: ${'a'.repeat(20)}!`,
   ]
 
   for (const query of dangerousQueries) {
@@ -375,12 +380,15 @@ test('ReDoS guard blocks overlapping char-class alternations, bounded nesting, a
     assert.ok(blockedItem, `expected ReDoS guard to block: ${query} (got: ${JSON.stringify(items.map(i => i.title))})`)
   }
 
-  // Legitimate fixed-repetition MAC address with unquantified backreference remains safe
-  h.pushedBatches.length = 0
-  await h.mod.onFeatureTriggered('regex-lab', {
-    text: '/^(?:[0-9A-Fa-f]{2}([-:]))(?:[0-9A-Fa-f]{2}\\1){4}[0-9A-Fa-f]{2}$/ :: AA:BB:CC:11:22:33',
-  })
-  const summary = (h.pushedBatches.at(-1) || []).find(item => item.id === 'regex-lab-summary')
-  assert.ok(summary, 'expected valid MAC address regex to execute cleanly')
-  assert.match(summary.title, /1 match/)
+  // Legitimate fixed-repetition MAC address and IPv4 CIDR remain safe
+  for (const [safeQuery, label] of [
+    ['/^(?:[0-9A-Fa-f]{2}([-:]))(?:[0-9A-Fa-f]{2}\\1){4}[0-9A-Fa-f]{2}$/ :: AA:BB:CC:11:22:33', 'MAC address'],
+    ['/^(?:(?:25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)\\.){3}(?:25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)\\/(?:3[0-2]|[12]?\\d)$/ :: 10.0.0.0/24', 'IPv4 CIDR'],
+  ]) {
+    h.pushedBatches.length = 0
+    await h.mod.onFeatureTriggered('regex-lab', { text: safeQuery })
+    const summary = (h.pushedBatches.at(-1) || []).find(item => item.id === 'regex-lab-summary')
+    assert.ok(summary, `expected valid ${label} regex to execute cleanly`)
+    assert.match(summary.title, /1 match/)
+  }
 })

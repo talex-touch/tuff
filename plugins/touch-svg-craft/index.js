@@ -630,9 +630,9 @@ function normalizeNumericToken(rawNum) {
   return String(rounded)
 }
 
-const ACTIVE_SVG_TAG_NAMES = [
+const ACTIVE_SVG_TAG_SET = new Set([
   'script',
-  'foreignObject',
+  'foreignobject',
   'iframe',
   'object',
   'embed',
@@ -640,35 +640,72 @@ const ACTIVE_SVG_TAG_NAMES = [
   'handler',
   'animate',
   'set',
-  'animateMotion',
-  'animateTransform',
+  'animatemotion',
+  'animatetransform',
   'audio',
   'video',
   'meta',
   'link',
   'base',
-]
-const ACTIVE_SVG_PAIRED_RE = new RegExp(`<(${ACTIVE_SVG_TAG_NAMES.join('|')})\\b[^>]*>[\\s\\S]*?<\\/\\1\\s*>`, 'gi')
-const ACTIVE_SVG_SINGLE_RE = new RegExp(`<\\/?(?:${ACTIVE_SVG_TAG_NAMES.join('|')})\\b[^>]*>`, 'gi')
-const ACTIVE_EVENT_ATTR_RE = /\s+on[\w-]*\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi
-const URI_ATTR_RE = /\s+((?:xlink:)?href|src|action|formaction|from|to|values)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/gi
-const STYLE_ATTR_RE = /\s+style\s*=\s*(?:"([^"]*)"|'([^']*)')/gi
+])
+const URI_ATTR_LOCAL_SET = new Set([
+  'href',
+  'src',
+  'action',
+  'formaction',
+  'from',
+  'to',
+  'values',
+])
+const CSS_URL_ATTR_LOCAL_SET = new Set([
+  'fill',
+  'stroke',
+  'filter',
+  'clip-path',
+  'mask',
+  'marker-start',
+  'marker-mid',
+  'marker-end',
+  'cursor',
+])
 const UNSAFE_CSS_VALUE_RE = /javascript\s*:|vbscript\s*:|expression\s*\(|@import|behavior\s*:|url\s*\(\s*(?:['"]\s*)?(?:javascript|vbscript|data)\s*:/i
 const JS_IDENTIFIER_RE = /^[a-z_$][\w$]*$/i
 
+function getLocalTagOrAttrName(rawName) {
+  const text = String(rawName ?? '').trim()
+  const colonIdx = text.lastIndexOf(':')
+  return (colonIdx >= 0 ? text.slice(colonIdx + 1) : text).toLowerCase()
+}
+
 function decodeBasicHtmlEntities(value) {
-  return String(value ?? '')
-    .replace(/&#x([0-9a-f]+);?/gi, (_, hex) => {
-      const code = Number.parseInt(hex, 16)
-      return Number.isFinite(code) ? String.fromCodePoint(code) : ''
-    })
-    .replace(/&#(\d+);?/g, (_, dec) => {
-      const code = Number.parseInt(dec, 10)
-      return Number.isFinite(code) ? String.fromCodePoint(code) : ''
-    })
-    .replace(/&colon;/gi, ':')
-    .replace(/&tab;/gi, '\t')
-    .replace(/&newline;/gi, '\n')
+  let out = String(value ?? '')
+  for (let pass = 0; pass < 2; pass += 1) {
+    const next = out
+      .replace(/&#x([0-9a-f]+);?/gi, (_, hex) => {
+        if (hex.length > 8)
+          return ''
+        const code = Number.parseInt(hex, 16)
+        return Number.isInteger(code) && code >= 0 && code <= 0x10FFFF
+          ? String.fromCodePoint(code)
+          : ''
+      })
+      .replace(/&#(\d+);?/g, (_, dec) => {
+        if (dec.length > 10)
+          return ''
+        const code = Number.parseInt(dec, 10)
+        return Number.isInteger(code) && code >= 0 && code <= 0x10FFFF
+          ? String.fromCodePoint(code)
+          : ''
+      })
+      .replace(/&colon;/gi, ':')
+      .replace(/&tab;/gi, '\t')
+      .replace(/&newline;/gi, '\n')
+      .replace(/&amp;/gi, '&')
+    if (next === out)
+      break
+    out = next
+  }
+  return out
 }
 
 function isUnsafeUriValue(rawValue) {
@@ -683,34 +720,269 @@ function isUnsafeUriValue(rawValue) {
   )
 }
 
+function isUnsafeCssText(rawCss) {
+  const decoded = decodeBasicHtmlEntities(rawCss)
+  return UNSAFE_CSS_VALUE_RE.test(decoded)
+}
+
+function escapeXmlAttrValue(value) {
+  return String(value ?? '').replace(/"/g, '&quot;')
+}
+
+function parseAttributes(attrSource) {
+  const attrs = []
+  let pos = 0
+  const len = attrSource.length
+  let selfClosing = false
+
+  while (pos < len) {
+    // Skip whitespace and stray '/' separators (e.g., <svg/onload="alert(1)">)
+    while (pos < len && (/[\s/]/.test(attrSource[pos]))) {
+      if (attrSource[pos] === '/') {
+        // Track whether this '/' is only followed by whitespace up to end of tag
+        let look = pos + 1
+        while (look < len && /\s/.test(attrSource[look]))
+          look += 1
+        if (look >= len) {
+          selfClosing = true
+          pos = len
+          break
+        }
+      }
+      pos += 1
+    }
+    if (pos >= len)
+      break
+
+    const nameStart = pos
+    while (pos < len && !/[\s=/>]/.test(attrSource[pos]))
+      pos += 1
+    const rawName = attrSource.slice(nameStart, pos)
+    if (!rawName) {
+      pos += 1
+      continue
+    }
+
+    while (pos < len && /\s/.test(attrSource[pos]))
+      pos += 1
+
+    let hasValue = false
+    let value = ''
+    if (pos < len && attrSource[pos] === '=') {
+      hasValue = true
+      pos += 1
+      while (pos < len && /\s/.test(attrSource[pos]))
+        pos += 1
+      if (pos < len && (attrSource[pos] === '"' || attrSource[pos] === '\'')) {
+        const quote = attrSource[pos]
+        pos += 1
+        const valStart = pos
+        while (pos < len && attrSource[pos] !== quote)
+          pos += 1
+        value = attrSource.slice(valStart, pos)
+        if (pos < len && attrSource[pos] === quote)
+          pos += 1
+      }
+      else {
+        const valStart = pos
+        while (pos < len && !/[\s>]/.test(attrSource[pos]))
+          pos += 1
+        value = attrSource.slice(valStart, pos)
+        if (pos >= len && value.endsWith('/')) {
+          value = value.slice(0, -1)
+          selfClosing = true
+        }
+      }
+    }
+
+    attrs.push({ name: rawName, value, hasValue })
+  }
+
+  return { attrs, selfClosing }
+}
+
+function findTagCloseIndex(source, startIdx) {
+  let quote = ''
+  for (let i = startIdx; i < source.length; i += 1) {
+    const ch = source[i]
+    if (quote) {
+      if (ch === quote)
+        quote = ''
+      continue
+    }
+    if (ch === '"' || ch === '\'') {
+      quote = ch
+      continue
+    }
+    if (ch === '>')
+      return i
+  }
+  return -1
+}
+
 function sanitizeSvgContent(rawSvg) {
   let svg = String(rawSvg ?? '').trim()
-  // Extract only the first <svg>...</svg> block non-greedily so intervening tags between
-  // multiple <svg> elements cannot be merged into the output.
-  const svgSliceMatch = /<svg\b[\s\S]*?<\/svg>/i.exec(svg)
+  // Extract only the first <svg>...</svg> block non-greedily (including optional namespace prefix
+  // or <svg/...> separator) so intervening tags between multiple <svg> elements cannot be merged.
+  const svgSliceMatch = /<(?:[\w.-]+:)?svg(?=[\s/>])[\s\S]+?<\/(?:[\w.-]+:)?svg\s*>/i.exec(svg)
   if (svgSliceMatch) {
     svg = svgSliceMatch[0]
   }
 
-  let prev = ''
-  for (let pass = 0; pass < 6 && svg !== prev; pass += 1) {
-    prev = svg
-    svg = svg.replace(ACTIVE_SVG_PAIRED_RE, '')
-    svg = svg.replace(ACTIVE_SVG_SINGLE_RE, '')
-    svg = svg.replace(/<style\b[^>]*>([\s\S]*?)<\/style\s*>/gi, (full, body) => (
-      UNSAFE_CSS_VALUE_RE.test(body) ? '' : full
-    ))
-    svg = svg.replace(ACTIVE_EVENT_ATTR_RE, '')
-    svg = svg.replace(URI_ATTR_RE, (full, _attrName, dbl, sgl, bare) => {
-      const val = dbl ?? sgl ?? bare ?? ''
-      return isUnsafeUriValue(val) ? '' : full
-    })
-    svg = svg.replace(STYLE_ATTR_RE, (full, dbl, sgl) => {
-      const val = dbl ?? sgl ?? ''
-      return UNSAFE_CSS_VALUE_RE.test(val) ? '' : full
-    })
+  const out = []
+  const skipStack = []
+  let inStyle = false
+  let styleTagOpen = ''
+  let styleBody = []
+  let pos = 0
+
+  while (pos < svg.length) {
+    const lt = svg.indexOf('<', pos)
+    if (lt === -1) {
+      const text = svg.slice(pos)
+      if (skipStack.length === 0) {
+        if (inStyle)
+          styleBody.push(text)
+        else
+          out.push(text)
+      }
+      break
+    }
+
+    if (lt > pos) {
+      const text = svg.slice(pos, lt)
+      if (skipStack.length === 0) {
+        if (inStyle)
+          styleBody.push(text)
+        else
+          out.push(text)
+      }
+    }
+
+    // Comments, CDATA, processing instructions, DOCTYPE declarations
+    if (svg.startsWith('<!--', lt)) {
+      const end = svg.indexOf('-->', lt + 4)
+      pos = end === -1 ? svg.length : end + 3
+      continue
+    }
+    if (svg.startsWith('<![CDATA[', lt)) {
+      const end = svg.indexOf(']]>', lt + 9)
+      pos = end === -1 ? svg.length : end + 3
+      continue
+    }
+    if (svg.startsWith('<?', lt)) {
+      const end = svg.indexOf('?>', lt + 2)
+      pos = end === -1 ? svg.length : end + 2
+      continue
+    }
+    if (svg.startsWith('<!', lt)) {
+      const end = svg.indexOf('>', lt + 2)
+      pos = end === -1 ? svg.length : end + 1
+      continue
+    }
+
+    // Closing tag: </tagName ...>
+    if (svg[lt + 1] === '/') {
+      const gt = svg.indexOf('>', lt + 2)
+      if (gt === -1)
+        break
+      const rawClose = svg.slice(lt + 2, gt).trim()
+      const closeNameMatch = /^([\w:.-]+)/.exec(rawClose)
+      const closeName = closeNameMatch ? closeNameMatch[1] : ''
+      const closeLocal = getLocalTagOrAttrName(closeName)
+      pos = gt + 1
+
+      if (!closeName)
+        continue
+
+      if (skipStack.length > 0) {
+        const idx = skipStack.lastIndexOf(closeLocal)
+        if (idx >= 0)
+          skipStack.length = idx
+        continue
+      }
+
+      if (inStyle && closeLocal === 'style') {
+        const cssText = styleBody.join('')
+        if (!isUnsafeCssText(cssText))
+          out.push(`${styleTagOpen}${cssText}</${closeName}>`)
+        inStyle = false
+        styleTagOpen = ''
+        styleBody = []
+        continue
+      }
+
+      if (ACTIVE_SVG_TAG_SET.has(closeLocal))
+        continue
+
+      out.push(`</${closeName}>`)
+      continue
+    }
+
+    // Opening or self-closing tag: <tagName ...>
+    const nameMatch = /^([a-z][\w:.-]*)/i.exec(svg.slice(lt + 1))
+    if (!nameMatch) {
+      if (skipStack.length === 0 && !inStyle)
+        out.push('<')
+      pos = lt + 1
+      continue
+    }
+
+    const tagName = nameMatch[1]
+    const tagLocal = getLocalTagOrAttrName(tagName)
+    const afterName = lt + 1 + tagName.length
+    const gt = findTagCloseIndex(svg, afterName)
+    if (gt === -1)
+      break
+
+    const rawAttrRegion = svg.slice(afterName, gt)
+    const { attrs, selfClosing } = parseAttributes(rawAttrRegion)
+    pos = gt + 1
+
+    if (skipStack.length > 0) {
+      if (!selfClosing && ACTIVE_SVG_TAG_SET.has(tagLocal))
+        skipStack.push(tagLocal)
+      continue
+    }
+
+    if (ACTIVE_SVG_TAG_SET.has(tagLocal)) {
+      if (!selfClosing)
+        skipStack.push(tagLocal)
+      continue
+    }
+
+    const keptAttrs = []
+    for (const attr of attrs) {
+      if (!/^[a-z_:][\w:.-]*$/i.test(attr.name))
+        continue
+      const attrLocal = getLocalTagOrAttrName(attr.name)
+      if (attrLocal.startsWith('on'))
+        continue
+      if (URI_ATTR_LOCAL_SET.has(attrLocal) && isUnsafeUriValue(attr.value))
+        continue
+      if (attrLocal === 'style' && isUnsafeCssText(attr.value))
+        continue
+      if (CSS_URL_ATTR_LOCAL_SET.has(attrLocal) && isUnsafeCssText(attr.value))
+        continue
+      if (attr.hasValue)
+        keptAttrs.push(` ${attr.name}="${escapeXmlAttrValue(attr.value)}"`)
+      else
+        keptAttrs.push(` ${attr.name}`)
+    }
+
+    const serializedOpen = `<${tagName}${keptAttrs.join('')}${selfClosing ? '/' : ''}>`
+
+    if (tagLocal === 'style' && !selfClosing) {
+      inStyle = true
+      styleTagOpen = serializedOpen
+      styleBody = []
+      continue
+    }
+
+    out.push(serializedOpen)
   }
-  return svg
+
+  return out.join('')
 }
 
 function optimizeSvg(rawInput) {

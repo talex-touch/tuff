@@ -20,7 +20,7 @@ const DEFAULT_SNIPPETS = [
 ]
 const SENSITIVE_CONTENT_PATTERNS = [
   /['"`]?(?:api[_-]?key|secret(?:[_-]?key)?|password|passwd|pwd|access[_-]?token|refresh[_-]?token|auth[_-]?token|token|private[_-]?key|client[_-]?secret|session[_-]?id)['"`]?\s*[:=]/i,
-  /-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----/,
+  /-----BEGIN [A-Z0-9 ]*PRIVATE KEY(?: BLOCK)?-----/,
   /\bBearer\s+[\w.~+/=-]{8,}/i,
   /\bBasic\s+[A-Z0-9+/=]{12,}/i,
   /\bsk-[\w-]{16,}\b/,

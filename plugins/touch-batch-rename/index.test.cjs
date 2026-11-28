@@ -408,16 +408,25 @@ test('blocks case-insensitive collisions, Windows forbidden/reserved names, ReDo
     assert.equal(winRes.reason, 'invalid-target-name', rule)
   }
 
-  // 3. ReDoS regex in replace rule is rejected without hanging
+  // 3. ReDoS regexes (nested, grouped overlapping, char-class overlapping alt, chained bounded, concatenated alt) are rejected without hanging
   const longName = `${'a'.repeat(35)}!`
-  const started = Date.now()
-  await lifecycle.onFeatureTriggered('batch-rename-redos', {
-    text: 'replace:/(a+)+$/->x',
-    inputs: [{ type: 'files', content: JSON.stringify([`/approved/${longName}.txt`]) }],
-  })
-  assert.ok(Date.now() - started < 250, 'ReDoS rule must be skipped before regex execution')
-  const redosApply = await action('batch-rename-redos', 'apply')
-  assert.equal(redosApply.reason, 'no-changes')
+  for (const dangerousPattern of [
+    '/(a+)+$/',
+    '/(a+)(a+)(a+)(a+)!/',
+    '/([a-z]|[a-f])+$/',
+    '/([a-z]a|[a-f]a)+$/',
+    '/a{0,3}a{0,3}a{0,3}a{0,3}a{0,3}a{0,3}a{0,3}a{0,3}!/',
+    `/${'(a|a)'.repeat(10)}b/`,
+  ]) {
+    const started = Date.now()
+    await lifecycle.onFeatureTriggered('batch-rename-redos', {
+      text: `replace:${dangerousPattern}->x`,
+      inputs: [{ type: 'files', content: JSON.stringify([`/approved/${longName}.txt`]) }],
+    })
+    assert.ok(Date.now() - started < 250, `ReDoS rule must be skipped before regex execution: ${dangerousPattern}`)
+    const redosApply = await action('batch-rename-redos', 'apply')
+    assert.equal(redosApply.reason, 'no-changes', dangerousPattern)
+  }
 
   // 4. Clearing preview cache prevents stale double-apply
   await preview('batch-rename-once', ['/approved/a.txt', '/approved/b.txt'])

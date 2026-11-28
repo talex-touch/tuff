@@ -402,4 +402,25 @@ test('strips active SVG elements/handlers/javascript schemes, extracts single SV
 
   // JSX style uses JSON.stringify so backslash+quote cannot break out of string literal
   assert.match(jsx, /style=\{\{ fontFamily: "\\\\' \} , alert\(4\) \/\/" \}\}/)
+
+  // Tokenizer bypass vectors: adjacent quoted attrs, '/' separators, namespace-prefixed tags/attrs,
+  // unsafe CSS url(), and out-of-range numeric HTML entities (no RangeError)
+  const bypassVectors = [
+    '<svg viewBox="0 0 24 24"onload="alert(1)"><path d="M0 0"/></svg>',
+    '<svg/onload="alert(1)"><path d="M0 0"/></svg>',
+    '<svg viewBox="0 0 24 24"><a title="x"href="javascript:alert(2)"><path d="M0 0"/></a></svg>',
+    '<svg xmlns:s="http://www.w3.org/2000/svg"><s:script>alert(1)</s:script><path d="M0 0"/></svg>',
+    '<svg xmlns:x="http://www.w3.org/1999/xlink"><a x:href="javascript:alert(3)"><path d="M0 0"/></a></svg>',
+    '<svg><path d="M0 0"fill="red"style="background:url(javascript:alert(5))"/></svg>',
+    '<svg><a href="&#99999999;javascript:alert(4)"><path d="M0 0"/></a></svg>',
+    '<svg><a href="&#999999999999999;javascript:alert(6)"><path d="M0 0"/></a></svg>',
+  ]
+
+  for (const vector of bypassVectors) {
+    state.pushed.length = 0
+    await mod.onFeatureTriggered('svg-craft', vector)
+    const cleanRaw = state.pushed.find(i => i.id === 'svg-craft-out-raw').actions[0].payload.text
+    assert.doesNotMatch(cleanRaw, /onload=|javascript:|<s:script|<script|alert\(/i, `vector survived sanitization: ${vector} -> ${cleanRaw}`)
+    assert.match(cleanRaw, /<path\b[^>]+d="M0 0"/i, `safe path stripped for vector: ${vector}`)
+  }
 })
