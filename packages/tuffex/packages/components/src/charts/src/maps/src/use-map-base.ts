@@ -307,8 +307,8 @@ export function useMapBase(props: MapBaseProps, options: MapBaseOptions = {}): M
 
   const scaleFactor = computed(() => roamState.value.k)
   const isTransformed = computed(() => drawn.value !== null)
-  const canZoomIn = computed(() => roamState.value.k < MAX_ZOOM_FACTOR - 1e-3)
-  const canZoomOut = computed(() => roamState.value.k > zoom.value + 1e-3)
+  const canZoomIn = computed(() => roamState.value.k < zoom.value * MAX_ZOOM_FACTOR - 1e-3)
+  const canZoomOut = computed(() => roamState.value.k > Math.min(1, zoom.value) + 1e-3)
 
   /** The displayed window as fitted: what a pan keeps in view. */
   const box = computed<RoamBox>(() => {
@@ -611,6 +611,10 @@ export function useMapBase(props: MapBaseProps, options: MapBaseOptions = {}): M
   function onClickCapture(event: MouseEvent): void {
     if (!props.roam || !suppressClick)
       return
+    if ((event.target as Element | null)?.closest?.('.tx-map__controls')) {
+      suppressClick = false
+      return
+    }
     // A pan never lands as a click on the region or bubble it started on.
     event.stopPropagation()
     event.preventDefault()

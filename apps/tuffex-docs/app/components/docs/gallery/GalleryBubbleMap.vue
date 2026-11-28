@@ -1,23 +1,23 @@
 <script setup lang="ts">
 import { TxBubbleMap } from '@talex-touch/tuffex/charts/src/maps'
-import { computed, shallowRef } from 'vue'
+import { computed, ref } from 'vue'
 import { useWorldGeo } from './use-world-geo'
 
-interface EdgeNode { city: string, lon: number, lat: number, requests: number }
+interface EdgeNode { id: string, city: string, lon: number, lat: number, requests: number }
 
 const sites = [
-  { lon: -121.89, lat: 37.34, requests: 9200 },
-  { lon: -77.49, lat: 39.04, requests: 12400 },
-  { lon: -46.63, lat: -23.55, requests: 4100 },
-  { lon: 8.68, lat: 50.11, requests: 10800 },
-  { lon: 28.05, lat: -26.2, requests: 2100 },
-  { lon: 103.82, lat: 1.35, requests: 7800 },
-  { lon: 139.69, lat: 35.69, requests: 8900 },
-  { lon: 151.21, lat: -33.87, requests: 3400 },
+  { id: 'sjc', lon: -121.89, lat: 37.34, requests: 9200 },
+  { id: 'iad', lon: -77.49, lat: 39.04, requests: 12400 },
+  { id: 'gru', lon: -46.63, lat: -23.55, requests: 4100 },
+  { id: 'fra', lon: 8.68, lat: 50.11, requests: 10800 },
+  { id: 'jnb', lon: 28.05, lat: -26.2, requests: 2100 },
+  { id: 'sin', lon: 103.82, lat: 1.35, requests: 7800 },
+  { id: 'nrt', lon: 139.69, lat: 35.69, requests: 8900 },
+  { id: 'syd', lon: 151.21, lat: -33.87, requests: 3400 },
 ]
 
 const worldGeo = useWorldGeo()
-const selected = shallowRef<EdgeNode | null>(null)
+const selectedId = ref<string | null>(null)
 const { locale } = useI18n()
 
 const copy = computed(() => locale.value === 'zh'
@@ -42,6 +42,9 @@ const copy = computed(() => locale.value === 'zh'
 const nodes = computed<EdgeNode[]>(() =>
   sites.map((site, index) => ({ city: copy.value.cities[index]!, ...site })),
 )
+const selected = computed<EdgeNode | null>(() =>
+  selectedId.value ? nodes.value.find(node => node.id === selectedId.value) ?? null : null,
+)
 </script>
 
 <template>
@@ -62,7 +65,7 @@ const nodes = computed<EdgeNode[]>(() =>
       :bubble-border-width="1"
       :value-format="(value: number) => `${value.toLocaleString(locale)} ${copy.unit}`"
       :labels="copy.labels"
-      @bubble-click="selected = $event"
+      @bubble-click="selectedId = $event.id"
     />
     <p class="gallery-hint">
       {{ selected ? copy.selected(selected.city, selected.requests) : copy.hint }}

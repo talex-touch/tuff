@@ -449,7 +449,6 @@ $allocation-ease: cubic-bezier(0.16, 1, 0.3, 1);
 
 .tx-bui-allocation-bar__percent {
   @include bui-tabular-nums;
-  opacity: 0.72;
 }
 
 .tx-bui-allocation-bar__detail {

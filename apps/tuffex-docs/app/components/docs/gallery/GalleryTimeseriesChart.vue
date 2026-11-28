@@ -20,7 +20,11 @@ const data = computed<TimeseriesData[]>(() => copy.value.names.map((name, index)
 
 function compactDateTick(ms: number): string {
   const date = new Date(ms)
-  return `${date.getUTCMonth() + 1}/${date.getUTCDate()}`
+  const hours = date.getHours()
+  const minutes = date.getMinutes()
+  if (hours !== 0 || minutes !== 0)
+    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`
+  return `${date.getMonth() + 1}/${date.getDate()}`
 }
 </script>
 

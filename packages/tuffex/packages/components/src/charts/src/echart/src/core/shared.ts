@@ -171,12 +171,19 @@ function seriesDefaults(component: unknown, tokens: EChartThemeTokens): object {
     }
   }
   if (component.type === 'treemap') {
+    const callerItemStyle = isPlainObject(component.itemStyle) ? component.itemStyle : {}
+    const levelItemStyle = {
+      borderColor: tokens.axisLine,
+      borderWidth: 1,
+      gapWidth: 2,
+      ...callerItemStyle,
+    }
     return {
       itemStyle: { borderColor: tokens.axisLine, gapWidth: 2 },
       upperLabel: { color: tokens.text, fontSize: 11, height: 22 },
       levels: [
-        { itemStyle: { borderColor: tokens.axisLine, borderWidth: 1, gapWidth: 2 } },
-        { itemStyle: { borderColor: tokens.axisLine, borderWidth: 1, gapWidth: 2 } },
+        { itemStyle: levelItemStyle },
+        { itemStyle: levelItemStyle },
       ],
     }
   }
