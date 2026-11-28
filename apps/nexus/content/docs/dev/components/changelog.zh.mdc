@@ -15,19 +15,22 @@ verified: false
 |------|----|
 | 源码版本 | **0.9.6** |
 | 发布版本 | **0.9.6**（最近一次 npm 发布） |
-| 组件模块 | **195**：基础 99 · 进阶 59 · AI 37 |
+| 组件模块 | **198**：基础 99 · 进阶 62 · AI 37 |
 
 ## 版本更新历程
 
-### 0.9.6 版本（2026-11-27）
+### 0.9.6 版本（2026-11-28）
 
-在 AI 套件中新增球面半调数学加载器，在 Pro 套件中新增多设备样机容器。
+在 AI 套件中新增球面半调数学加载器，在 Pro 套件中新增多设备样机容器与三款动效组件。
 
-- **新增组件**：matrix-loader、device-mockup
+- **新增组件**：matrix-loader、device-mockup、distortion-wave、pixel-field、voice-ring
 - **主要更新组件**：无
 - **关键特性**：
   - 新增 `TxMatrixLoader`（`@talex-touch/tuffex/ai`）：基于球面凸透镜与半调棋盘格的纯数学 Canvas 加载器，提供 8 种 AI 语义状态、状态间平滑融合、2D 梯度噪声与 5 种电子屏幕显示时代（`oled`、`crt`、`vfd`、`dither`、`lcd`）。
   - 新增 `TxDeviceMockup`（`@talex-touch/tuffex/pro`）：内置 75+ 款可按需 Tree-Shaking 的手机、平板、笔记本、桌面、圆/方形手表与浏览器外壳预设，支持真 3D 挤出机身与着地阴影、8 套 Shots.so 精选场景搭配、7 种阴影与出血构图、12 组渐变与胶片噪点、设备与横竖屏弹性形变切换，以及按需加载的客户端 SVG/PNG/WebP 导出。
+  - 新增 `TxDistortionWave`（`@talex-touch/tuffex/pro`）：基于透明 WebGL2 色散折射层的视图转场组件，支持 `vertical` / `horizontal` / `center` 几何形态、5 套内置色板、`#overlay` 保活控件层、`scrub` 进度定格与 Vue `Ref` 触发源，并提供降动效自动降级。
+  - 新增 `TxVoiceRing`（`@talex-touch/tuffex/pro`）：支持 `ring` 玻璃光谱光环与 `mono` 双环的实时语音动效组件，支持情绪色、声源方向 `direction` 倾斜与边缘玻璃折射、`hoverBend` 及 `useVoiceRingMicrophone`。
+  - 新增 `TxPixelField`（`@talex-touch/tuffex/pro`）：零外部依赖的 Canvas 2D 方形像素粒子舞台，内置 6 组植物与几何预设，支持自定义 `src` / `text` 等比采样、5 套色板、`obsidian` / `adaptive` 双舞台、4 种指针物理模式、点击脉冲与 `useMotionActivity` 门禁。
 
 ### 0.9.5 版本（2026-11-23）
 
@@ -289,6 +292,7 @@ TuffEx 独立包初始基线。
 | [`device-mockup`](./device-mockup.zh.mdc) | pro | 0.9.6 |
 | [`dialog`](./dialog.zh.mdc) | base | 0.3.4 |
 | [`diff-table`](./diff-table.zh.mdc) | pro | 0.3.9 |
+| [`distortion-wave`](./distortion-wave.zh.mdc) | pro | 0.9.6 |
 | [`divider`](./divider.zh.mdc) | base | 0.3.7 |
 | [`dot-indicator`](./dot-indicator.zh.mdc) | base | 0.3.9 |
 | [`drawer`](./drawer.zh.mdc) | base | 0.3.4 |
@@ -369,6 +373,7 @@ TuffEx 独立包初始基线。
 | [`permission-state`](./permission-state.zh.mdc) | base | 0.3.4 |
 | [`physics-motion`](./physics-motion.zh.mdc) | pro | 0.7.0 |
 | [`picker`](./picker.zh.mdc) | base | 0.3.4 |
+| [`pixel-field`](./pixel-field.zh.mdc) | pro | 0.9.6 |
 | [`popover`](./popover.zh.mdc) | base | 0.3.4 |
 | [`prism-glow`](./prism-glow.zh.mdc) | pro | 0.6.0 |
 | [`progress`](./progress.zh.mdc) | base | 0.3.4 |
@@ -438,6 +443,7 @@ TuffEx 独立包初始基线。
 | [`virtual-list`](./virtual-list.zh.mdc) | pro | 0.3.4 |
 | [`voice-beam`](./voice-beam.zh.mdc) | pro | 0.6.2 |
 | [`voice-clip`](./voice-clip.zh.mdc) | ai | 0.8.0 |
+| [`voice-ring`](./voice-ring.zh.mdc) | pro | 0.9.6 |
 | [`working-indicator`](./working-indicator.zh.mdc) | ai | 0.3.9 |
 
 ### Charts 模块新增

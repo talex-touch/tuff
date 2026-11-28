@@ -87,7 +87,7 @@ function tierD(
 }
 
 /**
- * Single Source of Truth Compatibility Matrix covering all 195 exported modules
+ * Single Source of Truth Compatibility Matrix covering all 198 exported modules
  * in `packages/tuffex/packages/components/src/components.ts`.
  */
 export const COMPAT_REGISTRY: readonly CompatEntry[] = Object.freeze([
@@ -136,6 +136,7 @@ export const COMPAT_REGISTRY: readonly CompatEntry[] = Object.freeze([
   planned('device-mockup', 'pro', 'B'),
   ready('dialog', 'base', 'B', ['TxDialog']),
   tierD('diff-table', 'pro', REASON_SCOPED_SLOTS),
+  tierD('distortion-wave', 'pro', REASON_MOTION_PRIMITIVE),
   ready('divider', 'base', 'A', ['TxDivider']),
   ready('dot-indicator', 'base', 'A', ['TxDotIndicator']),
   ready('drawer', 'base', 'B', ['TxDrawer']),
@@ -216,6 +217,7 @@ export const COMPAT_REGISTRY: readonly CompatEntry[] = Object.freeze([
   ready('permission-state', 'base', 'A', ['TxPermissionState']),
   tierD('physics-motion', 'pro', REASON_MOTION_PRIMITIVE),
   ready('picker', 'base', 'B', ['TxPicker']),
+  planned('pixel-field', 'pro', 'C'),
   ready('popover', 'base', 'B', ['TxPopover']),
   planned('prism-glow', 'pro', 'A'),
   ready('progress-bar', 'base', 'A', ['TxProgressBar']),
@@ -285,6 +287,7 @@ export const COMPAT_REGISTRY: readonly CompatEntry[] = Object.freeze([
   tierD('virtual-list', 'pro', REASON_SCOPED_SLOTS),
   planned('voice-beam', 'pro', 'C'),
   planned('voice-clip', 'ai', 'B'),
+  planned('voice-ring', 'pro', 'C'),
   planned('working-indicator', 'ai', 'A'),
 ])
 

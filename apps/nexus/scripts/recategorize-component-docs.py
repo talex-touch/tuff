@@ -377,12 +377,15 @@ TAXONOMY: dict[str, list[str]] = {
     "MotionInteraction": [
         "motion-dock",
         "motion",
+        "pixel-field",
+        "voice-ring",
     ],
     "MotionToggles": [
         "motion-toggle",
     ],
     "MotionTransitions": [
         "motion-transition",
+        "distortion-wave",
     ],
 }
 

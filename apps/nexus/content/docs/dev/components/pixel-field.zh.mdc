@@ -1,0 +1,134 @@
+---
+title: PixelField
+description: 交互式方形像素粒子矩阵舞台，支持植物脉络预设与自定义图形采样
+category: MotionInteraction
+status: beta
+since: 0.9.6
+tags: [motion, particle, pixel, canvas, interactive]
+syncStatus: reviewed
+verified: false
+---
+
+## 用法
+
+`TxPixelField` 在零外部依赖的 Canvas 2D 画布上生成方形像素点阵粒子场。静息态保持柔和呼吸微颤与外围离散微粒，指针悬停或划过时触发深度视差、边缘聚拢锐化、脉络高光与局部力学扰动，点击可发射发光脉冲波。
+
+### 特性卡片阵列（Violet 植物点阵预设）
+
+内置 `branch`、`leaf`、`sprout`、`blade` 四组植物脉络预设，搭配 `stage="obsidian"` 与默认插槽叠层即可快速组合出高对比暗黑特性卡；也支持一键切回 `adaptive` 自适应深浅主题与四种交互物理模式。
+
+:::TuffDemoWrapper{demo="PixelFieldVioletCardsDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { TxPixelField } from '@talex-touch/tuffex/pixel-field'
+  </script>
+
+  <template>
+    <TxPixelField preset="leaf" palette="emerald" stage="obsidian" interaction="coalesce">
+      <div class="feature-overlay">
+        <h4>Visual Continuity</h4>
+        <p>From ideas to experiences</p>
+      </div>
+    </TxPixelField>
+  </template>
+---
+:::
+
+### 几何预设与自定义文字采样
+
+除植物预设外，内置 `orb` 球面与 `wave` 波纹地形预设，同时支持通过 `text` 或 `src`（图片/SVG URL）在离屏画布采样亮度与边缘轮廓，自动转为可交互像素点阵。
+
+:::TuffDemoWrapper{demo="PixelFieldPlaygroundDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { TxPixelField } from '@talex-touch/tuffex/pixel-field'
+  </script>
+
+  <template>
+    <TxPixelField text="TUFF" palette="cyan" stage="obsidian" interaction="repel" />
+  </template>
+---
+:::
+
+### 最佳实践
+
+- 默认插槽叠加文案时保持外层简洁，不覆盖画布指针事件（如纯展示文案层可设 `pointer-events: none`），避免挡住粒子场悬停交互。
+- 需要严格跟随页面明暗主题时保持默认的 `stage="adaptive"`；仅在独立视觉展示卡中使用 `stage="obsidian"`。
+- 传入外部图片 `src` 时确保目标资源支持 CORS，否则浏览器会禁止读取像素亮度数据。
+- 同页放置多个卡片时建议保持 `density` 在 `0.8–1.2`，既细腻又稳定 60fps。
+
+## API 参考
+
+### 属性
+
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `preset` | `'branch' \| 'leaf' \| 'sprout' \| 'blade' \| 'orb' \| 'wave'` | `'leaf'` | 内置程序化植物脉络或几何点阵预设。 |
+| `src` | `string` | — | 自定义图片或 SVG 地址，离屏采样亮度与边缘转点阵（优先级最高）。 |
+| `text` | `string` | — | 自定义文字或缩写，离屏栅格化并提取轮廓转点阵。 |
+| `palette` | `'emerald' \| 'violet' \| 'cyan' \| 'amber' \| 'mono' \| PixelFieldPalette` | `'emerald'` | 内置四阶荧光/矿物色板或自定义四色梯度。 |
+| `stage` | `'adaptive' \| 'obsidian'` | `'adaptive'` | `adaptive` 跟随 `--tx-*` 深浅双主题；`obsidian` 锁定纯黑发光暗室舞台。 |
+| `pixelSize` | `number` | `3` | 方形像素基础边长（CSS px）。 |
+| `gap` | `number` | `1.6` | 像素晶格间距（CSS px）。 |
+| `density` | `number` | `1` | 点阵密度倍率（`0.4–1.6`）。 |
+| `speed` | `number` | `1` | 静息呼吸与微颤速度倍率（`0.2–3`）。 |
+| `animated` | `boolean` | `true` | 是否开启持续微颤动效。 |
+| `paused` | `boolean` | `false` | 暂停在当前帧。 |
+| `interactive` | `boolean` | `true` | 是否启用指针视差、悬停聚拢与局部力场交互。 |
+| `interaction` | `'coalesce' \| 'repel' \| 'attract' \| 'ripple'` | `'coalesce'` | 指针力学模式：聚拢微澜、斥力散开、引力聚点或波纹涟漪。 |
+| `pointerRadius` | `number` | `96` | 指针力场影响半径（CSS px）。 |
+| `pointerStrength` | `number` | `1` | 指针力场强度倍率（`0–2`）。 |
+| `parallax` | `number` | `1` | 悬停 3D 深度视差幅度倍率（`0–2`）。 |
+| `rippleOnClick` | `boolean` | `true` | 点击时是否从点击处发射发光冲击波。 |
+| `aspectRatio` | `string \| number` | — | 可选容器宽高比。 |
+| `radius` | `number \| string` | `20` | 容器圆角半径。 |
+| `ariaLabel` | `string` | 读取 `labels.stage` | 画布无障碍描述。 |
+| `labels` | `Partial<PixelFieldLabels>` | 英文默认 | 无障碍兜底文案。 |
+
+### 事件
+
+| 事件 | 参数 | 说明 |
+| --- | --- | --- |
+| `pulse` | `{ nx: number; ny: number }` | 点击或调用 `pulse()` 发射脉冲波时触发（归一化坐标 `0–1`）。 |
+
+### 插槽
+
+| 插槽 | 说明 |
+| --- | --- |
+| `default` | 叠置于像素点阵画布之上的前景内容（如标题、序号与品牌落款）。 |
+
+### 暴露方法
+
+| 方法 | 说明 |
+| --- | --- |
+| `pulse(nx?, ny?)` | 在指定归一化坐标（默认中心 `0.5, 0.5`）发射一道发光脉冲波。 |
+| `rebuild()` | 根据当前尺寸与配置重新采样粒子晶格。 |
+| `count` | 只读属性，返回当前活跃粒子数量。 |
+
+### CSS 变量
+
+| 变量 | 默认值 | 说明 |
+| --- | --- | --- |
+| `--tx-pixel-field-radius` | `20px` | 舞台圆角半径。 |
+| `--tx-pixel-field-bg` | `--tx-bg-color-overlay` | `adaptive` 模式舞台背景色。 |
+| `--tx-pixel-field-border` | `--tx-border-color` | `adaptive` 模式内描边颜色。 |
+| `--tx-pixel-field-obsidian-bg` | `#040506` | `obsidian` 模式暗黑背景色。 |
+
+## 概述
+
+- 接入共享 `useMotionActivity` 门禁：元素滚出视口、标签页隐藏、KeepAlive 停用或系统开启 `prefers-reduced-motion: reduce` 时自动停帧并保留清晰静止点阵。
+- 渲染层采用 64 阶预烘焙色表与 DPR 像素对齐绘制，多张卡片同屏无 WebGL 上下文数量上限，且每帧零临时对象分配。
+- 粒子排布由确定性哈希生成，相同尺寸与参数每次渲染轮廓一致，便于测试与视觉回归比对。
+
+## 技术实现
+
+- 原创 Canvas 2D 确定性像素点阵引擎：由植物脉络距离场 / 离屏 Sobel 边缘采样、阻尼弹簧微粒物理与 64 阶色板 LUT 组成。
+- 源码路径：`packages/tuffex/packages/components/src/pixel-field/`。
+
+## 相关组件
+
+- [DistortionWave 折射波转场](./distortion-wave.zh.mdc)：WebGL2 彩色折射波视图转场。
+- [VoiceRing 语音光环](./voice-ring.zh.mdc)：支持方位倾斜与情绪色的语音光环。
+- [DitherChart 抖动图表](./dither-chart.zh.mdc)：面向数据可视化的像素与有序抖动图表。

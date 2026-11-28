@@ -1,0 +1,144 @@
+---
+title: DistortionWave
+description: Chromatic lens wave transition that carries one view into another
+category: MotionTransitions
+status: beta
+since: 0.9.6
+tags: [motion, transition, wave, webgl, shader]
+syncStatus: reviewed
+verified: false
+---
+
+## Usage
+
+`TxDistortionWave` overlays a transparent WebGL2 refraction pass over live DOM, launching a chromatic lens wave with progressive blur from the pressed control to reveal `#revealed`. Without WebGL2 or under reduced motion, it falls back cleanly to a crossfade.
+
+### View transition and wave direction
+
+Pressing Confirm launches a wave from the button that leans toward the click point; controls placed in `#overlay` stay sharp and interactive above the wave.
+
+:::TuffDemoWrapper{demo="DistortionWaveBasicDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+  import { TxDistortionWave } from '@talex-touch/tuffex/distortion-wave'
+
+  const sent = ref(false)
+  const triggerRef = ref<HTMLButtonElement | null>(null)
+  </script>
+
+  <template>
+    <TxDistortionWave
+      :revealed="sent"
+      :source="triggerRef"
+      type="vertical"
+      palette="colorful"
+      :corner-radius="24"
+    >
+      <div class="review-card">Review transfer</div>
+      <template #revealed>
+        <div class="receipt-card">Transfer sent</div>
+      </template>
+      <template #overlay>
+        <button ref="triggerRef" type="button" @click="sent = !sent">
+          {{ sent ? 'Done' : 'Confirm' }}
+        </button>
+      </template>
+    </TxDistortionWave>
+  </template>
+---
+:::
+
+### Center ring and progress scrubbing
+
+`type="center"` radiates a coloured ring from an avatar or icon while holding the origin sharp; `scrub` freezes any moment between `0` and `1`.
+
+:::TuffDemoWrapper{demo="DistortionWaveScrubDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+  import { TxDistortionWave } from '@talex-touch/tuffex/distortion-wave'
+
+  const scrub = ref<number | null>(0.3)
+  </script>
+
+  <template>
+    <TxDistortionWave type="center" palette="green" :scrub="scrub">
+      <div>Pending verification</div>
+      <template #revealed>
+        <div>Verified</div>
+      </template>
+    </TxDistortionWave>
+  </template>
+---
+:::
+
+### Best Practices
+
+- Give both the default and `#revealed` layers opaque backgrounds so captured snapshots have no transparent bleed.
+- Place trigger buttons, spinners, or live media in `#overlay` so they remain unbent and clickable throughout the wave.
+- Cross-origin images and webfonts need CORS headers to appear in the refracted snapshot; iframes are skipped.
+- Drive transitions by toggling `:revealed` rather than unmounting the component with `v-if`.
+
+## API Reference
+
+### Props
+
+| Name | Type | Default | Description |
+| --- | --- | --- | --- |
+| `revealed` | `boolean` | — | Controlled view state; `true` advances the wave, `false` collapses it back. |
+| `type` | `'vertical' \| 'horizontal' \| 'center'` | `'vertical'` | Wave front geometry, each with tuned physics defaults. |
+| `source` | `Element \| Ref<Element \| null> \| Rect \| null` | Last pressed control | Origin element, template ref, or local rectangle for the wave. |
+| `focus` | `{ x: number; y: number } \| null` | Last pointer press | Local point the front leans toward as it launches. |
+| `palette` | `'colorful' \| 'green' \| 'ocean' \| 'sunset' \| 'mono' \| string \| DistortionWavePalette` | By `type` | Built-in palette name, single hex colour, or custom palette object. |
+| `waveStyle` | `DistortionWaveStyleInput` | — | Fine-grained timing, lens, blur, rim, and particle overrides. |
+| `scale` | `number \| 'auto'` | `'auto'` | CSS pixels per logical point; `'auto'` scales proportionally to the host. |
+| `cornerRadius` | `number` | Host `border-radius` | Corner radius followed by the edge colour rim in CSS pixels. |
+| `scrub` | `number \| null` | — | Holds the wave at progress `0–1` when set; `null` resumes playback. |
+| `capture` | `boolean \| DistortionWaveCaptureFunction` | `true` | Captures live DOM into textures for lens bending; `false` draws colour only. |
+| `live` | `boolean \| 'animations'` | `true` | Automatically refreshes cached view snapshots after DOM mutations. |
+| `prewarm` | `boolean` | `true` | Captures initial snapshot on idle after mount so the first wave starts immediately. |
+| `resolution` | `number` | Device DPR | Canvas backing pixel ratio per CSS pixel. |
+| `reducedMotion` | `'system' \| 'always' \| 'never'` | `'system'` | Reduced-motion policy; crossfades instead of running the wave when active. |
+
+### Events
+
+| Event | Payload | Description |
+| --- | --- | --- |
+| `finish` | `revealed: boolean` | Fired when a wave settles onto a view; skipped if reversed mid-flight. |
+
+### Slots
+
+| Slot | Description |
+| --- | --- |
+| `default` | Initial view shown when `revealed` is `false`. |
+| `revealed` | Target view revealed behind the wave; omit to sweep across the same view. |
+| `overlay` | Unbent live controls layered above the WebGL canvas. |
+
+### Exposed Methods
+
+| Method | Description |
+| --- | --- |
+| `play(options?)` | Runs a forward wave imperatively. |
+| `reverse()` | Collapses the wave back to the first view. |
+| `reset()` | Immediately restores the initial view without animation. |
+| `prepare()` | Captures fresh view textures immediately and returns a Promise. |
+
+## Overview
+
+- Both views share a single CSS Grid cell sized to the larger layer, preventing layout shifts mid-transition.
+- The transparent WebGL2 canvas only owns pixels actively bent or tinted by the wave and releases idle GPU textures automatically after rest.
+- Without WebGL2 or under `prefers-reduced-motion: reduce`, the component switches via a short crossfade and still emits `finish`.
+
+## Technologies
+
+- Engine and shaders ported from [Jakubantalik/Libraries.dev · distortion-waves](https://github.com/Jakubantalik/Libraries.dev/tree/main/packages/distortion-waves) (MIT © 2026 Jakub Antalik), extended to accept Vue template `Ref` sources.
+- Source path: `packages/tuffex/packages/components/src/distortion-wave/`.
+
+## Related components
+
+- [MotionTransition](./motion-transition.en.mdc): door, liquid-wave, iris, and curtain transitions.
+- [VoiceRing](./voice-ring.en.mdc): voice-reactive light ring with directional lean and edge refraction.
+- [PixelField](./pixel-field.en.mdc): interactive pixel-matrix particle stage with hover coalescing.

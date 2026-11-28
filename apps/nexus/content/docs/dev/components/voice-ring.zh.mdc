@@ -1,0 +1,131 @@
+---
+title: VoiceRing
+description: 随声波形变、响应情绪色与声源方位倾斜的发光语音光环
+category: MotionInteraction
+status: beta
+since: 0.9.6
+tags: [motion, voice, audio, ring, spatial]
+syncStatus: reviewed
+verified: false
+---
+
+## 用法
+
+`TxVoiceRing` 以玻璃光谱光环（`ring`）或双环金属管（`mono`）呈现实时语音能量、对话状态、情绪色彩与声源方位倾斜。支持绑定浏览器麦克风 `MediaStream`、现有 `AnalyserNode` 或自定义 `level` 采样函数。
+
+### 光环形态、状态与情绪色
+
+切换 `ring` 与 `mono` 两种形态、四种对话状态与情绪色调，并可一键切入真实麦克风输入或悬停膜形变。
+
+:::TuffDemoWrapper{demo="VoiceRingBasicDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { TxVoiceRing, useVoiceRingMicrophone } from '@talex-touch/tuffex/voice-ring'
+
+  const mic = useVoiceRingMicrophone()
+  </script>
+
+  <template>
+    <TxVoiceRing
+      type="ring"
+      state="listening"
+      :size="220"
+      :stream="mic.stream.value"
+      emotion="calm"
+      hover-bend
+    />
+  </template>
+---
+:::
+
+### 空间声源方位倾斜
+
+通过 `direction`（`-1` 左侧到 `+1` 右侧）驱动光环向声源侧倾、拉伸并在触达 `directionBounds` 容器边界时触发玻璃色散折射。在舞台内移动指针即可实时体验空间方位追踪与遥测联动。
+
+:::TuffDemoWrapper{demo="VoiceRingSpatialDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+  import { TxVoiceRing } from '@talex-touch/tuffex/voice-ring'
+
+  const pan = ref(-0.7)
+  const containerRef = ref<HTMLElement | null>(null)
+  </script>
+
+  <template>
+    <div ref="containerRef" style="overflow: hidden">
+      <TxVoiceRing
+        state="listening"
+        :size="180"
+        :level="0.65"
+        :direction="pan"
+        :direction-bounds="containerRef"
+      />
+    </div>
+  </template>
+---
+:::
+
+### 最佳实践
+
+- 用 `level` 传入无参采样函数（`() => currentLevel`）而非高频更新响应式 ref，可避免每帧触发 Vue 重渲染。
+- 在卡片或弹窗内启用 `direction` 倾斜时，传入容器元素的 `directionBounds` 并给容器设置 `overflow: hidden`，让边缘玻璃折射自然贴合边界。
+- 浏览器标准麦克风通常为单声道，空间 `direction` 建议由多麦/WebRTC 说话人位置或界面布局位置传入。
+- 搭配 `labels` 属性提供本地化无障碍状态文案，组件不内置固定语言包。
+
+## API 参考
+
+### 属性
+
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `type` | `'ring' \| 'mono'` | `'ring'` | `ring` 为玻璃光谱发光环，`mono` 为随语音展开的双灰管环。 |
+| `state` | `'idle' \| 'listening' \| 'speaking' \| 'processing'` | `'listening'` | 对话状态；`idle` 与 `processing` 会忽略外部音频输入。 |
+| `size` | `number` | `160` | 光环逻辑直径（CSS px）。 |
+| `stream` | `MediaStream \| null` | `null` | 实时音频流（优先级高于 `analyser` 和 `level`）。 |
+| `analyser` | `AnalyserNode \| null` | `null` | 已有 Web Audio 分析器节点（优先级高于 `level`）。 |
+| `level` | `number \| (() => number)` | — | 手动音量（`0–1`）或每帧采样的 getter 函数。 |
+| `emotion` | `'positive' \| 'negative' \| 'calm' \| null` | `null` | 情绪色彩映射，切换时平滑过渡。 |
+| `direction` | `number \| (() => number)` | — | 声源方向（`-1` 左至 `+1` 右）或每帧 getter，有声时向该侧倾斜。 |
+| `directionBounds` | `Element \| Ref<Element \| null> \| null` | 视口边界 | 限制水平倾斜范围的边界元素或模板引用。 |
+| `directionMove` | `number` | 随形态预设 | 倾斜位移幅度系数。 |
+| `directionLens` | `number` | 随形态预设 | 触及边界时的边缘玻璃折射强度（`0–2`）。 |
+| `hoverBend` | `boolean \| number` | `false` | `idle` / `processing` 状态下指针靠近边缘时的柔膜牵引强度。 |
+| `theme` | `'auto' \| 'dark' \| 'light'` | `'auto'` | 渲染基底主题，`auto` 自动监听祖先 `.dark` / `data-theme` 与系统偏好。 |
+| `sensitivity` | `number` | `0.85` | 音频输入增益。 |
+| `threshold` | `number` | `0.04` | 静音噪声门限。 |
+| `speed` | `number` | `1` | 内部时钟速率倍率。 |
+| `paused` | `boolean` | `false` | 冻结在当前帧并停止 rAF。 |
+| `ariaLabel` | `string` | 读取 `labels[state]` | 自定义画布无障碍名称。 |
+| `labels` | `Partial<VoiceRingLabels>` | 英文默认 | 各状态对应的屏幕阅读器文案。 |
+
+### 事件
+
+| 事件 | 参数 | 说明 |
+| --- | --- | --- |
+| `level` | `value: number` | 每帧发出平滑整形后的实时电平（`0–1`）。 |
+
+### 组合式函数
+
+| 函数 | 说明 |
+| --- | --- |
+| `useVoiceRingMicrophone(options?)` | 封装浏览器麦克风授权、原始动态音频流获取与卸载自动停轨清理。 |
+
+## 概述
+
+- `IntersectionObserver` 与 `visibilitychange` 联合门禁在离屏或切后台时自动停止 60fps 渲染循环。
+- 启用 `direction` 时画布自动左右扩充并配负外边距，保证光环倾斜光晕不被裁切且不改变自身占位尺寸。
+- 遵循 `prefers-reduced-motion: reduce`：无音频源时渲染单帧静止态，有音频源时仅保留非晃动的平滑电平表达。
+
+## 技术实现
+
+- 渲染引擎、边缘玻璃折射（2D Canvas + 轻量 WebGL 边缘透镜通道）与音频包络追踪移植自 [Jakubantalik/Libraries.dev · voice-ring](https://github.com/Jakubantalik/Libraries.dev/tree/main/packages/voice-ring)（MIT © 2026 Jakub Antalik）。
+- 源码路径：`packages/tuffex/packages/components/src/voice-ring/`。
+
+## 相关组件
+
+- [VoiceBeam 语音光束](./voice-beam.zh.mdc)：环绕输入框或胶囊容器的语音光束动效。
+- [ThinkingOrb 思考光球](./thinking-orb.zh.mdc)：面向 AI 思考态的多球融合动效。
+- [DistortionWave 折射波转场](./distortion-wave.zh.mdc)：彩色色散折射波屏幕切换组件。

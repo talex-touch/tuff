@@ -514,8 +514,11 @@ const SECTION_ORDER: Record<string, string[]> = {
     '/docs/dev/components/physics-motion',
     '/docs/dev/components/motion-dock',
     '/docs/dev/components/motion',
+    '/docs/dev/components/pixel-field',
+    '/docs/dev/components/voice-ring',
     '/docs/dev/components/motion-toggle',
     '/docs/dev/components/motion-transition',
+    '/docs/dev/components/distortion-wave',
   ],
   '/docs/dev/reference': [
     '/docs/dev/reference/index',

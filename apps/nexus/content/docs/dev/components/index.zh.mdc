@@ -36,7 +36,7 @@ Tuffex（`@talex-touch/tuffex`）是服务 CoreBox、插件界面与本文档站
 | [AI 套件](./ai-suite.zh.mdc) | 对话 / 智能体 / 推理与生成 / 上下文与洞察 | 36 | `@talex-touch/tuffex/ai` |
 | [数据套件](./data-suite.zh.mdc) | 图表 / 可视化 | 12 | `@talex-touch/tuffex/pro` + `/charts` |
 | [流程套件](./flow-suite.zh.mdc) | 流程编排 | 1 | `@talex-touch/tuffex/ai` |
-| [动效套件](./motion-suite.zh.mdc) | 按钮、轮播、加载、文字、转场等 10 组 | 12 | `@talex-touch/tuffex/pro` + `/charts` |
+| [动效套件](./motion-suite.zh.mdc) | 按钮、轮播、加载、文字、转场等 10 组 | 15 | `@talex-touch/tuffex/pro` + `/charts` |
 
 - 页数按文档条目计，不含套件总览页，不等于导出组件数。
 - 套件入口只有 `base`、`pro`、`ai` 三个；数据、流程、动效是文档分类，图表另有 `@talex-touch/tuffex/charts`。
@@ -406,6 +406,8 @@ code: |
 
 - [MotionDock 动效 Dock](./motion-dock.zh.mdc)
 - [Motion 悬停与滚动](./motion.zh.mdc)
+- [PixelField 像素粒子场](./pixel-field.zh.mdc)
+- [VoiceRing 语音光环](./voice-ring.zh.mdc)
 
 ### 切换控件
 
@@ -414,6 +416,7 @@ code: |
 ### 转场
 
 - [MotionTransition 动效转场](./motion-transition.zh.mdc)
+- [DistortionWave 折射波转场](./distortion-wave.zh.mdc)
 
 ## 技术实现
 

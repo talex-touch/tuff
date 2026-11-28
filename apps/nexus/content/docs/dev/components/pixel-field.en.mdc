@@ -1,0 +1,134 @@
+---
+title: PixelField
+description: Interactive square-pixel particle stage with botanical presets and custom sampling
+category: MotionInteraction
+status: beta
+since: 0.9.6
+tags: [motion, particle, pixel, canvas, interactive]
+syncStatus: reviewed
+verified: false
+---
+
+## Usage
+
+`TxPixelField` renders a zero-dependency Canvas 2D square-pixel particle lattice. At rest, particles breathe gently with floating edge spores; hovering tightens the silhouette, adds 3D depth parallax, blooms vein highlights, and reacts smoothly to pointer motion and click pulses.
+
+### Feature cards grid (botanical presets)
+
+Use the four built-in botanical presets (`branch`, `leaf`, `sprout`, `blade`) with `stage="obsidian"` and default slot overlays to compose high-contrast showcase cards, or switch to `adaptive` for native light and dark theme pairing.
+
+:::TuffDemoWrapper{demo="PixelFieldVioletCardsDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { TxPixelField } from '@talex-touch/tuffex/pixel-field'
+  </script>
+
+  <template>
+    <TxPixelField preset="leaf" palette="emerald" stage="obsidian" interaction="coalesce">
+      <div class="feature-overlay">
+        <h4>Visual Continuity</h4>
+        <p>From ideas to experiences</p>
+      </div>
+    </TxPixelField>
+  </template>
+---
+:::
+
+### Geometric presets and custom text sampling
+
+Alongside botanical forms, `TxPixelField` ships `orb` and `wave` geometric presets and can sample any custom `text` or `src` image/SVG into the same interactive particle matrix.
+
+:::TuffDemoWrapper{demo="PixelFieldPlaygroundDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { TxPixelField } from '@talex-touch/tuffex/pixel-field'
+  </script>
+
+  <template>
+    <TxPixelField text="TUFF" palette="cyan" stage="obsidian" interaction="repel" />
+  </template>
+---
+:::
+
+### Best Practices
+
+- Keep decorative slot chrome non-blocking (`pointer-events: none` on passive copy containers) so pointer motion reaches the particle stage smoothly.
+- Use the default `stage="adaptive"` for pages that follow light/dark themes; reserve `stage="obsidian"` for dedicated dark showcase cards.
+- External `src` images require CORS headers so offscreen canvas sampling can read pixel luminance.
+- Keep `density` between `0.8` and `1.2` when rendering multi-card grids for crisp detail at steady 60fps.
+
+## API Reference
+
+### Props
+
+| Name | Type | Default | Description |
+| --- | --- | --- | --- |
+| `preset` | `'branch' \| 'leaf' \| 'sprout' \| 'blade' \| 'orb' \| 'wave'` | `'leaf'` | Built-in procedural botanical or geometric field preset. |
+| `src` | `string` | — | Custom image or SVG URL sampled by luminance and edge gradient (highest priority). |
+| `text` | `string` | — | Custom glyph or wordmark rasterized into an interactive pixel lattice. |
+| `palette` | `'emerald' \| 'violet' \| 'cyan' \| 'amber' \| 'mono' \| PixelFieldPalette` | `'emerald'` | Built-in four-stop bioluminescent/mineral palette or custom colour ramp. |
+| `stage` | `'adaptive' \| 'obsidian'` | `'adaptive'` | `adaptive` follows `--tx-*` light/dark tokens; `obsidian` locks a pitch-black showcase stage. |
+| `pixelSize` | `number` | `3` | Base square dot size in CSS pixels. |
+| `gap` | `number` | `1.6` | Lattice cell spacing in CSS pixels. |
+| `density` | `number` | `1` | Lattice density multiplier (`0.4–1.6`). |
+| `speed` | `number` | `1` | Ambient breathing and shimmer speed multiplier (`0.2–3`). |
+| `animated` | `boolean` | `true` | Enables continuous ambient motion. |
+| `paused` | `boolean` | `false` | Freezes rendering on the current frame. |
+| `interactive` | `boolean` | `true` | Enables hover parallax, silhouette coalescing, and local pointer physics. |
+| `interaction` | `'coalesce' \| 'repel' \| 'attract' \| 'ripple'` | `'coalesce'` | Pointer physics mode. |
+| `pointerRadius` | `number` | `96` | Pointer force influence radius in CSS pixels. |
+| `pointerStrength` | `number` | `1` | Pointer force intensity multiplier (`0–2`). |
+| `parallax` | `number` | `1` | Depth parallax sway multiplier on hover (`0–2`). |
+| `rippleOnClick` | `boolean` | `true` | Emits an expanding luminous shockwave ring on click. |
+| `aspectRatio` | `string \| number` | — | Optional CSS aspect ratio for the container. |
+| `radius` | `number \| string` | `20` | Container corner radius. |
+| `ariaLabel` | `string` | `labels.stage` | Accessible canvas description. |
+| `labels` | `Partial<PixelFieldLabels>` | English defaults | Fallback assistive labels. |
+
+### Events
+
+| Event | Payload | Description |
+| --- | --- | --- |
+| `pulse` | `{ nx: number; ny: number }` | Fired when a click or imperative `pulse()` launches a shockwave (normalized `0–1`). |
+
+### Slots
+
+| Slot | Description |
+| --- | --- |
+| `default` | Foreground overlay content (titles, indices, badges) layered above the pixel canvas. |
+
+### Exposed Methods
+
+| Method | Description |
+| --- | --- |
+| `pulse(nx?, ny?)` | Triggers an expanding luminous ripple at normalized coordinates (defaults to center). |
+| `rebuild()` | Re-samples the particle lattice for the current bounds and props. |
+| `count` | Read-only count of active particles in the lattice. |
+
+### CSS Variables
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `--tx-pixel-field-radius` | `20px` | Stage border radius. |
+| `--tx-pixel-field-bg` | `--tx-bg-color-overlay` | Background fill in `adaptive` mode. |
+| `--tx-pixel-field-border` | `--tx-border-color` | Inset ring colour in `adaptive` mode. |
+| `--tx-pixel-field-obsidian-bg` | `#040506` | Pitch-black stage fill in `obsidian` mode. |
+
+## Overview
+
+- Integrated with the shared `useMotionActivity` boundary so offscreen, hidden, KeepAlive-deactivated, or reduced-motion hosts halt the rAF loop while keeping a sharp static frame.
+- Uses a pre-baked 64-step colour LUT and DPR-snapped `fillRect` passes with zero per-frame allocations and no browser WebGL context cap across multi-card grids.
+- Deterministic hash seeding guarantees reproducible silhouettes for consistent visual regression testing.
+
+## Technologies
+
+- Custom Canvas 2D deterministic pixel-matrix engine combining botanical vein distance fields, offscreen Sobel edge sampling, damped spring particle physics, and a 64-step colour LUT.
+- Source path: `packages/tuffex/packages/components/src/pixel-field/`.
+
+## Related components
+
+- [DistortionWave](./distortion-wave.en.mdc): WebGL2 chromatic distortion wave view transition.
+- [VoiceRing](./voice-ring.en.mdc): voice-reactive light ring with directional lean.
+- [DitherChart](./dither-chart.en.mdc): pixel and ordered-dither data visualizations.
