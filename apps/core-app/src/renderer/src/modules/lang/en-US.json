@@ -3171,6 +3171,7 @@
       "title": "Sidebar",
       "tabs": "Sidebar tabs",
       "newTab": "New tab / Quick launcher",
+      "moreActions": "More actions",
       "newTabMenu": "Quick new tab options",
       "searchPlaceholder": "Search or enter a URL or file path",
       "recentOpened": "Recent",

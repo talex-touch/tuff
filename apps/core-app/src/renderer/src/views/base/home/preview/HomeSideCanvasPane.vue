@@ -1087,6 +1087,11 @@ function handleOpenLint(frameId: string): void {
   lintOpen.value = true
 }
 
+function handleSyncFromChatAndClose(close: () => void): void {
+  handleSyncFromChat()
+  close()
+}
+
 function handleSyncFromChat(): void {
   const extracted = collectConversationFrames(props.messages)
   if (extracted.length === 0) {
@@ -1479,10 +1484,7 @@ async function handleAskFrameAi(payload: TdsCanvasAskFramePayload): Promise<void
             role="menuitem"
             class="HomeSideCanvasPane-MoreItem"
             data-testid="canvas-sync-messages"
-            @click="
-              handleSyncFromChat()
-              close()
-            "
+            @click="handleSyncFromChatAndClose(close)"
           >
             <span class="i-ri-refresh-line" aria-hidden="true" />
             <span>{{ t('home.sidePanel.canvasSyncMessages') }}</span>
