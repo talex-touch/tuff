@@ -130,10 +130,12 @@ describe('tuffex-docs phase 1 scaffold', () => {
       mkdirSync(join(fixtureRoot, 'content/docs/components'), { recursive: true })
 
       const sampleHtml = '<!doctype html><html><head><link rel="stylesheet" href="/tuffex/_tuffex/entry.abc.css" crossorigin><script type="module" src="/tuffex/_tuffex/entry.abc.js" crossorigin></script></head><body><div id="__nuxt"><h1>Button</h1></div></body></html>'
-      writeFileSync(join(fixtureRoot, '.output/public/en.html'), sampleHtml)
-      writeFileSync(join(fixtureRoot, '.output/public/zh.html'), sampleHtml)
-      writeFileSync(join(fixtureRoot, '.output/public/en/button.html'), sampleHtml)
-      writeFileSync(join(fixtureRoot, '.output/public/zh/button.html'), sampleHtml)
+      const demoSampleHtml = '<!doctype html><html><head><link rel="stylesheet" href="/tuffex/_tuffex/entry.abc.css" crossorigin><link rel="stylesheet" href="/tuffex/_tuffex/TuffDemoWrapper.xyz.css" crossorigin><script type="module" src="/tuffex/_tuffex/entry.abc.js" crossorigin></script></head><body><div id="__nuxt"><h1>Button</h1></div></body></html>'
+      writeFileSync(join(fixtureRoot, '.output/public/en.html'), demoSampleHtml)
+      writeFileSync(join(fixtureRoot, '.output/public/zh.html'), demoSampleHtml)
+      writeFileSync(join(fixtureRoot, '.output/public/en/button.html'), demoSampleHtml)
+      writeFileSync(join(fixtureRoot, '.output/public/zh/button.html'), demoSampleHtml)
+      writeFileSync(join(fixtureRoot, '.output/public/zh/base-suite.html'), sampleHtml)
       writeFileSync(join(fixtureRoot, '.output/public/__not-found.html'), '<!doctype html><html><body><div id="__nuxt"><main aria-label="404">404</main></div></body></html>')
       writeFileSync(join(fixtureRoot, '.output/public/dump.docs.sql'), 'CREATE TABLE docs;')
       writeFileSync(join(fixtureRoot, '.output/public/__nuxt_content/docs/sql_dump.txt'), 'dump')
@@ -165,6 +167,7 @@ describe('tuffex-docs phase 1 scaffold', () => {
       expect(headers).toContain('/tuffex/zh/*')
       expect(headers).not.toMatch(/^\/tuffex\/\*$/m)
       expect(headers).not.toContain('_payload.json')
+      expect(headers).not.toContain('TuffDemoWrapper.xyz.css')
       expect(headers).toContain('Link: </tuffex/_tuffex/entry.abc.js>; rel=modulepreload; crossorigin, </tuffex/_tuffex/entry.abc.css>; rel=preload; as=style; crossorigin')
 
       const llms = readFileSync(join(stageRoot, 'tuffex/llms.txt'), 'utf8')
@@ -176,16 +179,52 @@ describe('tuffex-docs phase 1 scaffold', () => {
     }
   })
 
-  it('configures Rolldown codeSplitting with minSize >= 16 KiB and safe eager/nav groups (zero tuffex-wc/vendor/demo groups) and trims SSG i18n preload', () => {
+  it('configures non-recursive Rolldown codeSplitting groups (zero tuffex-wc/vendor/demo/heavy widget groups) and trims SSG i18n preload', () => {
     const splitting = createTuffexCodeSplittingConfig()
     expect(splitting.minSize).toBeGreaterThanOrEqual(16384)
+    expect(splitting.includeDependenciesRecursively).toBe(false)
     expect(splitting.groups.map(g => g.name)).toEqual([
       'tuffex-nav-en',
       'tuffex-nav-zh',
       'nuxt-vue-core',
+      'tuffex-primitives',
+      'tuffex-ui-core',
+      'tuffex-ui-form',
+      'tuffex-ui-nav',
+      'tuffex-ui-pro',
+      'tuffex-ui-motion',
+      'tuffex-ui-ai',
     ])
     expect(splitting.groups.some(g => /wc|vendor|demo|mermaid|three|echarts|react/i.test(g.name))).toBe(false)
-    expect(splitting.groups.every(g => g.minSize === 0)).toBe(true)
+    expect(splitting.groups.every(g => g.minSize === 0 && g.includeDependenciesRecursively === false)).toBe(true)
+
+    const matchGroup = (id: string) => splitting.groups.find(g => g.test.test(id))?.name
+    expect(matchGroup('/repo/packages/tuffex/dist/es/button/index.js')).toBe('tuffex-primitives')
+    expect(matchGroup('/repo/packages/tuffex/dist/es/button/style.css')).toBe('tuffex-primitives')
+    expect(matchGroup('/repo/packages/tuffex/dist/es/utils/internal/dom.js')).toBe('tuffex-primitives')
+    expect(matchGroup('/repo/packages/tuffex/dist/es/badge/index.js')).toBe('tuffex-ui-core')
+    expect(matchGroup('/repo/packages/tuffex/dist/es/input/index.js')).toBe('tuffex-ui-form')
+    expect(matchGroup('/repo/packages/tuffex/dist/es/tabs/style.css')).toBe('tuffex-ui-nav')
+    expect(matchGroup('/repo/packages/tuffex/dist/es/data-table/index.js')).toBe('tuffex-ui-nav')
+    expect(matchGroup('/repo/packages/tuffex/dist/es/virtual-list/index.js')).toBe('tuffex-ui-pro')
+    expect(matchGroup('/repo/packages/tuffex/dist/es/motion-button/index.js')).toBe('tuffex-ui-motion')
+    expect(matchGroup('/repo/packages/tuffex/dist/es/prompt-bar/index.js')).toBe('tuffex-ui-ai')
+    // Barrels & heavy widgets must stay excluded so Base pages never pull AI/Motion/Charts
+    expect(matchGroup('/repo/packages/tuffex/dist/es/base/index.js')).toBeUndefined()
+    expect(matchGroup('/repo/packages/tuffex/dist/es/pro/index.js')).toBeUndefined()
+    expect(matchGroup('/repo/packages/tuffex/dist/es/ai/index.js')).toBeUndefined()
+    expect(matchGroup('/repo/packages/tuffex/dist/es/charts/index.js')).toBeUndefined()
+    expect(matchGroup('/repo/packages/tuffex/dist/es/spark-chart/index.js')).toBeUndefined()
+    expect(matchGroup('/repo/packages/tuffex/dist/es/motion-metric/index.js')).toBeUndefined()
+    expect(matchGroup('/repo/packages/tuffex/dist/es/code-editor/index.js')).toBeUndefined()
+    expect(matchGroup('/repo/packages/tuffex/dist/es/markdown-editor/index.js')).toBeUndefined()
+    expect(matchGroup('/repo/packages/tuffex/dist/es/terminal/index.js')).toBeUndefined()
+    expect(matchGroup('/repo/packages/tuffex/dist/es/flowchart/index.js')).toBeUndefined()
+    expect(matchGroup('/repo/packages/tuffex/dist/es/image-generation/index.js')).toBeUndefined()
+    expect(matchGroup('/repo/packages/tuffex-wc/dist/chunks/tier-a.js')).toBeUndefined()
+    expect(matchGroup('/repo/node_modules/three/build/three.module.js')).toBeUndefined()
+    expect(matchGroup('/repo/node_modules/echarts/core.js')).toBeUndefined()
+    expect(matchGroup('/repo/node_modules/mermaid/dist/mermaid.core.mjs')).toBeUndefined()
 
     expect(resolveTuffexManualChunk('/repo/apps/tuffex-docs/app/components/content/demos/ButtonVariantsDemo.vue')).toBeUndefined()
     expect(resolveTuffexManualChunk('/repo/packages/tuffex-wc/dist/chunks/tier-a.js')).toBeUndefined()
@@ -218,14 +257,35 @@ describe('tuffex-docs phase 1 scaffold', () => {
     })
   })
 
-  it('guards CSS stylesheet loading in nuxt.config.ts and preserves 13px family toggle typography in DocsSidebar.vue', () => {
+  it('guards CSS stylesheet loading, sticky gallery chrome, static i18n, and CLS-free demo mounting', () => {
     const nuxtConfig = readFileSync(join(appRoot, 'nuxt.config.ts'), 'utf8')
     expect(nuxtConfig).toMatch(/resolveDependencies\([^)]*\)\s*\{[\s\S]*?\.endsWith\(['"]\.css['"]\)/)
     expect(nuxtConfig).not.toContain('entry.imports = []')
+    expect(nuxtConfig).toContain("strategy: 'no_prefix'")
+
+    const i18nConfig = readFileSync(join(appRoot, 'i18n/i18n.config.ts'), 'utf8')
+    expect(i18nConfig).toContain('./locales/en.json')
+    expect(i18nConfig).toContain('./locales/zh.json')
 
     const sidebarSource = readFileSync(join(appRoot, 'app/components/docs/DocsSidebar.vue'), 'utf8')
     const familyToggleBlock = sidebarSource.match(/:deep\(\.docs-nav-family-toggle\)\s*\{[^}]*\}/)?.[0] ?? ''
     expect(familyToggleBlock).toContain('font-family: inherit;')
     expect(familyToggleBlock).not.toMatch(/\bfont:\s*inherit\b/)
+
+    const galleryCss = readFileSync(join(appRoot, 'app/components/docs/DocsComponentsGallery.css'), 'utf8')
+    expect(galleryCss).toContain('overflow: clip;')
+    expect(galleryCss).not.toMatch(/\.docs-gallery\s*\{[^}]*overflow:\s*hidden/)
+    expect(galleryCss).toMatch(/\.docs-gallery-fw\s*\{[^}]*position:\s*sticky/)
+
+    const baseSuiteCss = readFileSync(join(appRoot, 'app/components/docs/gallery/suites/GalleryBaseSuite.css'), 'utf8')
+    expect(baseSuiteCss).toMatch(/\.docs-gallery__cat-nav\s*\{[^}]*position:\s*sticky/)
+
+    const demoWrapper = readFileSync(join(appRoot, 'app/components/content/TuffDemoWrapper.vue'), 'utf8')
+    const demoWrapperStyleNoComments = (demoWrapper.match(/<style[\s\S]*?<\/style>/)?.[0] ?? '')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+    expect(demoWrapperStyleNoComments).not.toContain('content-visibility: auto')
+
+    const slugPage = readFileSync(join(appRoot, 'app/pages/[...slug].vue'), 'utf8')
+    expect(slugPage).toContain("flush: 'pre'")
   })
 })

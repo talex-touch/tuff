@@ -13,19 +13,43 @@
 
 .docs-gallery {
   --docs-gallery-line: color-mix(in srgb, var(--docs-border) 72%, transparent);
+  --docs-gallery-sticky-top: 68px;
+  --docs-gallery-sticky-bar-h: 53px;
+  --docs-gallery-sticky-bg: color-mix(in srgb, var(--docs-surface, #ffffff) 94%, transparent);
 
   border: 1px solid var(--docs-gallery-line);
   border-radius: 14px;
-  overflow: hidden;
+  /* Use clip (not hidden) so rounded corners clip cleanly without breaking position: sticky inside */
+  overflow: clip;
+}
+
+.dark .docs-gallery,
+[data-theme='dark'] .docs-gallery {
+  --docs-gallery-sticky-bg: color-mix(in srgb, var(--docs-surface, #121212) 94%, transparent);
+}
+
+.docs-gallery-fw {
+  position: sticky;
+  top: var(--docs-gallery-sticky-top);
+  z-index: 12;
+  background: var(--docs-gallery-sticky-bg);
+  -webkit-backdrop-filter: blur(12px) saturate(140%);
+  backdrop-filter: blur(12px) saturate(140%);
+  border-bottom: 1px solid var(--docs-gallery-line);
+  border-top-left-radius: 13px;
+  border-top-right-radius: 13px;
+  /* Seal the narrow gap beneath the floating DocsHeader pill when stuck; clipped by .docs-gallery at y=0. */
+  box-shadow: 0 -18px 0 0 var(--docs-surface, #ffffff);
 }
 
 .docs-gallery__bar {
   display: flex;
   align-items: center;
-  /* Install command anchors the left edge, version the right. */
+  /* Install command anchors the left edge, framework switcher & version the right. */
   justify-content: space-between;
   gap: 10px;
-  padding: 12px 20px;
+  min-height: 52px;
+  padding: 10px 20px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 12px;
   color: var(--docs-muted);

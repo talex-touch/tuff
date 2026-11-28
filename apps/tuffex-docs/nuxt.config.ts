@@ -143,20 +143,15 @@ export default defineNuxtConfig({
 
   i18n: {
     locales: [
-      { code: 'en', language: 'en-US', file: 'en.json' },
-      { code: 'zh', language: 'zh-CN', file: 'zh.json' },
+      { code: 'en', language: 'en-US' },
+      { code: 'zh', language: 'zh-CN' },
     ],
     restructureDir: 'i18n',
-    langDir: 'locales',
     defaultLocale: 'en',
-    strategy: 'prefix',
+    strategy: 'no_prefix',
     baseUrl: 'https://tuff.tagzxia.com',
     detectBrowserLanguage: false,
     vueI18n: './i18n.config.ts',
-    experimental: {
-      preload: true,
-      stripMessagesPayload: true,
-    },
   },
 
   runtimeConfig: {

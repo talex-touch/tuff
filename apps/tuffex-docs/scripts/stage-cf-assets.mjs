@@ -449,6 +449,8 @@ function buildHeadersFile(tuffexStageDir) {
     join(tuffexStageDir, 'en.html'),
     join(tuffexStageDir, 'en/button.html'),
     join(tuffexStageDir, 'zh/button.html'),
+    join(tuffexStageDir, 'zh/base-suite.html'),
+    join(tuffexStageDir, 'en/installation.html'),
   ]
   const samples = sampleCandidates
     .filter(file => existsSync(file))

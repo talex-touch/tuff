@@ -10,7 +10,7 @@ import {
 const LazyDocsSearchModal = defineAsyncComponent(() => import('~/components/docs/DocsSearchModal.vue'))
 
 const route = useRoute()
-const { locale, setLocale } = useI18n()
+const { locale } = useI18n()
 
 const routeLocale = computed(() => resolveLocaleFromPath(route.path))
 const searchOpen = useState<boolean>('tuffex-search-open', () => false)
@@ -21,16 +21,12 @@ watch(searchOpen, (open) => {
     searchMounted.value = true
 })
 
-// Keep vue-i18n locale aligned with URL prefix without blocking SSR/navigation.
+// Synchronously align vue-i18n locale with the URL prefix (`en`/`zh`) without extra route rewrites or fetches.
 watch(
   routeLocale,
   (next) => {
-    if (locale.value !== next) {
-      if (typeof setLocale === 'function')
-        void setLocale(next)
-      else
-        locale.value = next
-    }
+    if (locale.value !== next)
+      locale.value = next
   },
   { immediate: true },
 )

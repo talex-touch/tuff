@@ -10,7 +10,7 @@ import {
 } from '~/utils/docs-route'
 
 const route = useRoute()
-const { setLocale } = useI18n()
+const { locale } = useI18n()
 
 const currentLocale = computed<SupportedLocale>(() => resolveLocaleFromPath(route.path))
 const nextLocale = computed<SupportedLocale>(() => (currentLocale.value === 'zh' ? 'en' : 'zh'))
@@ -24,8 +24,8 @@ async function toggleLocale() {
   const target = nextLocale.value
   // C7: Synchronize cookie (`tuff_locale`) & localStorage across TuffEx Docs and Nexus on the same origin.
   persistLocalePreference(target, true)
-  if (typeof setLocale === 'function')
-    void setLocale(target)
+  if (locale.value !== target)
+    locale.value = target
 
   const targetPath = toLocalizedTuffexPath(route.path, target)
   await navigateTo({

@@ -376,9 +376,9 @@ async function resetDemo() {
   }
 }
 
-// R6: Pre-viewport IntersectionObserver (rootMargin: '400px 0px') + parallel 1-hop preload
-// + 12ms frame-budgeted mount scheduler!
-const DEMO_PRELOAD_ROOT_MARGIN = '400px 0px'
+// R6: Pre-viewport IntersectionObserver (rootMargin: '1200px 0px') + parallel 1-hop preload
+// + 12ms frame-budgeted mount scheduler so demos preload ~1.5 screens ahead of scroll!
+const DEMO_PRELOAD_ROOT_MARGIN = '1200px 0px'
 let demoObserver: IntersectionObserver | null = null
 let cancelScheduledMount: (() => void) | null = null
 let demoStarted = false
@@ -609,10 +609,10 @@ onBeforeUnmount(() => {
   --tuff-demo-row-bg: var(--tx-bg-color, #ffffff);
 }
 
-/* R6: content-visibility isolation on non-first demos for faster layout/paint */
+/* Keep layout containment lightweight without `content-visibility: auto`, which caused
+ * large CLS jumps (0.34 on Tabs) and skipped bounding-rect measurements on tall Form demos. */
 .tuff-demo--deferred-paint {
-  content-visibility: auto;
-  contain-intrinsic-size: auto 260px;
+  contain: layout style;
 }
 
 .tuff-demo__header {

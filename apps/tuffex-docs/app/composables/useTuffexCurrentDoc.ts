@@ -273,6 +273,7 @@ export function useTuffexCurrentDoc(): TuffexCurrentDocContext {
       fetchedMeta.value = mod?.docMeta ?? null
       displayMeta.value = mod?.docMeta ?? null
       displayComponent.value = mod?.default ?? null
+      pending.value = false
     }
     catch (err) {
       if (generation !== loadGeneration)
@@ -281,6 +282,7 @@ export function useTuffexCurrentDoc(): TuffexCurrentDocContext {
       fetchedMeta.value = null
       displayMeta.value = null
       displayComponent.value = null
+      pending.value = false
     }
     finally {
       if (generation === loadGeneration)

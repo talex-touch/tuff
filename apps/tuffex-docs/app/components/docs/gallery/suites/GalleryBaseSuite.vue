@@ -95,15 +95,77 @@ const categoryList = computed(() =>
   })),
 )
 
+const activeCategory = ref<BaseCategoryKey>('basic')
+let catObserver: IntersectionObserver | null = null
+let manualLockUntil = 0
+let realignTimer: number | null = null
+const STICKY_LANDING_OFFSET = 178
+
 function scrollToCategory(key: BaseCategoryKey) {
+  activeCategory.value = key
   if (!import.meta.client || typeof document === 'undefined')
     return
   const el = document.getElementById(`base-cat-${key}`)
   if (!el)
     return
+  manualLockUntil = Date.now() + 950
+  if (realignTimer !== null) {
+    window.clearTimeout(realignTimer)
+    realignTimer = null
+  }
   const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
-  el.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' })
+  const scrollOnce = () => {
+    const top = el.getBoundingClientRect().top + window.scrollY - STICKY_LANDING_OFFSET
+    window.scrollTo({ top: Math.max(0, top), behavior: reduced ? 'auto' : 'smooth' })
+  }
+  scrollOnce()
+  // Progressive gallery specimens above the target section can expand mid-scroll;
+  // perform one gentle follow-up alignment so the target heading lands cleanly below the sticky bar.
+  realignTimer = window.setTimeout(() => {
+    realignTimer = null
+    const delta = Math.abs(el.getBoundingClientRect().top - STICKY_LANDING_OFFSET)
+    if (delta > 32)
+      scrollOnce()
+  }, 420)
 }
+
+onMounted(() => {
+  if (typeof window === 'undefined' || !('IntersectionObserver' in window))
+    return
+  const keys: BaseCategoryKey[] = ['basic', 'form', 'layout', 'navigation', 'data', 'feedback', 'status']
+  const visible = new Set<BaseCategoryKey>()
+  catObserver = new IntersectionObserver(
+    (entries) => {
+      for (const entry of entries) {
+        const key = entry.target.id.replace(/^base-cat-/, '') as BaseCategoryKey
+        if (entry.isIntersecting)
+          visible.add(key)
+        else
+          visible.delete(key)
+      }
+      if (Date.now() < manualLockUntil)
+        return
+      const firstVisible = keys.find(k => visible.has(k))
+      if (firstVisible)
+        activeCategory.value = firstVisible
+    },
+    { rootMargin: '-180px 0px -65% 0px', threshold: 0 },
+  )
+  for (const key of keys) {
+    const el = document.getElementById(`base-cat-${key}`)
+    if (el)
+      catObserver.observe(el)
+  }
+})
+
+onBeforeUnmount(() => {
+  if (realignTimer !== null) {
+    window.clearTimeout(realignTimer)
+    realignTimer = null
+  }
+  catObserver?.disconnect()
+  catObserver = null
+})
 
 const copy = computed(() => (props.localeKey === 'zh'
   ? {
@@ -715,6 +777,8 @@ const statusStates = computed<StatusCell[]>(() => [
         :key="cat.key"
         :href="`#base-cat-${cat.key}`"
         class="docs-gallery__cat-pill"
+        :class="{ 'is-active': activeCategory === cat.key }"
+        :aria-current="activeCategory === cat.key ? 'true' : undefined"
         @click.prevent="scrollToCategory(cat.key)"
       >
         <span class="docs-gallery__cat-pill-icon" :class="cat.icon" aria-hidden="true" />

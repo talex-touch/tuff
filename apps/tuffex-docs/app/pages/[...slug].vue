@@ -138,18 +138,19 @@ function resetPageTransientState(nextMeta: TuffexCompiledDocMeta | null, options
 let lastCommittedKey = displayMeta.value ? `${displayMeta.value.locale}:${displayMeta.value.slug}` : ''
 
 watch(
-  [displayMeta, pending],
-  ([nextMeta, isPending]) => {
-    if (isPending)
-      return
-
+  displayMeta,
+  (nextMeta) => {
     const nextKey = nextMeta ? `${nextMeta.locale}:${nextMeta.slug}` : `missing:${docLocale.value}:${docSlug.value}`
     if (nextKey !== lastCommittedKey) {
       const isRouteSwap = Boolean(lastCommittedKey)
       lastCommittedKey = nextKey
+      // Runs with default `flush: 'pre'` BEFORE `<component :is="displayComponent" :key="contentRenderKey" />`
+      // patches and mounts the new page's `<TuffDemoWrapper>` children, so `resetDemoMountQueue()`
+      // clears only the outgoing page's pending tasks and never wipes incoming demos.
       resetPageTransientState(nextMeta ?? null, { scroll: isRouteSwap })
     }
   },
+  { flush: 'pre' },
 )
 
 const activeComponentSlug = computed(() => resolveTuffexComponentSlug(route.path))

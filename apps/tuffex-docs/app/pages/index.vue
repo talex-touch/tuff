@@ -6,8 +6,6 @@ definePageMeta({
   layout: false,
 })
 
-defineI18nRoute(false)
-
 useHead({
   title: 'TuffEx — Tuff Design System',
   meta: [

@@ -6,8 +6,6 @@ definePageMeta({
   layout: false,
 })
 
-defineI18nRoute(false)
-
 const detectedLocale = ref<SupportedLocale>('en')
 const isZh = computed(() => detectedLocale.value === 'zh')
 const searchOpen = useState<boolean>('tuffex-search-open', () => false)

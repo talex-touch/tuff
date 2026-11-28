@@ -1,12 +1,17 @@
-/* ── Basics Suite category bands & quick-jump bar ── */
+/* ── Basics Suite category bands & sticky quick-jump bar ── */
 .docs-gallery__cat-nav {
+  position: sticky;
+  top: calc(var(--docs-gallery-sticky-top, 68px) + var(--docs-gallery-sticky-bar-h, 53px));
+  z-index: 11;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
   padding: 10px 20px;
-  border-top: 1px solid var(--docs-gallery-line);
-  background: color-mix(in srgb, var(--docs-inline-code-bg) 52%, transparent);
+  border-bottom: 1px solid var(--docs-gallery-line);
+  background: var(--docs-gallery-sticky-bg, var(--docs-surface, #ffffff));
+  -webkit-backdrop-filter: blur(12px) saturate(140%);
+  backdrop-filter: blur(12px) saturate(140%);
 }
 
 .docs-gallery a.docs-gallery__cat-pill {
@@ -26,8 +31,10 @@
   transition: border-color 0.16s ease, color 0.16s ease, background-color 0.16s ease;
 }
 
-.docs-gallery a.docs-gallery__cat-pill:hover {
+.docs-gallery a.docs-gallery__cat-pill:hover,
+.docs-gallery a.docs-gallery__cat-pill.is-active {
   border-color: color-mix(in srgb, var(--docs-accent) 48%, transparent);
+  background: color-mix(in srgb, var(--docs-accent) 10%, var(--tx-bg-color, transparent));
   color: var(--docs-accent);
   text-decoration: none;
 }
@@ -41,7 +48,8 @@
   transition: color 0.16s ease;
 }
 
-.docs-gallery a.docs-gallery__cat-pill:hover .docs-gallery__cat-pill-icon {
+.docs-gallery a.docs-gallery__cat-pill:hover .docs-gallery__cat-pill-icon,
+.docs-gallery a.docs-gallery__cat-pill.is-active .docs-gallery__cat-pill-icon {
   color: var(--docs-accent);
 }
 
@@ -56,7 +64,7 @@
 }
 
 .docs-gallery__cat-section {
-  scroll-margin-top: 84px;
+  scroll-margin-top: 178px;
 }
 
 .docs-gallery__cat-head {
@@ -67,6 +75,10 @@
   padding: 11px 20px;
   border-top: 1px solid var(--docs-gallery-line);
   background: color-mix(in srgb, var(--docs-inline-code-bg) 72%, transparent);
+}
+
+.docs-gallery__cat-nav + .docs-gallery__cat-section > .docs-gallery__cat-head {
+  border-top: 0;
 }
 
 .docs-gallery__cat-meta {

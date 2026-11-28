@@ -1,12 +1,12 @@
 import { hasDocument, hasWindow } from '@talex-touch/utils/env'
 import { type InjectionKey, type Ref, readonly, ref } from 'vue'
 
-/** Specimens admitted immediately when first entering view, so the top row renders with zero wait. */
-const EAGER_SPECIMENS = 4
+/** Specimens admitted immediately when first entering view, so the top rows render with zero wait. */
+const EAGER_SPECIMENS = 8
 /** Maximum specimens admitted per animation frame / yield slice. */
-const MAX_SPECIMENS_PER_FRAME = 3
+const MAX_SPECIMENS_PER_FRAME = 6
 /** Frame time budget (ms) before yielding remaining queued admissions to the browser. */
-const FRAME_BUDGET_MS = 8
+const FRAME_BUDGET_MS = 10
 
 interface SchedulerWithYield {
   yield?: () => Promise<void>
@@ -190,7 +190,7 @@ export function createSpecimenQueue(): SpecimenQueue {
         }
       },
       {
-        rootMargin: '320px 0px',
+        rootMargin: '800px 0px',
         threshold: 0,
       },
     )

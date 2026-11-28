@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
+import DocsFrameworkSwitcher from './DocsFrameworkSwitcher.vue'
 import type { FrameworkCompatEntry } from '~/data/tuffex-framework-matrix'
 import type { PackageManager } from '~/utils/docs-install-command'
 import type { DocsSuiteKey } from '~/utils/docs-suites'
@@ -15,6 +16,26 @@ const props = defineProps<{
 const { locale, t } = useI18n()
 const { framework } = useDocsFramework()
 const packageManager = useState<PackageManager>('docs-install-manager', () => 'pnpm')
+const barRootRef = ref<HTMLElement | null>(null)
+let resizeObserver: ResizeObserver | null = null
+
+function syncStickyBarHeight() {
+  const el = barRootRef.value
+  const gallery = el?.closest<HTMLElement>('.docs-gallery')
+  if (!el || !gallery)
+    return
+  const h = Math.ceil(el.getBoundingClientRect().height)
+  if (h > 0)
+    gallery.style.setProperty('--docs-gallery-sticky-bar-h', `${h}px`)
+}
+
+onMounted(() => {
+  syncStickyBarHeight()
+  if (typeof ResizeObserver !== 'undefined' && barRootRef.value) {
+    resizeObserver = new ResizeObserver(syncStickyBarHeight)
+    resizeObserver.observe(barRootRef.value)
+  }
+})
 
 const localeKey = computed<'zh' | 'en'>(() => (locale.value === 'zh' ? 'zh' : 'en'))
 const activeMeta = computed(() => DOCS_FRAMEWORK_META[framework.value])
@@ -91,13 +112,15 @@ async function copyInstall() {
 
 onBeforeUnmount(() => {
   unmounted = true
+  resizeObserver?.disconnect()
+  resizeObserver = null
   if (copyTimer)
     clearTimeout(copyTimer)
 })
 </script>
 
 <template>
-  <div class="docs-gallery-fw not-prose">
+  <div ref="barRootRef" class="docs-gallery-fw not-prose">
     <div class="docs-gallery__bar docs-gallery-fw__bar">
       <button
         type="button"
@@ -114,11 +137,12 @@ onBeforeUnmount(() => {
         />
       </button>
 
-      <span v-if="framework === 'vue'" class="docs-gallery__version">
-        v{{ props.version }}
-      </span>
-      <div v-else class="docs-gallery-fw__right">
-        <template v-if="readyInSuite.length">
+      <div class="docs-gallery-fw__right">
+        <DocsFrameworkSwitcher size="sm" />
+        <span v-if="framework === 'vue'" class="docs-gallery__version">
+          v{{ props.version }}
+        </span>
+        <template v-else-if="readyInSuite.length">
           <span class="docs-gallery__version docs-gallery-fw__summary">
             <span class="docs-gallery-fw__summary-icon" :class="activeMeta.icon" aria-hidden="true" />
             <span>{{ t('docs.framework.gallerySuiteReady', { framework: activeMeta.shortLabel, ready: readyInSuite.length, total: suiteEntries.length }) }}</span>
