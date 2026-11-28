@@ -72,6 +72,11 @@ export const COVERAGE = [
   },
   /* eslint-enable no-template-curly-in-string */
   {
+    root: 'apps/tuffex-docs',
+    workflow: '.github/workflows/tuffex-docs-ci.yml',
+    command: 'pnpm -C apps/tuffex-docs exec vitest run',
+  },
+  {
     root: 'packages/test',
     workflow: '.github/workflows/ci.yml',
     command: 'pnpm -C "packages/test" exec vitest run',

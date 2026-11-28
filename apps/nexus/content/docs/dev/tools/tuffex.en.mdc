@@ -10,8 +10,8 @@ TuffEx (Chinese name: Ta Fu) is a modern Vue3 component library focused on tacti
 > **Migration in Progress** - TuffEx is migrating components from Tuff core app. Tech stack upgraded to Vue 3.5 / Vite 6 / TypeScript 5.8.
 
 ## Component Gallery
-- **[Tuffex Components](../components/index.en.mdc)** — component catalog, demos, and API (bilingual).
-- **[Component Changelog & Lifecycle](../components/changelog.en.mdc)** — component Since versions and per-release updates.
+- **[Tuffex Components](/tuffex/en)** — component catalog, demos, and API (bilingual).
+- **[Component Changelog & Lifecycle](/tuffex/en/changelog)** — component Since versions and per-release updates.
 
 
 ## Installation
@@ -152,8 +152,8 @@ code: |
   pnpm -C packages/tuffex run test
   pnpm -C packages/tuffex run typecheck
 
-  # Showcase and docs are hosted by Tuff
-  pnpm -C apps/nexus run dev
+  # Standalone TuffEx component docs (SSG)
+  pnpm -C apps/tuffex-docs run dev
 ---
 :::
 

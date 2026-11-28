@@ -101,8 +101,6 @@ function trimPrerenderedClientSqlDumps() {
   console.log(`[nexus-content-assets] verified Cloudflare root SQL dumps: ${verifiedDumps.join(', ')}`)
   console.log(`[nexus-content-assets] removed prerendered client SQL dumps: ${removedBytes} bytes`)
 }
-const PRECOMPUTED_MANIFEST_DEMO_LOADER_PREFIX = '../nexus-demo-loader:'
-const PRECOMPUTED_MANIFEST_DEMO_COMPONENT_RE = /(?:^|\/)components\/content\/demos\//
 const PRECOMPUTED_MANIFEST_STATIC_ASSET_RE = /\.(?:css|ttf|woff2?|jpg|jpeg|png|svg|webp)$/i
 const PRECOMPUTED_MANIFEST_BUCKETS = ['scripts', 'styles', 'preload']
 const VAR_NAME_ALPHABET = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_$'
@@ -120,10 +118,6 @@ function indexToVarName(index) {
 export function classifyPrecomputedDependency(key, entrypointSet) {
   if (entrypointSet.has(key))
     return 'keep'
-  if (key.startsWith(PRECOMPUTED_MANIFEST_DEMO_LOADER_PREFIX))
-    return 'demo-loader'
-  if (PRECOMPUTED_MANIFEST_DEMO_COMPONENT_RE.test(key))
-    return 'demo-component'
   if (PRECOMPUTED_MANIFEST_STATIC_ASSET_RE.test(key))
     return 'static-asset'
   return 'keep'
@@ -132,13 +126,12 @@ export function classifyPrecomputedDependency(key, entrypointSet) {
 /**
  * Rebuilds `client.precomputed.mjs` from the parsed manifest object instead of slicing its
  * minified source: Vite/Nitro hoists shared asset descriptor objects (`e={...}`) inside
- * property values, so deleting a demo key by string slicing would break later references.
+ * property values, so deleting a key by string slicing would break later references.
  *
  * `vue-bundle-renderer` only looks up keys present in `entrypoints` or registered via
- * `ssrContext.modules` during SSR; client-only demo loaders, demo SFCs (never bundled into
- * the Worker), and top-level static asset keys (`.css`, fonts, images) are unreachable at
- * Worker runtime because every `.vue`/`.js` entry already carries its flattened `styles`
- * and `preload` maps.
+ * `ssrContext.modules` during SSR; top-level static asset keys (`.css`, fonts, images) are
+ * unreachable at Worker runtime because every `.vue`/`.js` entry already carries its flattened
+ * `styles` and `preload` maps.
  */
 export function serializePrecomputedClientManifest(manifest) {
   const dependencies = manifest?.dependencies && typeof manifest.dependencies === 'object'
@@ -148,21 +141,11 @@ export function serializePrecomputedClientManifest(manifest) {
   const entrypointSet = new Set(entrypoints)
 
   const retainedEntries = []
-  let removedDemoLoaders = 0
-  let removedDemoComponents = 0
   let removedStaticAssets = 0
   let removedPrefetchMaps = 0
 
   for (const [key, entry] of Object.entries(dependencies)) {
     const classification = classifyPrecomputedDependency(key, entrypointSet)
-    if (classification === 'demo-loader') {
-      removedDemoLoaders++
-      continue
-    }
-    if (classification === 'demo-component') {
-      removedDemoComponents++
-      continue
-    }
     if (classification === 'static-asset') {
       removedStaticAssets++
       continue
@@ -228,8 +211,6 @@ export function serializePrecomputedClientManifest(manifest) {
   return {
     source,
     keptDependencies: retainedEntries.length,
-    removedDemoLoaders,
-    removedDemoComponents,
     removedStaticAssets,
     removedPrefetchMaps,
   }
@@ -251,7 +232,7 @@ export async function trimPrecomputedClientManifest(root = workerRoot) {
   writeFileSync(manifestPath, result.source)
   const removedBytes = Buffer.byteLength(original) - Buffer.byteLength(result.source)
   console.log(
-    `[nexus-content-assets] trimmed client precomputed manifest: ${result.removedDemoLoaders} demo loaders, ${result.removedDemoComponents} demo components, ${result.removedStaticAssets} static asset keys, ${result.removedPrefetchMaps} prefetch maps (${result.keptDependencies} kept); ${removedBytes} bytes removed`,
+    `[nexus-content-assets] trimmed client precomputed manifest: ${result.removedStaticAssets} static asset keys, ${result.removedPrefetchMaps} prefetch maps (${result.keptDependencies} kept); ${removedBytes} bytes removed`,
   )
   return { ...result, removedBytes }
 }

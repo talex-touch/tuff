@@ -1,0 +1,138 @@
+---
+title: Attachment Tray
+description: A tray that displays a message's image and file attachments.
+category: AiChat
+status: beta
+since: 0.3.9
+tags: [ai, attachment, upload]
+syncStatus: reviewed
+verified: true
+---
+
+## Usage
+
+### Basic
+::::TuffDemoWrapper{demo="AttachmentTrayAttachmentTrayDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import type { AiAttachment, AiAttachmentFile } from '@talex-touch/tuffex/ai-elements'
+  import { ref } from 'vue'
+
+  const attachments = ref<AiAttachment[]>([
+    { kind: 'image', id: 'i1', url: 'https://picsum.photos/id/1015/400/300', name: 'canyon.jpg' },
+    { kind: 'image', id: 'i2', url: 'https://picsum.photos/id/1043/400/300', name: 'shore.jpg', uploading: true, progress: 0.6 },
+    { kind: 'file', id: 'f1', name: 'report.pdf', size: 240_000 },
+    { kind: 'file', id: 'f2', name: 'uploading.zip', size: 1_200_000, uploading: true, progress: 0.4 },
+  ])
+
+  // The component never mutates the list: the host drops removed and cancelled ids.
+  function drop(id: string) {
+    attachments.value = attachments.value.filter(item => item.id !== id)
+  }
+
+  function onOpen(file: AiAttachmentFile) {
+    // Opening or downloading the file is up to the host.
+  }
+  </script>
+
+  <template>
+    <TxAttachmentTray
+      :attachments="attachments"
+      removable
+      @remove="drop"
+      @cancel="drop"
+      @open="onOpen"
+    />
+  </template>
+---
+::::
+
+### Best Practices
+
+- Set `removable` in a composer and drop the `id` on `remove` and `cancel`; keep sent messages read-only.
+- Give an in-flight attachment both `uploading: true` and `progress` (0–1); without `progress`, no progress shows.
+- Handle `open`; otherwise clicking a file chip does nothing.
+- On non-English surfaces, override every text prop, `sizeFormatter` and `openLabelFormatter`, and pass the preview's `labelFormatter` and `zoomLabel` through `previewProps`: the preview's buttons are icons, and these names are what screen readers announce; `failedText` is visible text.
+- Resize thumbnails with `--tx-attachment-tray-thumb-size` rather than overriding the component's internal classes.
+
+## API Reference
+
+### TxAttachmentTray
+
+#### Props
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `attachments` | `AiAttachment[]` | — | Images and files in one list. Required. |
+| `removable` | `boolean` | `false` | Shows remove buttons; cancel-upload buttons don't depend on it. |
+| `previewTitle` | `string` | `'Preview'` | The preview dialog's accessible name, followed by the image's `name`; also starts each thumbnail's accessible name unless `openLabelFormatter` builds it. |
+| `previousLabel` | `string` | `'Previous image'` | Accessible name of the previous button. |
+| `nextLabel` | `string` | `'Next image'` | Accessible name of the next button. |
+| `previousText` | `string` | — | Deprecated and not shown: the preview's previous button is an icon, named by `previousLabel`. |
+| `nextText` | `string` | — | Deprecated and not shown: the preview's next button is an icon, named by `nextLabel`. |
+| `closeLabel` | `string` | `'Close'` | Accessible name of the preview's close button. |
+| `zoomInLabel` | `string` | `'Zoom in'` | Accessible name of the preview's zoom-in button. |
+| `zoomOutLabel` | `string` | `'Zoom out'` | Accessible name of the preview's zoom-out button. |
+| `resetLabel` | `string` | `'Fit to screen'` | The first item of the preview's zoom menu, which shows the whole image again. |
+| `failedText` | `string` | `'This image could not be loaded'` | Text in the preview's placeholder for an image that failed to load. |
+| `removeLabel` | `string` | `'Remove attachment'` | Accessible name of remove buttons. |
+| `cancelLabel` | `string` | `'Cancel upload'` | Accessible name of cancel-upload buttons. |
+| `sizeFormatter` | `(bytes: number) => string` | — | Formats file sizes; defaults to whole bytes under 1 KB, then KB/MB/GB with one decimal. |
+| `openLabelFormatter` | `(name: string) => string` | `` (name) => `${previewTitle}: ${name}` `` | Builds a thumbnail's `aria-label` from the image's `name`, or its `id` without one. |
+| `previewProps` | `AttachmentTrayPreviewProps` | — | The preview's other options, such as `actions`, `indicator`, `bounce`, and the materials; the tray sets the images, the failures, where they fly from, and the labels above. |
+
+#### Events
+
+| Name | Payload | Description |
+|------|---------|-------------|
+| `remove` | `(id: string)` | Fires when remove is clicked. |
+| `cancel` | `(id: string)` | Fires when cancel-upload is clicked. |
+| `open` | `(attachment: AiAttachmentFile)` | Fires when a file chip is clicked; clicking an image opens the built-in preview. |
+| `action` | `(event: ImagePreviewActionEvent)` | Fires when an action is chosen in the preview, before it runs; after `preventDefault()` the host runs it. |
+
+### TxAttachmentChip
+
+#### Props
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `attachment` | `AiAttachment & { kind: 'file' }` | — | The file attachment to show. Required. |
+| `removable` | `boolean` | `false` | Shows the remove button; the cancel-upload button doesn't depend on it. |
+| `removeLabel` | `string` | `'Remove attachment'` | Accessible name of the remove button. |
+| `cancelLabel` | `string` | `'Cancel upload'` | Accessible name of the cancel-upload button. |
+| `sizeFormatter` | `(bytes: number) => string` | — | Formats the file size; defaults to the same format as `TxAttachmentTray`. |
+
+#### Events
+
+| Name | Payload | Description |
+|------|---------|-------------|
+| `remove` | `(id: string)` | Fires when remove is clicked. |
+| `cancel` | `(id: string)` | Fires when cancel-upload is clicked. |
+| `open` | `(attachment: AiAttachment & { kind: 'file' })` | Fires when the chip body is clicked. |
+
+### CSS Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `--tx-attachment-tray-thumb-size` | `72px` | Side length of an image thumbnail. |
+
+- The variable is not declared on the root, so setting it on the component or any ancestor takes effect.
+
+## Overview
+
+- `kind: 'image'` items go to the image grid and `kind: 'file'` items to file chips; pass both in one `attachments` array.
+- Each file renders as a `TxAttachmentChip`; the tray forwards `removable`, `removeLabel`, `cancelLabel`, and `sizeFormatter` to it.
+- An `uploading` attachment always has a cancel button: images draw a progress ring, file chips show a percentage and a thin progress bar.
+- An image's remove or cancel button sits inside the thumbnail's top-right corner; it appears on hover or keyboard focus and stays visible on touch screens.
+- Clicking an image opens it full-window in [ImagePreview](/en/image-preview) without emitting `open`, growing it out of the thumbnail and shrinking it back on closing; the wheel, a trackpad, or two fingers zoom, a drag pans a zoomed image, a sideways swipe or ← / → turns the page at fit, and a drag up or down closes it. At either end the page button is `aria-disabled`, so focus never drops to `body`.
+- Until an image arrives, the preview holds its place, shaped by the attachment's `width` / `height` when given and otherwise like the last image looked at, and shows the loading effect there once 150 ms have passed (`sweep-gradient` by default, set by the preview's `loadingEffect`, passed through `previewProps`).
+- An image that fails to load shows a placeholder icon in the thumbnail and a placeholder with `failedText` in the preview; the two share the record of failures, so the same URL is not retried, and a new `url` loads again.
+
+## Technologies
+
+- Thumbnails pin their own `img` margin and size, so an article's typography cannot shift them; the preview is mounted on `<body>`, outside the article's styles.
+- The preview is `TxImagePreview`, the same component `TxImageGallery` opens. It is loaded the first time it is about to be needed: pointing at the tray or moving focus into it starts the load, and an image pressed before it arrives opens once it does. The on-demand style plugin brings its styles with it; when importing styles by hand, also import `style.css` from `image-preview`, `base-surface`, `flow-light`, and `glass-surface`.
+- Source: `packages/tuffex/packages/components/src/attachment-tray/`.
+
+<TuffDocSourceLink />

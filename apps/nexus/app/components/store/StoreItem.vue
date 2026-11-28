@@ -116,7 +116,7 @@ function viewDetails(event: MouseEvent | KeyboardEvent) {
             size="sm"
           />
 
-          <span class="StoreItem-Stat" :title="t('dashboard.sections.plugins.stats.installs', { count: formatInstalls(plugin.installs) })">
+          <span class="StoreItem-Stat" :title="t('store.stats.installs', { count: formatInstalls(plugin.installs) })">
             <span class="i-carbon-download" aria-hidden="true" />
             <span>{{ formatInstalls(plugin.installs) }}</span>
           </span>

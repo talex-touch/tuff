@@ -1,0 +1,119 @@
+---
+title: Showcase
+description: A release page telling one update through a motion headline, carousel, and metrics.
+category: TemplateContent
+status: beta
+since: 0.9.1
+tags: [template, marketing, motion, carousel, landing]
+syncStatus: reviewed
+verified: false
+---
+
+## Usage
+
+### What's new
+:::TuffDemoWrapper{demo="TemplateShowcaseDemo" code-lang="vue" description="Plays once as it scrolls into view; the deck turns every 4 seconds until you touch it. Replay tour runs it again."}
+---
+code: |
+  <script setup lang="ts">
+  import { computed, ref, watch } from 'vue'
+  import TemplateFrame from './TemplateFrame.vue'
+
+  const headlineKey = ref(0) // each bump plays the headline's line reveal once
+  const current = ref(0)
+  const autoplay = ref(false) // on at enter; off at a press, a key, or focus in the deck
+  const deckHover = ref(false)
+  const hidden = ref(false) // off screen or hidden tab: IntersectionObserver + visibilitychange
+  const turning = computed(() => autoplay.value && !deckHover.value && !logOpen.value && !hidden.value)
+
+  // Every hold clears the timer; a release arms a full turn again
+  let slideTimer: ReturnType<typeof setTimeout> | undefined
+  function scheduleSlide() {
+    clearTimeout(slideTimer)
+    if (!turning.value)
+      return
+    slideTimer = setTimeout(() => {
+      current.value = (current.value + 1) % FEATURES.length
+      scheduleSlide()
+    }, 4000)
+  }
+  watch(turning, scheduleSlide)
+
+  function onEnter() {
+    if (prefersReducedMotion())
+      return settle() // the final frame, and no timer
+    headlineKey.value++
+    METRIC_IDS.forEach((id, i) => rollMetric(id, 600 + i * 160)) // from 2.5's figures to 2.6's
+    autoplay.value = true
+  }
+  </script>
+
+  <template>
+    <TemplateFrame title="Showcase" :height="680" @enter="onEnter">
+      <template #default="{ width, height }">
+        <!-- Wide: is-split puts the headline beside the deck when that leaves the deck more room;
+             --sc-deck-zoom scales the card band into the room it gets (1–2×) -->
+        <div class="sc" v-bind="stageAttrs(width, height)" data-theme="dark" @pointerdown.capture="onReaderInput" @keydown.capture="onReaderInput">
+          <div class="sc-hero">
+            <TxFlowLight variant="corners" />
+            <TxMotionText
+              ref="headlineRef" tag="h2" variant="text-reveal" trigger="manual"
+              :text="copy.headline" :replay-key="headlineKey"
+              @animation-complete="headlineRef?.reset()"
+            />
+            <TxMotionButton variant="slide-arrow" active-icon="arrow-right" :label="copy.openLog" @click="openLog" />
+            <TxMotionButton variant="rotate" icon="refresh" :label="copy.replay" @click="resetDemo" />
+          </div>
+
+          <TxPrismGlow :active="entered && !hidden && !logOpen" placement="top" :collapse-on-grow="false">
+            <TxCarousel3D
+              v-model="current" variant="card-carousel" :items="cards"
+              :size="width >= 960 ? 'lg' : 'md'" loop :controls="false" @change="onDeckChange"
+            >
+              <template #item="{ item, index }">
+                <span class="sc-card" :style="{ background: ART[index] }">{{ item.title }}</span>
+              </template>
+            </TxCarousel3D>
+          </TxPrismGlow>
+
+          <TxMotionMetric
+            v-for="card in metricCards" :key="card.id"
+            variant="mono-users" size="sm" :data="card.data" :format-value="FORMAT[card.id]"
+          />
+        </div>
+      </template>
+    </TemplateFrame>
+  </template>
+---
+:::
+
+## Overview
+
+The What's new page of a made-up release, Tuff 2.6: a motion headline, a 3D deck of six feature cards, and three metrics. Every figure is sample data, and the page sells nothing: no price, checkout, or download.
+
+- The first time it scrolls into view it plays once: the headline reveals line by line, the subtitle and buttons fade in, the three metrics roll from 2.5's figures to 2.6's, and the deck turns every 4 seconds. Reduced motion shows the final frame and starts no timer.
+- The deck holds while the pointer is on it and restarts a full 4 seconds when it leaves. A press or a key anywhere in the page, or focus moving into the deck, stops the tour; the button at the deck's top right starts it again. It also holds off screen, in a hidden tab, and while the changelog is open, and the prism light unmounts with it.
+- Dragging, ← / →, Home / End, and the dots all come from TxCarousel3D; the card art is gradients and SVG line work generated in code, with no image request.
+- Nothing is announced when the deck turns by itself: TxCarousel3D's caption is always `aria-live`, so the template hides it from screen readers and announces through its own line, only when the reader changes cards.
+- The deltas and percentages on the metric cards are TxMotionMetric's own arithmetic on `previous`; they stay hidden while a figure rolls and appear when it lands. Each card is tagged Sample · vs 2.5.
+- View changelog opens a sheet inside the stage (a bottom sheet when narrow); Escape, the scrim, or the close button dismisses it and returns focus to the button, and in full screen Escape closes only the sheet. Replay tour plays everything again from the start.
+- The page is dark in both docs themes. At medium widths the headline sits above the deck with the buttons on its right; narrow stacks everything. Wide (≥ 960px, as in full screen) keeps the headline above the deck on a tall stage and moves it beside the deck on a short one, whichever leaves the deck more room, and the cards grow into that room, up to twice their largest size.
+
+## Customization
+
+- For a real release, the features, metrics, and changelog are plain constants (`FEATURES`, `METRICS`, `LOG`); in both releases the `parts` must agree with the total: timings average, counts add up.
+- `artOf()` encodes each card's SVG line work as a data URI and layers it with the gradient in one `background`; for images from the repo, give each item a `src` and drop the `#item` slot.
+- TxMotionMetric formats the figure, the parts, and the delta through one `format-value` callback, and only the delta call comes without a `unit`; the template uses that to add a sign and the unit. The percentage in parentheses is the component's own.
+- TxCarousel3D has no autoplay: the template moves `v-model` on a timer. The component emits `change` only when the reader changes cards, which is where the screen reader line hooks in.
+- TxCarousel3D's largest `size` is `lg`. Past it, the template scales the card band with CSS `zoom` (`--sc-deck-zoom`), worked out from the stage's `height` and the measured heights of the headline and the metrics; the caption and dots keep their size.
+- A `trigger="manual"` headline reveal stays requested after it plays and replays each time it scrolls back into view; the template calls `reset()` on `animation-complete`.
+- TxPrismGlow is a CSS animation that does not stop off screen by itself: the template unmounts the light through `:active` off screen, in a hidden tab, and while the changelog is open. Full screen makes the stage taller, so `collapse-on-grow` is off.
+
+## Related components
+
+| Region | Components | Role |
+|---|---|---|
+| Hero | [TxMotionText](/en/motion-text), [TxFlowLight](/en/flow-light), [TxMotionButton](/en/motion-button) | Line-reveal headline, corner light, and two actions |
+| Feature deck | [TxCarousel3D](/en/carousel-3d), [TxPrismGlow](/en/prism-glow) | Six feature cards under a prism light |
+| Metrics | [TxMotionMetric](/en/motion-metric) | Three sample figures rolling from 2.5 to 2.6 |
+| Changelog | Hand-built sheet, [TxFlowLight](/en/flow-light) | The in-stage sheet and its rim light |

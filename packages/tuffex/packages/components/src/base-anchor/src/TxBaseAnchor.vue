@@ -6,7 +6,7 @@ import type { TxCardProps } from '../../card/src/types'
 import type { LiquidMetrics } from './base-anchor-liquid'
 import type { BaseAnchorClassValue, BaseAnchorProps, BaseAnchorVirtualReference } from './types'
 import { arrow, autoUpdate, flip, offset as offsetMw, shift, size, useFloating } from '@floating-ui/vue'
-import { computed, getCurrentInstance, nextTick, onBeforeUnmount, onMounted, ref, useAttrs, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, useAttrs, useId, watch } from 'vue'
 import { useAnchorDelayService } from '../../../../utils/anchor-delay'
 import { hasWindow } from '../../../../utils/env'
 import { hoverBridgeAt } from '../../../../utils/hover-intent'
@@ -115,7 +115,7 @@ let liquidSignature = ''
 let motionQuery: MediaQueryList | null = null
 let reducedMotion = false
 
-const uid = getCurrentInstance()?.uid ?? 0
+const uid = useId()
 const liquidShapesId = `tx-ba-liquid-shapes-${uid}`
 const liquidGooId = `tx-ba-liquid-goo-${uid}`
 const liquidOutlineId = `tx-ba-liquid-outline-${uid}`

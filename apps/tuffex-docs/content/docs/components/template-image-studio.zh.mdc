@@ -1,0 +1,119 @@
+---
+title: ImageStudio 图像工作室
+description: 带风格参数、生成占位与大图预览的图像生成工作室
+category: TemplateAi
+status: beta
+since: 0.9.1
+tags: [template, ai, image, generation, gallery]
+syncStatus: reviewed
+verified: false
+---
+
+## 用法
+
+### 图像生成
+:::TuffDemoWrapper{demo="TemplateImageStudioDemo" code-lang="vue" description="进入视口后演示一次：选好极光风格与 16:9，写下提示词并生成四张；点击或按键即可接手。"}
+---
+code: |
+  <script setup lang="ts">
+  import type { ImageGenerationCycleEvent, ImageGenerationHandle } from '@talex-touch/tuffex/image-generation'
+  import { nextTick, reactive, ref } from 'vue'
+  import TemplateFrame from './TemplateFrame.vue'
+
+  const form = reactive({ style: 'aurora', ratio: '16:9', count: 4, seed: 7310, guidance: 7, steps: 30 })
+  const draft = ref('')
+  const handles = new Map<string, ImageGenerationHandle>()
+
+  // 不调用模型：paint() 用提示词与参数画出一张 SVG，返回它的地址
+  function generate() {
+    const set = createSet(draft.value, form) // 每张图从 queued 开始
+    set.tiles.forEach((tile, i) => cue(450 + i * 320, () => reveal(tile)))
+  }
+
+  // 暂停中的 TxImageGeneration 会忽略触发：先让 paused 变成 false，渲染后再触发
+  async function reveal(tile: Tile) {
+    tile.status = 'revealing'
+    await nextTick()
+    handles.get(tile.id)?.triggerReveal({ hold: 'manual' })
+  }
+
+  // 揭开到当前这张图即完成，之后特效暂停、改为显示原图
+  function onCycle(tile: Tile, event: ImageGenerationCycleEvent) {
+    if (event.phase === 'visible' && event.src === tile.src)
+      settle(tile)
+  }
+  </script>
+
+  <template>
+    <TemplateFrame title="ImageStudio" :height="600" @enter="play">
+      <aside class="img-studio__params">
+        <TxFlatSelect v-model="form.style">…</TxFlatSelect>
+        <TxFlatRadio v-model="form.ratio">…</TxFlatRadio>
+        <TxSegmentedSlider v-model="form.count" :segments="counts" :show-labels="false" />
+        <TxNumberInput v-model="form.seed" :min="0" :max="99999" :controls="false" />
+        <TxCollapse>
+          <TxCollapseItem name="advanced" title="高级">
+            <TxScrubField v-model="form.guidance" label="引导" :min="1" :max="12" />
+            <TxScrubField v-model="form.steps" label="步数" :min="10" :max="50" :step="5" />
+          </TxCollapseItem>
+        </TxCollapse>
+      </aside>
+
+      <section class="img-studio__main">
+        <TxPromptBar v-model="draft" :clear-on-send="false" send-label="生成" :submitting="generating" @send="generate" />
+        <TxSuggestionChips :suggestions="ideas" @select="useIdea" />
+        <div v-for="tile in active.tiles" :key="tile.id" class="img-studio-tile" role="listitem">
+          <TxImageGeneration
+            :ref="el => setHandle(tile.id, el)"
+            :preset="EFFECT[active.params.style]"
+            :images="tile.src"
+            :paused="tile.status === 'done' || (tile.status === 'queued' && !onScreen)"
+            @cycle="event => onCycle(tile, event)"
+          />
+          <img v-if="tile.shownSrc" :src="tile.shownSrc" :alt="altOf(tile)">
+        </div>
+      </section>
+
+      <!-- 宽屏（≥ 960px）才显示历史 -->
+      <aside v-if="mode === 'wide'" class="img-studio__history">…</aside>
+
+      <!-- 大图预览：「放大」设好 index 再打开 -->
+      <TxImagePreview v-model:open="viewerOpen" v-model:index="viewerIndex" :images="finished" />
+    </TemplateFrame>
+  </template>
+---
+:::
+
+## 概述
+
+为 Tuff 主题与插件生成素材的图像工作室，仿 Midjourney / Krea：左侧是参数，中间是提示词与生成网格，宽屏时右侧是历史。不调用模型：每张图都是这个文件根据提示词、风格、比例、种子、引导与步数画出的 SVG，同样的输入总得到同一张图，也不发出任何网络请求；标题栏与通知都注明是示例数据。
+
+- 首次进入视口时播放一次：依次选中「极光」、16:9 与种子 7310，逐字写下提示词并按下「生成」；四张图每隔 0.32 秒依次开始揭开，每张约 3 秒，全部完成后提示「已生成 4 张 · 示例」。整段约 7 秒。
+- 舞台的时钟在模板离开视口或页面转入后台时停下，回来后从停下的地方继续；脉冲动画也一并暂停。
+- 模板内的第一次指针、按键或聚焦即接手：剧本立刻停止，参数与提示词直接填成剧本写好的样子，但不会替你按下生成；已经开始的生成照常完成。减少动态效果时直接显示生成好的四张图，不挂载生成特效，只有通知按自己的计时关闭。
+- 揭开特效随风格而定：玻璃与水彩是 `sweep-gradient`，极光与霓虹是 `pixels-mechanic`，像素是 `pixels-organic`。
+- 完成的图片在悬停或聚焦时显示四个操作：放大、变体、复制提示词，以及设为壁纸（图标类提示词则是设为插件图标）。「变体」先把原图打散成色块，再溶出新的一张；设为壁纸或图标只在图上加一个标记，通知里可以撤销。
+- 在工作室内任意位置按 ⌘/Ctrl+Enter 即生成；示例提示词会连同风格与比例一起填入。通知约 3.6 秒后关闭（可撤销的 4.8 秒），指针或焦点停在上面时保持，离开约 2 秒后关闭。
+- 宽屏（≥ 960px）增加历史栏，最多保留 6 组，点任意一组即恢复它的参数、提示词与图片；640–959px 保留参数栏与网格；640px 以下参数收进标题栏的按钮，从左侧滑出，按 Esc 或点遮罩关闭，焦点回到按钮。
+- 网格按图片比例挑出让每张最大的列数（640px 以下最多 2 列，其余最多 4 列）；单张窄于 112px 时改为可滚动的网格。
+
+## 自定义
+
+- 接真实模型时替换 `paint()`，让它返回生成好的图片地址即可。`TxImageGeneration` 的 `images` 换成新地址后由 `triggerReveal()` 揭开；以 `@cycle` 报告 `phase: 'visible'` 且 `src` 与这张图一致作为完成。
+- 暂停中的 `TxImageGeneration` 会忽略 `triggerReveal()` 与 `triggerRegenerate()`，而离开视口时排队的图片是暂停的；所以先把状态改为 revealing，等下一次渲染让 `paused` 变成 false 再触发。揭开途中暂停会丢掉这一次的 `visible`，因此只有完成的图片才暂停。
+- `TxImageGeneration` 只绘制网格与窗口内可见的部分。看门狗在开始揭开 8 秒后检查：仍在视野内却没完成的图片直接显示原图并停用特效，滚出网格或窗口的再等一轮。
+- 「变体」对正在显示的特效调用 `triggerRegenerate({ autoReveal: false })`，打散 1.4 秒后再 `triggerReveal()`；从历史恢复的图片没有挂载特效，会重新挂载并从头揭开。
+- 「放大」用 `TxImagePreview` 打开当前这组完成的图片，可缩放、拖动并滑动翻页；图片带上 `width` / `height`，加载前的占位就是它的比例。预览关闭时把焦点还给打开时持有焦点的元素，而 WebKit 点击按钮并不聚焦它，所以打开前先聚焦「放大」按钮。
+- 工作室用 `:clear-on-send="false"` 让提示词在 `send` 之后保留，方便在上一组的基础上修改。
+- 640px 以下的参数面板是模板自己的侧边面板，而不是 `TxDrawer`：后者会接管整个页面的 Tab 与 Esc。面板打开时主区域 `inert`；风格菜单展开时第一次 Esc 只关菜单，第二次关面板，第三次才退出全屏。
+- 生成按钮在生成期间、图片的操作在变体期间会禁用，通知里的按钮随通知隐藏；模板事先把焦点移到图片或工作室本身，否则焦点落到 `<body>`，全屏时 Esc 就不再退出。
+
+## 相关组件
+
+| 区域 | 组件 | 作用 |
+|---|---|---|
+| 参数 | [TxFlatSelect](/zh/flat-select)、[TxFlatRadio](/zh/flat-radio)、[TxSegmentedSlider](/zh/segmented-slider)、[TxNumberInput](/zh/number-input)、[TxCollapse](/zh/collapse)、[TxScrubField](/zh/scrub-field) | 风格、比例、数量、种子，以及折叠起来的引导与步数 |
+| 提示词 | [TxPromptBar](/zh/prompt-bar)、[TxSuggestionChips](/zh/suggestion-chips) | 写下提示词并生成；示例提示词连同风格与比例一起填入 |
+| 生成网格 | [TxImageGeneration](/zh/image-generation)、[TxIconButton](/zh/button) | 生成与变体的揭开特效，以及每张图的操作 |
+| 大图预览 | [TxImagePreview](/zh/image-preview) | 全屏查看，缩放、拖动，←/→ 或滑动翻页 |
+| 顶栏与提示 | [TxButton](/zh/button)、[TxIconButton](/zh/button)、[TxToastPanel](/zh/toast-panel) | 参数按钮（640px 以下）、重新演示，以及生成、复制与设为壁纸的通知 |

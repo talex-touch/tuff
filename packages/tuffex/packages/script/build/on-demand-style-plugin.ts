@@ -448,7 +448,12 @@ export function tuffexOnDemandStylePlugin(options: TuffexOnDemandStylePluginOpti
           existingStyles,
           style => relativeSpecifier(dirname(file), `${options.componentDistRoot}/${style}/style.css`),
         )
-        return styleImports ? { code: `${styleImports}\n${code}`, map: null } : null
+        // The package declares `"sideEffects": ["**/*.css", "**/*.scss"]`, so Rolldown (Vite 8)
+        // marks `dist/es/<component>/index.js` as side-effect-free before `transform` runs and
+        // bypasses pure re-export barrels (`export { TxCheckbox }` from `./src/...`), silently
+        // dropping the injected `import './style.css'`. Marking `moduleSideEffects: true` keeps
+        // the barrel's injected stylesheet edges intact.
+        return styleImports ? { code: `${styleImports}\n${code}`, map: null, moduleSideEffects: true } : null
       }
       const closure = closureOf([...componentNames])
       const styleImports = createStyleImports(closure, existingStyles)
@@ -465,7 +470,11 @@ export function tuffexOnDemandStylePlugin(options: TuffexOnDemandStylePluginOpti
       const rewritten = withStyleImports(code, dynamicImports, name => closureOf([name])
         .filter(style => !existingStyles.has(style))
         .map(style => `@talex-touch/tuffex/${style}/style.css`))
-      return { code: `${styleImports}\n${rewritten}`, map: null }
+      return {
+        code: `${styleImports}\n${rewritten}`,
+        map: null,
+        ...(styleImports ? { moduleSideEffects: true } : {}),
+      }
     },
   }
 }

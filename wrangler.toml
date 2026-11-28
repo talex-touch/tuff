@@ -48,7 +48,8 @@ EXCHANGE_RATE_TIMEOUT_MS = "10000"
 EXCHANGE_RATE_HISTORY_RETENTION_DAYS = "0"
 EXCHANGE_RATE_STORE_RATE_ROWS = "true"
 # `Server-Timing: d1;desc="N round trips";dur=…` on responses (server/plugins/d1-server-timing.ts).
-NEXUS_SERVER_TIMING = "1"
+# Off in production to avoid leaking internal D1 query telemetry; kept on in preview.
+NEXUS_SERVER_TIMING = "0"
 # Source map upload (NUXT_ENABLE_SENTRY_SOURCEMAPS = "true", nuxt.config.ts `sentry`) is off: with it
 # the production build of 63e424b ran past Pages' build time limit and was terminated after 36 minutes
 # (2026-10-09), where the build before it took 25.6 minutes without maps. Turn it back on only with the

@@ -43,9 +43,12 @@ export const pwa: ModuleOptions = {
       '**/dump.*.sql',
       '**/*.wasm',
       '**/sqlite3*',
+      '**/tuffex/**',
     ],
     maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
-    navigateFallbackDenylist: [/.*/],
+    // Explicitly exclude the standalone `/tuffex` SSG mount alongside the catch-all denylist
+    // so Nexus's root service worker can never hijack or intercept `/tuffex/*` navigations.
+    navigateFallbackDenylist: [/^\/tuffex(\/|$)/, /.*/],
     cleanupOutdatedCaches: true,
   },
   registerWebManifestInRouteRules: true,

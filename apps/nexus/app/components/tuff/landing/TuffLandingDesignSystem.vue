@@ -10,10 +10,10 @@ import TuffLandingSection from './TuffLandingSection.vue'
 // packages/tuffex/packages/components/style/variables.scss; the counts are
 // floors (186 component directories, 224 zh docs pages on 2026-10-07).
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 const INSTALL_COMMAND = 'npm i @talex-touch/tuffex'
-const DOCS_HREF = '/docs/dev/components/foundations'
+const docsHref = computed(() => `/tuffex/${locale.value === 'zh' ? 'zh' : 'en'}/foundations`)
 
 const copy = computed(() => ({
   eyebrow: t('landing.os.designSystem.eyebrow'),
@@ -438,7 +438,7 @@ onBeforeUnmount(() => {
       </div>
 
       <footer class="DesignSpec-Foot">
-        <NuxtLink class="DesignSpec-Cta" :to="DOCS_HREF">
+        <NuxtLink external class="DesignSpec-Cta" :to="docsHref">
           {{ copy.cta }}
           <span class="i-carbon-arrow-right" aria-hidden="true" />
         </NuxtLink>

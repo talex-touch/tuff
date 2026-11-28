@@ -1,6 +1,6 @@
 # TuffEx Docs Sync
 
-> A change under `packages/tuffex/packages/components/src/` is not finished when the tests pass. Every component has a Nexus docs page that **displays** it, the pages are hand-written prose, nothing regenerates them, and no gate reads them. These rules bind any prop/event/slot/DOM/class/ARIA/visual change to the docs that describe it.
+> A change under `packages/tuffex/packages/components/src/` is not finished when the tests pass. Every component has a standalone TuffEx docs page under `apps/tuffex-docs/` (published at `/tuffex/*`) that **displays** it, the pages are hand-written prose, nothing regenerates them, and no gate reads them. These rules bind any prop/event/slot/DOM/class/ARIA/visual change to the docs that describe it.
 
 ---
 
@@ -18,14 +18,14 @@ Landed instance: `loading` was added to `TxSwitch` (2026-08-30) and `TxBlockSwit
 COMP=switch   # directory name under packages/tuffex/packages/components/src/
 
 # 1. The component's own pages (zh and en are separate files)
-ls apps/nexus/content/docs/dev/components/$COMP.{zh,en}.mdc
+ls apps/tuffex-docs/content/docs/components/$COMP.{zh,en}.mdc
 
 # 2. Wrappers — every tuffex component that renders it. Search by import path,
 #    not tag name: tags get re-aliased. THIS is the step that gets skipped.
 rg -l "\.\./\.\./$COMP'" packages/tuffex/packages/components/src --glob '*.vue'
 
 # 3. Any docs page that names the component
-rg -l "TuffSwitch|TxSwitch" apps/nexus/content/docs --glob '*.mdc'
+rg -l "TuffSwitch|TxSwitch" apps/tuffex-docs/content/docs --glob '*.mdc'
 ```
 
 Every wrapper from (2) owns its own `.zh.mdc` / `.en.mdc` and must be checked. `TxBlockSwitch` wrapping `TuffSwitch` is the canonical case. Hits from (3) are usually filler inside another component's demo — confirm they make no behavioural claim, then leave them.
@@ -70,9 +70,9 @@ If every line you added landed at the bottom of its list, you never considered p
 
 A table row is not a display. A user-visible change ships:
 
-1. `apps/nexus/app/components/content/demos/<Comp><Variant>Demo.vue` — follow the neighbours: `useI18n()` plus a `labels` / `copy` computed with `zh` and `en` branches, `<style scoped>` last. Clear timers and listeners in `onBeforeUnmount`; these demos live on a long-lived docs page.
-2. One alphabetical line in `apps/nexus/app/components/content/demo-registry.ts`.
-3. A `:::TuffDemoWrapper{demo="<Name>Demo" code-lang="vue"}` block in **both** `.zh.mdc` and `.en.mdc`.
+1. `apps/tuffex-docs/app/components/content/demos/<Comp><Variant>Demo.vue` — follow the neighbours: `useI18n()` plus a `labels` / `copy` computed with `zh` and `en` branches, `<style scoped>` last. Clear timers and listeners in `onBeforeUnmount`; these demos live on a long-lived docs page.
+2. One alphabetical line in `apps/tuffex-docs/app/components/content/demo-registry.ts`.
+3. A `:::TuffDemoWrapper{demo="<Name>Demo" code-lang="vue"}` block in **both** `.zh.mdc` and `.en.mdc` under `apps/tuffex-docs/content/docs/components/`.
 
 The `code:` block inside the mdc is an idealized snippet, not the literal demo source — existing demos carry i18n scaffolding the snippet omits. Keep it readable, keep it truthful about props and behaviour.
 
@@ -89,14 +89,14 @@ The `code:` block inside the mdc is an idealized snippet, not the literal demo s
 
 ## Gallery specimens
 
-`apps/nexus/app/components/docs/DocsComponentsGallery.vue` renders one live cell per component on each suite overview page. What the cells rely on:
+`apps/tuffex-docs/app/components/docs/DocsComponentsGallery.vue` renders one live cell per component on each suite overview page. What the cells rely on:
 
 - **Every stage's `<ClientOnly>` is `DocsGallerySpecimen.vue`**, bound to that name by a local import at the top of the gallery's `<script setup>`. It renders Nuxt's `ClientOnly`, keys the slot on a counter, and adds the hover/focus reset button (`.docs-gallery__replay`, label `docs.demo.reset`) that bumps it. A new cell written with a plain `<ClientOnly>` directly inside `.docs-gallery__stage` gets the button; importing Nuxt's `ClientOnly` into the gallery would silently take it off every cell.
 - **Reset remounts the slot and nothing else.** CSS animations and `appear` transitions on the remounted nodes replay. The gallery's own refs (`switchOn`, an open flag) and any timer started in the gallery's `onMounted` survive. A specimen driven by state — a loop, an auto-advance, a scripted scroll — lives in its own component under `docs/gallery/` and starts that in its own `onMounted`, so a reset restarts it. `useGalleryLoop(step, intervalMs, firstDelayMs)` in `gallery/use-gallery-loop.ts` does this and skips readers who ask for reduced motion.
 - **Text behind `aria-live` does not loop.** `TxTextTransformer` announces every change; its cell advances once on mount and then waits for the Next button.
 - **Teleported content cannot read `--docs-*`.** Those tokens live on `.docs-root`; a TxModal or TxFlipOverlay body renders under `<body>`, where `var(--docs-muted)` is invalid and the property falls back to inheritance. Use `--tx-*` inside anything that teleports.
 - **The docs article is a containing block for `position: fixed`.** `.docs-prose` carries `content-visibility: auto` (`pages/docs/[...slug].vue`), which implies layout containment. A fixed overlay rendered in place is laid out against the whole article instead of the viewport — TxFlipOverlay's card centred on the article and focusing it scrolled the page 870px, until it teleported (2026-09-23). An overlay shown in docs has to teleport.
-- **Icon classes named inside tuffex are invisible to Nexus in dev.** Nexus resolves tuffex from `dist/*.js`, which its UnoCSS pipeline does not scan, and installs only `carbon`, `cib`, `logos` and `twemoji` — `ri` is kept out on purpose (`build/check-worker-bundle.test.ts`, `build/check-icon-collections.mjs`). A component that draws icons by class exports them from a plain `.ts` module, and `apps/nexus/uno.config.ts` spreads that into `safelist` with the module listed in `configDeps`: `markdown-editor/src/toolbar-icons.ts` → `MARKDOWN_EDITOR_ICON_CLASSES` is the worked case. A class Uno cannot generate renders as a `currentColor` square — the preflight sizes every `i-*` box and TxIcon fills it, waiting for a mask that never arrives.
+- **Icon classes named inside tuffex are invisible to the docs site in dev.** `apps/tuffex-docs` (and `apps/nexus`) resolve tuffex from `dist/*.js`, which their UnoCSS pipelines do not scan, and install only `carbon` and `logos` — `ri` is kept out on purpose (`apps/nexus/build/check-worker-bundle.test.ts`, `apps/nexus/build/check-icon-collections.mjs`). A component that draws icons by class exports them from a plain `.ts` module, and `apps/tuffex-docs/uno.config.ts` (plus `apps/nexus/uno.config.ts` when used in Nexus UI) spreads that into `safelist` with the module listed in `configDeps`: `markdown-editor/src/toolbar-icons.ts` → `MARKDOWN_EDITOR_ICON_CLASSES` is the worked case. A class Uno cannot generate renders as a `currentColor` square — the preflight sizes every `i-*` box and TxIcon fills it, waiting for a mask that never arrives.
 - **A test that measures one token's CSS passes `safelist: false`.** `uno.generate(token)` appends every safelisted rule by default, so a length check reads non-zero as soon as the config has a safelist.
 
 ---
@@ -104,11 +104,16 @@ The `code:` block inside the mdc is an idealized snippet, not the literal demo s
 ## Gates and their traps
 
 ```bash
-# apps/nexus — these can actually fail
-node build/check-demo-registry-orphans.mjs
-node build/check-mdc-fences.mjs
-node build/check-doc-translation-parity.mjs
-node node_modules/vitest/vitest.mjs run test/docs   # content guards; parses every docs page (~10 s)
+# apps/tuffex-docs — standalone component docs gates (pure VitePress-style .mdc -> Vue SFC SSG)
+node apps/tuffex-docs/scripts/checks/check-demo-registry.mjs
+node apps/tuffex-docs/scripts/checks/check-mdc-fences.mjs
+node apps/tuffex-docs/scripts/checks/check-doc-parity.mjs
+pnpm -C apps/tuffex-docs exec vitest run          # compiles & validates all .mdc -> Vue SFCs
+pnpm -C apps/tuffex-docs run generate             # builds static SSG + stages .dist-cf/
+
+# apps/nexus — remaining product/API/guide docs gates
+node apps/nexus/build/check-mdc-fences.mjs
+node apps/nexus/build/check-doc-translation-parity.mjs
 ```
 
 - `.bin` shims in this checkout are stale. Call the real entries and resolve the versioned directory with `ls -d`, never hardcoded:

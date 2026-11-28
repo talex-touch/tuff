@@ -4,8 +4,10 @@ import { describe, expect, it } from 'vitest'
 import en from '../../i18n/locales/en'
 import dashEn from '../../i18n/locales/route/en/dashboard'
 import landEn from '../../i18n/locales/route/en/landing'
+import storeEn from '../../i18n/locales/route/en/store'
 import zh from '../../i18n/locales/zh'
 import dashZh from '../../i18n/locales/route/zh/dashboard'
+import storeZh from '../../i18n/locales/route/zh/store'
 
 /**
  * No `t()` call may fall back to a Chinese literal (#684).
@@ -41,8 +43,8 @@ function flatten(tree: unknown, prefix = '', found = new Set<string>()): Set<str
   return found
 }
 
-const enKeys = new Set([...flatten(en), ...flatten({ dashboard: dashEn }), ...flatten(landEn)])
-const zhKeys = new Set([...flatten(zh), ...flatten({ dashboard: dashZh })])
+const enKeys = new Set([...flatten(en), ...flatten({ dashboard: dashEn }), ...flatten({ store: storeEn }), ...flatten(landEn)])
+const zhKeys = new Set([...flatten(zh), ...flatten({ dashboard: dashZh }), ...flatten({ store: storeZh })])
 
 function sourceFiles(dir: string, found: string[] = []): string[] {
   for (const entry of readdirSync(dir)) {

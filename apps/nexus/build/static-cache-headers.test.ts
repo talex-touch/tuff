@@ -116,7 +116,7 @@ describe('static cache headers guard', () => {
     expect(result.verified).toBe(1)
     expect(result.findings).toContain('/zh/docs/*: no _headers block')
     expect(result.findings).toContain('/_i18n/*: no _headers block')
-    expect(result.findings).toContain('/api/docs/component-sync: no _headers block')
+    expect(result.findings).toContain('/api/docs/navigation/*: no _headers block')
   })
 
   it('rejects a block that lost its edge cache window or JSON content type', () => {
@@ -178,6 +178,12 @@ describe('_headers file limits', () => {
 describe('early hints guard', () => {
   const docsLink = '</_nuxt/e.js>; rel=modulepreload; crossorigin, </_nuxt/docs.css>; rel=preload; as=style; crossorigin'
   const docsBlocks = [
+    '/en/docs',
+    `  cache-control: ${DOCS_STATIC_CACHE_CONTROL}`,
+    `  Link: ${docsLink}`,
+    '/zh/docs',
+    `  cache-control: ${DOCS_STATIC_CACHE_CONTROL}`,
+    `  Link: ${docsLink}`,
     '/en/docs/*',
     `  cache-control: ${DOCS_STATIC_CACHE_CONTROL}`,
     `  Link: ${docsLink}`,
@@ -197,7 +203,7 @@ describe('early hints guard', () => {
     const assets = new Set(['/_nuxt/e.js', '/_nuxt/entry.css', '/_nuxt/docs.css'])
     const result = checkEarlyHints(headers, target => assets.has(target))
     expect(result.findings).toEqual([])
-    expect(result.verified).toBe(3)
+    expect(result.verified).toBe(5)
     // The docs blocks keep their cache window next to the hint.
     expect(checkStaticCacheHeaders(headers).findings).not.toContain(
       `/en/docs/*: cache-control is "", expected "${DOCS_STATIC_CACHE_CONTROL}"`,
@@ -207,10 +213,14 @@ describe('early hints guard', () => {
   it('names missing targets and missing families', () => {
     const assets = new Set(['/_nuxt/e.js', '/_nuxt/entry.css'])
     expect(checkEarlyHints(headers, target => assets.has(target)).findings).toEqual([
+      '/en/docs: Link targets missing from dist: /_nuxt/docs.css',
+      '/zh/docs: Link targets missing from dist: /_nuxt/docs.css',
       '/en/docs/*: Link targets missing from dist: /_nuxt/docs.css',
       '/zh/docs/*: Link targets missing from dist: /_nuxt/docs.css',
     ])
     expect(checkEarlyHints(landingBlocks.join('\n'), () => true).findings).toEqual([
+      '/en/docs: no Link block for early hints',
+      '/zh/docs: no Link block for early hints',
       '/en/docs/*: no Link block for early hints',
       '/zh/docs/*: no Link block for early hints',
     ])

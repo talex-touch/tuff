@@ -3,42 +3,27 @@ import { describe, expect, it } from 'vitest'
 
 const layout = readFileSync(new URL('./docs.vue', import.meta.url), 'utf8')
 
-function extractTopLevelFunction(source: string, name: string) {
-  const marker = `function ${name}(`
-  const start = source.indexOf(marker)
-  expect(start, `${name} should exist`).toBeGreaterThanOrEqual(0)
-
-  const nextFunction = source.indexOf('\nfunction ', start + marker.length)
-  return source.slice(start, nextFunction < 0 ? source.length : nextFunction)
-}
-
 describe('docs layout performance boundaries', () => {
-  it('keeps the decorative TuffEx hero background off the SSR critical path', () => {
-    const scheduleTuffexBackground = extractTopLevelFunction(layout, 'scheduleTuffexBackground')
-
-    expect(layout).toContain('defineAsyncComponent')
-    expect(layout).toContain("import('~/components/docs/TuffexDocsHeroBackground.vue')")
-    expect(layout).toContain('TUFFEX_DOCS_BACKGROUND_IDLE_TIMEOUT_MS = 2200')
-    expect(layout).toContain('TUFFEX_DOCS_BACKGROUND_INTENT_EVENTS')
-    expect(layout).toContain('shouldMountTuffexBackground')
-    expect(layout).toContain('requestIdleCallback')
-    expect(layout).toContain('bindTuffexBackgroundIntentListeners')
-    expect(layout).toContain('handleTuffexBackgroundIntent')
-    expect(layout).toContain('watch(isTuffexDocs')
-    expect(layout).toMatch(/if \(active\) \{[\s\S]*bindTuffexBackgroundIntentListeners\(\)/)
-    expect(layout).toMatch(/clearTuffexBackgroundSchedule\(\)[\s\S]*shouldMountTuffexBackground\.value = false/)
-    expect(scheduleTuffexBackground).not.toContain('setTimeout')
-    expect(scheduleTuffexBackground).toContain('requestIdleCallback')
-    expect(scheduleTuffexBackground).toContain('requestAnimationFrame')
-    expect(layout).toContain('<ClientOnly>')
-    expect(layout).toContain('<TuffexDocsHeroBackground v-if="shouldMountTuffexBackground"')
-    expect(layout).not.toContain("import TuffexDocsHeroBackground from '~/components/docs/TuffexDocsHeroBackground.vue'")
+  it('keeps evicted TuffEx component docs modules out of the Nexus docs layout', () => {
+    expect(layout).not.toContain('TuffexDocsHeroBackground')
+    expect(layout).not.toContain('DocsFrameworkSwitcher')
+    expect(layout).not.toContain('tuffex-component-slug')
   })
 
-  it('uses static edge blur chrome instead of SSR-rendering TuffEx blur components', () => {
+  it('uses pure CSS linear-gradient edge scrims with zero fixed backdrop-filter blur layers', () => {
     expect(layout).not.toContain('@talex-touch/tuffex/gradual-blur')
     expect(layout).not.toContain('<TxGradualBlur')
+    expect(layout).not.toContain('docs-edge-blur__layer')
+    expect(layout).not.toContain('backdrop-filter')
     expect(layout).toContain('class="docs-edge-blur docs-edge-blur--top"')
     expect(layout).toContain('class="docs-edge-blur docs-edge-blur--bottom"')
+    expect(layout).toContain('--docs-edge-bottom-height')
+    expect(layout).toContain('linear-gradient(')
+  })
+
+  it('keeps footer and back-to-top deferred off the initial render path', () => {
+    expect(layout).toContain("defineAsyncComponent(() => import('~/components/TuffFooter.vue'))")
+    expect(layout).toContain("defineAsyncComponent(() => import('~/components/ui/BackToTop.vue'))")
+    expect(layout).toContain('IntersectionObserver')
   })
 })

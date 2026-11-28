@@ -108,11 +108,13 @@ const hotspotCommands = computed<SearchCommandItem[]>(() => [
 const resultCommands = computed<SearchCommandItem[]>(() => {
   const queryKeyword = query.value.trim()
   return results.value.map((result) => {
-    const sourceLabel = result.source === 'docs'
-      ? t('search.category.docs')
-      : result.source === 'page'
-        ? t('search.category.pages')
-        : t('search.category.features')
+    const sourceLabel = result.source === 'tuffex'
+      ? t('search.category.tuffex')
+      : result.source === 'docs'
+        ? t('search.category.docs')
+        : result.source === 'page'
+          ? t('search.category.pages')
+          : t('search.category.features')
     const description = result.description
       ? `${sourceLabel} · ${result.description}`
       : sourceLabel
@@ -146,8 +148,15 @@ function onPaletteModelUpdate(value: boolean) {
 
 function onSelect(item: CommandPaletteItem) {
   const target = (item as SearchCommandItem).to
-  if (target)
-    navigateTo(target)
+  if (!target)
+    return
+  if (target === '/tuffex' || target.startsWith('/tuffex/')) {
+    closeSearch()
+    if (hasWindow())
+      window.location.assign(target)
+    return
+  }
+  navigateTo(target)
 }
 
 function getPanelElement() {

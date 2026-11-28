@@ -1,0 +1,115 @@
+---
+title: "ImageGallery"
+description: "A thumbnail grid with a fullscreen lightbox preview."
+category: Data
+status: beta
+since: 0.3.4
+tags: [image, gallery, preview]
+syncStatus: reviewed
+verified: true
+---
+
+## Usage
+
+### Basic
+Clicking a thumbnail opens it full-window in [ImagePreview](/en/image-preview), where it zooms, pans, and swipes to page; `startIndex` picks the current preview image.
+::::TuffDemoWrapper{demo="ImageGalleryImageGalleryDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  const items = [
+    { id: 'one', url: '/images/one.png', name: 'Workspace overview' },
+    { id: 'two', url: '/images/two.png', name: 'Release graph' },
+  ]
+  </script>
+
+  <template>
+    <TxImageGallery :items="items" :start-index="1" />
+  </template>
+---
+::::
+
+### Track Preview Opens
+
+```vue
+<script setup lang="ts">
+function onOpen({ index, item }: { index: number, item: { id: string } }) {
+  analytics.track('gallery_open', { index, imageId: item.id })
+}
+</script>
+
+<template>
+  <TxImageGallery :items="images" @open="onOpen" @close="onClose" />
+</template>
+```
+
+### Controlled Starting Image
+`startIndex` only selects the preview index; it never opens the lightbox.
+
+```vue
+<template>
+  <TxImageGallery :items="screenshots" :start-index="selectedIndex" />
+</template>
+```
+
+### Best Practices
+
+- Use stable `id` values, not array indexes, for long-lived gallery data.
+- Give informative images a `name` so button labels, alt text, and preview titles mean something.
+- Keep the list modest: every thumbnail renders, with no virtualization.
+- Normalize or proxy untrusted remote image URLs at your application boundary.
+- Don't mutate `items` synchronously in `@open` in a way that invalidates the opened image.
+- On non-English surfaces, override every text prop and both formatters, and pass the preview's `labelFormatter` and `zoomLabel` through `previewProps`: the preview's buttons are icons, and these names are what screen readers announce; `failedText` is visible text.
+
+## API Reference
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `items` | `ImageGalleryItem[]` | required | Images shown as thumbnails and in the fullscreen preview. |
+| `startIndex` | `number` | `0` | Current preview index, clamped to the item range. |
+| `previousLabel` | `string` | `'Previous image'` | Accessible name of the previous button. |
+| `nextLabel` | `string` | `'Next image'` | Accessible name of the next button. |
+| `previousText` / `nextText` | `string` | - | Deprecated and not shown: the preview's page buttons are icons, named by `previousLabel` / `nextLabel`. |
+| `previewTitle` | `string` | `'Preview'` | The preview dialog's accessible name, followed by the current image's `name`. |
+| `closeLabel` | `string` | `'Close'` | Accessible name of the preview's close button. |
+| `zoomInLabel` | `string` | `'Zoom in'` | Accessible name of the preview's zoom-in button. |
+| `zoomOutLabel` | `string` | `'Zoom out'` | Accessible name of the preview's zoom-out button. |
+| `resetLabel` | `string` | `'Fit to screen'` | The first item of the preview's zoom menu, which shows the whole image again. |
+| `failedText` | `string` | `'This image could not be loaded'` | Text in the preview's placeholder for an image that failed to load. |
+| `itemLabelFormatter` | `(index: number) => string` | `` (i) => `Image ${i + 1}` `` | Builds a display name when `item.name` is absent. |
+| `openLabelFormatter` | `(label: string) => string` | `` (label) => `Open ${label} preview` `` | Builds a thumbnail's `aria-label` from its display name. |
+| `previewProps` | `ImageGalleryPreviewProps` | - | The preview's other options, such as `actions`, `indicator`, `bounce`, and the materials; the gallery sets the images, the failures, where they fly from, and the labels above. |
+
+### Events
+
+| Event | Payload | Description |
+|------|---------|-------------|
+| `open` | `{ index: number, item: ImageGalleryItem }` | Fires after a thumbnail opens the fullscreen preview. |
+| `close` | `void` | Fires when the preview closes. |
+| `action` | `ImagePreviewActionEvent` | Fires when an action is chosen in the preview, before it runs; after `preventDefault()` the host runs it. |
+
+### ImageGalleryItem
+
+| Field | Type | Description |
+|------|------|-------------|
+| `id` | `string` | Stable key for the thumbnail. |
+| `url` | `string` | Image URL for the thumbnail and the preview. |
+| `name` | `string` | Optional display name for labels, alt text, and the preview's name. |
+
+## Overview
+
+- Each thumbnail is a native `<button type="button">` whose `aria-label` comes from `openLabelFormatter`; `alt` is `item.name`, and unnamed images deliberately get empty alt text.
+- The preview traps Tab focus and closes on Escape, the close button, the backdrop, dragging the image up or down, or `items` becoming empty, and returns focus to the thumbnail that opened it.
+- Once open, the wheel, a trackpad, or two fingers zoom, and a drag pans a zoomed image; at fit, a sideways swipe or ← / → turns the page. At either end the page button is `aria-disabled` rather than disabled, so focus never drops to `body`.
+- The top bar's image name and position count are an `aria-live` region, so screen readers announce each page.
+- The preview grows out of the clicked thumbnail and shrinks back into it on closing. It opens on the whole image, never cropped, and never blows a small image up past its own pixels; at 640px wide or less, or 480px tall or less, the image fills the screen under floating controls.
+- Until an image loads, its place is held at the shape of the last image looked at (4:3 for the first), and the loading effect appears only after 150 ms (`sweep-gradient` by default, set by the preview's `loadingEffect` through `previewProps`; with reduced motion it holds still). A failed image shows a placeholder in the thumbnail and the preview, the same URL is not retried, and a new `url` loads again.
+
+## Technologies
+
+- The preview is [TxImagePreview](/en/image-preview), teleported to `body`; its page has the gestures, keys, and placeholders in full. `TxAttachmentTray` opens the same preview, so the two behave alike. The preview is loaded the first time it is about to be needed: pointing at the gallery or moving focus into it starts the load, and a thumbnail pressed before it arrives opens once it does. The on-demand style plugin brings the preview's styles with it; when importing styles by hand, also import `style.css` from `image-preview`, `base-surface`, `flow-light`, and `glass-surface`.
+- Source: `packages/tuffex/packages/components/src/image-gallery/`.
+
+<TuffDocSourceLink />

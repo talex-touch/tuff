@@ -56,11 +56,11 @@ const primaryDownloadPlatform = computed(() => primaryDownload.value?.platform ?
 const primaryDownloadPlatformLabel = computed(() => getPlatformLabel(primaryDownloadPlatform.value as any))
 const primaryDownloadIcon = computed(() => {
   if (primaryDownloadPlatform.value === 'darwin')
-    return 'i-carbon-logo-apple'
+    return 'i-carbon-apple'
   if (primaryDownloadPlatform.value === 'win32')
-    return 'i-carbon-logo-windows'
+    return 'i-carbon-grid'
   if (primaryDownloadPlatform.value === 'linux')
-    return 'i-carbon-logo-linux'
+    return 'i-carbon-linux-alt'
   return 'i-carbon-download'
 })
 const platformRequirementLabel = computed(() => {
@@ -176,7 +176,7 @@ function getDownloadLabel(asset: { platform: string, arch: string }) {
   <main v-else class="updates-page" aria-labelledby="updates-page-title">
     <img
       class="updates-page__background"
-      src="/assets/updates/download-bg.png"
+      src="/assets/updates/download-bg.webp"
       alt=""
       aria-hidden="true"
     >
@@ -212,7 +212,7 @@ function getDownloadLabel(asset: { platform: string, arch: string }) {
             class="updates-disabled-download"
             :disabled="true"
           >
-            <span class="i-carbon-incomplete text-lg" aria-hidden="true" />
+            <span class="i-carbon-information text-lg" aria-hidden="true" />
             <span>{{ t('updates.empty') }}</span>
           </button>
 

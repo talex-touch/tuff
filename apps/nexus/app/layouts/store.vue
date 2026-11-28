@@ -9,30 +9,59 @@ useProvideTxIconConfig()
 const { t } = useI18n()
 const shouldMountRay = ref(false)
 let idleId: number | null = null
-let frameId: number | null = null
+let timeoutId: number | null = null
 
-onMounted(() => {
+function clearRaySchedule() {
+  if (idleId !== null && 'cancelIdleCallback' in window) {
+    window.cancelIdleCallback(idleId)
+    idleId = null
+  }
+  if (timeoutId !== null) {
+    window.clearTimeout(timeoutId)
+    timeoutId = null
+  }
+}
+
+function scheduleRayMount() {
+  if (shouldMountRay.value || document.hidden)
+    return
   if (window.matchMedia('(prefers-reduced-motion: reduce)').matches)
     return
 
+  clearRaySchedule()
+
   const mount = () => {
     idleId = null
-    frameId = null
+    timeoutId = null
+    if (document.hidden || window.matchMedia('(prefers-reduced-motion: reduce)').matches)
+      return
     shouldMountRay.value = true
   }
 
   if (typeof window.requestIdleCallback === 'function') {
-    idleId = window.requestIdleCallback(mount, { timeout: 900 })
+    idleId = window.requestIdleCallback(mount, { timeout: 1200 })
     return
   }
-  frameId = window.requestAnimationFrame(mount)
+  timeoutId = window.setTimeout(mount, 240)
+}
+
+function handleVisibilityChange() {
+  if (document.hidden) {
+    clearRaySchedule()
+    return
+  }
+  if (!shouldMountRay.value)
+    scheduleRayMount()
+}
+
+onMounted(() => {
+  document.addEventListener('visibilitychange', handleVisibilityChange)
+  scheduleRayMount()
 })
 
 onBeforeUnmount(() => {
-  if (idleId !== null && 'cancelIdleCallback' in window)
-    window.cancelIdleCallback(idleId)
-  if (frameId !== null)
-    window.cancelAnimationFrame(frameId)
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
+  clearRaySchedule()
 })
 </script>
 

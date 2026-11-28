@@ -1,0 +1,122 @@
+---
+title: Research 研究助手
+description: 带研究过程、编号引用与证据栏的研究助手
+category: TemplateAi
+status: beta
+since: 0.6.0
+tags: [template, ai, research, citation, rag]
+syncStatus: reviewed
+verified: false
+---
+
+## 用法
+
+### 带引用的研究报告
+:::TuffDemoWrapper{demo="TemplateResearchDemo" code-lang="vue" description="点结论里的编号引用，证据栏定位并高亮对应条目。"}
+---
+code: |
+  <script setup lang="ts">
+  import { useStickToBottom } from '@talex-touch/tuffex/conversation-stream'
+  import { nextTick, ref } from 'vue'
+  import TemplateFrame from './TemplateFrame.vue'
+
+  const scroller = ref<HTMLElement | null>(null)
+  // 正文列跟随流式内容；读者一向上滚动就停止跟随
+  const stick = useStickToBottom(scroller)
+
+  // 点引用：切到证据栏对应页签，只滚动栏内的滚动容器
+  function onCite(source: AiSourceItem) {
+    railTab.value = chunkOf(source) ? 'chunks' : 'sources'
+    nextTick(() => railScroller().scrollTo({ top: offsetOf(source), behavior: 'smooth' }))
+  }
+  </script>
+
+  <template>
+    <TemplateFrame title="Research 研究助手" @enter="run">
+      <template #default="{ width }">
+        <div class="research">
+          <main ref="scroller" class="research__main" @scroll="stick.handleScroll" @wheel="stick.handleWheel">
+            <TxChainOfThought :steps="steps" :streaming="researching" :default-open="false" label="研究过程" />
+
+            <!-- 引用是组件，只能放在普通段落里逐词显影 -->
+            <p class="research__answer">
+              <template v-for="token in shownTokens" :key="token.id">
+                <TxInlineCitation v-if="token.cite" :source="token.cite" :label="token.number" @open="onCite" />
+                <span v-else>{{ token.text }}</span>
+              </template>
+            </p>
+
+            <!-- 表格走 v-html，里面不写链接 -->
+            <TxStreamMarkdown :content="table" :streaming="writingTable" />
+            <TxInsightCards v-model:active-index="page" :pages="insights" @follow-up="ask" />
+            <TxRecommendationCard v-model="choice" v-model:accepted="accepted" :options="options" @accept="saveNote" />
+            <TxSuggestionChips :suggestions="followUps" layout="list" @select="ask" />
+
+            <TxAiConversation :messages="thread">
+              <template #default="{ message }">
+                <TxReasoningDisclosure :text="reasoningOf(message)" label="思考过程" />
+                <TxStreamMarkdown :content="answerOf(message)" :streaming="isStreaming(message)" />
+              </template>
+            </TxAiConversation>
+          </main>
+
+          <aside v-if="width >= 640" class="research__rail">
+            <TxTabs v-model="railTab" placement="top" borderless>
+              <TxTabItem name="sources">
+                <template #name>来源</template>
+                <template #default>
+                  <TxSources :sources="sources" default-open @open="hostOpens" />
+                </template>
+              </TxTabItem>
+              <TxTabItem name="chunks">
+                <template #name>片段</template>
+                <template #default>
+                  <TxContextCards :chunks="chunks" title="命中片段" :total="32" @open="hostOpens" />
+                </template>
+              </TxTabItem>
+              <TxTabItem name="notes">
+                <template #name>笔记</template>
+                <template #default>
+                  <TxMarkdownView :content="note" />
+                </template>
+              </TxTabItem>
+            </TxTabs>
+          </aside>
+        </div>
+      </template>
+    </TemplateFrame>
+  </template>
+---
+:::
+
+## 概述
+
+结论可溯源的研究助手：研究过程、带编号引用的结论、对比表、洞察与推荐依次出现；数字为示例数据。
+
+- 进入视口后自动研究，约 10 秒走完，「重置」或「重新研究」可重播；减少动态效果时直接呈现完整答案。
+- 点编号引用，证据栏切到对应页签，只在栏内滚动定位：有命中片段的跳到片段，其余跳到来源。
+- 点来源或片段的出处只显示「宿主会打开：…」，不离开页面。
+- 推荐卡可切换备选方案；「写入方案」后，方案稿出现在「笔记」页签。
+- 追问在下方追加一问一答，带可展开的思考过程；正文列跟随流式内容，向上滚动即停止跟随。
+- 列内（640–959px）证据栏用页签，≥ 1200px 洞察单独成列；窄屏（< 640px）收起证据栏，来源叠放在结论下方。
+
+## 自定义
+
+- 接真实服务时，研究步骤映射到 TxChainOfThought 的 `steps`（同一时刻只有一个 `active`），结论按 token 追加，表格交给 TxStreamMarkdown。
+- 可点击的引用不能放进 markdown（TxStreamMarkdown 走 `v-html`）：引用段落单独渲染，markdown 里也不写链接。
+- 证据栏用滚动容器的 `scrollTo` 定位，不用会带动整页的 `scrollIntoView`。
+- 第三方产品的指标未经实测时，写定性结论或标注示例数据；推荐卡的置信度要有文字标签。
+
+## 相关组件
+
+| 区域 | 组件 | 作用 |
+|---|---|---|
+| 顶栏 | [TxWorkingIndicator](/zh/working-indicator)、[TxStatusBadge](/zh/status-badge) | 阶段、耗时与完成状态 |
+| 研究过程 | [TxChainOfThought](/zh/chain-of-thought) | 四步研究过程，完成后折叠 |
+| 结论 | [TxInlineCitation](/zh/inline-citation) | 逐词显影的结论与编号引用 |
+| 对比 | [TxStreamMarkdown](/zh/stream-markdown) | 流式对比表，不含链接 |
+| 洞察与建议 | [TxInsightCards](/zh/insight-cards)、[TxRecommendationCard](/zh/recommendation-card) | 可翻页洞察与推荐方案 |
+| 追问 | [TxSuggestionChips](/zh/suggestion-chips)、[TxAiConversation](/zh/ai-elements)、[TxReasoningDisclosure](/zh/reasoning-disclosure)、[TxTypingIndicator](/zh/typing-indicator) | 追问候选与问答线程 |
+| 证据栏 | [TxTabs](/zh/tabs)、[TxSources](/zh/sources)、[TxContextCards](/zh/context-cards)、[TxSignalMeter](/zh/signal-meter)、[TxSkeleton](/zh/skeleton) | 来源、片段与笔记页签 |
+| 笔记 | [TxMarkdownView](/zh/markdown-view)、[TxMessageActions](/zh/message-actions) | 采纳后的方案稿，可复制 |
+| 输入 | [TxPromptBar](/zh/prompt-bar) | 追问输入、命令与模式切换 |

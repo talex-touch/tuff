@@ -1,0 +1,209 @@
+---
+title: "StreamElement 流式回答"
+description: "流式呈现整段 AI 回答的元素"
+category: AiReasoning
+status: beta
+since: 0.6.3
+tags: [ai, streaming, markdown, citation, reveal]
+syncStatus: reviewed
+verified: true
+---
+
+## 安装
+
+:::TuffCodeBlock{lang="bash"}
+---
+code: |
+  pnpm add @talex-touch/tuffex
+---
+:::
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { TxStreamElement } from '@talex-touch/tuffex/stream-element'
+  import '@talex-touch/tuffex/stream-element/style.css'
+  import '@talex-touch/tuffex/base.css' // 全局引入一次
+---
+:::
+
+## 用法
+
+### AI 回答
+`[n]` 按 `sources` 解析为引用 chip；操作、来源与追问放在 `footer` 插槽，`done` 后出现。
+:::TuffDemoWrapper{demo="StreamElementAnswerDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxStreamElement :content="answer" :streaming="busy" :sources="sources" @cite="open">
+      <template #footer="{ done }">
+        <template v-if="done">
+          <TxMessageActions :copy-text="answer" regenerable>
+            <button class="tx-message-actions__btn" aria-label="有帮助">…</button>
+          </TxMessageActions>
+          <TxSources :sources="sources" variant="stack" />
+          <TxSuggestionChips :suggestions="followUps" layout="list" />
+        </template>
+      </template>
+    </TxStreamElement>
+  </template>
+---
+:::
+
+### 委托渲染的 Markdown
+表格、公式等委托片段逐行显影，与原生片段共用一个时钟；`reserve` 让回放时下方内容不动。
+:::TuffDemoWrapper{demo="StreamElementMarkdownDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxStreamElement ref="answer" :content="markdown" reserve />
+    <TxButton @click="answer?.replay()">重播</TxButton>
+  </template>
+---
+:::
+
+### 插槽与状态
+`parts` 直接接收结构化片段；`part-<name>` 插槽渲染同名的自定义片段。
+:::TuffDemoWrapper{demo="StreamElementSlotsDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxStreamElement :parts="parts">
+      <template #caret="{ state }">
+        <span class="my-caret" :data-state="state" />
+      </template>
+      <template #citation="{ index }">
+        <sup>{{ index }}</sup>
+      </template>
+      <template #part-chart="{ part }">
+        <MyChart :values="part.props.values" />
+      </template>
+      <template #footer="{ state, done }">
+        {{ state }}
+      </template>
+    </TxStreamElement>
+  </template>
+---
+:::
+
+### 最佳实践
+
+- 传目前为止的完整回答，不要只传增量。
+- 源头真正结束前保持 `streaming` 为真：结尾写到一半的 `**bold`、`` `code `` 会先被补全，标记符号不会闪现。
+- 属于完整回答的内容（操作、来源、追问）放进 `footer` 插槽并以 `done` 为条件；回答末尾没有外边距，footer 自己设间距。
+- 复制、分享用你持有的完整回答，不用屏幕上显示的部分。
+- 单段文字用 `TxStreamText`；不需要逐词显影时用 `TxStreamMarkdown`。
+
+## API 参考
+
+### 属性
+
+| 名称 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `content` | `string` | `''` | 目前收到的全部 Markdown。 |
+| `parts` | `StreamPart[]` | — | `content` 的结构化替代，二者都给时以它为准。 |
+| `streaming` | `boolean` | `false` | 源头仍在输出。 |
+| `sources` | `AiSourceItem[]` | — | 按模型引用顺序给出；`[n]` 解析为 `sources[n - 1]` 的引用 chip。 |
+| `wordMs` | `number` | `24` | 每 `wordMs` 放出一个词。 |
+| `maxLagMs` | `number` | `600` | 任何词都在到达后这段时间内显示。 |
+| `drainMs` | `number` | `320` | `streaming` 变为 false 后，在这段时间内放完剩余部分。 |
+| `pauseMs` | `number` | `400` | 超过这段时间没有新词即报告 `paused`。 |
+| `reveal` | `'aurora' \| 'hue' \| 'blur' \| 'languid' \| 'none'` | `'aurora'` | 词的进场方式，预设同 `TxStreamText`；代码保持语法颜色。 |
+| `caret` | `boolean` | `true` | 流式进行时在写入位置显示光标。 |
+| `reserve` | `boolean` | `false` | 完整内容回放时占住最终版面，`replay()` 时也占住回答当前的高度；`streaming` 时忽略。 |
+| `renderers` | `Record<string, Component>` | — | 按名称渲染自定义片段的组件；`part-<name>` 插槽优先。 |
+| `copyLabel` | `string` | `'Copy'` | 代码片段复制按钮的文案，交给 `TxCodeStream`；委托片段里的代码块读 `markdownProps.copyCodeText`。 |
+| `copiedLabel` | `string` | `'Copied'` | 复制成功后的文案；委托片段里的代码块读 `markdownProps.copiedCodeText`。 |
+| `runnable` | `boolean` | `false` | 为已完成的 Shell 代码片段在复制按钮左侧提供「执行」按钮，交给 `TxCodeStream`；委托片段里的围栏读 `markdownProps.runnableCode`。 |
+| `runLabel` | `string` | `'Run'` | 执行按钮文案。 |
+| `ranLabel` | `string` | `'Ran'` | 点击执行按钮后的短暂反馈文案。 |
+| `runTitle` | `string` | — | 执行按钮的无障碍名称与提示；缺省时回退到 `runLabel`。 |
+| `previewable` | `boolean` | `true` | 已完成的 `html`、`svg`、`xml` 代码片段提供「预览」开关，交给 `TxCodeStream`；委托片段里的围栏读 `markdownProps`。 |
+| `autoPreview` | `boolean` | `false` | 代码片段完成时直接显示渲染结果，读者可切回源码。 |
+| `previewScripts` | `boolean` | `false` | 允许预览页运行自带脚本；预览帧始终无同源、无网络。 |
+| `previewLabel` | `string` | `'Preview'` | 预览开关文案。 |
+| `codeLabel` | `string` | `'Code'` | 预览显示时同一开关的文案。 |
+| `codeFrameLabelFormatter` | `(lang: string) => string` | ``(lang) => `${lang} preview` `` | 预览帧的可访问名称。 |
+| `markdownProps` | `Partial<StreamMarkdownProps>` | — | 透传给渲染委托片段的 `TxStreamMarkdown`。 |
+| `locale` | `string` | `'zh'` | `Intl.Segmenter` 分词所用的语言。 |
+
+### 事件
+
+| 名称 | 参数 | 说明 |
+|------|------|------|
+| `state-change` | `(state: StreamState)` | 流式状态变化时触发。 |
+| `done` | — | 每次播放触发一次：末词已显示且源头已结束。 |
+| `cite` | `(source: AiSourceItem)` | 引用 chip 被打开时触发；chip 自身不跳转。 |
+| `code-run` | `(payload: CodeRunPayload)` | 开启 `runnable` 时，Shell 代码片段的执行按钮被点击时触发。 |
+
+### 插槽
+
+| 名称 | 作用域 | 说明 |
+|------|--------|------|
+| `caret` | `{ state }` | 替换光标，位于文字与代码的写入位置。 |
+| `citation` | `{ source, label, index }` | 替换引用 chip。 |
+| `inline` | `{ name, props }` | 渲染文字中的自定义行内片段。 |
+| `code` | `{ part, code, streaming }` | 替换代码块；`code` 为已显影的部分。 |
+| `part-<name>` | `{ part, state }` | 渲染 `{ type: 'custom', name }` 片段。 |
+| `footer` | `{ state, done }` | 回答下方；末词已显示且源头已结束时 `done` 为真。 |
+
+### 暴露方法
+
+| 名称 | 类型 | 说明 |
+|------|------|------|
+| `state` | `StreamState` | 当前流式状态。 |
+| `replay` | `() => void` | 从第一个词起重播整段回答。 |
+| `skip` | `() => void` | 立即显示全部内容，不播放进场。 |
+
+### 类型
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  type StreamPart =
+    | { type: 'heading', depth: 1 | 2 | 3 | 4 | 5 | 6, inlines: StreamInline[] }
+    | { type: 'paragraph', inlines: StreamInline[], tight?: boolean }
+    | { type: 'list', ordered: boolean, start?: number, items: { checked?: boolean, parts: StreamPart[] }[] }
+    | { type: 'quote', parts: StreamPart[] }
+    | { type: 'rule' }
+    | { type: 'code', lang?: string, code: string, filename?: string }
+    | { type: 'markdown', raw: string }
+    | { type: 'custom', name: string, props?: Record<string, unknown> }
+---
+:::
+
+### CSS 变量
+
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `--tx-stream-reveal-1` / `-2` / `-3` | 蓝 / 紫 / 粉，随主题变化 | 色带的三个颜色节点，与 `TxStreamText` 共用。 |
+| `--tx-stream-reveal-duration` | 取决于预设 | 由组件按 `reveal` 写入根节点，无需设置。 |
+
+## 概述
+
+- 节奏、状态、增量显影与降级行为同 [StreamText](/zh/stream-text)；所有片段按文档顺序排在同一个时钟上。
+- 原生渲染并逐词显影：标题、段落、强调、删除线、行内代码、安全链接、列表（嵌套、任务）、引用、分割线与围栏代码（`TxCodeStream`）。
+- 表格、公式、mermaid、原始 HTML 与图片整体委托给 `TxStreamMarkdown`（含其净化与远程图片策略），逐行显影；相邻的委托块合为一个片段。
+- 光标只在写入位置：回答中任何时候只有一个，回答结束时收起。
+- 断行：写完的段落与标题按 `text-wrap-style: pretty` 断行，末行不会只剩一两个字；正在写的那一段按普通 `wrap` 断行，写入位置移走后再切换，免得每放出一个词都重排整段。
+- `[n]` 只在纯文字中变成引用 chip（带来源名称的链接），代码与链接文字中不会；没有对应来源时保持为文字。
+
+## 技术实现
+
+- 建立在 `TxStreamText`、`TxCodeStream` 与 `TxStreamMarkdown` 之上：`parse.ts` 把 Markdown 解析为片段，`plan.ts` 把片段排上时钟。
+- 源码：`packages/tuffex/packages/components/src/stream-element/`。
+
+<TuffDocSourceLink />
+
+## 使用场景
+
+- 对话回复或助手面板中的回答，带来源、代码与追问。
+- 混合正文、列表、表格与公式的生成报告。
+- 在卡片或演示里配合 `reserve` 回放存档的回答。
+
+## 相关组件
+
+- [StreamText](/zh/stream-text)：流式呈现一段文字，本组件建立在它之上。
+- [CodeStream](/zh/code-stream)：渲染代码片段。
+- [StreamMarkdown](/zh/stream-markdown)：渲染委托片段。
+- [Sources](/zh/sources)、[MessageActions](/zh/message-actions) 与 [SuggestionChips](/zh/suggestion-chips)：在 `footer` 插槽里收尾一段回答。

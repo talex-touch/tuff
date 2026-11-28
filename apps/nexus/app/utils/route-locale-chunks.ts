@@ -2,7 +2,7 @@ import type { SupportedLocale } from '~/composables/useLocaleOrchestrator'
 import { hasWindow } from '@talex-touch/utils/env'
 import { recoverFromStaleChunkError } from '~/utils/chunk-recovery'
 
-export type RouteLocaleChunkName = 'dashboard' | 'landing'
+export type RouteLocaleChunkName = 'dashboard' | 'landing' | 'store'
 
 export type RouteLocaleChunkMessages = Record<string, unknown>
 
@@ -12,10 +12,12 @@ const routeLocaleChunkLoaders: Record<SupportedLocale, Record<RouteLocaleChunkNa
   en: {
     dashboard: () => import('../../i18n/locales/route/en/dashboard'),
     landing: () => import('../../i18n/locales/route/en/landing'),
+    store: () => import('../../i18n/locales/route/en/store'),
   },
   zh: {
     dashboard: () => import('../../i18n/locales/route/zh/dashboard'),
     landing: () => import('../../i18n/locales/route/zh/landing'),
+    store: () => import('../../i18n/locales/route/zh/store'),
   },
 }
 
@@ -37,6 +39,9 @@ export function resolveRouteLocaleChunks(path: string): RouteLocaleChunkName[] {
   if (normalized === '/' || normalized === '/new' || normalized.startsWith('/new/') || normalized === '/next' || normalized.startsWith('/next/'))
     chunks.push('landing')
 
+  if (normalized === '/store' || normalized.startsWith('/store/'))
+    chunks.push('store')
+
   /**
    * `/admin/*` is the administrator console, split out of `/dashboard/*` into
    * its own shell. Its pages still read `dashboard.*` keys — one message
@@ -48,8 +53,6 @@ export function resolveRouteLocaleChunks(path: string): RouteLocaleChunkName[] {
     || normalized.startsWith('/dashboard/')
     || normalized === '/admin'
     || normalized.startsWith('/admin/')
-    || normalized === '/store'
-    || normalized.startsWith('/store/')
     || normalized === '/team/join'
   ) {
     chunks.push('dashboard')

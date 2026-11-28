@@ -1,0 +1,106 @@
+---
+title: Workbench 插件工作台
+description: 文件树、代码编辑器、终端与热重载预览的插件工作台
+category: TemplateApp
+status: beta
+since: 0.9.1
+tags: [template, ide, code-editor, terminal, plugin]
+syncStatus: reviewed
+verified: false
+---
+
+## 用法
+
+### 插件开发
+:::TuffDemoWrapper{demo="TemplateWorkbenchDemo" code-lang="vue" description="进入视口后自动启动一次 dev 并给 manifest 加一个触发词；之后改文件、按 ⌘/Ctrl+S 保存，终端和预览跟着热重载。"}
+---
+code: |
+  <script setup lang="ts">
+  import { computed, reactive, ref, shallowRef } from 'vue'
+  import TemplateFrame from './TemplateFrame.vue'
+
+  // 每个文件两份内容：value 是编辑器缓冲，saved 是 dev server 读到的版本
+  const files = reactive(seedFiles())
+  const loaded = shallowRef<LoadedManifest | null>(null) // 最后一次解析成功的 manifest
+  const terminal = shallowRef<TerminalInstance | null>(null)
+
+  // 只有保存会触达 dev server：⌘/Ctrl+S 先格式化 JSON，停止输入 1 秒后自动保存
+  function saveFile(path: FilePath) {
+    files[path].saved = files[path].value
+    queueReload(path) // 360ms 后热重载；manifest 解析失败时保留上一个可用版本
+  }
+
+  // 问题面板跟着缓冲实时更新；行列号来自模板自己的 JSON 扫描，不依赖浏览器的报错文本
+  const problems = computed(() => lintManifest(files['manifest.json'].value))
+
+  // xterm 会吃掉 Ctrl+S / Ctrl+J，快捷键放在根节点的捕获阶段
+  function onShortcut(event: KeyboardEvent) {
+    if ((event.metaKey || event.ctrlKey) && event.key === 's') {
+      event.preventDefault()
+      saveFile(activePath.value)
+    }
+  }
+  </script>
+
+  <template>
+    <TemplateFrame title="Workbench" :height="600" @enter="play">
+      <template #default="{ width }">
+        <div class="workbench" tabindex="-1" @keydown.capture="onShortcut">
+          <TxTree :nodes="tree" :model-value="activePath" :expanded-keys="openFolders" @select="onTreeSelect">
+            <template #item="{ node, expanded }">…</template>
+          </TxTree>
+
+          <div role="tablist">…</div>
+          <TxCodeEditorToolbar :actions="toolbarActions" @action="onToolbarAction" />
+          <TxCodeEditor
+            v-for="path in openTabs" v-show="path === activePath" :key="path"
+            :ref="el => setEditorRef(path, el)"
+            :model-value="files[path].value" :language="files[path].lang"
+            @update:model-value="value => onEditorInput(path, value)"
+          />
+
+          <TxTerminal ref="terminal" read-only :labels="{ ariaLabel: 'tuff dev 输出（模拟）' }" />
+
+          <!-- 宽屏才有的 CoreBox 预览：按 dev server 已加载的 manifest 匹配 -->
+          <aside v-if="width >= 960">
+            <TxSearchInput v-model="query" :disabled="!loaded" />
+            <TxSearchEmpty v-if="!hits.length" :title="`没有功能响应「${query}」`" />
+          </aside>
+
+          <TxStatusHint :text="hint.text" :tone="hint.tone" :pulse-key="hint.pulse" />
+        </div>
+      </template>
+    </TemplateFrame>
+  </template>
+---
+:::
+
+## 概述
+
+以划词翻译插件 touch-translate 为例的插件开发工作台：文件树、编辑器页签、`pnpm dev` 终端与问题面板，宽屏再加一块 CoreBox 预览。终端输出全部是模拟的，所有耗时都是示例数据。
+
+- 首次进入视口时自动播放一次（不到 6 秒）：终端启动 `pnpm dev`，随后在 manifest.json 第一个功能的 `commands` 里补上触发词「词典」并保存，预览从「没有功能响应」变成命中「划词翻译」。你的任何输入都会停下剩余播放；正在输入的触发词会立即补完并保存，manifest 不会停在半截。减少动态效果时直接显示最终状态，不启动计时器。
+- 只有保存会触达 dev server：⌘/Ctrl+S 保存当前文件，JSON 会先格式化；停止输入 1 秒后自动保存所有改动（不格式化）。manifest.json 重新加载功能列表，index.js 重启 Prelude，src 与 locales 走 Vite 热更新，package.json 只提示重启 dev。
+- manifest.json 保存成无法解析的 JSON 时，dev server 保留上一个可用版本：状态栏显示「manifest.json 解析失败 · 第 N 行」，预览标为「旧版本」。问题面板跟着编辑缓冲实时更新，也会提示没有触发词的功能和重复的触发词，点一条就跳到对应的行列。
+- ⌘/Ctrl+J 收起或展开终端面板，在编辑器里按 ⌘/Ctrl+Shift+F 格式化当前 JSON 文件；编辑器页签用 ← / →、Home / End 切换，Delete 关闭，中键点按也能关闭。
+- 宽度 < 640px 时资源管理器收进抽屉（Esc 或点别处关闭），不显示预览；640–959px 显示文件树、编辑器与终端；≥ 960px 在右侧加上 CoreBox 预览。
+
+## 自定义
+
+- 接真实的 `tuff dev` 时，把 `bootSteps()` 与 `reloadFile()` 里的定时输出换成 dev server 推来的日志（WebSocket / SSE），逐行写进 TxTerminal；预览改读 dev server 实际加载的功能列表，不要在页面里自己解析 manifest。
+- TxCodeEditor 自带的格式化是 `JSON.stringify(value, null, 2)`，每个数组元素各占一行，并且绑定在 Mod-Shift-F。模板在捕获阶段拦下这个快捷键，换成保留短数组的格式化；写回时只替换有差异的那一段，光标不会跳到文末。
+- 定位到某一行时不要用 CodeMirror 的 `scrollIntoView`，它会连页面一起滚动。模板用 `getView()` 拿到 EditorView，再用 `requestMeasure` 只滚动编辑器自己的滚动容器。
+- TxCodeEditor 与 TxTerminal 默认是 160px 高的圆角卡片，放进面板要覆盖最小高度、圆角与边框。TxTerminal 把宿主的计算背景色交给 xterm，背景只能用纯色变量，不能用 `color-mix()`。
+- 工具栏的文字标签是可见文本，模板把它视觉隐藏，保留为图标按钮的可访问名称；TxCodeEditor 的深色主题是固定的 `#0d1117`，旁边的页签与终端用 `--tx-fill-color-blank` 贴近它。
+
+## 相关组件
+
+| 区域 | 组件 | 作用 |
+|---|---|---|
+| 标题栏 | [TxIconButton](/zh/button)、[TxIconChip](/zh/icon-chip)、[TxTag](/zh/tag)、[TxWorkingIndicator](/zh/working-indicator)、[TxStatusBadge](/zh/status-badge) | 面板开关、项目与分支、dev 状态 |
+| 资源管理器 | [TxTree](/zh/tree) | 文件树，未保存的文件带圆点 |
+| 编辑器 | [TxCodeEditor](/zh/code-editor)、[TxCodeEditorToolbar](/zh/code-editor)、[TxEmptyState](/zh/empty-state) | 多页签编辑、格式化、搜索与复制 |
+| 面板 | [TxTerminal](/zh/terminal)、[TxIconButton](/zh/button) | 模拟的 `pnpm dev` 输出与问题列表 |
+| CoreBox 预览（宽屏） | [TxSearchInput](/zh/search-input)、[TxIconChip](/zh/icon-chip)、[TxTag](/zh/tag)、[TxKbd](/zh/kbd)、[TxSearchEmpty](/zh/search-empty)、[TxEmptyState](/zh/empty-state)、[TxStatusHint](/zh/status-hint) | 按已加载的 manifest 匹配功能 |
+| 状态栏 | [TxStatusHint](/zh/status-hint)、[TxKbd](/zh/kbd) | 最近一次热重载、问题计数与快捷键 |
+| 通知 | [TxToastPanel](/zh/toast-panel) | 保存、格式化与复制的结果 |

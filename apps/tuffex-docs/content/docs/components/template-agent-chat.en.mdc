@@ -1,0 +1,201 @@
+---
+title: Agent Chat
+description: A coding agent session with a write gate, live plan, and changed files.
+category: TemplateAi
+status: beta
+since: 0.6.0
+tags: [template, ai, agent, chat, tool-call]
+syncStatus: reviewed
+verified: false
+---
+
+## Usage
+
+### Coding agent workbench
+:::TuffDemoWrapper{demo="TemplateAgentChatDemo" code-lang="vue" description="Plays once in view, then waits at the write gate for Allow or Deny."}
+---
+code: |
+  <script setup lang="ts">
+  import { reactive } from 'vue'
+  import TemplateFrame from './TemplateFrame.vue'
+
+  // Stream rows hold an id and a kind; what they show is read from reactive state
+  const state = reactive({
+    items: [{ id: 'request', kind: 'user' }, { id: 'tail', kind: 'tail' }],
+    gate: 'waiting',
+  })
+
+  // New rows go in front of a permanent tail, so no existing row moves or remounts
+  function push(kind: string) {
+    state.items.splice(state.items.length - 1, 0, { id: kind, kind })
+  }
+
+  // No timer ever calls this: the write waits for the reader
+  function onAllow() {
+    state.gate = 'allowed'
+    push('code')
+  }
+  </script>
+
+  <template>
+    <TemplateFrame title="Agent Chat" @enter="run">
+      <template #default="{ width }">
+        <div class="agent-chat">
+          <TxAgentsList v-if="width >= 1200" :agents="agents" :selected-id="agentId" @select="agentId = $event" />
+          <main class="agent-chat__main">
+            <header class="agent-chat__head">
+              <TxThinkingOrb :state="orbState" :label="phaseLabel" :paused="!running" />
+              <TxWorkingIndicator v-if="working" :label="phaseLabel" :started-at="startedAt" />
+              <TxContextIndicator :used-tokens="tokens" :max-tokens="200000" />
+            </header>
+
+            <TxConversationStream :items="state.items" item-key="id" :overscan="24" :streaming="working">
+              <template #item="{ item }">
+                <TxChatMessage v-if="item.kind === 'user'" :message="request" :markdown="false" />
+                <TxAgentTrace v-else-if="item.kind === 'plan'" :rows="planRows" :working="planning" />
+                <TxApprovalCard
+                  v-else-if="item.kind === 'ask'"
+                  v-model="answers" v-model:index="page" :questions="questions"
+                  @answer="stopAutoPick"
+                />
+                <TxToolCallCard v-else-if="item.kind === 'search'" :tool-call="searchCall" default-expanded />
+                <TxToolConfirmation
+                  v-else-if="item.kind === 'gate' && state.gate === 'waiting'"
+                  tool-name="apply_patch" risk="write" :input="patchFiles"
+                  @approve="onAllow" @deny="onDeny"
+                />
+                <TxCodeStream v-else-if="item.kind === 'code'" :code="code" :diff="diff" :revealed-lines="lines" lang="ts" />
+                <TxStreamMarkdown v-else-if="item.kind === 'summary'" :content="summary" :streaming="streaming" />
+              </template>
+            </TxConversationStream>
+
+            <TxPromptBar v-model="draft" :sources="sources" :commands="commands" :models="models" :submitting="running" @send="send">
+              <template #actions>
+                <TxIconButton v-if="running" icon="i-carbon-stop-filled-alt" label="Stop" @click="stop" />
+              </template>
+            </TxPromptBar>
+          </main>
+
+          <aside v-if="width >= 640" class="agent-chat__side">
+            <TxTaskRows :rows="tasks" done-text="" />
+            <TxDiffChips :diffs="diffs" @select="jumpToCode" />
+            <TxAgentScreen :state="screen" :cursor="cursor" label="Plugin preview · CoreBox" />
+          </aside>
+        </div>
+      </template>
+    </TemplateFrame>
+  </template>
+---
+:::
+
+### Side copilot
+A docked assistant for an existing page, such as a docs editor, CMS body, or ticket reply, that only suggests edits for you to apply.
+:::TuffDemoWrapper{demo="TemplateAgentChatCopilotDemo" code-lang="vue" description="Plays one Improve and stops at the suggestion; select any text to try it."}
+---
+code: |
+  <script setup lang="ts">
+  import type { SelectionPayload } from '@talex-touch/tuffex/selection-actions'
+  import { useSelectionAnchor } from '@talex-touch/tuffex/selection-actions'
+  import { markRaw, nextTick, onMounted, ref } from 'vue'
+  import TemplateFrame from './TemplateFrame.vue'
+
+  const articleRef = ref<HTMLElement | null>(null)
+  const barRef = ref()
+  const { selection } = useSelectionAnchor({ root: articleRef, ignore: () => [barRef.value?.el] })
+
+  // The bar reads rects on every reposition; measuring the Range live keeps it on the text as the page or article scrolls
+  function livePayload(text: string, range: Range): SelectionPayload {
+    return markRaw({ text, range, get rects() { return Array.from(range.getClientRects()) } })
+  }
+
+  // Layout changes that fire no scroll (collapsing the panel, expanding the stage, text reflow) ask it to reposition
+  onMounted(() => {
+    new ResizeObserver(() => nextTick(() => barRef.value?.updatePosition())).observe(articleRef.value!)
+  })
+
+  // The page changes only when the reader clicks Apply
+  function apply(card: Card) {
+    texts[card.blockId] = card.body
+    card.phase = 'applied'
+  }
+  </script>
+
+  <template>
+    <TemplateFrame title="Side copilot" :height="560" @enter="run">
+      <template #default="{ width }">
+        <article ref="articleRef" class="copilot__page">
+          <p v-for="block in blocks" :key="block.id" :data-block="block.id">{{ texts[block.id] }}</p>
+        </article>
+
+        <aside v-if="width >= 640" class="copilot__side">
+          <TxThinkingOrb :state="orbState" :paused="!working" />
+          <TxModeChip :label="readonly ? 'Read-only · explain' : 'Edits need your OK'" @click="readonly = !readonly" />
+          <TxTag v-if="target" label="Selection" closable @close="dismiss" />
+          <div v-for="card in cards" :key="card.id">
+            <TxChatMessage :message="echo(card)" :markdown="false" />
+            <TxTypingIndicator v-if="card.phase === 'thinking'" text="Rewriting…" />
+            <template v-else>
+              <del>{{ card.original }}</del>
+              <ins>{{ card.body.slice(0, card.shown) }}</ins>
+              <TxButton variant="primary" size="sm" @click="apply(card)">Apply to page</TxButton>
+              <TxDiffChips :diffs="[{ file: 'README.md', add: 1, del: 1 }]" @select="reveal(card.blockId)" />
+            </template>
+          </div>
+          <TxSuggestionChips :suggestions="next" @select="runSuggestion" />
+          <TxPromptBar v-model="draft" :sources="sources" :commands="commands" @send="send" />
+        </aside>
+
+        <TxSelectionActions
+          ref="barRef" :selection="payload" :state="barState" :actions="actions" keep-label="Apply"
+          @action="run($event.id)" @keep="apply(activeCard)" @discard="discard(activeCard)" @retry="retry(activeCard)"
+        >
+          <template #action-icon="{ action }">
+            <span :class="icons[action.id]" />
+          </template>
+        </TxSelectionActions>
+      </template>
+    </TemplateFrame>
+  </template>
+---
+:::
+
+## Overview
+
+A coding agent's full session on one request; a person answers its questions and approves each write. Answers are pre-written.
+
+- It plays once in view and stops at the write gate; reduced motion shows everything up to the gate at once.
+- After 3 idle seconds the questionnaire takes the recommended picks; clicking any option makes it wait for you to send.
+- The write gate never opens by itself: Allow writes, tests, and summarizes; Deny skips the write and tests and exports a patch.
+- Stop marks the running tool card as stopped; clicking a changed file scrolls the transcript to its code, never the page.
+- In the docs column (640–959px) the side panel switches between Tasks, Changes, and Preview, and ≥ 1200px adds the agent list; narrow (< 640px) hides the panel.
+- Side copilot: the page changes only when you click Apply, with Undo; "Read-only · explain" leaves the bar with Explain alone.
+- Side copilot: the selection bar follows the text through scrolling and reflow; narrow (< 640px) folds the copilot into a toolbar button that opens a bottom sheet.
+
+## Customization
+
+- To wire a real agent, replace the demo timeline with your event stream; rows hold only `id` and `kind`, so streamed events only update state.
+- Keep a permanent tail item at the end of TxConversationStream, so each message mounts once and card state and entrance motion never replay.
+- Tier permissions by risk: a `risk="read"` call runs and leaves a trace; `write` and `execute` always wait for a person.
+- Hold the questionnaire's answers in a controlled `v-model` and `v-model:index`; stop auto-picking once the reader touches the card.
+- Side copilot: make `selection.rects` a getter that measures the Range live, and call `updatePosition()` after layout changes.
+
+## Related components
+
+| Region | Components | Role |
+|---|---|---|
+| Header | [TxThinkingOrb](/en/thinking-orb), [TxWorkingIndicator](/en/working-indicator), [TxStatusBadge](/en/status-badge), [TxContextIndicator](/en/context-indicator) | Phase, elapsed time, and context usage |
+| Conversation | [TxConversationStream](/en/conversation-stream), [TxChatMessage](/en/chat) | Virtualized transcript and request bubble |
+| Plan | [TxAgentTrace](/en/agent-trace) | Plan steps that fold when done |
+| Clarify | [TxApprovalCard](/en/approval-card) | Two clarifying questions |
+| Tool calls | [TxToolCallCard](/en/tool-call-card) | Input, streamed log, and result |
+| Write gate | [TxToolConfirmation](/en/tool-confirmation) | Allow or deny before writing |
+| Change | [TxCodeStream](/en/code-stream) | The diff, line by line |
+| Summary | [TxTypingIndicator](/en/typing-indicator), [TxStreamMarkdown](/en/stream-markdown), [TxToolChips](/en/tool-chips), [TxMessageActions](/en/message-actions) | Streamed summary, tool digest, actions |
+| Side panel | [TxFlatRadio](/en/flat-radio), [TxTaskRows](/en/task-rows), [TxDiffChips](/en/tool-chips), [TxAgentScreen](/en/agent-screen), [TxSkeleton](/en/skeleton) | Progress, changed files, and preview |
+| Agent list (≥ 1200px) | [TxAgentsList](/en/agents), [TxSuggestionChips](/en/suggestion-chips) | Agent switching and suggested asks |
+| Input | [TxPromptBar](/en/prompt-bar) | Sources, commands, model, and Stop |
+| Host page (Side copilot) | Plain DOM paragraphs | Selectable README text |
+| Selection bar (Side copilot) | [TxSelectionActions](/en/selection-actions) | Explain, Improve, Translate, and Apply |
+| Copilot panel (Side copilot) | [TxModeChip](/en/mode-chip), [TxTag](/en/tag) | Edit mode and visible context |
+| Suggestion card (Side copilot) | [TxButton](/en/button), [TxDiffChips](/en/tool-chips) | Before and after, Apply, Discard |
+| Change notice (Side copilot) | [TxToastPanel](/en/toast-panel) | Undo notice after applying |

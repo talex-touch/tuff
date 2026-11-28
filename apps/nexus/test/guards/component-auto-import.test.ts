@@ -34,15 +34,9 @@ const RULE = 'component-auto-import'
  * fails if this copy drifts from `nuxt.config.ts`.
  */
 const CONFIGURED_EXCLUSIONS = [
-  '/app/components/content/demos/',
-  '/app/components/content/demo-registry.ts',
-  '/app/components/content/demo-loader.ts',
-  '/app/components/content/demo-lazy.ts',
-  '/app/components/content/demo-component-loader.ts',
   '/app/components/content/TuffCodeBlockRenderer.vue',
   '/app/components/store/',
   '/app/components/tuff/',
-  '/app/components/theme/components/',
 ]
 
 /**

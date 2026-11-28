@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { defineAsyncComponent, h, type FunctionalComponent } from 'vue'
 import DocHero from '~/components/docs/DocHero.vue'
-import DocsFrameworkStatusBar from '~/components/docs/DocsFrameworkStatusBar.vue'
 import ProseA from '~/components/content/ProseA.vue'
 import DocsProseHeading from '~/components/docs/DocsProseHeading.vue'
-import { resolveComponentSlugFromPath } from '~/data/tuffex-framework-matrix'
+import { hasDocMathContent } from '~/utils/docs-math'
+import { buildDocsMetaState, slimDocsPagePayload } from '~/utils/docs-page-payload'
 import { appDescription, appName } from '~/constants'
 import { coerceJsonArray, coerceJsonRecord } from '~/utils/docs-api'
 import { cacheDocsFullBody, hasCachedDocsFullBody, isDocsPageRecordForRoute, readCachedDocsFullBody, requestDocsPage, resolveDocsFullBodyCacheKey } from '~/utils/docs-page-client-cache'
@@ -12,16 +12,17 @@ import { buildDocOutlineFromBody, buildDocOutlineTree, type DocTocEntry } from '
 import { buildDocsSeoHead, normalizeDocsSeoCanonicalPath } from '~/utils/docs-seo'
 import { DOCS_SOURCE_PATH_KEY } from '~/utils/docs-source-path'
 import { useTypedFetch } from '~/utils/request'
-import { CONCEPTS_MANUAL_PATH, CONCEPTS_MANUAL_READING_ORDER, isConceptsManualPath } from '~/utils/docs-concepts-manual'
-import { canonicalDocsPageIdentity, normalizeDocsPagePath, resolveDocsLocaleFromRoute, toLocalizedDocsPath } from '#shared/utils/docs-path'
-// Formulas arrive as KaTeX markup rendered when the page was parsed (utils/remark-math.ts).
-import 'katex/dist/katex.min.css'
+import { normalizeDocsPagePath, resolveDocsLocaleFromRoute, toLocalizedDocsPath } from '#shared/utils/docs-path'
+
+// Formulas arrive as KaTeX markup rendered when the page was parsed (utils/remark-math.ts);
+// load katex.min.css only when the active document actually contains math nodes.
+const LazyDocsKatexStyles = defineAsyncComponent(() => import('~/components/docs/DocsKatexStyles.vue'))
 
 // Two retries, then the reader gets an error with a retry button instead of a blank page.
 // The API behind this is dynamic and has been measured resetting connections on slow links,
 // so a single rejection is far more often a flaky hop than an answer.
 const DOCS_FULL_BODY_RETRY_DELAYS_MS = [800, 2400] as const
-const DOCS_PAGER_FULL_BODY_PREFETCH_DELAY_MS = 900
+const DOCS_PAGER_FULL_BODY_PREFETCH_DELAY_MS = 120
 const DOCS_PAGER_FULL_BODY_PREFETCH_IDLE_TIMEOUT_MS = 2400
 const DOCS_CURRENT_PAGE_FETCH_KEY_PREFIX = 'docs-current-page'
 const prefetchedDocRouteTargets = new Set<string>()
@@ -41,9 +42,10 @@ const RELATIVE_TIME_UNITS = [
 definePageMeta({
   layout: 'docs',
   pageTransition: false,
-  key: route => route.path,
+  key: 'docs-slug',
 })
 
+const nuxtApp = useNuxtApp()
 const route = useRoute()
 const router = useRouter()
 const requestUrl = useRequestURL()
@@ -61,14 +63,37 @@ const seoOrigin = computed(
 const { t } = useI18n()
 useI18nPreloadKeys(['docs', 'common'])
 const { setLocaleSerial } = useLocaleOrchestrator()
+
+function isDocsRoutePath(path: string) {
+  return /^\/(?:(?:en|zh)\/)?docs(?:\/|$)/i.test(path)
+}
+
+function isSaveDataEnabled() {
+  if (import.meta.server)
+    return false
+  const connection = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection
+  return Boolean(connection?.saveData)
+}
+
 const activeRoutePath = ref(route.path)
 if (import.meta.client) {
-  activeRoutePath.value = router.currentRoute.value.path || route.path
+  const initialPath = router.currentRoute.value.path || route.path
+  if (isDocsRoutePath(initialPath))
+    activeRoutePath.value = initialPath
   const removeRouteSync = router.afterEach((to) => {
-    activeRoutePath.value = to.path
+    if (isDocsRoutePath(to.path))
+      activeRoutePath.value = to.path
   })
   onBeforeUnmount(removeRouteSync)
 }
+watch(
+  () => route.path,
+  (nextPath) => {
+    if (isDocsRoutePath(nextPath) && activeRoutePath.value !== nextPath)
+      activeRoutePath.value = nextPath
+  },
+)
+
 const docsLocale = computed(() => resolveDocsLocaleFromRoute(activeRoutePath.value))
 const isZhDocs = computed(() => docsLocale.value === 'zh')
 const localizedDocsPath = (path: string | null | undefined) => toLocalizedDocsPath(path, docsLocale.value)
@@ -99,20 +124,13 @@ const shouldSplitDocBody = computed(() => shouldSplitDocsPageBody(activeRoutePat
 // headings, and components on first byte (`docs/engineering/specs/frontend/nexus-docs-rendering-contract.md`).
 const DOCS_PAGE_RENDER_BODY_MODE = '1'
 const currentDocsPageFetchKey = computed(() => `${DOCS_CURRENT_PAGE_FETCH_KEY_PREFIX}:${docPath.value}:${docsLocale.value}:${DOCS_PAGE_RENDER_BODY_MODE}`)
-// The concepts handbook shows in the components sidebar, so it asks for the same scope DocsSidebar does.
-const docsNavigationScope = computed(() => (
-  docPath.value.includes('/docs/dev/components') || isConceptsManualPath(docPath.value)
-    ? 'components'
-    : undefined
-))
-const docsNavigationEndpoint = computed(() => `/api/docs/navigation/${docsLocale.value}/${docsNavigationScope.value ?? 'all'}`)
+const docsNavigationEndpoint = computed(() => `/api/docs/navigation/${docsLocale.value}/all`)
 
 function normalizeContentPath(path: string | null | undefined) {
   if (!path)
     return null
   return normalizeDocsPagePath(path)
 }
-
 
 function fallbackTitleFromPath(path?: string) {
   if (!path)
@@ -144,7 +162,6 @@ function formatRelativeTimeFromNow(date: Date, locale: string) {
   return formatter.format(0, 'second')
 }
 
-
 function toBoolean(value: unknown) {
   if (value === true)
     return true
@@ -162,10 +179,11 @@ function resolveDocMeta(record: Record<string, any> | null | undefined) {
     return {}
 
   const parsedMeta = coerceJsonRecord<Record<string, any>>(record.meta) ?? {}
+  const { body: _body, rawbody: _rawbody, toc: _toc, ...rest } = record
 
   return {
     ...parsedMeta,
-    ...record,
+    ...rest,
   }
 }
 
@@ -178,6 +196,7 @@ const { data: docPayload, status } = await useTypedFetch<Record<string, any> | n
       locale: docsLocale.value,
       body: DOCS_PAGE_RENDER_BODY_MODE,
     })),
+    transform: slimDocsPagePayload,
     default: () => null,
     immediate: import.meta.server,
     watch: false,
@@ -185,9 +204,9 @@ const { data: docPayload, status } = await useTypedFetch<Record<string, any> | n
 )
 
 /**
- * The docs page remounts on every navigation, and Nuxt seeds a newly keyed
- * `useAsyncData` entry with the previous key's data. Own the document locally so
- * a page that is on its way out can never write into the incoming page's state.
+ * Own the committed document locally so SPA navigations can keep rendering the
+ * previous document (stale-while-revalidate) while the incoming page loads, and
+ * commit atomically without stale async writes overwriting a newer route.
  */
 const doc = shallowRef<Record<string, any> | null>(
   isDocsPageRecordForRoute(docPayload.value, docPath.value, docsLocale.value)
@@ -198,9 +217,12 @@ const fullDocCacheKey = computed(() => resolveDocsFullBodyCacheKey(docPath.value
 const fullDoc = shallowRef<Record<string, any> | null>(null)
 const fullDocLoading = ref(false)
 const fullDocError = ref(false)
+const isNavigatingDoc = ref(false)
 
 const docMeta = computed(() => resolveDocMeta((doc.value ?? null) as Record<string, any> | null))
 const renderDoc = computed(() => (shouldSplitDocBody.value ? fullDoc.value ?? doc.value : doc.value))
+const domHasMath = ref(false)
+const hasMathContent = computed(() => hasDocMathContent(renderDoc.value?.body) || domHasMath.value)
 
 // `ProseA` resolves an author's relative content link (`./installation.zh.mdc`) against the
 // document being rendered: such a link is relative to the source file, not to the URL.
@@ -210,7 +232,7 @@ provide(DOCS_SOURCE_PATH_KEY, computed(() => {
 }))
 
 // The loading skeleton reuses TxSkeleton without joining the first-paint TuffEx
-// import graph (docs-page-performance.test.ts guards this): async chunk only.
+// import graph: async chunk only.
 const TxSkeleton = defineAsyncComponent(() => import('@talex-touch/tuffex/skeleton').then(m => m.TxSkeleton))
 
 const isLoading = ref(!doc.value)
@@ -252,27 +274,57 @@ function isStaleDocFetch(fetchId: number, path: string, locale: 'en' | 'zh') {
   return fetchId !== activeDocFetchId || path !== docPath.value || locale !== docsLocale.value
 }
 
-/** Adopt a resolved document as the rendered body and leave the loading state. */
-function settleFullDoc(value: Record<string, any> | null) {
-  fullDoc.value = value
-  // Upgrade a metadata-only stub to the full record so titles and meta come from it too.
-  if (value && !doc.value?.body)
-    doc.value = value
-  isLoading.value = false
+function resetPageTransientState(options: { scrollToTop?: boolean } = {}) {
+  clearCodeEnhanceSchedule()
+  clearPagerFullBodyPrefetchSchedules()
+  clearRenderedCodeHeaders()
+  clearEngagementPanelSchedule()
+  domHasMath.value = false
+  lastEnhancedDocKey = ''
+  shouldMountDocEngagementPanels.value = false
+  pendingDocHash = ''
+
+  if (import.meta.client) {
+    const hash = window.location.hash || route.hash || ''
+    if (hash) {
+      scrollToDocHashTarget(hash)
+    }
+    else if (options.scrollToTop) {
+      window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+    }
+  }
 }
 
-async function loadFullDocForRoute(fetchId: number, path: string, locale: 'en' | 'zh') {
-  if (import.meta.server || !shouldSplitDocBody.value)
-    return
+/** Adopt a resolved document atomically and leave the loading/navigating state. */
+function settleFullDoc(value: Record<string, any> | null, options: { isNavigation?: boolean } = {}) {
+  if (options.isNavigation)
+    resetPageTransientState({ scrollToTop: true })
 
+  fullDoc.value = value
+  if (options.isNavigation || !doc.value?.body)
+    doc.value = value
   fullDocError.value = false
+  fullDocLoading.value = false
+  isLoading.value = false
+  isNavigatingDoc.value = false
+}
+
+async function loadFullDocForRoute(
+  fetchId: number,
+  path: string,
+  locale: 'en' | 'zh',
+  options: { isNavigation?: boolean } = {},
+) {
+  if (import.meta.server)
+    return
 
   const cacheKey = resolveDocsFullBodyCacheKey(path, locale)
   if (hasCachedDocsFullBody(cacheKey)) {
-    settleFullDoc(readCachedDocsFullBody(cacheKey) ?? null)
+    settleFullDoc(readCachedDocsFullBody(cacheKey) ?? null, options)
     return
   }
 
+  fullDocError.value = false
   fullDocLoading.value = true
 
   try {
@@ -283,7 +335,8 @@ async function loadFullDocForRoute(fetchId: number, path: string, locale: 'en' |
         if (isStaleDocFetch(fetchId, path, locale))
           return
 
-        settleFullDoc(cacheDocsFullBody(nextFullDoc))
+        const cached = nextFullDoc ? cacheDocsFullBody(nextFullDoc) : null
+        settleFullDoc(cached, options)
         return
       }
       catch {
@@ -295,6 +348,9 @@ async function loadFullDocForRoute(fetchId: number, path: string, locale: 'en' |
         // same 204 twice more.
         const retryDelay = DOCS_FULL_BODY_RETRY_DELAYS_MS[attempt]
         if (retryDelay === undefined) {
+          if (options.isNavigation)
+            resetPageTransientState({ scrollToTop: true })
+          doc.value = null
           fullDoc.value = null
           fullDocError.value = true
           return
@@ -310,14 +366,14 @@ async function loadFullDocForRoute(fetchId: number, path: string, locale: 'en' |
     }
   }
   finally {
-    // Never leave the spinner up: every exit from the body fetch resolves the view.
+    // Never leave the spinner or busy state up: every exit from the body fetch resolves the view.
     if (!isStaleDocFetch(fetchId, path, locale)) {
       fullDocLoading.value = false
       isLoading.value = false
+      isNavigatingDoc.value = false
     }
   }
 }
-
 
 function seedFullDocFromCurrentDoc() {
   if (!shouldSplitDocBody.value || !doc.value?.body)
@@ -343,7 +399,7 @@ function retryFullDocFetch() {
   if (import.meta.server || fullDocLoading.value)
     return
 
-  void loadActiveDocForRoute()
+  void loadActiveDocForRoute({ isNavigation: false })
 }
 
 function prefetchDocRouteForTarget(normalized: string, locale: 'en' | 'zh') {
@@ -380,7 +436,7 @@ function clearPagerFullBodyPrefetchSchedules() {
 }
 
 function schedulePagerFullDocPrefetch(normalized: string, locale: 'en' | 'zh') {
-  if (import.meta.server)
+  if (import.meta.server || isSaveDataEnabled())
     return
 
   const cacheKey = resolveDocsFullBodyCacheKey(normalized, locale)
@@ -418,7 +474,7 @@ function schedulePagerFullDocPrefetch(normalized: string, locale: 'en' | 'zh') {
 }
 
 function prefetchDocForPath(path: string | null | undefined) {
-  if (import.meta.server || !path)
+  if (import.meta.server || !path || isSaveDataEnabled())
     return
 
   const normalized = normalizeDocsPagePath(path)
@@ -436,70 +492,58 @@ function cancelPrefetchDocForPath(path: string | null | undefined) {
   clearPagerFullBodyPrefetchSchedule(`${normalized}:${docsLocale.value}`)
 }
 
-async function loadActiveDocForRoute() {
+async function loadActiveDocForRoute(options: { isNavigation?: boolean } = {}) {
   if (import.meta.server)
     return
 
   const fetchId = ++activeDocFetchId
   const path = docPath.value
   const locale = docsLocale.value
-  const splitBody = shouldSplitDocBody.value
+  const isNavigation = Boolean(options.isNavigation)
 
   clearFullDocFetchSchedule()
   fullDocLoading.value = false
-  fullDocError.value = false
 
-  const cachedFullDoc = splitBody ? readCachedDocsFullBody(fullDocCacheKey.value) : undefined
+  const cachedFullDoc = readCachedDocsFullBody(fullDocCacheKey.value)
   if (cachedFullDoc !== undefined) {
-    settleFullDoc(cachedFullDoc)
+    settleFullDoc(cachedFullDoc, { isNavigation })
     return
   }
 
-  // Preserve the complete SSR document during hydration.
+  // Preserve the complete SSR document during initial hydration.
   const hasResolvedDoc = isDocsPageRecordForRoute(doc.value, path, locale)
-  if (!hasResolvedDoc) {
+  if (hasResolvedDoc) {
+    if (!seedFullDocFromCurrentDoc()) {
+      fullDoc.value = doc.value
+      isLoading.value = false
+      isNavigatingDoc.value = false
+    }
+    return
+  }
+
+  // Stale-while-revalidate on SPA navigation: keep the previous document visible
+  // with a subtle busy bar until the incoming document commits.
+  const hasPreviousDoc = isNavigation && Boolean(doc.value || fullDoc.value)
+  if (hasPreviousDoc) {
+    isNavigatingDoc.value = true
+    isLoading.value = false
+  }
+  else {
     doc.value = null
     fullDoc.value = null
+    fullDocError.value = false
+    isNavigatingDoc.value = false
+    isLoading.value = true
   }
-  isLoading.value = !hasResolvedDoc
 
-  try {
-    if (splitBody) {
-      if (!seedFullDocFromCurrentDoc())
-        await loadFullDocForRoute(fetchId, path, locale)
-      return
-    }
-    if (!hasResolvedDoc) {
-      const nextDoc = await requestDocsPage({ path, locale, body: '1' })
-
-      if (isStaleDocFetch(fetchId, path, locale))
-        return
-
-      doc.value = nextDoc
-    }
-    isLoading.value = false
-
-  }
-  catch {
-    if (!isStaleDocFetch(fetchId, path, locale)) {
-      isLoading.value = false
-      fullDocLoading.value = false
-      fullDocError.value = true
-      clearFullDocFetchSchedule()
-    }
-  }
+  await loadFullDocForRoute(fetchId, path, locale, { isNavigation })
 }
 
-// Each navigation mounts a fresh page instance, so the incoming instance owns its load.
 if (import.meta.client)
-  void loadActiveDocForRoute()
+  void loadActiveDocForRoute({ isNavigation: false })
 
 watch(requestKey, () => {
-  clearCodeEnhanceSchedule()
-  clearPagerFullBodyPrefetchSchedules()
-  clearRenderedCodeHeaders()
-  isLoading.value = true
-  void loadActiveDocForRoute()
+  void loadActiveDocForRoute({ isNavigation: true })
 })
 
 watch(
@@ -532,19 +576,21 @@ const viewState = computed(() => {
 if (import.meta.server && viewState.value === 'not-found')
   setResponseStatus(404)
 
-// DocsSidebar asks for the same key. Nuxt's default dedupe ('cancel') aborts the first
-// promise and starts a second request when two subscribers mount in one tick, so the
-// navigation tree left the browser twice per page (measured in production). 'defer'
-// makes the second subscriber await the request already in flight.
+// DocsSidebar asks for the same key. 'defer' shares the in-flight request on initial mount,
+// and getCachedData prevents SPA navigations from refetching `/api/docs/navigation/*`.
 const { data: navigationTreePayload } = await useTypedFetch<unknown>(
   docsNavigationEndpoint,
   {
-    key: computed(() => `docs-navigation:${docsLocale.value}:${docsNavigationScope.value ?? 'all'}`),
+    key: computed(() => `docs-navigation:${docsLocale.value}:all`),
     server: false,
     lazy: true,
     dedupe: 'defer',
     responseType: 'json',
     default: () => [],
+    getCachedData: (key: string, app: ReturnType<typeof useNuxtApp>) => {
+      const cached = app.payload.data[key] ?? app.static.data[key]
+      return Array.isArray(cached) && cached.length > 0 ? cached : undefined
+    },
   },
 )
 
@@ -556,28 +602,27 @@ const viewCount = ref<number | null>(null)
 const docsClientPanelsMounted = ref(false)
 const shouldMountDocClientPanels = ref(false)
 const shouldMountDocEngagementPanels = ref(false)
-// The renderer resolves the components a body uses before it draws anything, so
-// the skeleton holds space until Suspense resolves. A body already present at setup
-// was rendered on the server, and hydration must agree with that.
-const primaryDocBodyResolved = ref(Boolean(renderDoc.value?.body))
-// The heading the URL points at until hydration finishes and can scroll into view.
+// Keep `nuxtApp.isHydrating` true until the inner `<Suspense>` around `<ContentRenderer>`
+// resolves its async MDC components on initial hydration only.
+let finishDocBodyHydration: (() => void) | null = null
+if (import.meta.client && nuxtApp.isHydrating && viewState.value === 'content' && Boolean(renderDoc.value?.body)) {
+  const done = nuxtApp.deferHydration()
+  const releaseDocBodyHydration = () => {
+    if (!finishDocBodyHydration)
+      return
+    finishDocBodyHydration = null
+    done()
+  }
+  finishDocBodyHydration = releaseDocBodyHydration
+  const removeErrorHook = nuxtApp.hooks.hookOnce('app:error', releaseDocBodyHydration)
+  onBeforeUnmount(() => {
+    removeErrorHook()
+    releaseDocBodyHydration()
+  })
+}
+// The heading the URL points at until hydration or SPA body resolution can scroll into view.
 let pendingDocHash = ''
 const docEngagementAnchorRef = ref<HTMLElement | null>(null)
-
-watch(
-  () => requestKey.value,
-  () => {
-    outlineState.value = []
-    docTitleState.value = ''
-    docLocaleState.value = docsLocale.value
-    docMetaState.value = {}
-    clearDocClientPanelIntentListeners()
-    clearDocClientPanelSchedule()
-    shouldMountDocClientPanels.value = false
-    shouldMountDocEngagementPanels.value = false
-    pendingDocHash = ''
-  },
-)
 
 type TocEntry = DocTocEntry
 
@@ -640,9 +685,6 @@ const docScope = computed(() => {
   const normalizedPath = typeof normalized === 'string' ? normalized : ''
   return {
     path: normalizedPath,
-    isComponent: normalizedPath.includes('/docs/dev/components'),
-    // The concepts handbook: listed with the components, though it lives under `/docs/dev`.
-    isConcept: isConceptsManualPath(normalizedPath),
     isExtension: normalizedPath.includes('/docs/dev/extensions'),
     isGuide: normalizedPath.startsWith('/docs/guide'),
     isDev: normalizedPath.startsWith('/docs/dev'),
@@ -661,18 +703,13 @@ const docDisplayDescription = computed(() =>
 )
 
 const heroBreadcrumbs = computed(() => {
-  const isComponentDoc = docScope.value.isComponent || docScope.value.isConcept
-  const prefixLabel = isComponentDoc
-    ? (isZhDocs.value ? '组件' : 'Components')
-    : (isZhDocs.value ? '文档' : 'Docs')
-  const prefixPath = isComponentDoc ? '/docs/dev/components' : '/docs'
+  const prefixLabel = isZhDocs.value ? '文档' : 'Docs'
+  const prefixPath = '/docs'
   const category = docMeta.value.category ? String(docMeta.value.category) : ''
   const categoryLabel = category ? normalizeTitleForLocale(category) : ''
   const label = docDisplayTitle.value || categoryLabel
   const normalized = docScope.value.path
   const crumbs = [{ label: prefixLabel, path: prefixPath }]
-  if (docScope.value.isConcept && canonicalDocsPageIdentity(normalized) !== CONCEPTS_MANUAL_PATH)
-    crumbs.push({ label: t('docsSidebar.conceptsManual'), path: CONCEPTS_MANUAL_PATH })
   if (label)
     crumbs.push({ label, path: normalized ?? undefined })
   return crumbs
@@ -694,10 +731,6 @@ const heroSinceLabel = computed(() => {
   const raw = docMeta.value?.since ?? docMeta.value?.meta?.since
   const fallback = (() => {
     if (isZhDocs.value) {
-      if (docScope.value.isConcept)
-        return '设计理念'
-      if (docScope.value.isComponent)
-        return '通用组件'
       if (docScope.value.isExtension)
         return '通用扩展'
       if (docScope.value.isGuide)
@@ -706,10 +739,6 @@ const heroSinceLabel = computed(() => {
         return '通用开发'
       return '通用文档'
     }
-    if (docScope.value.isConcept)
-      return 'Design Concept'
-    if (docScope.value.isComponent)
-      return 'Universal Component'
     if (docScope.value.isExtension)
       return 'Universal Extension'
     if (docScope.value.isGuide)
@@ -771,7 +800,7 @@ function matchesLocale(target: any) {
 }
 
 const normalizedDocPath = computed(() => normalizeContentPath(doc.value?.path ?? docPath.value))
-const activeComponentSlug = computed(() => resolveComponentSlugFromPath(normalizedDocPath.value ?? docPath.value))
+const committedDocPath = computed(() => normalizedDocPath.value ?? docPath.value)
 
 function itemTitle(title?: string, path?: string) {
   const fallback = fallbackTitleFromPath(path)
@@ -806,34 +835,12 @@ const navigationSections = computed(() => {
   return items
 })
 
-// The handbook reads in its index's group order, the one the sidebar shows, not the
-// tree's alphabetical one; a page missing from the groups follows them in tree order.
-function conceptsManualPager(sections: any[], currentPath: string) {
-  const nodes = collectSectionPages(sections.find(section => normalizeContentPath(section.path) === CONCEPTS_MANUAL_PATH))
-  const ordered = CONCEPTS_MANUAL_READING_ORDER.map(path => nodes.find(node => canonicalDocsPageIdentity(node.path) === path))
-  const seen = new Set<string>()
-  const pages = [...ordered, ...nodes].filter((node) => {
-    const identity = node ? canonicalDocsPageIdentity(node.path) : ''
-    if (!identity || seen.has(identity))
-      return false
-    seen.add(identity)
-    return true
-  })
-  const index = pages.findIndex(page => canonicalDocsPageIdentity(page.path) === canonicalDocsPageIdentity(currentPath))
-  if (index === -1)
-    return { prev: null, next: null, sectionTitle: null }
-  return { prev: pages[index - 1] ?? null, next: pages[index + 1] ?? null, sectionTitle: t('docsSidebar.conceptsManual') }
-}
-
 const docPager = computed(() => {
   const sections = navigationSections.value
   const currentPath = normalizedDocPath.value
 
   if (!sections.length || !currentPath)
     return { prev: null, next: null, sectionTitle: null }
-
-  if (isConceptsManualPath(currentPath))
-    return conceptsManualPager(sections, currentPath)
 
   for (const section of sections) {
     const pages = collectSectionPages(section)
@@ -899,6 +906,7 @@ const heroUpdatedLabel = computed(() => {
 })
 const isDocVerified = computed(() => toBoolean(docMeta.value?.verified))
 const heroVerifiedLabel = computed(() => (isDocVerified.value ? t('docs.verified') : ''))
+
 interface DocsProseHeadingProps {
   id?: string
 }
@@ -922,66 +930,6 @@ const docsProseComponents = {
   h5: createDocsProseHeading('h5'),
   h6: createDocsProseHeading('h6'),
 }
-
-type DocSyncStatusKey = 'not_started' | 'in_progress' | 'migrated' | 'verified'
-
-const DOC_SYNC_STATUS_ALIASES: Record<string, DocSyncStatusKey> = {
-  未迁移: 'not_started',
-  迁移中: 'in_progress',
-  已迁移: 'migrated',
-  已确认: 'verified',
-  not_started: 'not_started',
-  in_progress: 'in_progress',
-  migrated: 'migrated',
-  verified: 'verified',
-  // Reviewed docs are finished; without this they fall back to not_started and read as in progress.
-  reviewed: 'verified',
-}
-
-const docSyncStatus = computed<DocSyncStatusKey>(() => {
-  if (isDocVerified.value)
-    return 'verified'
-
-  const raw = typeof docMeta.value?.syncStatus === 'string'
-    ? docMeta.value.syncStatus.trim()
-    : ''
-
-  return DOC_SYNC_STATUS_ALIASES[raw] ?? 'not_started'
-})
-const isDocPerformancePending = computed(() => {
-  const raw = typeof docMeta.value?.syncStatus === 'string'
-    ? docMeta.value.syncStatus.trim().toLowerCase()
-    : ''
-  const normalizedSyncStatus = DOC_SYNC_STATUS_ALIASES[raw] ?? raw
-  const hasReviewedSyncStatus = raw === 'reviewed' || normalizedSyncStatus === 'verified'
-
-  return !hasReviewedSyncStatus || !isDocVerified.value
-})
-
-const heroSyncBanner = computed(() => {
-  if (!docScope.value.isComponent || docSyncStatus.value === 'verified')
-    return null
-
-  if (docSyncStatus.value === 'in_progress' || docSyncStatus.value === 'not_started') {
-    return {
-      status: 'in_progress',
-      icon: 'i-carbon-in-progress',
-      title: isZhDocs.value ? '当前组件文档正在开发中' : 'This component doc is in progress',
-      description: isZhDocs.value
-        ? '该页面正在持续迁移，示例与 API 可能会继续调整。'
-        : 'This page is still being migrated. Demos and API details may change.',
-    }
-  }
-
-  return {
-    status: 'migrated',
-    icon: 'i-carbon-warning-alt',
-    title: isZhDocs.value ? '该页面由 AI 迁移生成，请谨慎使用' : 'This page was migrated by AI, please review carefully',
-    description: isZhDocs.value
-      ? '内容已迁移完成，但仍建议结合源码和人工评审结果使用。'
-      : 'Migration is complete, but please validate against source code and manual review.',
-  }
-})
 
 const formattedLastUpdated = computed(() => {
   if (!lastUpdatedDate.value)
@@ -1008,7 +956,7 @@ const docSeoDescription = computed(() => {
   if (description)
     return description
   return isZhDocs.value
-    ? 'Tuff 官方文档，涵盖桌面指令中心、插件扩展、组件与开发者 API。'
+    ? 'Tuff 官方文档，涵盖桌面指令中心、插件扩展与开发者 API。'
     : appDescription
 })
 
@@ -1108,10 +1056,8 @@ const currentDocRenderKey = computed(() => {
   const path = typeof source?.path === 'string' ? source.path : docPath.value
   return `${path}:${docsLocale.value}:${source?.body ? 'body' : 'meta'}`
 })
+
 const isDocsContentReady = computed(() => viewState.value === 'content' && Boolean(doc.value))
-const shouldShowDocBodySkeleton = computed(() =>
-  renderDoc.value?.body ? !primaryDocBodyResolved.value : !fullDocError.value,
-)
 let lastEnhancedDocKey = ''
 const DOC_ENGAGEMENT_PANEL_ROOT_MARGIN = '480px 0px'
 const DOC_CLIENT_PANEL_IDLE_TIMEOUT_MS = 250
@@ -1125,7 +1071,7 @@ watch(
       const rawTitle = currentDoc.seo?.title ?? currentDoc.title ?? ''
       docTitleState.value = normalizeTitleForLocale(String(rawTitle), currentDoc.path ?? docPath.value)
       docLocaleState.value = resolveDocLocale(currentDoc)
-      docMetaState.value = { ...docMeta.value }
+      docMetaState.value = buildDocsMetaState(docMeta.value)
       if (!outlineState.value.length)
         void scheduleOutlineSync(120)
       return
@@ -1390,9 +1336,8 @@ function clearRenderedCodeHeaders() {
   if (import.meta.server || !codeHeaderTargets.size)
     return
 
-  for (const target of codeHeaderTargets) {
+  for (const target of codeHeaderTargets)
     target.replaceChildren()
-  }
   codeHeaderTargets.clear()
 }
 
@@ -1419,12 +1364,11 @@ function clearEngagementPanelSchedule() {
   }
 }
 
-function handlePrimaryDocBodyPending() {
-  primaryDocBodyResolved.value = false
-}
-
 function handlePrimaryDocBodyResolve() {
-  primaryDocBodyResolved.value = true
+  if (finishDocBodyHydration) {
+    const release = finishDocBodyHydration
+    void nextTick(release)
+  }
   void scheduleCodeEnhance(0)
   void scheduleOutlineSync(0)
   // The body may arrive after SPA navigation, so retry scrolling to the active hash target.
@@ -1585,6 +1529,9 @@ function enhanceCodeBlocks() {
     pre.dataset.codeEnhanced = 'true'
   })
 
+  if (!domHasMath.value && document.querySelector('.docs-prose .katex, .docs-prose .katex-display'))
+    domHasMath.value = true
+
   void renderMermaidBlocks()
 }
 
@@ -1676,274 +1623,277 @@ watch(
     scheduleDocEngagementPanels()
   },
 )
-
 </script>
 
 <template>
   <div class="docs-root relative">
+    <LazyDocsKatexStyles v-if="hasMathContent" />
     <div :key="viewState" class="docs-state">
-        <div v-if="viewState === 'loading'" class="docs-surface docs-surface--skeleton" role="status" aria-live="polite">
-          <span class="sr-only">{{ t('docs.loading') }}</span>
-          <div class="docs-skeleton-hero" aria-hidden="true">
-            <TxSkeleton :width="168" :height="12" :radius="6" />
-            <TxSkeleton width="56%" :height="34" :radius="10" />
-            <TxSkeleton :height="14" :radius="7" />
-            <TxSkeleton width="66%" :height="14" :radius="7" />
-            <div class="docs-skeleton-chips">
-              <TxSkeleton :width="76" :height="22" :radius="999" />
-              <TxSkeleton :width="100" :height="22" :radius="999" />
-              <TxSkeleton :width="88" :height="22" :radius="999" />
-            </div>
-          </div>
-          <div
-            v-for="section in 2"
-            :key="`docs-skeleton-section-${section}`"
-            class="docs-skeleton-section"
-            aria-hidden="true"
-          >
-            <TxSkeleton width="32%" :height="20" :radius="8" />
-            <TxSkeleton :lines="3" :height="13" :radius="7" />
-            <TxSkeleton :height="128" :radius="14" />
+      <div v-if="viewState === 'loading'" class="docs-surface docs-surface--skeleton" role="status" aria-live="polite">
+        <span class="sr-only">{{ t('docs.loading') }}</span>
+        <div class="docs-skeleton-hero" aria-hidden="true">
+          <TxSkeleton :width="168" :height="12" :radius="6" />
+          <TxSkeleton width="56%" :height="34" :radius="10" />
+          <TxSkeleton :height="14" :radius="7" />
+          <TxSkeleton width="66%" :height="14" :radius="7" />
+          <div class="docs-skeleton-chips">
+            <TxSkeleton :width="76" :height="22" :radius="999" />
+            <TxSkeleton :width="100" :height="22" :radius="999" />
+            <TxSkeleton :width="88" :height="22" :radius="999" />
           </div>
         </div>
-
         <div
-          v-else-if="viewState === 'content'"
-          class="docs-surface"
-          :class="{ 'docs-surface--hero': showDocHero }"
+          v-for="section in 2"
+          :key="`docs-skeleton-section-${section}`"
+          class="docs-skeleton-section"
+          aria-hidden="true"
         >
-          <div v-if="showDocHero" class="docs-hero-block">
-            <div v-if="heroBreadcrumbs.length" class="docs-hero-breadcrumb">
-              <template v-for="(crumb, index) in heroBreadcrumbs" :key="`${crumb.label}-${index}`">
-                <NuxtLink
-                  v-if="crumb.path && index < heroBreadcrumbs.length - 1"
-                  :to="localizedDocsPath(crumb.path)"
-                  class="docs-hero-crumb"
-                >
-                  {{ crumb.label }}
-                </NuxtLink>
-                <span
-                  v-else
-                  class="docs-hero-crumb"
-                  :class="{ 'is-current': index === heroBreadcrumbs.length - 1 }"
-                  :aria-current="index === heroBreadcrumbs.length - 1 ? 'page' : undefined"
-                >
-                  {{ crumb.label }}
-                </span>
-                <span v-if="index < heroBreadcrumbs.length - 1" class="docs-hero-crumb-sep">/</span>
-              </template>
-            </div>
-            <DocHero
-              :title="docDisplayTitle"
-              :description="docDisplayDescription"
-              :since-label="heroSinceLabel"
-              :beta-label="heroBetaLabel"
-              :read-time-label="heroReadTimeLabel"
-              :updated-label="heroUpdatedLabel"
-              :verified-label="heroVerifiedLabel"
-            />
-            <DocsFrameworkStatusBar
-              v-if="activeComponentSlug"
-              :slug="activeComponentSlug"
-            />
-          </div>
-          <div
-            v-if="heroSyncBanner"
-            class="docs-sync-banner"
-            :data-status="heroSyncBanner.status"
-          >
-            <span class="docs-sync-banner__icon" :class="heroSyncBanner.icon" />
-            <div class="docs-sync-banner__content">
-              <p class="docs-sync-banner__title">
-                {{ heroSyncBanner.title }}
-              </p>
-              <p class="docs-sync-banner__desc">
-                {{ heroSyncBanner.description }}
-              </p>
-            </div>
-          </div>
-          <template v-if="renderDoc?.body">
-            <!-- A new document hides the previous one at once (timeout 0); the
-                 skeleton below stands in until it resolves. -->
-            <Suspense :timeout="0" @pending="handlePrimaryDocBodyPending" @resolve="handlePrimaryDocBodyResolve">
-              <ContentRenderer
-                :key="currentDocRenderKey"
-                :value="renderDoc ?? {}"
-                :prose="false"
-                :components="docsProseComponents"
-                :class="[
-                  'docs-prose',
-                  'docs-rendered-body',
-                  'markdown-body',
-                  'max-w-none',
-                  'prose',
-                  'prose-neutral',
-                  'dark:prose-invert',
-                  { 'docs-prose--hero': showDocHero },
-                ]"
-              />
-            </Suspense>
-          </template>
-          <div v-else-if="fullDocError" class="docs-body-error" role="alert">
-            <span class="docs-body-error__icon i-carbon-warning" aria-hidden="true" />
-            <div class="docs-body-error__content">
-              <p class="docs-body-error__title">
-                {{ t('docs.bodyErrorTitle') }}
-              </p>
-              <p class="docs-body-error__desc">
-                {{ t('docs.bodyErrorDescription') }}
-              </p>
-            </div>
-            <button type="button" class="docs-body-error__retry" @click="retryFullDocFetch">
-              {{ t('docs.bodyErrorRetry') }}
-            </button>
-          </div>
-          <div
-            v-if="shouldShowDocBodySkeleton"
-            class="docs-prose docs-prose-skeleton markdown-body max-w-none prose prose-neutral dark:prose-invert"
-            :class="{ 'docs-prose-skeleton--component': docScope.isComponent }"
-            aria-hidden="true"
-          >
-            <span class="docs-prose-skeleton__line is-wide" />
-            <span class="docs-prose-skeleton__line" />
-            <span class="docs-prose-skeleton__line is-short" />
-            <span class="docs-prose-skeleton__block" />
-            <span class="docs-prose-skeleton__line" />
-            <span class="docs-prose-skeleton__line is-mid" />
-          </div>
-          <ClientOnly>
-            <LazyDocsEngagementClient
-              v-if="shouldMountDocClientPanels"
-              :doc-path="docPath"
-              :title="docDisplayTitle || (doc?.title ? String(doc.title) : '')"
-              :enabled="viewState === 'content'"
-              :is-admin="isAdmin"
-              @view-count="viewCount = $event"
-            />
-            <LazyDocsAdminAnalyticsClient
-              v-if="shouldMountDocClientPanels && isAdmin"
-              :doc-path="docPath"
-              :is-admin="isAdmin"
-              :is-zh="isZhDocs"
-              :ready="viewState === 'content'"
-            />
-          </ClientOnly>
-          <div
-            v-if="formattedLastUpdated || isAdmin"
-            class="mt-8 flex flex-wrap items-center justify-between gap-4 border-t border-dark/5 pt-6 text-sm text-black/40 dark:border-light/5 dark:text-light/40"
-          >
-            <div class="flex flex-wrap items-center gap-4">
-              <div v-if="formattedLastUpdated" class="flex items-center gap-1.5">
-                <span class="i-carbon-time" />
-                <span>
-                  {{ t('docs.lastUpdatedLabel') }}
-                  <span class="text-black/70 dark:text-light/70">{{ formattedLastUpdated }}</span>
-                </span>
-              </div>
-              <div v-if="isAdmin && viewCount !== null" class="flex items-center gap-1.5 rounded-md bg-primary/10 px-2 py-0.5 text-primary">
-                <span class="i-carbon-view" />
-                <span class="font-medium">{{ viewCount }}</span>
-              </div>
-            </div>
-            <div class="flex items-center gap-3">
-              <button
-                class="flex items-center gap-1.5 text-black/40 transition hover:text-black/70 dark:text-light/40 dark:hover:text-light/70"
-                @click="shareCurrentPage"
-              >
-                <span class="i-carbon-share text-sm" />
-                <span class="text-xs">{{ t('docs.share', 'Share') }}</span>
-              </button>
-              <a
-                v-if="editOnGitHubUrl"
-                :href="editOnGitHubUrl"
-                target="_blank"
-                rel="noopener noreferrer"
-                class="flex items-center gap-1.5 text-black/40 no-underline transition hover:text-black/70 dark:text-light/40 dark:hover:text-light/70"
-              >
-                <span class="i-carbon-edit text-sm" />
-                <span class="text-xs">{{ t('docs.editOnGitHub', 'Edit this page') }}</span>
-              </a>
-            </div>
-          </div>
-
-          <div ref="docEngagementAnchorRef" aria-hidden="true" />
-
-          <ClientOnly>
-            <LazyDocsFeedback v-if="shouldMountDocEngagementPanels" :doc-path="docPath" />
-          </ClientOnly>
-
-          <div v-if="pagerPrevPath || pagerNextPath" class="space-y-4">
-            <div v-if="docPager.sectionTitle" class="text-xs text-black/40 tracking-[0.12em] uppercase dark:text-light/40">
-              {{ docPager.sectionTitle }}
-            </div>
-            <div class="grid gap-4 lg:grid-cols-2">
-              <NuxtLink
-                v-if="pagerPrevPath"
-                :to="localizedDocsPath(pagerPrevPath)"
-                :prefetch="false"
-                class="group flex flex-col gap-2 border border-dark/10 rounded-2xl px-5 py-4 no-underline transition dark:border-light/10 hover:border-dark/20 hover:bg-dark/5 dark:hover:border-light/20 dark:hover:bg-light/5"
-                @focus="prefetchDocForPath(pagerPrevPath)"
-                @blur="cancelPrefetchDocForPath(pagerPrevPath)"
-                @mouseenter="prefetchDocForPath(pagerPrevPath)"
-                @mouseleave="cancelPrefetchDocForPath(pagerPrevPath)"
-                @touchstart.passive="prefetchDocForPath(pagerPrevPath)"
-              >
-                <span class="dark:group-hover:text-primary-200 flex items-center gap-2 text-xs text-black/40 font-medium tracking-[0.12em] uppercase dark:text-light/40 group-hover:text-primary">
-                  <span class="i-carbon-arrow-left text-base" />
-                  {{ t('docs.previousChapter') }}
-                </span>
-                <span class="dark:group-hover:text-primary-200 text-base text-black font-semibold transition dark:text-light group-hover:text-primary">
-                  {{ pagerPrevTitle }}
-                </span>
-              </NuxtLink>
-              <NuxtLink
-                v-if="pagerNextPath"
-                :to="localizedDocsPath(pagerNextPath)"
-                :prefetch="false"
-                class="group flex flex-col items-end gap-2 border border-dark/10 rounded-2xl px-5 py-4 text-right no-underline transition dark:border-light/10 hover:border-primary/30 hover:bg-primary/5 dark:hover:border-primary/40 dark:hover:bg-primary/10"
-                @focus="prefetchDocForPath(pagerNextPath)"
-                @blur="cancelPrefetchDocForPath(pagerNextPath)"
-                @mouseenter="prefetchDocForPath(pagerNextPath)"
-                @mouseleave="cancelPrefetchDocForPath(pagerNextPath)"
-                @touchstart.passive="prefetchDocForPath(pagerNextPath)"
-              >
-                <span class="dark:group-hover:text-primary-200 flex items-center justify-end gap-2 text-xs text-black/40 font-medium tracking-[0.12em] uppercase dark:text-light/40 group-hover:text-primary">
-                  {{ t('docs.nextChapter') }}
-                  <span class="i-carbon-arrow-right text-base" />
-                </span>
-                <span class="dark:group-hover:text-primary-200 text-base text-black font-semibold transition dark:text-light group-hover:text-primary">
-                  {{ pagerNextTitle }}
-                </span>
-              </NuxtLink>
-            </div>
-          </div>
-
-          <ClientOnly>
-            <LazyDocsComments v-if="shouldMountDocEngagementPanels" :doc-path="docPath" />
-          </ClientOnly>
+          <TxSkeleton width="32%" :height="20" :radius="8" />
+          <TxSkeleton :lines="3" :height="13" :radius="7" />
+          <TxSkeleton :height="128" :radius="14" />
         </div>
+      </div>
 
+      <div
+        v-else-if="viewState === 'content'"
+        class="docs-surface"
+        :class="{
+          'docs-surface--hero': showDocHero,
+          'docs-surface--navigating': isNavigatingDoc,
+        }"
+        :aria-busy="isNavigatingDoc ? 'true' : undefined"
+      >
+        <div
+          v-if="isNavigatingDoc"
+          class="docs-nav-progress"
+          role="progressbar"
+          :aria-label="t('docs.loading')"
+        />
+        <div v-if="showDocHero" class="docs-hero-block">
+          <div v-if="heroBreadcrumbs.length" class="docs-hero-breadcrumb">
+            <template v-for="(crumb, index) in heroBreadcrumbs" :key="`${crumb.label}-${index}`">
+              <NuxtLink
+                v-if="crumb.path && index < heroBreadcrumbs.length - 1"
+                :to="localizedDocsPath(crumb.path)"
+                class="docs-hero-crumb"
+              >
+                {{ crumb.label }}
+              </NuxtLink>
+              <span
+                v-else
+                class="docs-hero-crumb"
+                :class="{ 'is-current': index === heroBreadcrumbs.length - 1 }"
+                :aria-current="index === heroBreadcrumbs.length - 1 ? 'page' : undefined"
+              >
+                {{ crumb.label }}
+              </span>
+              <span v-if="index < heroBreadcrumbs.length - 1" class="docs-hero-crumb-sep">/</span>
+            </template>
+          </div>
+          <DocHero
+            :title="docDisplayTitle"
+            :description="docDisplayDescription"
+            :since-label="heroSinceLabel"
+            :beta-label="heroBetaLabel"
+            :read-time-label="heroReadTimeLabel"
+            :updated-label="heroUpdatedLabel"
+            :verified-label="heroVerifiedLabel"
+          />
+        </div>
+        <template v-if="renderDoc?.body">
+          <!-- Keep the previous document visible for up to 180ms during async MDC switches
+               so fast SPA navigations never flash a blank skeleton. -->
+          <Suspense :timeout="180" @resolve="handlePrimaryDocBodyResolve">
+            <ContentRenderer
+              :key="currentDocRenderKey"
+              :value="renderDoc ?? {}"
+              :prose="false"
+              :components="docsProseComponents"
+              :class="[
+                'docs-prose',
+                'docs-rendered-body',
+                'markdown-body',
+                'max-w-none',
+                'prose',
+                'prose-neutral',
+                'dark:prose-invert',
+                { 'docs-prose--hero': showDocHero },
+              ]"
+            />
+            <template #fallback>
+              <div
+                class="docs-prose docs-prose-skeleton markdown-body max-w-none prose prose-neutral dark:prose-invert"
+                aria-hidden="true"
+              >
+                <span class="docs-prose-skeleton__line is-wide" />
+                <span class="docs-prose-skeleton__line" />
+                <span class="docs-prose-skeleton__line is-short" />
+                <span class="docs-prose-skeleton__block" />
+                <span class="docs-prose-skeleton__line" />
+                <span class="docs-prose-skeleton__line is-mid" />
+              </div>
+            </template>
+          </Suspense>
+        </template>
+        <div v-else-if="fullDocError" class="docs-body-error" role="alert">
+          <span class="docs-body-error__icon i-carbon-warning" aria-hidden="true" />
+          <div class="docs-body-error__content">
+            <p class="docs-body-error__title">
+              {{ t('docs.bodyErrorTitle') }}
+            </p>
+            <p class="docs-body-error__desc">
+              {{ t('docs.bodyErrorDescription') }}
+            </p>
+          </div>
+          <button type="button" class="docs-body-error__retry" @click="retryFullDocFetch">
+            {{ t('docs.bodyErrorRetry') }}
+          </button>
+        </div>
         <div
           v-else
-          class="docs-state__body p-10 text-center space-y-4"
+          class="docs-prose docs-prose-skeleton markdown-body max-w-none prose prose-neutral dark:prose-invert"
+          aria-hidden="true"
         >
-          <div class="mx-auto h-16 w-16 flex items-center justify-center rounded-full bg-dark/5 text-3xl text-black dark:bg-light/10 dark:text-light">
-            <span class="i-carbon-warning" />
-          </div>
-          <div class="text-lg text-black font-semibold dark:text-light">
-            {{ t('docs.notFoundTitle') }}
-          </div>
-          <p class="text-sm text-gray-500 dark:text-gray-300">
-            {{ t('docs.notFoundDescription') }}
-          </p>
-          <NuxtLink
-            :to="localizedDocsPath('/docs')"
-            class="inline-flex items-center justify-center gap-2 rounded-full bg-dark px-5 py-2 text-sm text-light font-medium no-underline transition dark:bg-light hover:bg-black dark:text-black dark:hover:bg-light/90"
-          >
-            <span class="i-carbon-arrow-left text-base" />
-            {{ t('docs.backHome') }}
-          </NuxtLink>
+          <span class="docs-prose-skeleton__line is-wide" />
+          <span class="docs-prose-skeleton__line" />
+          <span class="docs-prose-skeleton__line is-short" />
+          <span class="docs-prose-skeleton__block" />
+          <span class="docs-prose-skeleton__line" />
+          <span class="docs-prose-skeleton__line is-mid" />
         </div>
+        <ClientOnly>
+          <LazyDocsEngagementClient
+            v-if="shouldMountDocClientPanels"
+            :doc-path="committedDocPath"
+            :title="docDisplayTitle || (doc?.title ? String(doc.title) : '')"
+            :enabled="viewState === 'content' && !isNavigatingDoc"
+            :is-admin="isAdmin"
+            @view-count="viewCount = $event"
+          />
+          <LazyDocsAdminAnalyticsClient
+            v-if="shouldMountDocClientPanels && isAdmin"
+            :doc-path="committedDocPath"
+            :is-admin="isAdmin"
+            :is-zh="isZhDocs"
+            :ready="viewState === 'content' && !isNavigatingDoc"
+          />
+        </ClientOnly>
+        <div
+          v-if="formattedLastUpdated || isAdmin"
+          class="mt-8 flex flex-wrap items-center justify-between gap-4 border-t border-dark/5 pt-6 text-sm text-black/40 dark:border-light/5 dark:text-light/40"
+        >
+          <div class="flex flex-wrap items-center gap-4">
+            <div v-if="formattedLastUpdated" class="flex items-center gap-1.5">
+              <span class="i-carbon-time" />
+              <span>
+                {{ t('docs.lastUpdatedLabel') }}
+                <span class="text-black/70 dark:text-light/70">{{ formattedLastUpdated }}</span>
+              </span>
+            </div>
+            <div v-if="isAdmin && viewCount !== null" class="flex items-center gap-1.5 rounded-md bg-primary/10 px-2 py-0.5 text-primary">
+              <span class="i-carbon-view" />
+              <span class="font-medium">{{ viewCount }}</span>
+            </div>
+          </div>
+          <div class="flex items-center gap-3">
+            <button
+              class="flex items-center gap-1.5 text-black/40 transition hover:text-black/70 dark:text-light/40 dark:hover:text-light/70"
+              @click="shareCurrentPage"
+            >
+              <span class="i-carbon-share text-sm" />
+              <span class="text-xs">{{ t('docs.share', 'Share') }}</span>
+            </button>
+            <a
+              v-if="editOnGitHubUrl"
+              :href="editOnGitHubUrl"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="flex items-center gap-1.5 text-black/40 no-underline transition hover:text-black/70 dark:text-light/40 dark:hover:text-light/70"
+            >
+              <span class="i-carbon-edit text-sm" />
+              <span class="text-xs">{{ t('docs.editOnGitHub', 'Edit this page') }}</span>
+            </a>
+          </div>
+        </div>
+
+        <div ref="docEngagementAnchorRef" aria-hidden="true" />
+
+        <ClientOnly>
+          <LazyDocsFeedback v-if="shouldMountDocEngagementPanels" :doc-path="committedDocPath" />
+        </ClientOnly>
+
+        <div v-if="pagerPrevPath || pagerNextPath" class="space-y-4">
+          <div v-if="docPager.sectionTitle" class="text-xs text-black/40 tracking-[0.12em] uppercase dark:text-light/40">
+            {{ docPager.sectionTitle }}
+          </div>
+          <div class="grid gap-4 lg:grid-cols-2">
+            <NuxtLink
+              v-if="pagerPrevPath"
+              :to="localizedDocsPath(pagerPrevPath)"
+              :prefetch="false"
+              class="group flex flex-col gap-2 border border-dark/10 rounded-2xl px-5 py-4 no-underline transition dark:border-light/10 hover:border-dark/20 hover:bg-dark/5 dark:hover:border-light/20 dark:hover:bg-light/5"
+              @focus="prefetchDocForPath(pagerPrevPath)"
+              @blur="cancelPrefetchDocForPath(pagerPrevPath)"
+              @mouseenter="prefetchDocForPath(pagerPrevPath)"
+              @mouseleave="cancelPrefetchDocForPath(pagerPrevPath)"
+              @touchstart.passive="prefetchDocForPath(pagerPrevPath)"
+            >
+              <span class="dark:group-hover:text-primary-200 flex items-center gap-2 text-xs text-black/40 font-medium tracking-[0.12em] uppercase dark:text-light/40 group-hover:text-primary">
+                <span class="i-carbon-arrow-left text-base" />
+                {{ t('docs.previousChapter') }}
+              </span>
+              <span class="dark:group-hover:text-primary-200 text-base text-black font-semibold transition dark:text-light group-hover:text-primary">
+                {{ pagerPrevTitle }}
+              </span>
+            </NuxtLink>
+            <NuxtLink
+              v-if="pagerNextPath"
+              :to="localizedDocsPath(pagerNextPath)"
+              :prefetch="false"
+              class="group flex flex-col items-end gap-2 border border-dark/10 rounded-2xl px-5 py-4 text-right no-underline transition dark:border-light/10 hover:border-primary/30 hover:bg-primary/5 dark:hover:border-primary/40 dark:hover:bg-primary/10"
+              @focus="prefetchDocForPath(pagerNextPath)"
+              @blur="cancelPrefetchDocForPath(pagerNextPath)"
+              @mouseenter="prefetchDocForPath(pagerNextPath)"
+              @mouseleave="cancelPrefetchDocForPath(pagerNextPath)"
+              @touchstart.passive="prefetchDocForPath(pagerNextPath)"
+            >
+              <span class="dark:group-hover:text-primary-200 flex items-center justify-end gap-2 text-xs text-black/40 font-medium tracking-[0.12em] uppercase dark:text-light/40 group-hover:text-primary">
+                {{ t('docs.nextChapter') }}
+                <span class="i-carbon-arrow-right text-base" />
+              </span>
+              <span class="dark:group-hover:text-primary-200 text-base text-black font-semibold transition dark:text-light group-hover:text-primary">
+                {{ pagerNextTitle }}
+              </span>
+            </NuxtLink>
+          </div>
+        </div>
+
+        <ClientOnly>
+          <LazyDocsComments v-if="shouldMountDocEngagementPanels" :doc-path="committedDocPath" />
+        </ClientOnly>
+      </div>
+
+      <div
+        v-else
+        class="docs-state__body p-10 text-center space-y-4"
+      >
+        <div class="mx-auto h-16 w-16 flex items-center justify-center rounded-full bg-dark/5 text-3xl text-black dark:bg-light/10 dark:text-light">
+          <span class="i-carbon-warning" />
+        </div>
+        <div class="text-lg text-black font-semibold dark:text-light">
+          {{ t('docs.notFoundTitle') }}
+        </div>
+        <p class="text-sm text-gray-500 dark:text-gray-300">
+          {{ t('docs.notFoundDescription') }}
+        </p>
+        <NuxtLink
+          :to="localizedDocsPath('/docs')"
+          class="inline-flex items-center justify-center gap-2 rounded-full bg-dark px-5 py-2 text-sm text-light font-medium no-underline transition dark:bg-light hover:bg-black dark:text-black dark:hover:bg-light/90"
+        >
+          <span class="i-carbon-arrow-left text-base" />
+          {{ t('docs.backHome') }}
+        </NuxtLink>
+      </div>
     </div>
   </div>
 </template>
@@ -1969,7 +1919,7 @@ watch(
   border-radius: 20px;
 }
 
-/* Skeleton mirrors the loaded layout (hero → prose sections) so nothing shifts
+/* Skeleton mirrors the loaded layout (hero -> prose sections) so nothing shifts
    when the document arrives; the shimmer surface is owned by TxSkeleton. */
 .docs-surface--skeleton {
   padding-top: 8px;
@@ -1988,151 +1938,60 @@ watch(
   margin-top: 6px;
 }
 
-.docs-state-enter-active,
-.docs-state-leave-active {
-  transition: opacity 220ms ease, filter 220ms ease, transform 220ms ease;
-}
-
-.docs-state-enter-from,
-.docs-state-leave-to {
-  opacity: 0;
-  filter: blur(8px);
-  transform: translateY(6px);
-}
-
-/* Holds a screen for the demos still to come, so the pager and footer stay below the
-   fold until they arrive. Only parts with a demo, API table or gallery are deferred,
-   and those run longer than that. */
-.docs-deferred-body-shell {
-  display: grid;
-  align-content: start;
-  gap: 14px;
-  min-height: 100vh;
-  padding-block: 8px 4px;
-}
-
-.docs-deferred-body-shell__line,
-.docs-deferred-body-shell__block {
-  display: block;
-  border-radius: 999px;
-  background:
-    linear-gradient(
-      90deg,
-      color-mix(in srgb, var(--docs-muted) 8%, transparent),
-      color-mix(in srgb, var(--docs-muted) 14%, transparent),
-      color-mix(in srgb, var(--docs-muted) 8%, transparent)
-    );
-  animation: docs-prose-skeleton-pulse 1.2s ease-in-out infinite;
-}
-
-.docs-deferred-body-shell__line {
-  width: min(68%, 540px);
-  height: 12px;
-}
-
-.docs-deferred-body-shell__line.is-wide {
-  width: min(82%, 680px);
-}
-
-.docs-deferred-body-shell__block {
-  width: 100%;
-  height: 88px;
-  border-radius: 18px;
-}
-
-:global(.docs-page-enter-active),
-:global(.docs-page-leave-active) {
-  transition:
-    opacity 260ms ease,
-    transform 320ms cubic-bezier(0.28, 1.7, 0.52, 1),
-    filter 260ms ease;
-}
-
-:global(.docs-page-enter-from),
-:global(.docs-page-leave-to) {
-  opacity: 0;
-  transform: translateY(8px) scale(0.98);
-  filter: blur(3px);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  :global(.docs-page-enter-active),
-  :global(.docs-page-leave-active) {
-    transition: none;
-  }
-}
-
 /* Flat reading column — the page is type on the background, not a card on a page. */
 .docs-surface {
   position: relative;
   display: flex;
   flex-direction: column;
   gap: 2.75rem;
+  min-width: 0;
   background: transparent;
   isolation: isolate;
+  transition: opacity 140ms ease;
+}
+
+.docs-surface--navigating {
+  opacity: 0.72;
+}
+
+.docs-nav-progress {
+  position: sticky;
+  top: 72px;
+  z-index: 25;
+  height: 2px;
+  width: 100%;
+  margin-bottom: -2px;
+  border-radius: 999px;
+  background: var(--docs-accent, #409eff);
+  transform-origin: left center;
+  animation: docs-nav-progress-bar 1.1s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+  pointer-events: none;
+}
+
+@keyframes docs-nav-progress-bar {
+  0% {
+    opacity: 0.45;
+    transform: scaleX(0.08);
+  }
+  50% {
+    opacity: 0.9;
+    transform: scaleX(0.68);
+  }
+  100% {
+    opacity: 0.45;
+    transform: scaleX(0.95);
+  }
 }
 
 .docs-hero-block {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  min-width: 0;
 }
 
 .docs-surface--hero .docs-hero-block {
   padding-bottom: 0.5rem;
-}
-
-.docs-sync-banner {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  border-radius: 14px;
-  border: 1px solid color-mix(in srgb, var(--tx-border-color) 70%, transparent);
-  background: color-mix(in srgb, var(--tx-fill-color-light) 78%, transparent);
-  padding: 12px 14px;
-}
-
-.docs-sync-banner__icon {
-  margin-top: 1px;
-  font-size: 16px;
-  color: var(--tx-text-color-secondary);
-}
-
-.docs-sync-banner__content {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.docs-sync-banner__title {
-  margin: 0;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--tx-text-color-primary);
-}
-
-.docs-sync-banner__desc {
-  margin: 0;
-  font-size: 12px;
-  color: var(--tx-text-color-regular);
-}
-
-.docs-sync-banner[data-status='in_progress'] {
-  border-color: color-mix(in srgb, var(--tx-color-warning) 45%, var(--tx-border-color));
-  background: color-mix(in srgb, var(--tx-color-warning) 16%, transparent);
-}
-
-.docs-sync-banner[data-status='in_progress'] .docs-sync-banner__icon {
-  color: color-mix(in srgb, var(--tx-color-warning) 85%, var(--tx-text-color-primary));
-}
-
-.docs-sync-banner[data-status='migrated'] {
-  border-color: color-mix(in srgb, var(--tx-color-warning) 35%, var(--tx-border-color));
-  background: color-mix(in srgb, var(--tx-color-warning) 10%, transparent);
-}
-
-.docs-sync-banner[data-status='migrated'] .docs-sync-banner__icon {
-  color: color-mix(in srgb, var(--tx-color-warning) 70%, var(--tx-text-color-primary));
 }
 
 .docs-body-error {
@@ -2200,11 +2059,6 @@ watch(
   min-height: 320px;
 }
 
-/* A component page's body outgrows the viewport: keep what follows below the fold. */
-.docs-prose-skeleton--component {
-  min-height: 100vh;
-}
-
 .docs-prose-skeleton__line,
 .docs-prose-skeleton__block {
   display: block;
@@ -2253,9 +2107,12 @@ watch(
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .docs-surface,
+  .docs-nav-progress,
   .docs-prose-skeleton__line,
   .docs-prose-skeleton__block {
     animation: none;
+    transition: none;
   }
 }
 
@@ -2297,10 +2154,6 @@ a.docs-hero-crumb:hover {
   display: none;
 }
 
-
-
-
-
 :deep(.docs-prose) {
   --tw-prose-body: var(--docs-ink);
   --tw-prose-headings: var(--docs-ink);
@@ -2318,6 +2171,7 @@ a.docs-hero-crumb:hover {
   --tw-prose-pre-bg: var(--docs-code-bg);
   --tw-prose-th-borders: var(--docs-border);
   --tw-prose-td-borders: var(--docs-border);
+  min-width: 0;
   color: var(--docs-ink);
 }
 
@@ -2564,13 +2418,12 @@ a.docs-hero-crumb:hover {
   border-bottom: 1px solid color-mix(in srgb, var(--docs-accent) 40%, transparent);
 }
 
+/* Static gradient hairline — zero infinite background-position paint animations. */
 :deep(.docs-prose hr:not(:where(.not-prose, .not-prose *))) {
   border: 0;
   height: 1px;
   margin: 2rem 0;
   background-image: linear-gradient(90deg, transparent, var(--docs-hr-color), transparent);
-  background-size: 200% 100%;
-  animation: docs-hr-shimmer 6s ease-in-out infinite;
   opacity: 0.6;
 }
 
@@ -2606,23 +2459,5 @@ a.docs-hero-crumb:hover {
 
 :deep(.docs-prose table tbody tr:nth-child(2n):not(:where(.not-prose, .not-prose *))) {
   background: color-mix(in srgb, var(--tx-fill-color) 45%, transparent);
-}
-
-@keyframes docs-hr-shimmer {
-  0% {
-    background-position: 0% 50%;
-  }
-  50% {
-    background-position: 100% 50%;
-  }
-  100% {
-    background-position: 0% 50%;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  :deep(.docs-prose hr:not(:where(.not-prose, .not-prose *))) {
-    animation: none;
-  }
 }
 </style>

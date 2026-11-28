@@ -24,16 +24,24 @@ function openMobileMenu() {
   mobileMenuOpen.value = true
 }
 const { locale, t } = useI18n()
-const docsLink = (path: string) => toLocalizedDocsPath(path, locale.value === 'zh' ? 'zh' : 'en')
+const headerLocale = computed<'en' | 'zh'>(() => (locale.value === 'zh' ? 'zh' : 'en'))
+const docsLink = (path: string) => toLocalizedDocsPath(path, headerLocale.value)
 
 function handleScroll() {
   scrolled.value = window.scrollY > 8
 }
 
-const links = computed(() => [
+interface HeaderNavLink {
+  to: string
+  label: string
+  external?: boolean
+}
+
+const links = computed<HeaderNavLink[]>(() => [
   { to: '/store', label: t('nav.store') },
   { to: docsLink('/docs/guide/start'), label: t('nav.tutorial') },
   { to: docsLink('/docs/dev'), label: t('nav.developer') },
+  { to: `/tuffex/${headerLocale.value}`, label: 'TuffEx', external: true },
   { to: '/updates', label: t('nav.download') },
   { to: '/pricing', label: t('nav.pricing') },
 ])
@@ -67,9 +75,14 @@ function normalizeNavPath(path: string) {
   return trimmed || '/'
 }
 
-function isActiveLink(link: { to: string }) {
+function isActiveLink(link: HeaderNavLink) {
+  if (link.external)
+    return false
+
   const path = normalizedPath.value
-  const matches = (item: { to: string }) => {
+  const matches = (item: HeaderNavLink) => {
+    if (item.external)
+      return false
     const target = normalizeNavPath(item.to)
     if (target === '/')
       return path === '/'
@@ -79,7 +92,7 @@ function isActiveLink(link: { to: string }) {
   if (!matches(link))
     return false
 
-  const bestMatch = links.value.reduce<{ to: string } | null>((best, item) => {
+  const bestMatch = links.value.reduce<HeaderNavLink | null>((best, item) => {
     if (!matches(item))
       return best
     if (!best || normalizeNavPath(item.to).length > normalizeNavPath(best.to).length)
@@ -129,9 +142,10 @@ onUnmounted(() => {
             v-for="link in links"
             :key="link.to"
             :to="link.to"
+            :external="link.external || undefined"
             class="rounded-full px-2.5 py-1 text-black/65 font-medium no-underline transition-colors duration-200 hover:bg-dark/5 dark:text-light/70 hover:text-black dark:hover:bg-light/10 dark:hover:text-light"
             :data-active="isActiveLink(link) || undefined"
-              :class="isActiveLink(link) ? 'is-active bg-dark/5 text-black dark:bg-light/15 dark:text-light' : ''"
+            :class="isActiveLink(link) ? 'is-active bg-dark/5 text-black dark:bg-light/15 dark:text-light' : ''"
           >
             {{ link.label }}
           </NuxtLink>
@@ -198,6 +212,7 @@ onUnmounted(() => {
             v-for="link in links"
             :key="link.to"
             :to="link.to"
+            :external="link.external || undefined"
             class="block rounded-xl px-3.5 py-3 text-black/70 font-medium no-underline transition-colors duration-200 hover:bg-dark/5 dark:text-light/70 hover:text-black dark:hover:bg-light/10 dark:hover:text-light"
             :class="isActiveLink(link) ? 'bg-dark/5 text-black dark:bg-light/15 dark:text-light' : ''"
             @click="mobileMenuOpen = false"
@@ -253,9 +268,6 @@ onUnmounted(() => {
 }
 
 .TuffHeader-Main {
-  --header-border-color: transparent;
-  --header-bg-color: transparent;
-  --header-shadow: 0 0 0 rgba(0, 0, 0, 0);
   --header-backdrop-filter: blur(18px) saturate(180%);
 
   position: absolute;
@@ -270,41 +282,46 @@ onUnmounted(() => {
   max-width: calc(100vw - var(--nexus-frame-gutter) - var(--nexus-frame-gutter));
 
   border-radius: 24px;
-  border-color: var(--header-border-color);
-  background-color: var(--header-bg-color);
-  box-shadow: var(--header-shadow);
-  /* Narrowing on scroll carries the search trigger 108px. At 720ms, easing in, it was still
-     moving half a second later, under a pointer already on its way to it. */
-  transition:
-    width 320ms cubic-bezier(0.22, 1, 0.36, 1),
-    border-color 620ms cubic-bezier(0.4, 0, 0.2, 1),
-    background-color 620ms cubic-bezier(0.4, 0, 0.2, 1),
-    backdrop-filter 620ms cubic-bezier(0.4, 0, 0.2, 1),
-    -webkit-backdrop-filter 620ms cubic-bezier(0.4, 0, 0.2, 1),
-    box-shadow 720ms cubic-bezier(0.4, 0, 0.2, 1);
+  /* Narrowing on scroll carries the search trigger 108px. Glass fade lives on ::before
+     so only compositor-friendly opacity transitions (never animating backdrop-filter). */
+  transition: width 320ms cubic-bezier(0.22, 1, 0.36, 1);
 
   isolation: isolate;
-  overflow: hidden;
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
   transform: translate3d(var(--wm-jitter-x1, 0px), var(--wm-jitter-y1, 0px), 0);
   animation: tuff-header-quick-reveal 280ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
+.TuffHeader-Main::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  z-index: -1;
+  border-radius: inherit;
+  background-color: rgba(255, 255, 255, 0.58);
+  box-shadow:
+    inset 0 0 0 1px rgba(0, 0, 0, 0.1),
+    0 18px 50px rgba(15, 23, 42, 0.08);
+  -webkit-backdrop-filter: var(--header-backdrop-filter, blur(18px) saturate(180%));
+  backdrop-filter: var(--header-backdrop-filter, blur(18px) saturate(180%));
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 220ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .TuffHeader-Main--scrolled {
   width: min(var(--nexus-frame-compact), calc(100vw - 2rem));
   max-width: calc(100vw - 2rem);
-  border-color: rgba(0, 0, 0, 0.1);
-  background-color: rgba(255, 255, 255, 0.58);
-  box-shadow: 0 18px 50px rgba(15, 23, 42, 0.08);
-  backdrop-filter: var(--header-backdrop-filter, blur(18px) saturate(180%)) !important;
-  -webkit-backdrop-filter: var(--header-backdrop-filter, blur(18px) saturate(180%)) !important;
 }
 
-.dark .TuffHeader-Main--scrolled {
-  border-color: rgba(255, 255, 255, 0.12);
+.TuffHeader-Main--scrolled::before {
+  opacity: 1;
+}
+
+.dark .TuffHeader-Main::before {
   background-color: rgba(8, 10, 12, 0.58);
-  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.24);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.12),
+    0 18px 50px rgba(0, 0, 0, 0.24);
 }
 
 .TuffHeader-Brand,
@@ -382,6 +399,11 @@ nav :deep(a) {
 @media (prefers-reduced-motion: reduce) {
   .TuffHeader-Main {
     animation: none;
+    transition: none;
+  }
+
+  .TuffHeader-Main::before {
+    transition: none;
   }
 }
 

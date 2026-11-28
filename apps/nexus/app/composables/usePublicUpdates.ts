@@ -52,6 +52,7 @@ export async function usePublicUpdates() {
       await hydratePrerenderedUpdates({
         payload: asyncData.data.value,
         prerenderedAt: nuxtApp.payload.prerenderedAt,
+        serverRendered: Boolean(nuxtApp.payload.serverRendered),
         refresh: asyncData.refresh,
       })
     })

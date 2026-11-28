@@ -14,8 +14,13 @@ const body = source
   .replace(/^import[\s\S]*?from [^\n]+\n/gm, '')
   .replace(/^export /gm, '')
   .replaceAll('import.meta.client', 'true')
+  .replaceAll('import.meta.url', JSON.stringify(import.meta.url))
 
-type UseTracker = (options: Record<string, unknown>) => { hasSession: { value: boolean } }
+type UseTracker = (options: Record<string, unknown>) => {
+  hasSession: { value: boolean }
+  flush: (reason?: string) => Promise<void>
+  refreshSections: () => void
+}
 let createTracker: (dependencies: Record<string, unknown>) => UseTracker
 
 beforeAll(async () => {
@@ -35,12 +40,16 @@ ${body}
 interface Report {
   reason: string
   totalDurationMs: number
+  powNonce?: string
 }
 
 let reports: Report[]
+let viewCalls: number
 let listeners: Map<string, Array<(event?: unknown) => void>>
-let documentStub: { hidden: boolean }
+let documentStub: { hidden: boolean, querySelector: (selector: string) => unknown }
 let stopScope: () => void
+let unmounts: Array<() => void>
+let nextChallenge: { challengeId: string, seed: string, difficulty: number } | null
 
 function dispatch(type: string, event?: unknown) {
   for (const listener of listeners.get(type) ?? [])
@@ -80,47 +89,83 @@ async function advance(ms: number) {
   }
 }
 
-beforeEach(async () => {
-  vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] })
-  pending.digests = 0
-  vi.spyOn(globalThis.crypto.subtle, 'digest').mockImplementation(trackedDigest)
-  vi.setSystemTime(new Date('2026-10-08T00:00:00.000Z'))
-  reports = []
-  listeners = new Map()
-  documentStub = { hidden: false }
+function mountTracker(options: Record<string, unknown> = {}) {
+  const mounted: Array<() => void> = []
+  unmounts = []
   const target = {
     addEventListener: (type: string, listener: () => void) => {
       listeners.set(type, [...(listeners.get(type) ?? []), listener])
     },
     removeEventListener: () => {},
   }
-  vi.stubGlobal('document', Object.assign(documentStub, target, { querySelector: () => null }))
+  vi.stubGlobal('document', Object.assign(documentStub, target))
   vi.stubGlobal('window', Object.assign({ scrollY: 0, innerHeight: 800, location: { hash: '' } }, target))
 
-  const mounted: Array<() => void> = []
   const useTracker = createTracker({
-    vue: { computed, onBeforeUnmount: () => {}, onMounted: (callback: () => void) => mounted.push(callback), readonly, ref, watch },
+    vue: {
+      computed,
+      onBeforeUnmount: (callback: () => void) => unmounts.push(callback),
+      onMounted: (callback: () => void) => mounted.push(callback),
+      readonly,
+      ref,
+      watch,
+    },
     nuxt: { useRoute: () => reactive({ fullPath: '/docs/guide' }) },
     vueuse: {
       useDebounceFn: (fn: (...args: unknown[]) => unknown) => fn,
       useEventListener: (eventTarget: typeof target, type: string, listener: () => void) => eventTarget.addEventListener(type, listener),
     },
     request: {
-      requestJson: vi.fn(async (url: string, options: { body?: Record<string, unknown> }) => {
-        if (url === '/api/docs/view')
-          return { sessionId: 'session_1', token: 'token_1', views: 1, challenge: null, riskLevel: 0 }
-        reports.push({ reason: String(options.body?.reason), totalDurationMs: Number(options.body?.totalDurationMs) })
+      requestJson: vi.fn(async (url: string, requestOptions: { body?: Record<string, unknown> }) => {
+        if (url === '/api/docs/view') {
+          viewCalls += 1
+          return { sessionId: 'session_1', token: 'token_1', views: viewCalls, challenge: nextChallenge, riskLevel: 0 }
+        }
+        reports.push({
+          reason: String(requestOptions.body?.reason),
+          totalDurationMs: Number(requestOptions.body?.totalDurationMs),
+          powNonce: typeof requestOptions.body?.powNonce === 'string' ? requestOptions.body.powNonce : undefined,
+        })
         return {}
       }),
     },
   })
 
   const scope = effectScope()
-  scope.run(() => useTracker({ source: 'docs_page', path: () => 'docs/guide', clientId: () => 'device_1', trackSections: false }))
-  stopScope = () => scope.stop()
+  const tracker = scope.run(() =>
+    useTracker({
+      source: 'docs_page',
+      path: () => 'docs/guide',
+      clientId: () => 'device_1',
+      trackSections: false,
+      ...options,
+    }),
+  )!
+  stopScope = () => {
+    for (const cb of unmounts)
+      cb()
+    scope.stop()
+  }
   for (const callback of mounted)
     callback()
+  return tracker
+}
+
+beforeEach(async () => {
+  vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'setTimeout', 'clearTimeout', 'Date'] })
+  pending.digests = 0
+  viewCalls = 0
+  nextChallenge = null
+  vi.spyOn(globalThis.crypto.subtle, 'digest').mockImplementation(trackedDigest)
+  vi.setSystemTime(new Date('2026-10-08T00:00:00.000Z'))
+  reports = []
+  listeners = new Map()
+  documentStub = { hidden: false, querySelector: () => null }
+
+  mountTracker()
   await nextTick()
+  // Satisfy the 3s visible dwell gate before exercising ongoing engagement reporting.
+  vi.advanceTimersByTime(3_000)
   await drain()
 })
 
@@ -207,5 +252,125 @@ describe('docs engagement reports', () => {
     expect(reports).toHaveLength(1)
     expect(reports[0]!.totalDurationMs).toBeGreaterThanOrEqual(19_000)
     expect(reports[0]!.totalDurationMs).toBeLessThanOrEqual(20_500)
+  })
+})
+
+describe('docs engagement R9 performance guards', () => {
+  it('defers POST /api/docs/view until 3s of visible dwell and skips instant bounces', async () => {
+    stopScope()
+    viewCalls = 0
+    reports = []
+    listeners = new Map()
+    documentStub = { hidden: false, querySelector: () => null }
+
+    const tracker = mountTracker()
+    await nextTick()
+
+    // Before 3s: zero view writes.
+    vi.advanceTimersByTime(2_900)
+    await drain()
+    expect(viewCalls).toBe(0)
+    expect(tracker.hasSession.value).toBe(false)
+
+    // Hide tab before reaching 3s: pauses countdown and never fires while hidden.
+    documentStub.hidden = true
+    dispatch('visibilitychange')
+    vi.advanceTimersByTime(10_000)
+    await drain()
+    expect(viewCalls).toBe(0)
+
+    // Returning to visible resumes for the remaining ~100ms only.
+    documentStub.hidden = false
+    dispatch('visibilitychange')
+    vi.advanceTimersByTime(100)
+    await drain()
+    expect(viewCalls).toBe(1)
+    expect(tracker.hasSession.value).toBe(true)
+  })
+
+  it('caches heading offsets so 15s flushes trigger zero getBoundingClientRect layout reads', async () => {
+    stopScope()
+    viewCalls = 0
+    reports = []
+    listeners = new Map()
+
+    const h1RectSpy = vi.fn(() => ({ top: 100 }))
+    const h2RectSpy = vi.fn(() => ({ top: 600 }))
+    const fakeRoot = {
+      querySelectorAll: () => [
+        { id: 'intro', textContent: 'Intro', isConnected: true, getBoundingClientRect: h1RectSpy },
+        { id: 'usage', textContent: 'Usage', isConnected: true, getBoundingClientRect: h2RectSpy },
+      ],
+    }
+    documentStub = { hidden: false, querySelector: () => fakeRoot }
+
+    mountTracker({ trackSections: true })
+    await nextTick()
+    vi.advanceTimersByTime(3_000)
+    await drain()
+
+    // Clear initial mount/session-init measurement counts.
+    h1RectSpy.mockClear()
+    h2RectSpy.mockClear()
+
+    // Two 15s flush cycles must perform 0 layout reads.
+    await advance(30_000)
+    expect(reports.length).toBeGreaterThanOrEqual(2)
+    expect(h1RectSpy).not.toHaveBeenCalled()
+    expect(h2RectSpy).not.toHaveBeenCalled()
+  })
+
+  it('spawns the PoW worker only when difficulty > 0 and terminates it on unmount', async () => {
+    stopScope()
+    viewCalls = 0
+    reports = []
+    listeners = new Map()
+    documentStub = { hidden: false, querySelector: () => null }
+
+    const terminateSpy = vi.fn()
+    const postMessageSpy = vi.fn()
+    let messageHandler: ((event: { data: { id: number, nonce: string } }) => void) | null = null
+
+    class MockWorker {
+      addEventListener(type: string, handler: any) {
+        if (type === 'message')
+          messageHandler = handler
+      }
+
+      postMessage(payload: { id: number }) {
+        postMessageSpy(payload)
+        queueMicrotask(() => {
+          messageHandler?.({ data: { id: payload.id, nonce: 'w42' } })
+        })
+      }
+
+      terminate = terminateSpy
+    }
+
+    vi.stubGlobal('Worker', MockWorker)
+    nextChallenge = { challengeId: 'c1', seed: 'seed-1', difficulty: 2 }
+
+    mountTracker()
+    await nextTick()
+    vi.advanceTimersByTime(3_000)
+    await drain()
+
+    // Worker is not spawned until a flush actually needs difficulty > 0.
+    expect(postMessageSpy).not.toHaveBeenCalled()
+
+    await advance(15_000)
+    expect(postMessageSpy).toHaveBeenCalledTimes(1)
+    expect(reports).toHaveLength(1)
+    expect(reports[0]!.powNonce).toBe('w42')
+
+    // Unmounting terminates the worker cleanly.
+    stopScope()
+    expect(terminateSpy).toHaveBeenCalledTimes(1)
+  })
+
+  it('uses macrotask yielding instead of microtask Promise.resolve spin in the PoW fallback', () => {
+    expect(source).not.toContain('await Promise.resolve()')
+    expect(source).toContain('schedulerApi?.yield')
+    expect(source).toContain('setTimeout(resolve, 0)')
   })
 })

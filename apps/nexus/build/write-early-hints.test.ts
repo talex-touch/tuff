@@ -29,6 +29,8 @@ function createDist(files: Record<string, string>) {
 }
 
 const nitroHeaders = [
+  '/en/docs',
+  '  cache-control: public, max-age=300, s-maxage=3600',
   '/en/docs/*',
   '  cache-control: public, max-age=300, s-maxage=3600',
   '/_nuxt/*',
@@ -84,6 +86,8 @@ describe('early hints', () => {
     ]
     const merged = mergeEarlyHintBlocks(nitroHeaders, blocks)
     expect(merged).toBe([
+      '/en/docs',
+      '  cache-control: public, max-age=300, s-maxage=3600',
       '/en/docs/*',
       '  cache-control: public, max-age=300, s-maxage=3600',
       '  Link: </_nuxt/docs.css>; rel=preload; as=style; crossorigin',
@@ -98,18 +102,18 @@ describe('early hints', () => {
     // A second pass starts from its own output and lands on the same text.
     expect(mergeEarlyHintBlocks(merged, blocks)).toBe(merged)
     // A stale Link line from an earlier build is replaced, not kept beside the new one.
-    const stale = nitroHeaders.replace('s-maxage=3600\n', 's-maxage=3600\n  Link: </_nuxt/old.css>; rel=preload; as=style; crossorigin\n')
+    const stale = nitroHeaders.replace('/en/docs/*\n  cache-control: public, max-age=300, s-maxage=3600\n', '/en/docs/*\n  cache-control: public, max-age=300, s-maxage=3600\n  Link: </_nuxt/old.css>; rel=preload; as=style; crossorigin\n')
     expect(mergeEarlyHintBlocks(stale, blocks)).toBe(merged)
     expect(mergeEarlyHintBlocks('', blocks).startsWith(`${EARLY_HINTS_MARKER}\n/\n`)).toBe(true)
   })
 
-  it('writes one block per pattern into dist/_headers', () => {
+  it('writes one block per pattern into dist/_headers, including /en/docs and /zh/docs roots', () => {
     const distRoot = createDist({
       '_headers': nitroHeaders,
       'index.html': page('/_nuxt/e.js', ['/_nuxt/entry.css', '/_nuxt/TheHeader.css']),
       'pricing.html': page('/_nuxt/e.js', ['/_nuxt/entry.css']),
       'en/docs.html': page('/_nuxt/e.js', ['/_nuxt/entry.css', '/_nuxt/docs.css']),
-      'en/docs/dev/components/button.html': page('/_nuxt/e.js', ['/_nuxt/entry.css', '/_nuxt/docs.css', '/_nuxt/TxButton.css']),
+      'en/docs/dev/api/search.html': page('/_nuxt/e.js', ['/_nuxt/entry.css', '/_nuxt/docs.css', '/_nuxt/SearchApi.css']),
       'en/docs/guide/start.html': page('/_nuxt/e.js', ['/_nuxt/entry.css', '/_nuxt/docs.css']),
     })
 
@@ -117,20 +121,26 @@ describe('early hints', () => {
     const patterns = blocks.map(block => block.pattern)
     expect(patterns).toContain('/')
     expect(patterns).toContain('/pricing')
+    expect(patterns).toContain('/en/docs')
     expect(patterns).toContain('/en/docs/*')
     // No zh sample exists in this fixture, so no block is written for it.
+    expect(patterns).not.toContain('/zh/docs')
     expect(patterns).not.toContain('/zh/docs/*')
 
     const headers = readFileSync(join(distRoot, '_headers'), 'utf8')
+    expect(headers.match(/^\/en\/docs$/gm)).toHaveLength(1)
     expect(headers.match(/^\/en\/docs\/\*$/gm)).toHaveLength(1)
     expect(headers).toContain([
+      '/en/docs',
+      '  cache-control: public, max-age=300, s-maxage=3600',
+      '  Link: </_nuxt/e.js>; rel=modulepreload; crossorigin, </_nuxt/entry.css>; rel=preload; as=style; crossorigin, </_nuxt/docs.css>; rel=preload; as=style; crossorigin',
       '/en/docs/*',
       '  cache-control: public, max-age=300, s-maxage=3600',
       '  Link: </_nuxt/e.js>; rel=modulepreload; crossorigin, </_nuxt/entry.css>; rel=preload; as=style; crossorigin, </_nuxt/docs.css>; rel=preload; as=style; crossorigin',
       '/_nuxt/*',
     ].join('\n'))
     expect(headers).toContain(`${EARLY_HINTS_MARKER}\n`)
-    expect(headers).not.toContain('TxButton.css')
+    expect(headers).not.toContain('SearchApi.css')
     for (const line of headers.split('\n'))
       expect(line.trim().length).toBeLessThanOrEqual(CLOUDFLARE_HEADERS_MAX_LINE_LENGTH)
 
