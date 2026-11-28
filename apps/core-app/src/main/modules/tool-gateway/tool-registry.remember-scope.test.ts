@@ -1,6 +1,8 @@
+import { execFileSync } from 'node:child_process'
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
+import process from 'node:process'
 import { describe, expect, it, vi } from 'vitest'
 import { createToolRegistry, resolveUserPath } from './tool-registry'
 
@@ -76,6 +78,14 @@ describe('tuff_read_file confirmation scope', () => {
       await expect(tool.execute({ path: tmpDir })).resolves.toEqual(
         expect.objectContaining({ isError: true, code: 'TOOL_INPUT_INVALID' })
       )
+
+      if (process.platform !== 'win32') {
+        const fifoPath = path.join(tmpDir, 'named-pipe.fifo')
+        execFileSync('mkfifo', [fifoPath])
+        await expect(tool.execute({ path: fifoPath })).resolves.toEqual(
+          expect.objectContaining({ isError: true, code: 'TOOL_INPUT_INVALID' })
+        )
+      }
     } finally {
       await fs.rm(tmpDir, { recursive: true, force: true })
     }

@@ -521,6 +521,66 @@ describe('DatabaseModule aux WAL checkpointing and shutdown teardown', () => {
     expect(primaryExecute).toHaveBeenCalledWith('PRAGMA wal_checkpoint(PASSIVE)')
   })
 
+  it('gates aux and primary periodic WAL TRUNCATE independently', async () => {
+    const primaryExecute = vi.fn(async () => ({ rows: [{ busy: 0, log: 1, checkpointed: 1 }] }))
+    const auxExecute = vi.fn(async () => ({ rows: [{ busy: 0, log: 2, checkpointed: 2 }] }))
+    const module = createModule({ execute: primaryExecute })
+    const internals = module as unknown as {
+      auxClient: { execute: typeof auxExecute }
+      registerWalMaintenanceTasks: () => void
+      getWalSizeBytes: () => Promise<number>
+      getAuxWalSizeBytes: () => Promise<number>
+      runWalCheckpoint: (mode: 'PASSIVE' | 'TRUNCATE') => Promise<void>
+    }
+    internals.auxClient = { execute: auxExecute }
+    internals.getWalSizeBytes = vi.fn(async () => 2 * 1024 * 1024)
+    internals.getAuxWalSizeBytes = vi.fn(async () => 20 * 1024 * 1024)
+    const primaryCheckpointSpy = vi
+      .spyOn(internals, 'runWalCheckpoint')
+      .mockResolvedValue(undefined)
+
+    internals.registerWalMaintenanceTasks()
+    const truncateCall = vi
+      .mocked(pollingService.register)
+      .mock.calls.find(([id]) => id === 'database_wal_checkpoint_truncate')
+    expect(truncateCall).toBeDefined()
+
+    // Large aux WAL with small primary WAL checkpoints aux WITHOUT triggering primary TRUNCATE.
+    await (truncateCall?.[1] as () => Promise<void>)()
+    expect(auxExecute).toHaveBeenCalledWith('PRAGMA wal_checkpoint(TRUNCATE)')
+    expect(primaryCheckpointSpy).not.toHaveBeenCalled()
+
+    // Large aux WAL still checkpoints even while the primary lane has >2 queued writes.
+    auxExecute.mockClear()
+    const statsSpy = vi.spyOn(dbWriteScheduler, 'getStats').mockReturnValue({
+      queued: 5,
+      processing: true,
+      currentTaskLabel: 'primary.heavy',
+      currentTaskPriority: 'background',
+      lanes: {
+        primary: {
+          queued: 5,
+          processing: true,
+          currentTaskLabel: 'primary.heavy',
+          currentTaskPriority: 'background'
+        },
+        aux: {
+          queued: 0,
+          processing: false,
+          currentTaskLabel: null,
+          currentTaskPriority: null
+        }
+      }
+    })
+    try {
+      await (truncateCall?.[1] as () => Promise<void>)()
+      expect(auxExecute).toHaveBeenCalledWith('PRAGMA wal_checkpoint(TRUNCATE)')
+      expect(primaryCheckpointSpy).not.toHaveBeenCalled()
+    } finally {
+      statsSpy.mockRestore()
+    }
+  })
+
   it('checkpoints and closes both primary and aux clients and clears handles on onDestroy', async () => {
     const primaryClient = {
       execute: vi.fn(async () => ({ rows: [] })),

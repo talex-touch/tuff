@@ -57,7 +57,12 @@ import type {
 } from './worktree'
 import type { WorkflowExecutionContext } from './intelligence-workflow-service'
 import { createHash, randomUUID } from 'node:crypto'
-import { hasPluginSystemShellGrant, readPluginInvocation } from './intelligence-invoke-purpose'
+import {
+  hasPluginSystemShellGrant,
+  markMetadataPluginSystemShellGrant,
+  readMetadataPluginSystemShellGrant,
+  readPluginInvocation
+} from './intelligence-invoke-purpose'
 import {
   openUIPrompt,
   shouldInjectTdsDesignPrompt,
@@ -1809,7 +1814,7 @@ export class AiCliOrchestrator {
     const rawMetadata = toRecord(request.metadata)
     const isPluginCaller =
       typeof rawMetadata.caller === 'string' && rawMetadata.caller.trim().startsWith('plugin:')
-    const pluginHasSystemShell = rawMetadata._pluginSystemShell === true
+    const pluginHasSystemShell = readMetadataPluginSystemShellGrant(rawMetadata)
     if (isPluginCaller && request.profileId && request.profileId.startsWith('profile:cli:')) {
       throw new Error('AGENT_PROFILE_FORBIDDEN')
     }
@@ -2463,7 +2468,8 @@ export class AiCliOrchestrator {
       Boolean(pluginName) ||
       (typeof options.metadata?.caller === 'string' &&
         options.metadata.caller.trim().startsWith('plugin:'))
-    const metadata = options.metadata ? { ...options.metadata } : {}
+    let metadata = options.metadata ? { ...options.metadata } : {}
+    delete metadata._pluginSystemShell
     if (isPluginCaller) {
       delete metadata.profileId
       delete metadata.workingDirectory
@@ -2472,7 +2478,7 @@ export class AiCliOrchestrator {
       delete metadata.approvedAt
       delete metadata.automationPolicy
       metadata.caller = pluginName ? `plugin:${pluginName}` : String(options.metadata?.caller)
-      metadata._pluginSystemShell = hasPluginSystemShellGrant(options)
+      metadata = markMetadataPluginSystemShellGrant(metadata, hasPluginSystemShellGrant(options))
     }
     return {
       objective: payload.task,
@@ -2600,7 +2606,8 @@ export class AiCliOrchestrator {
       }))
     }
     await context.onUpdate(running)
-    const metadata = context.metadata ?? {}
+    const metadata = context.metadata ? { ...context.metadata } : {}
+    delete metadata._pluginSystemShell
     const run = await this.execute({
       objective: [
         `Execute workflow: ${context.workflow.name}`,
@@ -2663,7 +2670,8 @@ export class AiCliOrchestrator {
       Boolean(pluginName) ||
       (typeof options.metadata?.caller === 'string' &&
         options.metadata.caller.trim().startsWith('plugin:'))
-    const workflowMetadata = options.metadata ? { ...options.metadata } : {}
+    let workflowMetadata = options.metadata ? { ...options.metadata } : {}
+    delete workflowMetadata._pluginSystemShell
     if (isPluginCaller) {
       delete workflowMetadata.profileId
       delete workflowMetadata.workingDirectory
@@ -2674,7 +2682,10 @@ export class AiCliOrchestrator {
       workflowMetadata.caller = pluginName
         ? `plugin:${pluginName}`
         : String(options.metadata?.caller)
-      workflowMetadata._pluginSystemShell = hasPluginSystemShellGrant(options)
+      workflowMetadata = markMetadataPluginSystemShellGrant(
+        workflowMetadata,
+        hasPluginSystemShellGrant(options)
+      )
     }
     const run = await this.executeWorkflowRun({
       workflow,
@@ -2733,6 +2744,7 @@ export class AiCliOrchestrator {
     }
 
     const metadata = task.context?.metadata ? { ...task.context.metadata } : {}
+    delete metadata._pluginSystemShell
     const isPluginCaller =
       (typeof task.caller === 'string' && task.caller.trim().startsWith('plugin:')) ||
       (typeof metadata.caller === 'string' && metadata.caller.trim().startsWith('plugin:'))

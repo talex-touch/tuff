@@ -3,10 +3,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const {
   accessMock,
   execFileSafeMock,
+  lstatMock,
   mkdirMock,
+  openMock,
   readShortcutLinkMock,
   readdirMock,
   readFileMock,
+  realpathMock,
   statMock,
   getSteamAppsMock,
   tmpdirMock,
@@ -14,10 +17,13 @@ const {
 } = vi.hoisted(() => ({
   accessMock: vi.fn(),
   execFileSafeMock: vi.fn(),
+  lstatMock: vi.fn(),
   mkdirMock: vi.fn(),
+  openMock: vi.fn(),
   readShortcutLinkMock: vi.fn(),
   readdirMock: vi.fn(),
   readFileMock: vi.fn(),
+  realpathMock: vi.fn(),
   statMock: vi.fn(),
   getSteamAppsMock: vi.fn(),
   tmpdirMock: vi.fn(() => 'C:\\Temp'),
@@ -51,16 +57,22 @@ vi.mock('node:path', async () => {
 vi.mock('node:fs/promises', () => ({
   default: {
     access: accessMock,
+    lstat: lstatMock,
     mkdir: mkdirMock,
+    open: openMock,
     readFile: readFileMock,
     readdir: readdirMock,
+    realpath: realpathMock,
     stat: statMock,
     writeFile: writeFileMock
   },
   access: accessMock,
+  lstat: lstatMock,
   mkdir: mkdirMock,
+  open: openMock,
   readFile: readFileMock,
   readdir: readdirMock,
+  realpath: realpathMock,
   stat: statMock,
   writeFile: writeFileMock
 }))
@@ -121,7 +133,35 @@ describe('win app scanner', () => {
     vi.clearAllMocks()
     mkdirMock.mockResolvedValue(undefined)
     accessMock.mockRejectedValue(new Error('ENOENT'))
+    lstatMock.mockImplementation(async () => ({
+      isSymbolicLink: () => false,
+      isFile: () => true,
+      isDirectory: () => false,
+      size: 4
+    }))
+    realpathMock.mockImplementation(async (target: string) => target)
     readFileMock.mockResolvedValue(Buffer.from([1, 2, 3]))
+    openMock.mockImplementation(async (target: string) => {
+      const content = await readFileMock(target)
+      const buf = Buffer.isBuffer(content) ? content : Buffer.from(String(content), 'utf8')
+      let offset = 0
+      return {
+        stat: async () => ({
+          isFile: () => true,
+          isSymbolicLink: () => false,
+          size: buf.length
+        }),
+        read: async (dest: Buffer, destOffset: number, length: number) => {
+          if (offset >= buf.length) return { bytesRead: 0, buffer: dest }
+          const end = Math.min(offset + length, buf.length)
+          buf.copy(dest, destOffset, offset, end)
+          const bytesRead = end - offset
+          offset = end
+          return { bytesRead, buffer: dest }
+        },
+        close: async () => undefined
+      }
+    })
     writeFileMock.mockResolvedValue(undefined)
     getSteamAppsMock.mockResolvedValue([])
   })
@@ -1000,5 +1040,71 @@ describe('win app scanner', () => {
     expect(traversal?.icon).toBe('')
     expect(hugeLogo?.icon).toBe('')
     expect(readFileMock).not.toHaveBeenCalledWith(expect.stringContaining('secret.png'))
+  })
+
+  it('rejects UWP symlink logos and symlinked parent directories via lstat and realpath before opening', async () => {
+    const installLocation = 'C:\\Program Files\\WindowsApps\\Acme.SymlinkApp'
+    const manifestPath = `${installLocation}\\AppxManifest.xml`
+    const symlinkLogoPath = `${installLocation}\\Assets\\LinkLogo.png`
+    const parentSymlinkLogoPath = `${installLocation}\\LinkedAssets\\Escaped.png`
+
+    readdirMock.mockResolvedValue([])
+    accessMock.mockResolvedValue(undefined)
+    lstatMock.mockImplementation(async (target: string) => ({
+      isSymbolicLink: () => target === symlinkLogoPath,
+      isFile: () => target !== symlinkLogoPath,
+      isDirectory: () => false,
+      size: 4
+    }))
+    realpathMock.mockImplementation(async (target: string) => {
+      if (target === parentSymlinkLogoPath) {
+        return 'C:\\Users\\demo\\secret.png'
+      }
+      return target
+    })
+    readFileMock.mockImplementation(async (target: string) => {
+      if (target === manifestPath) {
+        return `<?xml version="1.0" encoding="utf-8"?>
+<Package>
+  <Applications>
+    <Application Id="SymlinkLogo">
+      <uap:VisualElements DisplayName="SymlinkLogo" Square44x44Logo="Assets\\LinkLogo.png" />
+    </Application>
+    <Application Id="ParentEscape">
+      <uap:VisualElements DisplayName="ParentEscape" Square44x44Logo="LinkedAssets\\Escaped.png" />
+    </Application>
+  </Applications>
+</Package>`
+      }
+      throw new Error(`Unexpected readFile for blocked logo: ${target}`)
+    })
+    execFileSafeMock.mockResolvedValue({
+      stdout: JSON.stringify([
+        {
+          Name: 'SymlinkLogo',
+          AppId: 'Acme.SymlinkApp_12345!SymlinkLogo',
+          PackageFamilyName: 'Acme.SymlinkApp_12345',
+          InstallLocation: installLocation
+        },
+        {
+          Name: 'ParentEscape',
+          AppId: 'Acme.SymlinkApp_12345!ParentEscape',
+          PackageFamilyName: 'Acme.SymlinkApp_12345',
+          InstallLocation: installLocation
+        }
+      ]),
+      stderr: ''
+    })
+
+    const { getApps } = await import('./win')
+    const apps = await getApps()
+
+    expect(
+      apps.find((entry) => entry.launchTarget === 'Acme.SymlinkApp_12345!SymlinkLogo')?.icon
+    ).toBe('')
+    expect(
+      apps.find((entry) => entry.launchTarget === 'Acme.SymlinkApp_12345!ParentEscape')?.icon
+    ).toBe('')
+    expect(openMock).not.toHaveBeenCalled()
   })
 })

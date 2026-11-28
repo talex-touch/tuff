@@ -87,6 +87,36 @@ export function hasPluginSystemShellGrant(options: IntelligenceInvokeOptions | u
   return (options as PurposedOptions | undefined)?.[PLUGIN_SYSTEM_SHELL_GRANT] === true
 }
 
+type PluginShellGrantedMetadata<T extends Record<string, unknown>> = T & {
+  [PLUGIN_SYSTEM_SHELL_GRANT]?: boolean
+}
+
+/**
+ * Stamps a Main-only Symbol indicating whether a plugin caller holds `system.shell`, and strips
+ * any spoofable plain-string `_pluginSystemShell` property. Because Symbols do not cross IPC or
+ * JSON serialization, untrusted callers cannot forge this authority.
+ */
+export function markMetadataPluginSystemShellGrant<T extends Record<string, unknown>>(
+  metadata: T,
+  granted: boolean
+): T {
+  const clean = { ...metadata } as Record<string, unknown>
+  delete clean._pluginSystemShell
+  ;(clean as PluginShellGrantedMetadata<Record<string, unknown>>)[PLUGIN_SYSTEM_SHELL_GRANT] =
+    granted === true
+  return clean as T
+}
+
+export function readMetadataPluginSystemShellGrant(
+  metadata: Record<string, unknown> | undefined
+): boolean {
+  return (
+    (metadata as PluginShellGrantedMetadata<Record<string, unknown>> | undefined)?.[
+      PLUGIN_SYSTEM_SHELL_GRANT
+    ] === true
+  )
+}
+
 /**
  * Strips untrusted Main-only control fields from IPC-supplied invocation options.
  * `profileId` is stripped for EVERY IPC caller (host and plugin) so only Main schedulers can
@@ -105,6 +135,7 @@ export function stripUntrustedInvokeMetadata<T extends IntelligenceInvokeOptions
   }
   const metadata = { ...options.metadata }
   delete metadata.profileId
+  delete metadata._pluginSystemShell
   if (isPlugin) {
     delete metadata.approved
     delete metadata.approvalGranted

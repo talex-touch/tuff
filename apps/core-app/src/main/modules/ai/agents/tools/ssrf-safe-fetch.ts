@@ -117,6 +117,18 @@ function isBlockedIpv6(raw: string): boolean {
     return isBlockedIpv4(embedded)
   }
 
+  // ::ffff:0:0:0/96 (RFC 2765 SIIT IPv4-translated — non-globally-reachable)
+  if (
+    groups[0] === 0 &&
+    groups[1] === 0 &&
+    groups[2] === 0 &&
+    groups[3] === 0 &&
+    groups[4] === 0xffff &&
+    groups[5] === 0
+  ) {
+    return true
+  }
+
   // 64:ff9b::/96 (NAT64 well-known prefix) and 64:ff9b:1::/48 (RFC 8215 local-use NAT64)
   if (groups[0] === 0x0064 && groups[1] === 0xff9b) {
     if (groups[2] === 1) return true
@@ -134,8 +146,12 @@ function isBlockedIpv6(raw: string): boolean {
 
   // 100::/64 (discard-only)
   if (groups[0] === 0x0100 && groups[1] === 0 && groups[2] === 0 && groups[3] === 0) return true
-  // 2001::/32 (Teredo) and 2001:db8::/32 (documentation)
-  if (groups[0] === 0x2001 && (groups[1] === 0 || groups[1] === 0x0db8)) return true
+  // 2001::/32 (Teredo), 2001:2::/48 (benchmarking), 2001:10::/28 & 2001:20::/28 (ORCHID/v2), 2001:db8::/32 (docs)
+  if (groups[0] === 0x2001) {
+    if (groups[1] === 0 || groups[1] === 0x0db8) return true
+    if (groups[1] === 0x0002 && groups[2] === 0) return true
+    if ((groups[1]! & 0xfff0) === 0x0010 || (groups[1]! & 0xfff0) === 0x0020) return true
+  }
   // fc00::/7 (unique local)
   if ((groups[0]! & 0xfe00) === 0xfc00) return true
   // fe80::/10 (link-local) & fec0::/10 (deprecated site-local)
@@ -299,10 +315,11 @@ function requestWithPinnedAddress(
         const location = Array.isArray(locationHeader) ? locationHeader[0] : locationHeader
 
         if (statusCode >= 300 && statusCode < 400 && location) {
-          res.resume()
           if (!settled) {
             settled = true
             cleanup()
+            res.destroy()
+            req?.destroy()
             resolve({ statusCode, location, body: '' })
           }
           return

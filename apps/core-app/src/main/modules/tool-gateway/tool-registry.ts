@@ -445,7 +445,8 @@ export function createToolRegistry(options: ToolRegistryOptions): Map<string, To
           if (looksBinary(canonical)) return toolFailure('TOOL_INPUT_INVALID')
           const flags =
             fsConstants.O_RDONLY |
-            (typeof fsConstants.O_NOFOLLOW === 'number' ? fsConstants.O_NOFOLLOW : 0)
+            (typeof fsConstants.O_NOFOLLOW === 'number' ? fsConstants.O_NOFOLLOW : 0) |
+            (typeof fsConstants.O_NONBLOCK === 'number' ? fsConstants.O_NONBLOCK : 0)
           handle = await open(canonical, flags)
           const info = await handle.stat()
           if (!info.isFile()) return toolFailure('TOOL_INPUT_INVALID')

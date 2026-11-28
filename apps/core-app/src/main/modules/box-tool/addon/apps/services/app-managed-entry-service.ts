@@ -248,6 +248,14 @@ export class AppManagedEntryService {
     if (!normalizedPath) return { reason: 'path-empty' }
 
     const launchTarget = normalizeOptionalString(input.launchTarget) || normalizedPath
+    if (
+      normalizedPath.includes('\0') ||
+      launchTarget.includes('\0') ||
+      /[\r\n]/.test(normalizedPath) ||
+      /[\r\n]/.test(launchTarget)
+    ) {
+      return { reason: 'path-invalid' }
+    }
     const launchKind = input.launchKind || inferManagedEntryLaunchKind(launchTarget)
     if (launchKind === 'uwp' && process.platform !== 'win32')
       return { reason: 'launch-kind-unsupported' }
@@ -262,9 +270,6 @@ export class AppManagedEntryService {
         if (!/^steam:\/\/rungameid\/\d+$/i.test(launchTarget))
           return { reason: 'protocol-not-allowed' }
       } else {
-        if (/[\r\n\0]/.test(normalizedPath) || /[\r\n\0]/.test(launchTarget)) {
-          return { reason: 'path-invalid' }
-        }
         if (!path.isAbsolute(normalizedPath)) return { reason: 'path-not-absolute' }
         if (!existsSync(normalizedPath)) return { reason: 'path-not-found' }
         if (!path.isAbsolute(launchTarget)) return { reason: 'launch-target-not-absolute' }
@@ -273,7 +278,7 @@ export class AppManagedEntryService {
     }
 
     const rawLaunchArgs = normalizeOptionalString(input.launchArgs)
-    if (rawLaunchArgs && /[\r\n\0]/.test(rawLaunchArgs)) {
+    if (rawLaunchArgs && (rawLaunchArgs.includes('\0') || /[\r\n]/.test(rawLaunchArgs))) {
       return { reason: 'launch-args-invalid' }
     }
 

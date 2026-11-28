@@ -100,7 +100,9 @@ async function readConfinedFileText(
   maxBytes: number
 ): Promise<string> {
   const flags =
-    fsConstants.O_RDONLY | (typeof fsConstants.O_NOFOLLOW === 'number' ? fsConstants.O_NOFOLLOW : 0)
+    fsConstants.O_RDONLY |
+    (typeof fsConstants.O_NOFOLLOW === 'number' ? fsConstants.O_NOFOLLOW : 0) |
+    (typeof fsConstants.O_NONBLOCK === 'number' ? fsConstants.O_NONBLOCK : 0)
   const handle = await fs.open(resolvedPath, flags)
   try {
     const stats = await handle.stat()

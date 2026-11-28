@@ -161,6 +161,7 @@ let db: LibSQLDatabase<typeof schema> | null = null
 let client: Client | null = null
 let dbFilePath: string | null = null
 let filePersistenceRepository: FileIndexPersistenceRepository | null = null
+let workerBusyReconnect: (() => Promise<void>) | null = null
 let initialized = false
 
 // Serial queue to avoid concurrent DB access within this worker
@@ -406,7 +407,7 @@ async function handleMessage(message: WorkerRequest): Promise<void> {
             )
           },
           FILE_INDEX_PERSISTENCE_RETRY_LABELS.removeFileRecords,
-          client
+          workerBusyReconnect ?? client
         )
         respond({ type: 'result', taskId, result })
         break
@@ -444,7 +445,7 @@ async function handleMessage(message: WorkerRequest): Promise<void> {
             )
           },
           FILE_INDEX_PERSISTENCE_RETRY_LABELS.removeMissingFileSearchRecords,
-          client
+          workerBusyReconnect ?? client
         )
         respond({ type: 'result', taskId, result })
         break
@@ -468,7 +469,7 @@ async function handleMessage(message: WorkerRequest): Promise<void> {
             )
           },
           FILE_INDEX_PERSISTENCE_RETRY_LABELS.listPendingFileDeletionCommits,
-          client
+          workerBusyReconnect ?? client
         )
         respond({ type: 'result', taskId, result })
         break
@@ -492,7 +493,7 @@ async function handleMessage(message: WorkerRequest): Promise<void> {
             )
           },
           FILE_INDEX_PERSISTENCE_RETRY_LABELS.acknowledgeFileDeletionCommits,
-          client
+          workerBusyReconnect ?? client
         )
         respond({ type: 'result', taskId, result })
         break
@@ -704,6 +705,7 @@ async function handleShutdown(): Promise<void> {
   db = null
   searchIndex = null
   filePersistenceRepository = null
+  workerBusyReconnect = null
   initialized = false
   if (!closing) return
   try {
@@ -748,6 +750,7 @@ async function handleInit(message: InitMessage): Promise<void> {
   // a new one, or every init retry leaks an open sqlite connection.
   const staleClient = client
   client = null
+  workerBusyReconnect = null
   if (staleClient) {
     try {
       staleClient.close()
@@ -784,6 +787,7 @@ async function handleInit(message: InitMessage): Promise<void> {
       searchIndexWorkerLog.warn('Worker DB reconnect/pragma reconfiguration failed', { error })
     }
   }
+  workerBusyReconnect = onBusyReconnect
 
   const workerDb = drizzle(workerClient, { schema })
 

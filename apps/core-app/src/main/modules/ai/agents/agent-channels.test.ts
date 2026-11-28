@@ -87,6 +87,7 @@ vi.mock('../../permission/channel-guard', () => ({
 }))
 
 import { registerAgentChannels } from './agent-channels'
+import { readMetadataPluginSystemShellGrant } from '../intelligence-invoke-purpose'
 
 function deferred() {
   let resolve!: () => void
@@ -235,21 +236,27 @@ describe('registerAgentChannels', () => {
       }
 
       await expect(handler(task, pluginContext)).resolves.toEqual(expectedResult)
-      expect(manager).toHaveBeenCalledWith({
-        ...task,
-        caller: 'plugin:third-party-plugin',
-        context: {
-          workingDirectory: undefined,
-          metadata: {
-            caller: 'plugin:third-party-plugin',
-            _pluginSystemShell: false
-          }
-        }
-      })
+      expect(manager).toHaveBeenCalledWith(
+        expect.objectContaining({
+          ...task,
+          caller: 'plugin:third-party-plugin',
+          context: expect.objectContaining({
+            workingDirectory: undefined,
+            metadata: expect.objectContaining({
+              caller: 'plugin:third-party-plugin'
+            })
+          })
+        })
+      )
+      const forwardedTask = (manager.mock.calls as unknown[][])[0]?.[0] as {
+        context?: { metadata?: Record<string, unknown> }
+      }
+      expect(forwardedTask.context?.metadata).not.toHaveProperty('_pluginSystemShell')
+      expect(readMetadataPluginSystemShellGrant(forwardedTask.context?.metadata)).toBe(false)
     }
   )
 
-  it('strips untrusted workingDirectory, profileId, and approval metadata from plugin agent tasks', async () => {
+  it('strips untrusted workingDirectory, profileId, _pluginSystemShell, and approval metadata from plugin agent tasks', async () => {
     const { transport, handlers } = createTransport()
     const pluginContext = {
       plugin: { name: 'third-party-plugin', uniqueKey: 'plugin-key', verified: true }
@@ -273,6 +280,7 @@ describe('registerAgentChannels', () => {
             approved: true,
             approvalGranted: true,
             automationPolicy: { mode: 'full' },
+            _pluginSystemShell: true,
             safeTag: 'kept'
           }
         }
@@ -280,19 +288,27 @@ describe('registerAgentChannels', () => {
       pluginContext
     )
 
-    expect(agentManagerMock.executeTask).toHaveBeenCalledWith({
-      agentId: 'builtin.workflow-agent',
-      input: { operation: 'summarize' },
-      caller: 'plugin:third-party-plugin',
-      context: {
-        workingDirectory: undefined,
-        metadata: {
-          safeTag: 'kept',
-          caller: 'plugin:third-party-plugin',
-          _pluginSystemShell: false
-        }
-      }
-    })
+    expect(agentManagerMock.executeTask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentId: 'builtin.workflow-agent',
+        input: { operation: 'summarize' },
+        caller: 'plugin:third-party-plugin',
+        context: expect.objectContaining({
+          workingDirectory: undefined,
+          metadata: expect.objectContaining({
+            safeTag: 'kept',
+            caller: 'plugin:third-party-plugin'
+          })
+        })
+      })
+    )
+    const forwardedTask = (agentManagerMock.executeTask.mock.calls as unknown[][])[0]?.[0] as {
+      context?: { metadata?: Record<string, unknown> }
+    }
+    expect(forwardedTask.context?.metadata).not.toHaveProperty('_pluginSystemShell')
+    expect(forwardedTask.context?.metadata).not.toHaveProperty('profileId')
+    expect(forwardedTask.context?.metadata).not.toHaveProperty('approved')
+    expect(readMetadataPluginSystemShellGrant(forwardedTask.context?.metadata)).toBe(false)
   })
 
   it('preserves an explicit host caller for queued execution', async () => {

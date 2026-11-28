@@ -121,7 +121,9 @@ function resolveRuntimeRootSafe(): string | null {
 
 export async function readBoundedRegularFile(filePath: string, maxBytes: number): Promise<Buffer> {
   const flags =
-    fsConstants.O_RDONLY | (typeof fsConstants.O_NOFOLLOW === 'number' ? fsConstants.O_NOFOLLOW : 0)
+    fsConstants.O_RDONLY |
+    (typeof fsConstants.O_NOFOLLOW === 'number' ? fsConstants.O_NOFOLLOW : 0) |
+    (typeof fsConstants.O_NONBLOCK === 'number' ? fsConstants.O_NONBLOCK : 0)
   const handle = await open(filePath, flags)
   try {
     const stats = await handle.stat()

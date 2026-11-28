@@ -317,7 +317,7 @@ export class DatabaseWalMaintenance {
     )
   }
 
-  private async runAuxWalCheckpoint(mode: WalCheckpointMode): Promise<void> {
+  async runAuxWalCheckpoint(mode: WalCheckpointMode): Promise<void> {
     const auxClient = this.deps.getAuxClient?.()
     if (!auxClient) return
 
@@ -367,7 +367,9 @@ export class DatabaseWalMaintenance {
   }
 
   async runWalCheckpoint(mode: WalCheckpointMode): Promise<void> {
-    await this.runAuxWalCheckpoint(mode)
+    if (mode === 'PASSIVE') {
+      await this.runAuxWalCheckpoint('PASSIVE')
+    }
 
     const client = this.deps.getClient()
     if (!client) return
@@ -512,6 +514,10 @@ export class DatabaseWalMaintenance {
     pollingService.register(
       DB_WAL_TRUNCATE_TASK_ID,
       async () => {
+        // Gate aux and primary WAL TRUNCATE independently so a primary backlog never
+        // starves an idle aux WAL, and a large aux WAL never forces a primary vacuum/pause.
+        await this.runAuxWalCheckpoint('TRUNCATE')
+
         const stats = dbWriteScheduler.getStats()
         this.schedulerQueuePeak = Math.max(this.schedulerQueuePeak, stats.queued)
         // Primary-lane depth only: TRUNCATE checkpoints the primary file, and
@@ -523,15 +529,11 @@ export class DatabaseWalMaintenance {
           })
           return
         }
-        const [walSize, auxWalSize] = await Promise.all([
-          this.deps.getWalSizeBytes(),
-          this.deps.getAuxWalSizeBytes?.() ?? Promise.resolve(0)
-        ])
-        if (walSize < DB_WAL_TRUNCATE_MIN_BYTES && auxWalSize < DB_WAL_TRUNCATE_MIN_BYTES) {
+        const walSize = await this.deps.getWalSizeBytes()
+        if (walSize < DB_WAL_TRUNCATE_MIN_BYTES) {
           this.deps.log.debug('Skipping WAL TRUNCATE checkpoint because WAL is below threshold', {
             meta: {
               walSizeBytes: walSize,
-              auxWalSizeBytes: auxWalSize,
               minBytes: DB_WAL_TRUNCATE_MIN_BYTES
             }
           })

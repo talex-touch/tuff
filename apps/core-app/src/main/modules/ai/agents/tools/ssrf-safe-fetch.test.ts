@@ -17,10 +17,18 @@ describe('ssrf-safe-fetch', () => {
       '[::1]',
       '::ffff:127.0.0.1',
       '::ffff:169.254.169.254',
+      '::ffff:0:127.0.0.1',
+      '::ffff:0:169.254.169.254',
       'fc00::1',
       'fd12:3456::1',
       'fe80::1',
       '64:ff9b::169.254.169.254',
+      '64:ff9b:1::1',
+      '2002:7f00:0001::1',
+      '2001::1',
+      '2001:2::1',
+      '2001:10::1',
+      '2001:20::1',
       'not-an-ip'
     ]
     for (const ip of blocked) {
@@ -37,11 +45,14 @@ describe('ssrf-safe-fetch', () => {
       'ftp://example.com/a',
       'https://user:pass@example.com/',
       'http://localhost:8080/admin',
+      'http://localhost./admin',
       'http://foo.localhost/secret',
       'http://printer.local/',
       'http://metadata.google.internal/computeMetadata/v1/',
       'http://127.0.0.1:9222/json',
       'http://[::1]:3000/',
+      'http://[::ffff:0:127.0.0.1]/',
+      'http://[::ffff:0:169.254.169.254]/',
       'http://169.254.169.254/latest/meta-data/'
     ]
 

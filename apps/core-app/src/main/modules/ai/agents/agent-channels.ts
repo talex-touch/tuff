@@ -19,6 +19,7 @@ import { agentStoreService } from '../../../service/agent-store.service'
 import { createLogger } from '../../../utils/logger'
 import { withPermission } from '../../permission/channel-guard'
 import { getPermissionModule } from '../../permission/permission-module-ref'
+import { markMetadataPluginSystemShellGrant } from '../intelligence-invoke-purpose'
 import { agentManager } from './agent-manager'
 
 const agentChannelsLog = createLogger('Intelligence').child('AgentChannels')
@@ -35,7 +36,23 @@ const AGENT_EXECUTION_PERMISSION = {
 function bindAgentTaskCaller(task: AgentTask, context: HandlerContext): AgentTask {
   if (!context.plugin) {
     const caller = task.caller?.trim() || DEFAULT_AGENT_CALLER
-    return task.caller === caller ? task : { ...task, caller }
+    const hasSpoofKey =
+      task.context?.metadata &&
+      typeof task.context.metadata === 'object' &&
+      '_pluginSystemShell' in task.context.metadata
+    if (!hasSpoofKey) {
+      return task.caller === caller ? task : { ...task, caller }
+    }
+    const cleanMetadata = { ...task.context!.metadata }
+    delete cleanMetadata._pluginSystemShell
+    return {
+      ...task,
+      caller,
+      context: {
+        ...task.context,
+        metadata: cleanMetadata
+      }
+    }
   }
 
   const pluginName = context.plugin.name
@@ -53,8 +70,9 @@ function bindAgentTaskCaller(task: AgentTask, context: HandlerContext): AgentTas
   delete rawMetadata.approvedAt
   delete rawMetadata.automationPolicy
   delete rawMetadata.workingDirectory
+  delete rawMetadata._pluginSystemShell
   rawMetadata.caller = caller
-  rawMetadata._pluginSystemShell = hasSystemShell
+  const stampedMetadata = markMetadataPluginSystemShellGrant(rawMetadata, hasSystemShell)
 
   return {
     ...task,
@@ -62,7 +80,7 @@ function bindAgentTaskCaller(task: AgentTask, context: HandlerContext): AgentTas
     context: {
       ...(task.context ?? {}),
       workingDirectory: undefined,
-      metadata: rawMetadata
+      metadata: stampedMetadata
     }
   }
 }

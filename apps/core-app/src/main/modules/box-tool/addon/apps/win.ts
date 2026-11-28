@@ -1,3 +1,4 @@
+import { constants as fsConstants } from 'node:fs'
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
@@ -591,25 +592,41 @@ async function resolveUwpLogoFilePath(
 }
 
 async function readImageAsDataUrl(filePath: string): Promise<string> {
+  let handle: Awaited<ReturnType<typeof fs.open>> | undefined
   try {
-    if (typeof fs.lstat === 'function') {
-      const linkStat = await fs.lstat(filePath)
-      if (linkStat.isSymbolicLink() || !linkStat.isFile() || linkStat.size > MAX_UWP_LOGO_BYTES) {
+    if (typeof fs.open === 'function') {
+      const flags =
+        fsConstants.O_RDONLY |
+        (typeof fsConstants.O_NOFOLLOW === 'number' ? fsConstants.O_NOFOLLOW : 0) |
+        (typeof fsConstants.O_NONBLOCK === 'number' ? fsConstants.O_NONBLOCK : 0)
+      handle = await fs.open(filePath, flags)
+      const fileStat = await handle.stat()
+      if (!fileStat.isFile() || fileStat.size <= 0 || fileStat.size > MAX_UWP_LOGO_BYTES) {
         return ''
       }
-    } else if (typeof fs.stat === 'function') {
-      const fileStat = await fs.stat(filePath).catch(() => null)
-      if (fileStat && typeof fileStat.size === 'number' && fileStat.size > MAX_UWP_LOGO_BYTES) {
+      const chunks: Buffer[] = []
+      let totalBytes = 0
+      const scratch = Buffer.allocUnsafe(Math.min(64 * 1024, MAX_UWP_LOGO_BYTES + 1))
+      while (true) {
+        const { bytesRead } = await handle.read(scratch, 0, scratch.length, null)
+        if (bytesRead === 0) break
+        totalBytes += bytesRead
+        if (totalBytes > MAX_UWP_LOGO_BYTES) {
+          return ''
+        }
+        chunks.push(Buffer.from(scratch.subarray(0, bytesRead)))
+      }
+      if (totalBytes === 0) {
         return ''
       }
+      const buffer = chunks.length === 1 ? chunks[0]! : Buffer.concat(chunks, totalBytes)
+      return `data:${getImageMimeType(filePath)};base64,${buffer.toString('base64')}`
     }
-    const buffer = await fs.readFile(filePath)
-    if (buffer.length === 0 || buffer.length > MAX_UWP_LOGO_BYTES) {
-      return ''
-    }
-    return `data:${getImageMimeType(filePath)};base64,${buffer.toString('base64')}`
+    return ''
   } catch {
     return ''
+  } finally {
+    await handle?.close().catch(() => undefined)
   }
 }
 

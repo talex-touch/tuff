@@ -570,8 +570,11 @@ export class DatabaseModule extends BaseModule {
     }
   }
 
-  private async getTableCount(client: Client, tableName: string): Promise<number> {
-    const rs = await client.execute(`SELECT count(*) as cnt FROM ${tableName}`)
+  private async getTableCount(
+    executor: Pick<Client, 'execute'>,
+    tableName: string
+  ): Promise<number> {
+    const rs = await executor.execute(`SELECT count(*) as cnt FROM ${tableName}`)
     const first = (rs.rows?.[0] ?? null) as Record<string, unknown> | null
     if (!first) return 0
     return this.parseCount(first.cnt ?? first['count(*)'])
@@ -586,8 +589,15 @@ export class DatabaseModule extends BaseModule {
    * database while the freshly written aux DDL places them mid-table. Copying positionally wrote
    * those values into whichever column happened to share the index (#637).
    */
-  private async getTableColumns(client: Client, tableName: string): Promise<string[]> {
-    const rs = await client.execute(`PRAGMA table_info(${tableName})`)
+  private async getTableColumns(
+    executor: Pick<Client, 'execute'>,
+    tableName: string,
+    schemaName?: string
+  ): Promise<string[]> {
+    const pragma = schemaName
+      ? `PRAGMA ${schemaName}.table_info(${tableName})`
+      : `PRAGMA table_info(${tableName})`
+    const rs = await executor.execute(pragma)
     return (rs.rows ?? [])
       .map((row) => (row as unknown as Record<string, unknown>).name)
       .filter((name): name is string => typeof name === 'string' && name.length > 0)
@@ -894,15 +904,13 @@ export class DatabaseModule extends BaseModule {
     const escapedMainPath = this.escapeSqlPath(this.mainDbPath)
     await this.auxClient.execute(`ATTACH DATABASE '${escapedMainPath}' AS coredb`)
     try {
-      await this.auxClient.execute('BEGIN IMMEDIATE')
+      const tx = await this.auxClient.transaction('write')
       try {
         for (const table of AUX_COPY_TABLES) {
           // Copy by name, never positionally. Only columns the two schemas share are moved; one
           // side having an extra column is survivable, silently shifting values is not.
-          const [targetColumns, sourceColumns] = await Promise.all([
-            this.getTableColumns(this.auxClient, table),
-            this.getTableColumns(this.auxClient, `coredb.${table}`)
-          ])
+          const targetColumns = await this.getTableColumns(tx, table)
+          const sourceColumns = await this.getTableColumns(tx, table, 'coredb')
           const shared = targetColumns.filter((column) => sourceColumns.includes(column))
           if (shared.length === 0) {
             dbLog.warn(`Aux migration found no shared columns for ${table}; skipping copy`, {
@@ -920,23 +928,23 @@ export class DatabaseModule extends BaseModule {
             })
           }
           const columnList = shared.map((column) => `"${column}"`).join(', ')
-          await this.auxClient.execute(
+          await tx.execute(
             `INSERT OR IGNORE INTO ${table} (${columnList}) SELECT ${columnList} FROM coredb.${table}`
           )
-          const [sourceCount, targetCount] = await Promise.all([
-            this.getTableCount(this.auxClient, `coredb.${table}`),
-            this.getTableCount(this.auxClient, table)
-          ])
+          const sourceCount = await this.getTableCount(tx, `coredb.${table}`)
+          const targetCount = await this.getTableCount(tx, table)
           if (targetCount < sourceCount) {
             dbLog.warn(`Aux migration verification mismatch for ${table}`, {
               meta: { sourceCount, targetCount }
             })
           }
         }
-        await this.auxClient.execute('COMMIT')
+        await tx.commit()
       } catch (copyError) {
-        await this.auxClient.execute('ROLLBACK').catch(() => undefined)
+        await tx.rollback().catch(() => undefined)
         throw copyError
+      } finally {
+        tx.close()
       }
       await this.markAuxMigrationCompleted()
       dbLog.info('Aux hot tables migration completed', {
@@ -1118,6 +1126,11 @@ export class DatabaseModule extends BaseModule {
       await this.configureSqliteClient(this.auxClient, 'aux')
       await this.ensureDatabaseIntegrity(this.auxDbPath, 'aux', this.probeDbIntegrity)
       const auxDb = drizzle(this.auxClient, { schema })
+      // Register aux busy-recovery BEFORE ensureAuxTables / migration so any SQLITE_BUSY
+      // during startup or immediate post-flip aux traffic reapplies connection PRAGMAs.
+      setDbBusyRecovery('aux', async () => {
+        if (this.auxClient) await this.recoverSqliteClient(this.auxClient, 'aux')
+      })
       await this.ensureAuxTables()
       // Serialize the copy, marker write, and auxInitialized flip behind the primary write lane so
       // no concurrent fallback-to-primary aux write can land on database.db after its table was
@@ -1134,9 +1147,6 @@ export class DatabaseModule extends BaseModule {
         { lane: 'primary', priority: 'critical' }
       )
       if (this.destroying || !this.auxInitialized) return
-      setDbBusyRecovery('aux', async () => {
-        if (this.auxClient) await this.recoverSqliteClient(this.auxClient, 'aux')
-      })
       dbLog.info('Aux database initialized', {
         meta: { path: this.auxDbPath }
       })
