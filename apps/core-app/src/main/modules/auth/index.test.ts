@@ -143,7 +143,8 @@ vi.mock('../abstract-base-module', () => ({
 
 vi.mock('../network', () => ({
   getNetworkService: vi.fn(() => ({
-    request: networkRequestMock
+    request: networkRequestMock,
+    requestNoRedirect: networkRequestMock
   }))
 }))
 
@@ -640,16 +641,17 @@ describe('forced auth credential persistence', () => {
 
     const response = await loginHandler({ mode: 'sign-in' })
 
+    const state = authModule.__test__.getActiveCallbackState()
+    expect(state).toBeTruthy()
+    const expectedAuthorizeUrl = `https://example.test/sign-in?redirect_url=%2Fdevice-auth%3Fcode%3DABC123&state=${encodeURIComponent(state!)}`
     expect(response).toMatchObject({
       initiated: true,
-      authorizeUrl: 'https://example.test/sign-in?redirect_url=%2Fdevice-auth%3Fcode%3DABC123',
+      authorizeUrl: expectedAuthorizeUrl,
       userCode: 'ABC123',
       expiresAt: '2026-05-17T05:00:00.000Z',
       browserOpenFailed: true
     })
-    expect(openExternalMock).toHaveBeenCalledWith(
-      'https://example.test/sign-in?redirect_url=%2Fdevice-auth%3Fcode%3DABC123'
-    )
+    expect(openExternalMock).toHaveBeenCalledWith(expectedAuthorizeUrl)
     expect(authLoggerMock.warn).toHaveBeenCalledWith(
       'Failed to open browser login page',
       expect.objectContaining({ error: expect.any(Error) })
@@ -691,9 +693,11 @@ describe('forced auth credential persistence', () => {
 
     expect(networkRequestMock).not.toHaveBeenCalled()
     expect(openExternalMock).not.toHaveBeenCalled()
+    const state = authModule.__test__.getActiveCallbackState()
+    expect(state).toBeTruthy()
     expect(response).toMatchObject({
       initiated: true,
-      authorizeUrl: 'https://example.test/device-auth?code=TUFF26',
+      authorizeUrl: `https://example.test/device-auth?code=TUFF26&state=${encodeURIComponent(state!)}`,
       userCode: 'TUFF26',
       browserOpenFailed: true
     })
@@ -1204,21 +1208,87 @@ describe('tuff://auth/callback deep link', () => {
     expect(setSecureStoreValueMock).not.toHaveBeenCalled()
   })
 
-  it('gets past the gate while a login this app started is pending', async () => {
-    // Control: the legitimate deep link races the device-code poll and must not be
-    // blocked. This asserts the gate is passed, not that the whole callback
-    // succeeds — the remote profile fetch is out of scope here.
+  it('requires a matching one-time state nonce and consumes the in-flight login on callback', async () => {
     const authModule = await importAuthModule()
     authModule.__test__.resetState()
-    authModule.__test__.setActiveDeviceAuthCode('device-code-in-flight')
+    authModule.__test__.setActiveDeviceAuthCode('device-code-in-flight', 'nonce-123')
     authLoggerMock.warn.mockClear()
 
-    await authModule.applyExternalAuthCallback('', 'legitimate-app-token')
-
-    expect(authLoggerMock.warn).not.toHaveBeenCalledWith(
-      'Rejected auth callback with no login in flight',
-      expect.anything()
+    // Missing or wrong state nonce rejected even while a login is pending
+    await expect(authModule.applyExternalAuthCallback('', 'attacker-app-token')).resolves.toBe(
+      false
     )
+    await expect(
+      authModule.applyExternalAuthCallback('', 'attacker-app-token', undefined, undefined, 'wrong')
+    ).resolves.toBe(false)
+    expect(setSecureStoreValueMock).not.toHaveBeenCalled()
+
+    // Matching state nonce passes the gate and consumes the login so replay is denied
+    await authModule.applyExternalAuthCallback(
+      '',
+      'legitimate-app-token',
+      undefined,
+      undefined,
+      'nonce-123'
+    )
+    expect(authModule.__test__.getActiveCallbackState()).toBeNull()
+    await expect(
+      authModule.applyExternalAuthCallback(
+        '',
+        'replayed-app-token',
+        undefined,
+        undefined,
+        'nonce-123'
+      )
+    ).resolves.toBe(false)
+  })
+
+  it('rejects cross-origin and protocol-relative URLs in performNexusRequest and performNexusUpload', async () => {
+    const authModule = await importAuthModule()
+    authModule.__test__.resetState()
+    authModule.__test__.setState({ authToken: 'secret-bearer' })
+    networkRequestMock.mockClear()
+
+    await expect(
+      authModule.__test__.performNexusRequest({ url: 'https://evil.example/steal' })
+    ).rejects.toThrow('NEXUS_INVALID_REQUEST')
+    await expect(
+      authModule.__test__.performNexusRequest({ path: '//evil.example/steal' })
+    ).rejects.toThrow('NEXUS_INVALID_REQUEST')
+    await expect(
+      authModule.__test__.performNexusUpload({
+        url: 'https://evil.example/upload',
+        files: []
+      })
+    ).rejects.toThrow('NEXUS_INVALID_REQUEST')
+    expect(networkRequestMock).not.toHaveBeenCalled()
+  })
+
+  it('binds tuff://auth/stepup to a one-time state nonce from requestStepUp', async () => {
+    const authModule = await importAuthModule()
+    authModule.__test__.resetState()
+
+    // Unsolicited step-up callback rejected
+    expect(authModule.applyStepUpToken('forged-stepup', 'any-state')).toBe(false)
+    expect(authModule.__test__.getStepUpToken()).toBeNull()
+
+    openExternalMock.mockResolvedValueOnce(undefined)
+    await authModule.__test__.requestStepUp()
+    const issuedState = authModule.__test__.getActiveStepUpState()
+    expect(issuedState).toBeTruthy()
+    expect(openExternalMock).toHaveBeenCalledWith(
+      expect.stringContaining(`state=${encodeURIComponent(issuedState!)}`)
+    )
+
+    // Wrong state rejected without consuming the active request
+    expect(authModule.applyStepUpToken('forged-stepup', 'wrong-state')).toBe(false)
+    expect(authModule.__test__.getStepUpToken()).toBeNull()
+
+    // Exact nonce accepted once and consumed
+    expect(authModule.applyStepUpToken('valid-stepup', issuedState!)).toBe(true)
+    expect(authModule.__test__.getStepUpToken()).toBe('valid-stepup')
+    expect(authModule.applyStepUpToken('replayed-stepup', issuedState!)).toBe(false)
+    expect(authModule.__test__.getStepUpToken()).toBe('valid-stepup')
   })
 })
 
@@ -1356,7 +1426,11 @@ describe('plugin account access', () => {
     await expect(Promise.all(asked)).resolves.toEqual([true, true])
     expect(requestsTo('/api/app-auth/device/start')).toBe(1)
     expect(openExternalMock).toHaveBeenCalledTimes(1)
-    expect(openExternalMock).toHaveBeenCalledWith('https://example.test/device-auth?code=ABC123')
+    expect(openExternalMock).toHaveBeenCalledWith(
+      expect.stringMatching(
+        /^https:\/\/example\.test\/device-auth\?code=ABC123&state=[A-Za-z0-9_-]+$/
+      )
+    )
   })
 
   it('joins the sign-in under way instead of voiding its code', async () => {

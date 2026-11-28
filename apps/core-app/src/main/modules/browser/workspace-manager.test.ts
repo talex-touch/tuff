@@ -206,6 +206,8 @@ describe('browser guest navigation confinement', () => {
         'javascript:alert(1)',
         'data:text/html,private',
         'plugin://private/index.html',
+        'tuff://settings',
+        'tuff://auth/callback?token=forged',
         'https://alice@example.com/'
       ]) {
         let prevented = false
@@ -264,7 +266,13 @@ describe('browser guest navigation confinement', () => {
     const { manager, guests, owner } = createWorkspace()
     manager.setViewport(visibleViewport)
     const before = manager.getState()
-    for (const url of ['javascript:alert(1)', 'file:///private', 'https://alice@example.com/']) {
+    for (const url of [
+      'javascript:alert(1)',
+      'file:///private',
+      'tuff://settings',
+      'tuff://store',
+      'https://alice@example.com/'
+    ]) {
       expect(guests[0]!.webContents.popup({ url })).toEqual({ action: 'deny' })
       expect(manager.getState()).toEqual(before)
       expect(guests).toHaveLength(1)

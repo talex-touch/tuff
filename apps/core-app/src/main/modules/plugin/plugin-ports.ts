@@ -105,9 +105,10 @@ export interface PluginCloudAuthPort {
     token: string,
     appToken?: string,
     refreshToken?: string,
-    ttlSeconds?: number
+    ttlSeconds?: number,
+    state?: string
   ): Promise<boolean>
-  applyStepUpToken(token: string): void
+  applyStepUpToken(token: string, state?: string): boolean | void
 }
 
 export interface PluginPortsRegistry {

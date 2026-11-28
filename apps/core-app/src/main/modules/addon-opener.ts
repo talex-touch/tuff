@@ -49,6 +49,7 @@ const schemaHandlers: SchemaHandler[] = [
       const token = url.searchParams.get('token') || ''
       const appToken = url.searchParams.get('app_token') || ''
       const refreshToken = url.searchParams.get('refresh_token') || ''
+      const state = url.searchParams.get('state') || ''
       const rawTtlSeconds = Number(url.searchParams.get('ttl_seconds'))
       const ttlSeconds =
         Number.isFinite(rawTtlSeconds) && rawTtlSeconds > 0 ? Math.floor(rawTtlSeconds) : undefined
@@ -70,7 +71,8 @@ const schemaHandlers: SchemaHandler[] = [
           token,
           appToken,
           refreshToken,
-          ttlSeconds
+          ttlSeconds,
+          state
         )
       } else {
         addonOpenerLog.warn('Auth callback received without token')
@@ -81,11 +83,12 @@ const schemaHandlers: SchemaHandler[] = [
     pattern: /^\/auth\/stepup/,
     handler: (url) => {
       const loginToken = url.searchParams.get('login_token') || ''
+      const state = url.searchParams.get('state') || ''
       if (loginToken) {
         addonOpenerLog.debug('Step-up callback received', {
           meta: { tokenLength: loginToken.length }
         })
-        getPluginCloudAuthPort().applyStepUpToken(loginToken)
+        getPluginCloudAuthPort().applyStepUpToken(loginToken, state)
       } else {
         addonOpenerLog.warn('Step-up callback received without token')
       }
@@ -111,7 +114,7 @@ function normalizeSchemaRoute(url: URL): string {
 function maskSchemaUrlForLog(rawUrl: string): string {
   try {
     const url = new URL(rawUrl)
-    const sensitiveKeys = ['token', 'app_token', 'refresh_token', 'login_token']
+    const sensitiveKeys = ['token', 'app_token', 'refresh_token', 'login_token', 'state']
     sensitiveKeys.forEach((key) => {
       if (!url.searchParams.has(key)) return
       const value = url.searchParams.get(key) || ''

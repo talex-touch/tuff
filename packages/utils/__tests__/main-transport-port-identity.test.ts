@@ -4,7 +4,7 @@ import type {
   StreamContext,
 } from "../transport/main";
 import { TuffMainTransport } from "../transport/sdk/main-transport";
-import { ClipboardEvents, TransportEvents } from "../transport/events";
+import { ClipboardEvents, StorageEvents, TransportEvents } from "../transport/events";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
@@ -305,5 +305,100 @@ describe("TuffMainTransport plugin port identity", () => {
     expect(contexts[1]?.signal.aborted).toBe(false);
     contexts[1]?.end();
     contexts[2]?.end();
+  });
+
+  it("forces plugin scope, enforces channel allowlists, strips client permissions, and caps ports per sender", async () => {
+    const { handlers } = harness;
+    const handleUpgrade = handlers.get(
+      `plugin:${TransportEvents.port.upgrade.toEventName()}`,
+    )!;
+    const spoofSender = sender(84);
+
+    // Unverified plugin trying to spoof window scope must still require plugin identity
+    const spoofedUnverified = await handleUpgrade({
+      data: {
+        channel: ClipboardEvents.change.toEventName(),
+        scope: "window",
+        permissions: ["system.shell"],
+      },
+      plugin: "__unverified_plugin_caller__",
+      header: { event: { sender: spoofSender }, uniqueKey: "" },
+      pluginIdentity: undefined,
+    });
+    expect(spoofedUnverified).toMatchObject({
+      accepted: false,
+      scope: "plugin",
+      error: { code: "plugin_identity_required" },
+    });
+
+    // Verified plugin requesting window scope gets forced to plugin scope and client permissions stripped
+    const spoofedVerified = await handleUpgrade({
+      ...upgradePayload(spoofSender),
+      data: {
+        channel: ClipboardEvents.change.toEventName(),
+        scope: "window",
+        permissions: ["system.shell"],
+      },
+    });
+    expect(spoofedVerified).toMatchObject({
+      accepted: true,
+      scope: "plugin",
+    });
+    expect((spoofedVerified as { permissions?: unknown }).permissions).toBeUndefined();
+    expect(spoofSender.postMessage).toHaveBeenCalledWith(
+      TransportEvents.port.confirm.toEventName(),
+      expect.not.objectContaining({ permissions: expect.anything() }),
+      expect.any(Array),
+    );
+
+    // Non-port-enabled / non-plugin-facing channel rejected
+    const disallowedChannel = await handleUpgrade({
+      ...upgradePayload(spoofSender),
+      data: {
+        channel: StorageEvents.app.get.toEventName(),
+        scope: "plugin",
+        plugin: "plugin-a",
+      },
+    });
+    expect(disallowedChannel).toMatchObject({
+      accepted: false,
+      error: { code: "channel_not_allowed" },
+    });
+
+    // Per-sender port limit enforced (32 total; 1 already created for spoofSender)
+    for (let i = 1; i < 32; i += 1) {
+      const ok = await handleUpgrade(upgradePayload(spoofSender));
+      expect(ok).toMatchObject({ accepted: true });
+    }
+    const overLimit = await handleUpgrade(upgradePayload(spoofSender));
+    expect(overLimit).toMatchObject({
+      accepted: false,
+      error: { code: "port_limit_exceeded" },
+    });
+  });
+
+  it("rejects plugin senders calling non-plugin-facing events over ipcMain.handle", async () => {
+    const { transport } = harness;
+    const handler = vi.fn(() => "host-secret");
+    const dispose = transport.on(StorageEvents.app.get, handler);
+    try {
+      const invokeCall = ipcHandle.mock.calls.find(
+        ([eventName]) => eventName === StorageEvents.app.get.toEventName(),
+      );
+      expect(invokeCall).toBeDefined();
+      const invokeHandler = invokeCall![1];
+      const pluginSender = sender(95);
+      const keyManager = transport.keyManager;
+      (keyManager.resolveSenderIdentity as ReturnType<typeof vi.fn>).mockReturnValueOnce(
+        activation(),
+      );
+
+      await expect(
+        invokeHandler({ sender: pluginSender, senderFrame: null }, {}),
+      ).rejects.toThrow("not available to plugin senders");
+      expect(handler).not.toHaveBeenCalled();
+    } finally {
+      dispose();
+    }
   });
 });

@@ -143,6 +143,23 @@ function unsupported() {
   })
 }
 
+const ALLOWED_HOST_CONTEXT_KEYS = new Set(['sender', 'senderFrame', 'eventName', 'plugin'])
+
+function isLiveMainSenderFrame(sender: object, frame: unknown): boolean {
+  if (typeof frame !== 'object' || frame === null || isProxy(frame)) {
+    return false
+  }
+  const frameLike = frame as { parent?: unknown; detached?: unknown }
+  if (frameLike.parent || frameLike.detached) {
+    return false
+  }
+  const senderMainFrame = (sender as { mainFrame?: unknown }).mainFrame
+  if (senderMainFrame !== undefined && frame !== senderMainFrame) {
+    return false
+  }
+  return true
+}
+
 function isHostContext(value: unknown, expectedEventName: string): value is HandlerContext {
   if (typeof value !== 'object' || value === null || isProxy(value)) return false
   try {
@@ -151,23 +168,45 @@ function isHostContext(value: unknown, expectedEventName: string): value is Hand
     const descriptors = Object.getOwnPropertyDescriptors(value)
     const keys = Reflect.ownKeys(descriptors)
     if (
-      keys.length !== 3 ||
+      keys.length < 3 ||
+      keys.length > 4 ||
       keys.some(
         (key) =>
           typeof key !== 'string' ||
-          !['sender', 'eventName', 'plugin'].includes(key) ||
+          !ALLOWED_HOST_CONTEXT_KEYS.has(key) ||
           !Object.hasOwn(descriptors[key] ?? {}, 'value')
       )
     ) {
       return false
     }
+    if (
+      !Object.hasOwn(descriptors, 'sender') ||
+      !Object.hasOwn(descriptors, 'eventName') ||
+      !Object.hasOwn(descriptors, 'plugin')
+    ) {
+      return false
+    }
     const sender = descriptors.sender!.value
-    return (
-      (typeof sender === 'object' || typeof sender === 'function') &&
-      sender !== null &&
-      descriptors.eventName!.value === expectedEventName &&
-      descriptors.plugin!.value === undefined
-    )
+    if (
+      (typeof sender !== 'object' && typeof sender !== 'function') ||
+      sender === null ||
+      descriptors.eventName!.value !== expectedEventName ||
+      descriptors.plugin!.value !== undefined
+    ) {
+      return false
+    }
+    if (
+      typeof (sender as { isDestroyed?: unknown }).isDestroyed === 'function' &&
+      (sender as { isDestroyed: () => boolean }).isDestroyed()
+    ) {
+      return false
+    }
+    if (Object.hasOwn(descriptors, 'senderFrame') && descriptors.senderFrame!.value !== undefined) {
+      if (!isLiveMainSenderFrame(sender as object, descriptors.senderFrame!.value)) {
+        return false
+      }
+    }
+    return true
   } catch {
     return false
   }

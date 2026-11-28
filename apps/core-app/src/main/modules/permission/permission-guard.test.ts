@@ -196,4 +196,25 @@ describe('unmapped API inventory', () => {
       'unmapped:rare'
     ])
   })
+
+  it('maps native:file:open to fs.execute while keeping native:file:stat on fs.read', async () => {
+    store.setDeclaredPermissions(TEST_PLUGIN_ID, {
+      required: ['fs.read'],
+      optional: ['fs.execute']
+    })
+    await store.grant(TEST_PLUGIN_ID, 'fs.read', 'user')
+
+    expect(guard.getRequiredPermissions('native:file:open')).toEqual(['fs.execute'])
+    expect(guard.getRequiredPermissions('native:file:stat')).toEqual(['fs.read'])
+
+    const openDenied = guard.check(TEST_PLUGIN_ID, 'native:file:open', SDK_VERSION)
+    expect(openDenied.allowed).toBe(false)
+    expect(openDenied.permissionId).toBe('fs.execute')
+
+    const statAllowed = guard.check(TEST_PLUGIN_ID, 'native:file:stat', SDK_VERSION)
+    expect(statAllowed.allowed).toBe(true)
+
+    await store.grant(TEST_PLUGIN_ID, 'fs.execute', 'user')
+    expect(guard.check(TEST_PLUGIN_ID, 'native:file:open', SDK_VERSION).allowed).toBe(true)
+  })
 })

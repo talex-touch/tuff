@@ -71,6 +71,43 @@ export const PRIVILEGED_PLUGIN_NAMES: readonly string[] = Object.freeze([
   ])
 ])
 
+const PRIVILEGED_PLUGIN_NAMES_LOWER: ReadonlySet<string> = new Set(
+  PRIVILEGED_PLUGIN_NAMES.map((name) => name.toLowerCase())
+)
+
+/**
+ * Normalizes a plugin name for filesystem collision and reservation comparisons across
+ * case-insensitive APFS/NTFS filesystems (including Windows NTFS trailing dot/space stripping).
+ */
+export function normalizePluginNameForCollision(pluginName: string): string {
+  return pluginName
+    .trim()
+    .replace(/[. ]+$/g, '')
+    .toLowerCase()
+}
+
+/**
+ * Rejects leading/trailing whitespace or trailing dots/spaces that Windows NTFS silently strips
+ * when mapping directory names.
+ */
+export function hasUnsafePluginNameEdgeChars(pluginName: string): boolean {
+  return pluginName !== pluginName.trim() || /[. ]$/.test(pluginName)
+}
+
+/**
+ * Case-insensitive (and Windows trailing-dot/space-insensitive) reservation check for
+ * install/uninstall/dev-install boundaries so a plugin differing only in case or trailing
+ * punctuation (e.g. `Touch-System-Actions`, `touch-system-actions.`) cannot overwrite a bundled
+ * privileged plugin directory on APFS/NTFS filesystems.
+ */
+export function isReservedPrivilegedPluginName(pluginName: string | undefined): boolean {
+  if (typeof pluginName !== 'string') {
+    return false
+  }
+  const normalized = normalizePluginNameForCollision(pluginName)
+  return normalized.length > 0 && PRIVILEGED_PLUGIN_NAMES_LOWER.has(normalized)
+}
+
 /** Holders of either system-action tier, for the gate that admits both before splitting them. */
 export const SYSTEM_ACTION_PLUGIN_NAMES: readonly string[] = Object.freeze([
   ...PRIVILEGED_PLUGIN_CAPABILITIES.systemActionsBasic,

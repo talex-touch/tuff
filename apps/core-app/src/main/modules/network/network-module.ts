@@ -12,48 +12,110 @@ import type { TalexEvents } from '../../core/eventbus/touch-event'
 import { resolveMainRuntime } from '../../core/runtime-accessor'
 import { BaseModule } from '../abstract-base-module'
 import { getNetworkService } from './network-service'
-import type { HandlerContext, PluginActivationIdentity } from '@talex-touch/utils/transport/main'
+import type { HandlerContext } from '@talex-touch/utils/transport/main'
+import { isAuthoritativePluginContext } from '@talex-touch/utils/transport/security/plugin-identity'
 import { withPermission } from '../permission/channel-guard'
+import { getPermissionModule } from '../permission/permission-module-ref'
+import { resolvePermissionPluginDeclaredSdkApi } from '../permission/permission-ports'
 import { idleBudgetCoordinator, isStatePausedFor } from '../../service/idle-budget-coordinator'
-import { classifyNetworkTarget } from '../../utils/network-target-policy'
+import { classifyNetworkTarget, isHttpUrl } from '../../utils/network-target-policy'
 
 const NETWORK_STATUS_POLL_INTERVAL_MS = 5000
-
-interface PluginViewNetworkChannelData {
-  data?: unknown
-  pluginIdentity?: PluginActivationIdentity
-  header?: {
-    event?: {
-      sender?: HandlerContext['sender']
-    }
-  }
-}
 
 const NETWORK_RESPONSE_TYPES: Record<string, true> = {
   json: true,
   text: true,
-  arrayBuffer: true,
-  stream: true
+  arrayBuffer: true
 }
 
-function isPluginViewNetworkRequest(value: unknown): value is NetworkRequest {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
-  if (!('url' in value) || typeof value.url !== 'string' || !value.url.trim()) return false
-  if ('method' in value && typeof value.method !== 'string') return false
-  if (
-    'responseType' in value &&
-    (typeof value.responseType !== 'string' ||
-      !Object.hasOwn(NETWORK_RESPONSE_TYPES, value.responseType))
-  ) {
-    return false
+function sanitizePluginViewNetworkRequest(value: unknown): NetworkRequest | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const record = value as Record<string, unknown>
+  if (Object.hasOwn(record, 'proxyOverride') && record.proxyOverride !== undefined) {
+    return null
   }
-  if ('headers' in value) {
-    if (!value.headers || typeof value.headers !== 'object' || Array.isArray(value.headers)) {
-      return false
+  if (!Object.hasOwn(record, 'url') || typeof record.url !== 'string' || !isHttpUrl(record.url)) {
+    return null
+  }
+
+  const sanitized: NetworkRequest = {
+    url: record.url
+  }
+
+  if (Object.hasOwn(record, 'method') && record.method !== undefined) {
+    if (typeof record.method !== 'string') return null
+    sanitized.method = record.method as NetworkRequest['method']
+  }
+
+  if (Object.hasOwn(record, 'responseType') && record.responseType !== undefined) {
+    if (
+      typeof record.responseType !== 'string' ||
+      !Object.hasOwn(NETWORK_RESPONSE_TYPES, record.responseType)
+    ) {
+      return null
     }
-    if (Object.values(value.headers).some((header) => typeof header !== 'string')) return false
+    sanitized.responseType = record.responseType as NetworkRequest['responseType']
   }
-  return true
+
+  if (Object.hasOwn(record, 'headers') && record.headers !== undefined) {
+    if (!record.headers || typeof record.headers !== 'object' || Array.isArray(record.headers)) {
+      return null
+    }
+    const headers: Record<string, string> = {}
+    for (const [key, headerValue] of Object.entries(record.headers as Record<string, unknown>)) {
+      if (typeof headerValue !== 'string') return null
+      headers[key] = headerValue
+    }
+    sanitized.headers = headers
+  }
+
+  if (Object.hasOwn(record, 'query') && record.query !== undefined) {
+    if (!record.query || typeof record.query !== 'object' || Array.isArray(record.query)) {
+      return null
+    }
+    const query: Record<string, string | number | boolean | null | undefined> = {}
+    for (const [key, queryValue] of Object.entries(record.query as Record<string, unknown>)) {
+      if (
+        queryValue !== undefined &&
+        queryValue !== null &&
+        typeof queryValue !== 'string' &&
+        typeof queryValue !== 'number' &&
+        typeof queryValue !== 'boolean'
+      ) {
+        return null
+      }
+      query[key] = queryValue
+    }
+    sanitized.query = query
+  }
+
+  if (Object.hasOwn(record, 'body') && record.body !== undefined) {
+    sanitized.body = record.body
+  }
+
+  if (Object.hasOwn(record, 'timeoutMs') && record.timeoutMs !== undefined) {
+    if (
+      typeof record.timeoutMs !== 'number' ||
+      !Number.isFinite(record.timeoutMs) ||
+      record.timeoutMs <= 0
+    ) {
+      return null
+    }
+    sanitized.timeoutMs = record.timeoutMs
+  }
+
+  return sanitized
+}
+
+async function hasPluginNetworkPermission(
+  pluginId: string,
+  permissionId: 'network.local' | 'network.internet'
+): Promise<boolean> {
+  const permModule = getPermissionModule()
+  if (!permModule) return false
+  const declaredSdkApi = await resolvePermissionPluginDeclaredSdkApi(pluginId)
+  if (typeof declaredSdkApi !== 'number') return false
+  return permModule.getGuard().check(pluginId, permissionId, declaredSdkApi).allowed === true
 }
 
 function resolveKeyManager(value: unknown): unknown {
@@ -116,21 +178,33 @@ export class NetworkModule extends BaseModule {
     // escaping its own view policy.
     const guarded = <TPayload, TResult>(
       handler: (payload: TPayload, context: HandlerContext) => Promise<TResult>,
-      readTarget: (payload: TPayload) => unknown
+      readTarget: (payload: TPayload) => unknown,
+      options: { allowNonHttp?: boolean } = {}
     ) => {
       const forLocal = withPermission<TPayload, TResult>(
-        { permissionId: 'network.local', errorMessage: 'Permission network.local required' },
+        {
+          permissionId: 'network.local',
+          errorMessage: 'Permission network.local required',
+          failClosedForPlugin: true
+        },
         handler
       )
       const forInternet = withPermission<TPayload, TResult>(
-        { permissionId: 'network.internet', errorMessage: 'Permission network.internet required' },
+        {
+          permissionId: 'network.internet',
+          errorMessage: 'Permission network.internet required',
+          failClosedForPlugin: true
+        },
         handler
       )
 
       return async (payload: TPayload, context: HandlerContext): Promise<TResult> => {
         const target = classifyNetworkTarget(readTarget(payload))
-        // A local file source is not a network request; the local-file allowlist governs it.
+        // Local file sources are only valid on readText/readBinary, never on NetworkEvents.api.request.
         if (target === 'non-http') {
+          if (!options.allowNonHttp) {
+            throw new Error('NETWORK_UNSUPPORTED_PROTOCOL')
+          }
           return await handler(payload, context)
         }
         const wrapped = target === 'local' ? forLocal : forInternet
@@ -138,46 +212,52 @@ export class NetworkModule extends BaseModule {
       }
     }
 
-    const handlePluginViewNetworkRequest = async (event: PluginViewNetworkChannelData) => {
-      const identity = event.pluginIdentity
-      const sender = event.header?.event?.sender
-      if (!identity || !sender || !isPluginViewNetworkRequest(event.data)) {
-        throw new Error('PLUGIN_NETWORK_REQUEST_INVALID')
-      }
-      return await transport.invoke(NetworkEvents.api.request, event.data, {
-        sender,
-        plugin: {
-          name: identity.name,
-          uniqueKey: identity.key
-        }
-      })
-    }
-
     this.disposers.push(
-      runtime.channel.regChannel(
-        'plugin',
-        NetworkEvents.api.request.toEventName(),
-        handlePluginViewNetworkRequest
-      ),
       transport.on(
         NetworkEvents.api.request,
         guarded(
-          async (request) => await service.request(request),
-          (request) => (request as { url?: unknown } | undefined)?.url
+          async (request, context) => {
+            if (context.plugin) {
+              if (!isAuthoritativePluginContext(context.plugin)) {
+                throw new Error('PLUGIN_NETWORK_REQUEST_INVALID')
+              }
+              const sanitizedRequest = sanitizePluginViewNetworkRequest(request)
+              if (!sanitizedRequest) {
+                throw new Error('PLUGIN_NETWORK_REQUEST_INVALID')
+              }
+              const target = classifyNetworkTarget(sanitizedRequest.url)
+              const allowLocal =
+                target === 'local' ||
+                (await hasPluginNetworkPermission(context.plugin.name, 'network.local'))
+              const allowInternet =
+                target === 'internet' ||
+                (await hasPluginNetworkPermission(context.plugin.name, 'network.internet'))
+              return await service.requestForPlugin(sanitizedRequest, {
+                pluginName: context.plugin.name,
+                allowLocal,
+                allowInternet
+              })
+            }
+            return await service.request(request)
+          },
+          (request) => (request as { url?: unknown } | undefined)?.url,
+          { allowNonHttp: false }
         )
       ),
       transport.on(
         NetworkEvents.api.readText,
         guarded(
           async (payload) => await service.readText(payload.source, payload.options),
-          (payload) => payload?.source
+          (payload) => payload?.source,
+          { allowNonHttp: true }
         )
       ),
       transport.on(
         NetworkEvents.api.readBinary,
         guarded(
           async (payload) => await service.readBinary(payload.source, payload.options),
-          (payload) => payload?.source
+          (payload) => payload?.source,
+          { allowNonHttp: true }
         )
       ),
       transport.on(NetworkEvents.api.toTfileUrl, (payload) => service.toTfileUrl(payload.source)),

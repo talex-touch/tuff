@@ -146,14 +146,15 @@ export function extractQualifiedName(item: SyncItemOutput): string {
     item.meta_plain && typeof item.meta_plain === 'object' && 'qualified_name' in item.meta_plain
       ? String((item.meta_plain as { qualified_name?: unknown }).qualified_name ?? '').trim()
       : ''
-  if (fromMeta) {
-    return fromMeta
-  }
+  const fromItemId = item.item_id.startsWith(STORAGE_ITEM_PREFIX)
+    ? item.item_id.slice(STORAGE_ITEM_PREFIX.length).trim()
+    : ''
 
-  if (!item.item_id.startsWith(STORAGE_ITEM_PREFIX)) {
+  if (fromMeta && fromItemId && fromMeta !== fromItemId) {
     return ''
   }
-  return item.item_id.slice(STORAGE_ITEM_PREFIX.length).trim()
+
+  return fromMeta || fromItemId
 }
 
 export function extractContentHash(item: SyncItemOutput): string {

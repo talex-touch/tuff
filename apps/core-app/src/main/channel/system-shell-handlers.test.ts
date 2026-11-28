@@ -534,6 +534,8 @@ describe('executeCommand path restriction', () => {
 
   beforeEach(() => {
     fsStatMock.mockReset()
+    fsRealpathMock.mockReset()
+    fsRealpathMock.mockImplementation(async (target: string) => target)
     shellOpenPathMock.mockReset()
     shellOpenPathMock.mockResolvedValue('')
   })
@@ -593,6 +595,39 @@ describe('executeCommand path restriction', () => {
   it('refuses a .app bundle inside the app root, which is a directory that executes', async () => {
     asDirectory()
     await expect(executeCommandHandler()({ command: `${APP_ROOT}/Evil.app` })).rejects.toThrow(
+      'SYSTEM_SHELL_PATH_NOT_A_DIRECTORY'
+    )
+    expect(shellOpenPathMock).not.toHaveBeenCalled()
+  })
+
+  it.each(['Evil.workflow', 'Installer.pkg', 'Payload.action', 'Run.scptd', 'Evil.prefPane'])(
+    'refuses macOS package %s inside the app root',
+    async (pkg) => {
+      asDirectory()
+      await expect(executeCommandHandler()({ command: `${APP_ROOT}/${pkg}` })).rejects.toThrow(
+        'SYSTEM_SHELL_PATH_NOT_A_DIRECTORY'
+      )
+      expect(shellOpenPathMock).not.toHaveBeenCalled()
+    }
+  )
+
+  it('refuses a symlink inside the app root that escapes to an outside directory', async () => {
+    asDirectory()
+    fsRealpathMock.mockImplementation(async (target: string) =>
+      target === `${APP_ROOT}/escape` ? '/Users/victim/Documents' : target
+    )
+    await expect(executeCommandHandler()({ command: `${APP_ROOT}/escape` })).rejects.toThrow(
+      'SYSTEM_SHELL_PATH_OUTSIDE_APP_ROOT'
+    )
+    expect(shellOpenPathMock).not.toHaveBeenCalled()
+  })
+
+  it('refuses a symlink inside the app root pointing to a macOS package', async () => {
+    asDirectory()
+    fsRealpathMock.mockImplementation(async (target: string) =>
+      target === `${APP_ROOT}/innocent-dir` ? `${APP_ROOT}/hidden.workflow` : target
+    )
+    await expect(executeCommandHandler()({ command: `${APP_ROOT}/innocent-dir` })).rejects.toThrow(
       'SYSTEM_SHELL_PATH_NOT_A_DIRECTORY'
     )
     expect(shellOpenPathMock).not.toHaveBeenCalled()

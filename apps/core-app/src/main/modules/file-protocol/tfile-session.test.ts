@@ -126,4 +126,45 @@ describe('tfile preview grant consumption', () => {
     expect((await pending).status).toBe(403)
     expect(net.fetch).not.toHaveBeenCalled()
   })
+
+  it('rejects a symlink inside an allowlisted root that escapes outside the root', async () => {
+    const allowedDir = await fs.realpath(
+      await fs.mkdtemp(path.join(os.tmpdir(), 'tfile-allowed-root-'))
+    )
+    const secretDir = await fs.realpath(
+      await fs.mkdtemp(path.join(os.tmpdir(), 'tfile-outside-secret-'))
+    )
+    cleanup.push(() => fs.rm(allowedDir, { recursive: true, force: true }))
+    cleanup.push(() => fs.rm(secretDir, { recursive: true, force: true }))
+
+    const secretFile = path.join(secretDir, 'local-secret.v1.key')
+    await fs.writeFile(secretFile, 'top-secret-key')
+    const escapeLink = path.join(allowedDir, 'escape.png')
+    await fs.symlink(secretFile, escapeLink)
+
+    let handler!: (request: { url: string }) => Promise<Response>
+    cleanup.push(
+      registerTfileProtocolForSession(
+        {
+          protocol: {
+            handle: (_scheme: string, callback: typeof handler) => {
+              handler = callback
+            },
+            unhandle: () => {}
+          }
+        } as unknown as Session,
+        [allowedDir]
+      )
+    )
+
+    // Note: os.tmpdir() is in built-in roots; use a non-tmp outside path or ensure secretDir is outside allowedDir.
+    // To prove containment against ONLY allowedDir, verify with a symlink to a path outside os.tmpdir too.
+    const etcHosts = process.platform === 'win32' ? secretFile : '/etc/hosts'
+    const outsideEscape = path.join(allowedDir, 'etc-hosts.png')
+    await fs.symlink(etcHosts, outsideEscape)
+
+    const response = await handler({ url: `tfile://${outsideEscape}` })
+    expect(response.status).toBe(403)
+    expect(net.fetch).not.toHaveBeenCalled()
+  })
 })

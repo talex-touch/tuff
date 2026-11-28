@@ -1,7 +1,7 @@
 import type { IFeatureInteraction } from '@talex-touch/utils/plugin'
 import os from 'node:os'
 import path from 'node:path'
-import compressing from 'compressing'
+import { extractArchiveSafely } from './safe-archive-extract'
 import fse from 'fs-extra'
 
 const HTML_LIKE_FILE_EXT_RE = /\.(html|htm|php|asp|aspx)$/i
@@ -115,17 +115,17 @@ function isPluginArchiveFile(fileName: string): boolean {
 async function uncompressPluginArchive(source: string, target: string): Promise<void> {
   const lower = source.toLowerCase()
   if (lower.endsWith('.tar') || lower.endsWith('.tpex')) {
-    await compressing.tar.uncompress(source, target)
+    await extractArchiveSafely(source, target, 'tar')
     return
   }
 
   if (lower.endsWith('.tar.gz') || lower.endsWith('.tgz')) {
-    await compressing.tgz.uncompress(source, target)
+    await extractArchiveSafely(source, target, 'tgz')
     return
   }
 
   if (lower.endsWith('.zip')) {
-    await compressing.zip.uncompress(source, target)
+    await extractArchiveSafely(source, target, 'zip')
     return
   }
 

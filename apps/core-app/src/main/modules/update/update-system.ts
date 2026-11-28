@@ -22,7 +22,6 @@ import {
   validateUpdateReleaseManifest
 } from '@talex-touch/utils'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
-import compressing from 'compressing'
 import { and, eq } from 'drizzle-orm'
 import { app } from 'electron'
 import fse from 'fs-extra'
@@ -35,6 +34,7 @@ import { getAppVersionSafe } from '../../utils/version-util'
 import { databaseModule } from '../database'
 import { getAnalyticsMessageStore } from '../analytics/message-store'
 import { getNetworkService } from '../network'
+import { extractArchiveSafely } from '../plugin/safe-archive-extract'
 import { normalizeUpdateAssetKey } from './update-asset-utils'
 
 /**
@@ -606,10 +606,9 @@ export class UpdateSystem {
       )
     }
 
-    const tempDir = path.join(os.tmpdir(), `talex-touch-renderer-${Date.now()}`)
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'talex-touch-renderer-'))
     try {
-      await fse.ensureDir(tempDir)
-      await compressing.zip.uncompress(filePath, tempDir)
+      await extractArchiveSafely(filePath, tempDir, 'zip')
 
       const bundleRoot = await this.resolveRendererBundleRoot(tempDir)
       if (!bundleRoot) {
@@ -683,7 +682,14 @@ export class UpdateSystem {
   private async writeRendererOverrideState(state: RendererOverrideState): Promise<void> {
     const statePath = this.resolveRendererOverrideStatePath()
     await fs.mkdir(path.dirname(statePath), { recursive: true })
-    await fs.writeFile(statePath, JSON.stringify(state, null, 2))
+    const tempPath = `${statePath}.${process.pid}.${crypto.randomUUID()}.tmp`
+    try {
+      await fs.writeFile(tempPath, JSON.stringify(state, null, 2), 'utf8')
+      await fs.rename(tempPath, statePath)
+    } catch (error) {
+      await fs.rm(tempPath, { force: true }).catch(() => undefined)
+      throw error
+    }
   }
 
   async disableRendererOverride(reason: string): Promise<void> {

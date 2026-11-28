@@ -18,7 +18,23 @@ function hasUnsafeBrowserCharacters(value: string, allowSpaces: boolean): boolea
 
 export function isRemoteWebUrl(value: unknown): boolean {
   if (typeof value !== 'string') return false
-  return value.startsWith('https://') || value.startsWith('http://')
+  try {
+    const protocol = new URL(value).protocol
+    return protocol === 'https:' || protocol === 'http:'
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Navigation policy for untrusted guest webviews.
+ *
+ * Guest pages (links, redirects, subframes, window.open) may only navigate to credential-free
+ * remote HTTP(S) origins — never internal `tuff://` app surfaces, which are reserved strictly for
+ * host-initiated `createTab` / `navigate` calls.
+ */
+export function isAllowedGuestNavigationUrl(value: unknown): value is string {
+  return isAllowedBrowserUrl(value) && isRemoteWebUrl(value)
 }
 
 export function isAllowedBrowserUrl(value: unknown): value is string {

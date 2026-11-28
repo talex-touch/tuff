@@ -152,6 +152,13 @@ export const __syncMigrationTestHooks = {
   hasScheduledPushForTest(): boolean {
     if (!isSyncTestEnvironment()) return false
     return Boolean(pushTimer)
+  },
+  async applyPulledStorageItemsForTest(
+    items: SyncItemOutput[],
+    client: CloudSyncSDK
+  ): Promise<number> {
+    if (!isSyncTestEnvironment()) return 0
+    return await applyPulledStorageItems(items, client)
   }
 }
 
@@ -640,6 +647,15 @@ function getPluginStorageContent(
   }
   const plugin = manager.getPluginByName(parsed.pluginName) as TouchPlugin | undefined
   if (!plugin) {
+    return null
+  }
+  if (
+    typeof plugin.isPluginStorageSyncFile !== 'function' ||
+    !plugin.isPluginStorageSyncFile(parsed.fileName)
+  ) {
+    syncLog.warn('Rejected non-sync plugin storage file', {
+      meta: { pluginName: parsed.pluginName, fileName: parsed.fileName }
+    })
     return null
   }
   return {
@@ -1138,6 +1154,9 @@ async function applyPulledStorageItems(
         if (await applyPluginStorageDeletion(qualifiedName)) appliedCount += 1
         continue
       }
+      if (!getPluginStorageContent(qualifiedName)) {
+        continue
+      }
       const payload = await resolveEncryptedPayloadText(item, client)
       if (!payload) continue
       const applied = await applyPluginStorageSnapshot(
@@ -1151,6 +1170,12 @@ async function applyPulledStorageItems(
     }
 
     if (item.deleted_at) continue
+    if (!isSyncStorageKey(qualifiedName)) {
+      syncLog.warn('Rejected pulled non-sync storage key', {
+        meta: { qualifiedName }
+      })
+      continue
+    }
     const payload = await resolveEncryptedPayloadText(item, client)
     if (!payload) continue
 

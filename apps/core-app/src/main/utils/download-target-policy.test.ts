@@ -1,9 +1,16 @@
-import { readFileSync } from 'node:fs'
+import fs, { readFileSync } from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { resetRuntimeRootPathForTests } from './app-root-path'
-import { evaluateDownloadTarget, getAllowedDownloadRoots } from './download-target-policy'
+import {
+  evaluateDownloadTarget,
+  getAllowedDownloadRoots,
+  isAllowedDownloadTempDir,
+  isDangerousDownloadOpenFile,
+  isSafeDownloadTaskId
+} from './download-target-policy'
 
 const electronAppMock = vi.hoisted(() => ({
   isPackaged: true,
@@ -161,6 +168,76 @@ describe('getAllowedDownloadRoots', () => {
       allowed: false,
       reason: 'destination-outside-roots'
     })
+
+    // Runtime root itself and sensitive subdirectories (config, plugins, browser-connector) are denied.
+    const runtimeRoot = path.join(userData, 'tuff')
+    expect(roots).not.toContain(runtimeRoot)
+    for (const forbidden of [
+      runtimeRoot,
+      path.join(runtimeRoot, 'config'),
+      path.join(runtimeRoot, 'modules', 'plugins'),
+      path.join(runtimeRoot, 'browser-connector')
+    ]) {
+      expect(evaluateDownloadTarget(forbidden, 'secret.json', roots)).toEqual({
+        allowed: false,
+        reason: 'destination-outside-roots'
+      })
+    }
+
+    // Dedicated runtime download subdirectories remain allowed.
+    for (const permitted of [
+      path.join(runtimeRoot, 'modules', 'update-packages'),
+      path.join(runtimeRoot, 'Downloads', 'dependencies', 'everything'),
+      path.join(runtimeRoot, 'temp')
+    ]) {
+      expect(evaluateDownloadTarget(permitted, 'package.zip', roots).allowed).toBe(true)
+    }
+  })
+
+  it('rejects symlink destinations and symlink target files escaping allowed roots', () => {
+    const sandbox = fs.mkdtempSync(path.join(os.tmpdir(), 'download-policy-symlink-'))
+    try {
+      const allowedRoot = path.join(sandbox, 'allowed')
+      const outsideRoot = path.join(sandbox, 'outside')
+      fs.mkdirSync(allowedRoot, { recursive: true })
+      fs.mkdirSync(outsideRoot, { recursive: true })
+
+      const escapedDirLink = path.join(allowedRoot, 'escape-dir')
+      fs.symlinkSync(outsideRoot, escapedDirLink)
+      expect(evaluateDownloadTarget(escapedDirLink, 'payload.txt', [allowedRoot])).toEqual({
+        allowed: false,
+        reason: 'destination-outside-roots'
+      })
+
+      const outsideFile = path.join(outsideRoot, 'target.txt')
+      fs.writeFileSync(outsideFile, 'original')
+      fs.symlinkSync(outsideFile, path.join(allowedRoot, 'link.txt'))
+      expect(evaluateDownloadTarget(allowedRoot, 'link.txt', [allowedRoot])).toEqual({
+        allowed: false,
+        reason: 'destination-outside-roots'
+      })
+    } finally {
+      fs.rmSync(sandbox, { recursive: true, force: true })
+    }
+  })
+
+  it('validates download task ids, temp dirs, and dangerous open extensions', () => {
+    expect(isSafeDownloadTaskId('task_123-abc')).toBe(true)
+    for (const badId of ['', '.', '..', '../escape', 'a/b', 'a\\b', '.hidden', 'a..b']) {
+      expect(isSafeDownloadTaskId(badId), badId).toBe(false)
+    }
+
+    const tempRoot = path.resolve('/var/tuff-profile/os-temp')
+    expect(isAllowedDownloadTempDir(path.join(tempRoot, 'tuff-downloads'), [tempRoot])).toBe(true)
+    expect(isAllowedDownloadTempDir(tempRoot, [tempRoot])).toBe(false)
+    expect(isAllowedDownloadTempDir('/Users/victim', [tempRoot])).toBe(false)
+
+    for (const dangerous of ['evil.app', 'run.command', 'payload.sh', 'setup.exe', 'script.bat']) {
+      expect(isDangerousDownloadOpenFile(`/tmp/${dangerous}`), dangerous).toBe(true)
+    }
+    for (const safe of ['doc.pdf', 'archive.zip', 'notes.txt']) {
+      expect(isDangerousDownloadOpenFile(`/tmp/${safe}`), safe).toBe(false)
+    }
   })
 })
 
@@ -198,5 +275,13 @@ describe('download-center wiring', () => {
     // the other straight through is the natural half-fix.
     expect(addTaskBody()).toContain('filename: target.filename')
     expect(addTaskBody()).not.toContain('filename: request.filename ||')
+  })
+
+  it('enforces http(s) URLs, safe task ids, IPC tempDir lock, and executable open guard', () => {
+    expect(addTaskBody()).toContain('isHttpUrl(request.url)')
+    expect(addTaskBody()).toContain('isSafeDownloadTaskId(request.id)')
+    expect(source).toContain('isDangerousDownloadOpenFile(canonicalPath)')
+    expect(source).toContain('Modifying download tempDir over IPC is not allowed')
+    expect(source).toContain('Refused temp cleanup on unapproved tempDir')
   })
 })

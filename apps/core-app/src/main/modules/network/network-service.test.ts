@@ -1397,4 +1397,141 @@ describe('networkService cooldown policy', () => {
       )
     }
   })
+
+  it('rejects non-HTTP(S) schemes like file:// across request, requestNoRedirect, and requestStream', async () => {
+    const service = new NetworkService()
+    for (const badUrl of ['file:///etc/passwd', 'tfile:///tmp/secret.txt', 'data:text/plain,hi']) {
+      await expect(service.request({ method: 'GET', url: badUrl })).rejects.toThrow(
+        'NETWORK_UNSUPPORTED_PROTOCOL'
+      )
+      await expect(service.requestNoRedirect({ method: 'GET', url: badUrl })).rejects.toThrow(
+        'NETWORK_UNSUPPORTED_PROTOCOL'
+      )
+      await expect(service.requestStream({ method: 'GET', url: badUrl })).rejects.toThrow(
+        'NETWORK_UNSUPPORTED_PROTOCOL'
+      )
+    }
+    expect(electronMocks.fetch).not.toHaveBeenCalled()
+  })
+
+  it('blocks DNS rebinding to local IPs, IPv4-mapped IPv6, and redirects to localhost in requestForPlugin', async () => {
+    const dnsLookup = vi.fn(async (hostname: string) => {
+      if (hostname === 'rebind-loopback.example.test') {
+        return [{ address: '127.0.0.1', family: 4 }]
+      }
+      if (hostname === 'rebind-metadata.example.test') {
+        return [{ address: '::ffff:169.254.169.254', family: 6 }]
+      }
+      if (hostname === 'mixed-dns.example.test') {
+        return [
+          { address: '93.184.216.34', family: 4 },
+          { address: '127.0.0.1', family: 4 }
+        ]
+      }
+      return [{ address: '93.184.216.34', family: 4 }]
+    })
+    const service = new NetworkService({ dnsLookup })
+
+    // Non-HTTP scheme blocked immediately
+    await expect(
+      service.requestForPlugin(
+        { method: 'GET', url: 'file:///etc/passwd' },
+        { pluginName: 'untrusted-plugin', allowLocal: false }
+      )
+    ).rejects.toThrow('NETWORK_UNSUPPORTED_PROTOCOL')
+
+    // IPv4-mapped IPv6, 0.0.0.0/8, CGNAT blocked when allowLocal is false
+    for (const url of [
+      'http://[::ffff:127.0.0.1]/',
+      'http://[::ffff:7f00:1]/',
+      'http://0.1.2.3/',
+      'http://100.64.0.1/'
+    ]) {
+      await expect(
+        service.requestForPlugin(
+          { method: 'GET', url },
+          { pluginName: 'untrusted-plugin', allowLocal: false }
+        )
+      ).rejects.toThrow('NETWORK_LOCAL_ACCESS_DENIED')
+    }
+
+    // DNS resolving to loopback or IMDS blocked before connecting
+    await expect(
+      service.requestForPlugin(
+        { method: 'GET', url: 'https://rebind-loopback.example.test/api' },
+        { pluginName: 'untrusted-plugin', allowLocal: false }
+      )
+    ).rejects.toThrow('NETWORK_LOCAL_ACCESS_DENIED')
+
+    await expect(
+      service.requestForPlugin(
+        { method: 'GET', url: 'https://rebind-metadata.example.test/api' },
+        { pluginName: 'untrusted-plugin', allowLocal: false }
+      )
+    ).rejects.toThrow('NETWORK_LOCAL_ACCESS_DENIED')
+
+    // Mixed [publicIp, localIp] DNS records are rejected when either internet or local is disallowed
+    await expect(
+      service.requestForPlugin(
+        { method: 'GET', url: 'https://mixed-dns.example.test/api?case=no-internet' },
+        { pluginName: 'untrusted-plugin', allowLocal: true, allowInternet: false }
+      )
+    ).rejects.toThrow('NETWORK_INTERNET_ACCESS_DENIED')
+    await expect(
+      service.requestForPlugin(
+        { method: 'GET', url: 'https://mixed-dns.example.test/api?case=no-local' },
+        { pluginName: 'untrusted-plugin', allowLocal: false, allowInternet: true }
+      )
+    ).rejects.toThrow('NETWORK_LOCAL_ACCESS_DENIED')
+
+    // Plugin-supplied proxyOverride is ignored (never switches to unpinned fetch or reads authRef)
+    await expect(
+      service.requestForPlugin(
+        {
+          method: 'GET',
+          url: 'https://rebind-loopback.example.test/api',
+          proxyOverride: {
+            mode: 'custom',
+            custom: { httpProxy: 'http://attacker.example:8080' },
+            authRef: 'auth.token'
+          }
+        },
+        { pluginName: 'untrusted-plugin', allowLocal: false }
+      )
+    ).rejects.toThrow('NETWORK_LOCAL_ACCESS_DENIED')
+    expect(electronMocks.fetch).not.toHaveBeenCalled()
+    expect(electronMocks.session.fromPartition).not.toHaveBeenCalled()
+
+    // Under legitimate HOST custom proxy: uses non-persistent per-plugin session partition with
+    // net.request({ redirect: 'manual' }) and rejects 302 redirects targeting localhost
+    const storageModule = await import('../storage')
+    vi.mocked(storageModule.getMainConfig).mockReturnValue({
+      network: {
+        proxy: {
+          mode: 'custom',
+          custom: { httpProxy: 'http://127.0.0.1:7890' }
+        }
+      }
+    } as never)
+    try {
+      const { request: hopReq, issued } = createManualRedirectHop()
+      const pendingProxy = service.requestForPlugin(
+        {
+          method: 'GET',
+          url: 'https://public.example.test/start'
+        },
+        { pluginName: 'untrusted-plugin', allowLocal: false }
+      )
+      await issued
+      hopReq.emit('redirect', 302, 'GET', 'http://127.0.0.1:8080/internal-admin', {})
+
+      await expect(pendingProxy).rejects.toThrow('NETWORK_LOCAL_ACCESS_DENIED')
+      expect(electronMocks.session.fromPartition).toHaveBeenCalledWith(
+        expect.stringMatching(/^tuff-plugin-network-[a-f0-9]{16}$/)
+      )
+      expect(electronMocks.fetch).not.toHaveBeenCalled()
+    } finally {
+      vi.mocked(storageModule.getMainConfig).mockReturnValue(undefined as never)
+    }
+  })
 })

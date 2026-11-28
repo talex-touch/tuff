@@ -213,7 +213,7 @@ import {
   buildLoaderFatalPreflightFailure,
   buildRuntimeDriftPreflightFailure
 } from './plugin-preflight-helper'
-import { PRIVILEGED_PLUGIN_NAMES } from '../../../shared/privileged-plugins'
+import { isReservedPrivilegedPluginName } from '../../../shared/privileged-plugins'
 import { LocalPluginProvider } from './providers/local-provider'
 
 import { inspectPluginRuntimeDrift } from './runtime/plugin-runtime-repair'
@@ -1695,7 +1695,7 @@ function createPluginModuleInternal(
     // By name, not sdkapi: privileged plugins remain name-gated for both host capabilities and
     // removal protection. The official seed force-replaces privileged plugins at every launch, so
     // an uninstall would only come back. Same rule as the uninstall transport handler.
-    if (PRIVILEGED_PLUGIN_NAMES.includes(request.plugin.name)) {
+    if (isReservedPrivilegedPluginName(request.plugin.name)) {
       throw new Error('PRIVILEGED_PLUGIN_UNINSTALL_DENIED')
     }
     return pluginDataDispositionCoordinator!.uninstall(request)

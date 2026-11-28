@@ -169,10 +169,11 @@ import {
   type StorageUsageReport
 } from '../utils/storage-usage'
 import { tempFileService } from '../service/temp-file.service'
+import { getAllowedLocalFileRoots, isAllowedLocalFilePath } from '../utils/local-file-policy'
 import { registerSystemApplicationHandlers } from './system-application-handlers'
 import { registerSystemSecureStoreHandlers } from './system-secure-store-handlers'
 import { registerSystemSelectionCaptureHandlers } from './system-selection-capture-handlers'
-import { registerSystemShellHandlers } from './system-shell-handlers'
+import { hasMacPackageExtension, registerSystemShellHandlers } from './system-shell-handlers'
 import { nativeShareService } from '../modules/flow-bus/native-share'
 import {
   getDirectoryTerminals,
@@ -272,7 +273,15 @@ type RuntimeTrayManager = {
   getRuntimeSettingsSnapshot?: () => RuntimeTraySettings
 }
 
-const dialogApprovedPaths = new Map<string, number>()
+type DialogAccessMode = 'read' | 'write'
+
+interface DialogPathGrant {
+  readAt?: number
+  writeAt?: number
+}
+
+const dialogApprovedPaths = new Map<string, DialogPathGrant>()
+const MAX_WALLPAPER_COPY_BYTES = 50 * 1024 * 1024
 
 function normalizeSafeNamespaceSegment(value: string): string {
   const normalized = value
@@ -791,40 +800,181 @@ function resolveLocalFilePath(source: string): string | null {
   return normalizeAbsolutePath(source)
 }
 
-function recordDialogPath(pathValue: string): void {
+async function canonicalizeDialogPath(
+  pathValue: string,
+  options: { allowMissingLeaf?: boolean } = {}
+): Promise<string | null> {
   const normalized = normalizeAbsolutePath(pathValue)
   if (!normalized) {
+    return null
+  }
+  if (typeof fs.realpath !== 'function') {
+    return normalized
+  }
+  try {
+    return await fs.realpath(normalized)
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException)?.code
+    if (code !== 'ENOENT' && code !== 'ENOTDIR') {
+      return null
+    }
+    if (!options.allowMissingLeaf) {
+      return null
+    }
+  }
+
+  const tail: string[] = []
+  let current = normalized
+  while (true) {
+    try {
+      if (typeof fs.lstat === 'function') {
+        const stat = await fs.lstat(current)
+        if (stat.isSymbolicLink()) {
+          // Reject dangling or symlinked leaf/ancestor on missing-leaf save targets.
+          try {
+            const realAncestor = await fs.realpath(current)
+            return tail.length > 0 ? path.join(realAncestor, ...tail.reverse()) : realAncestor
+          } catch {
+            return null
+          }
+        }
+      }
+      const realAncestor = await fs.realpath(current)
+      return tail.length > 0 ? path.join(realAncestor, ...tail.reverse()) : realAncestor
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException)?.code
+      if (code !== 'ENOENT' && code !== 'ENOTDIR') {
+        return null
+      }
+      const parent = path.dirname(current)
+      if (parent === current) {
+        return null
+      }
+      tail.push(path.basename(current))
+      current = parent
+    }
+  }
+}
+
+async function recordDialogPath(pathValue: string, access: DialogAccessMode): Promise<void> {
+  const canonical = await canonicalizeDialogPath(pathValue, {
+    allowMissingLeaf: access === 'write'
+  })
+  if (!canonical) {
     return
   }
 
-  dialogApprovedPaths.set(normalized, Date.now())
+  const now = Date.now()
+  const existing = dialogApprovedPaths.get(canonical) ?? {}
+  if (access === 'read') {
+    existing.readAt = now
+  } else {
+    existing.writeAt = now
+  }
+  dialogApprovedPaths.set(canonical, existing)
   if (dialogApprovedPaths.size <= DIALOG_APPROVED_MAX) {
     return
   }
 
-  const entries = Array.from(dialogApprovedPaths.entries()).sort((a, b) => a[1] - b[1])
+  const entries = Array.from(dialogApprovedPaths.entries()).sort(
+    (a, b) =>
+      Math.max(a[1].readAt ?? 0, a[1].writeAt ?? 0) - Math.max(b[1].readAt ?? 0, b[1].writeAt ?? 0)
+  )
   for (const [key] of entries.slice(0, entries.length - DIALOG_APPROVED_MAX)) {
     dialogApprovedPaths.delete(key)
   }
 }
 
-function ensureApprovedDialogPath(pathValue: string): string {
+function isApprovedDialogPath(
+  canonicalPath: string,
+  access: DialogAccessMode,
+  options: { allowApprovedAncestor?: boolean } = {}
+): boolean {
+  const now = Date.now()
+  const checkKey = (key: string): boolean => {
+    const grant = dialogApprovedPaths.get(key)
+    if (!grant) return false
+    const timestamp = access === 'read' ? grant.readAt : grant.writeAt
+    if (!timestamp) return false
+    if (now - timestamp > DIALOG_APPROVED_TTL_MS) {
+      if (access === 'read') {
+        delete grant.readAt
+      } else {
+        delete grant.writeAt
+      }
+      if (!grant.readAt && !grant.writeAt) {
+        dialogApprovedPaths.delete(key)
+      }
+      return false
+    }
+    return true
+  }
+
+  if (checkKey(canonicalPath)) {
+    return true
+  }
+  if (!options.allowApprovedAncestor || access !== 'read') {
+    return false
+  }
+  let cursor = path.dirname(canonicalPath)
+  while (cursor && cursor !== path.dirname(cursor)) {
+    if (checkKey(cursor)) {
+      return true
+    }
+    cursor = path.dirname(cursor)
+  }
+  return false
+}
+
+async function ensureApprovedDialogPath(
+  pathValue: string,
+  access: DialogAccessMode
+): Promise<string> {
   const normalized = normalizeAbsolutePath(pathValue)
   if (!normalized) {
     throw new Error('Invalid file path')
   }
+  if (access === 'write' && typeof fs.lstat === 'function') {
+    try {
+      if ((await fs.lstat(normalized)).isSymbolicLink()) {
+        throw new Error('Path cannot be a symbolic link')
+      }
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException)?.code
+      if (code !== 'ENOENT' && code !== 'ENOTDIR') {
+        throw error
+      }
+    }
+  }
 
-  const timestamp = dialogApprovedPaths.get(normalized)
+  const canonical = await canonicalizeDialogPath(normalized, {
+    allowMissingLeaf: access === 'write'
+  })
+  if (!canonical) {
+    throw new Error('Invalid file path')
+  }
+
+  const grant = dialogApprovedPaths.get(canonical)
+  const timestamp = access === 'read' ? grant?.readAt : grant?.writeAt
   if (!timestamp) {
     throw new Error('Path is not approved')
   }
 
   if (Date.now() - timestamp > DIALOG_APPROVED_TTL_MS) {
-    dialogApprovedPaths.delete(normalized)
+    if (grant) {
+      if (access === 'read') {
+        delete grant.readAt
+      } else {
+        delete grant.writeAt
+      }
+      if (!grant.readAt && !grant.writeAt) {
+        dialogApprovedPaths.delete(canonical)
+      }
+    }
     throw new Error('Path approval expired')
   }
 
-  return normalized
+  return canonical
 }
 
 function getCachedReadFile(path: string): ReadFileCacheEntry | null {
@@ -1037,7 +1187,7 @@ export class CommonChannelModule extends BaseModule {
           dialogOptions
         )
         const filePaths = result.canceled ? [] : (result.filePaths ?? [])
-        filePaths.forEach(recordDialogPath)
+        await Promise.all(filePaths.map((filePath) => recordDialogPath(filePath, 'read')))
         return { filePaths }
       }),
       transport.on(wallpaperListImagesEvent, async (payload) => {
@@ -1052,6 +1202,7 @@ export class CommonChannelModule extends BaseModule {
         try {
           const desktopPath = await wallpaperAdapter.getDesktopWallpaperPath()
           if (desktopPath) {
+            await recordDialogPath(desktopPath, 'read')
             lastWallpaperUnavailableLogAt = 0
             lastWallpaperUnavailableMessage = ''
             return { path: desktopPath }
@@ -1072,8 +1223,38 @@ export class CommonChannelModule extends BaseModule {
         if (!sourcePath) {
           return { storedPath: null, skippedCount: 0, error: 'Wallpaper source path is empty.' }
         }
+        let canonicalSourcePath: string
         try {
-          const stat = await fs.stat(sourcePath)
+          const normalizedSource = normalizeAbsolutePath(sourcePath)
+          if (!normalizedSource) {
+            return {
+              storedPath: null,
+              skippedCount: 0,
+              error: 'Wallpaper source path is invalid.'
+            }
+          }
+          canonicalSourcePath =
+            typeof fs.realpath === 'function'
+              ? await fs.realpath(normalizedSource)
+              : normalizedSource
+          const approvedByDialog = isApprovedDialogPath(canonicalSourcePath, 'read', {
+            allowApprovedAncestor: type === 'file'
+          })
+          const approvedByPolicy = isAllowedLocalFilePath(
+            canonicalSourcePath,
+            getAllowedLocalFileRoots()
+          )
+          if (!approvedByDialog && !approvedByPolicy) {
+            log.warn('Blocked unapproved wallpaper copy request', {
+              meta: { type }
+            })
+            return {
+              storedPath: null,
+              skippedCount: 0,
+              error: 'Wallpaper source path is not approved.'
+            }
+          }
+          const stat = await fs.stat(canonicalSourcePath)
           if (type === 'folder' && !stat.isDirectory()) {
             return {
               storedPath: null,
@@ -1084,11 +1265,18 @@ export class CommonChannelModule extends BaseModule {
           if (type === 'file' && !stat.isFile()) {
             return { storedPath: null, skippedCount: 0, error: 'Wallpaper source is not a file.' }
           }
-          if (type === 'file' && !isImagePath(sourcePath)) {
+          if (type === 'file' && !isImagePath(canonicalSourcePath)) {
             return {
               storedPath: null,
               skippedCount: 0,
               error: 'Wallpaper source file is not a supported image.'
+            }
+          }
+          if (type === 'file' && stat.size > MAX_WALLPAPER_COPY_BYTES) {
+            return {
+              storedPath: null,
+              skippedCount: 0,
+              error: 'Wallpaper source file exceeds maximum allowed size.'
             }
           }
         } catch (error) {
@@ -1102,7 +1290,11 @@ export class CommonChannelModule extends BaseModule {
         const libraryRoot = path.join(touchApp.app.getPath('userData'), 'wallpapers')
         try {
           if (type === 'folder') {
-            const result = await copyWallpaperFolderToLibrary(sourcePath, libraryRoot, dbUtils)
+            const result = await copyWallpaperFolderToLibrary(
+              canonicalSourcePath,
+              libraryRoot,
+              dbUtils
+            )
             if (!result.storedPath) {
               return {
                 storedPath: null,
@@ -1112,11 +1304,11 @@ export class CommonChannelModule extends BaseModule {
             }
             return result
           }
-          return await copyWallpaperFileToLibrary(sourcePath, libraryRoot, dbUtils)
+          return await copyWallpaperFileToLibrary(canonicalSourcePath, libraryRoot, dbUtils)
         } catch (error) {
           const message = toErrorMessage(error)
           log.warn('Failed to copy wallpaper to library', {
-            meta: { sourcePath, type, error: message }
+            meta: { sourcePath: canonicalSourcePath, type, error: message }
           })
           return { storedPath: null, skippedCount: 0, error: message }
         }
@@ -2007,9 +2199,13 @@ export class CommonChannelModule extends BaseModule {
         const inputPath = getOptionalStringProp(payload, 'path')
         if (!inputPath) return { success: false, error: 'PATH_EMPTY' }
         const target = path.resolve(inputPath)
+        let canonicalTarget = target
         try {
           await fs.stat(target)
           await fs.access(target, fs.constants.R_OK)
+          if (typeof fs.realpath === 'function') {
+            canonicalTarget = await fs.realpath(target)
+          }
         } catch (err) {
           const code = (err as NodeJS.ErrnoException)?.code
           return {
@@ -2020,16 +2216,14 @@ export class CommonChannelModule extends BaseModule {
         if (process.platform === 'darwin') {
           const win = this.touchApp?.window.window
           if (win && !win.isDestroyed()) {
-            win.previewFile(target)
+            win.previewFile(canonicalTarget)
             return { success: true }
           }
         }
-        if (target.toLowerCase().endsWith('.app')) {
-          shell.showItemInFolder(target)
-          return { success: true }
-        }
-        const error = await shell.openPath(target)
-        return { success: !error, error: error || undefined }
+        // Never fall back to shell.openPath here: quickLook is a preview action and must not
+        // execute scripts, installers, or packages via OS file associations.
+        shell.showItemInFolder(canonicalTarget)
+        return { success: true }
       }),
       transport.on(AppEvents.fileIndex.showPackageContents, async (payload, context) => {
         this.assertHostOnly(context, 'fileIndex.showPackageContents')
@@ -2051,7 +2245,12 @@ export class CommonChannelModule extends BaseModule {
           const stat = await fs.stat(contentsDir)
           await fs.access(contentsDir, fs.constants.R_OK)
           if (stat.isDirectory()) {
-            const error = await shell.openPath(contentsDir)
+            const canonicalContentsDir =
+              typeof fs.realpath === 'function' ? await fs.realpath(contentsDir) : contentsDir
+            if (hasMacPackageExtension(canonicalContentsDir)) {
+              return { success: false, error: 'PACKAGE_CONTENTS_NOT_FOUND' }
+            }
+            const error = await shell.openPath(canonicalContentsDir)
             return { success: !error, error: error || undefined }
           }
         } catch (err) {
@@ -2060,11 +2259,7 @@ export class CommonChannelModule extends BaseModule {
             return { success: false, error: 'PERMISSION_DENIED' }
           }
         }
-        if (target.toLowerCase().endsWith('.app')) {
-          return { success: false, error: 'PACKAGE_CONTENTS_NOT_FOUND' }
-        }
-        const error = await shell.openPath(target)
-        return { success: !error, error: error || undefined }
+        return { success: false, error: 'PACKAGE_CONTENTS_NOT_FOUND' }
       }),
       transport.on(AppEvents.fileIndex.getInfo, async (payload, context) => {
         this.assertHostOnly(context, 'fileIndex.getInfo')
@@ -2564,7 +2759,7 @@ export class CommonChannelModule extends BaseModule {
 
         const filePath = result.canceled ? undefined : result.filePath
         if (filePath) {
-          recordDialogPath(filePath)
+          await recordDialogPath(filePath, 'write')
         }
         return { filePath }
       }),
@@ -2572,7 +2767,7 @@ export class CommonChannelModule extends BaseModule {
         if (!payload?.path || typeof payload.data !== 'string') {
           throw new Error('Path and data are required')
         }
-        const targetPath = ensureApprovedDialogPath(payload.path)
+        const targetPath = await ensureApprovedDialogPath(payload.path, 'write')
         await fs.writeFile(targetPath, payload.data, 'utf-8')
       }),
       transport.on(fsReadFileEvent, async (payload) => {
@@ -2581,7 +2776,7 @@ export class CommonChannelModule extends BaseModule {
         }
 
         try {
-          const targetPath = ensureApprovedDialogPath(payload.path)
+          const targetPath = await ensureApprovedDialogPath(payload.path, 'read')
           const data = await fs.readFile(targetPath, 'utf-8')
           return { data }
         } catch (error) {

@@ -221,6 +221,7 @@ interface PortRecord {
 }
 
 const PORT_CONFIRM_TIMEOUT_MS = 10000;
+const MAX_PORTS_PER_SENDER = 32;
 const portRegistry = new Map<string, PortRecord>();
 const portsBySender = new WeakMap<WebContents, Set<string>>();
 const senderCleanupRegistered = new WeakSet<WebContents>();
@@ -416,12 +417,43 @@ function registerPortHandlers(transport: TuffMainTransport): void {
       } satisfies TransportPortUpgradeResponse;
     }
 
-    const scope = resolveScope(payload?.scope);
-    if (!scope) {
+    const requestedScope = resolveScope(payload?.scope);
+    if (!requestedScope) {
       return {
         accepted: false,
         channel,
         error: buildError("invalid_scope", "Scope is invalid"),
+      } satisfies TransportPortUpgradeResponse;
+    }
+
+    const isPluginCaller =
+      Boolean(context.plugin) ||
+      Boolean(transport.keyManager.resolveSenderIdentity?.(sender));
+    const scope: TransportPortScope = isPluginCaller
+      ? "plugin"
+      : requestedScope;
+
+    if (!isPortChannelEnabled(channel)) {
+      return {
+        accepted: false,
+        channel,
+        scope,
+        error: buildError(
+          "channel_not_allowed",
+          "Channel is not enabled for MessagePort transport",
+        ),
+      } satisfies TransportPortUpgradeResponse;
+    }
+
+    if (scope === "plugin" && !isPluginFacingEvent(channel)) {
+      return {
+        accepted: false,
+        channel,
+        scope,
+        error: buildError(
+          "channel_not_allowed",
+          "Channel is not plugin-facing",
+        ),
       } satisfies TransportPortUpgradeResponse;
     }
 
@@ -432,19 +464,6 @@ function registerPortHandlers(transport: TuffMainTransport): void {
         channel,
         scope,
         error: buildError("window_mismatch", "Window id does not match sender"),
-      } satisfies TransportPortUpgradeResponse;
-    }
-
-    const plugin = payload?.plugin ?? context.plugin?.name;
-    if (scope === "plugin" && !plugin) {
-      return {
-        accepted: false,
-        channel,
-        scope,
-        error: buildError(
-          "plugin_required",
-          "Plugin name is required for plugin scope",
-        ),
       } satisfies TransportPortUpgradeResponse;
     }
 
@@ -460,7 +479,27 @@ function registerPortHandlers(transport: TuffMainTransport): void {
       } satisfies TransportPortUpgradeResponse;
     }
 
-    if (context.plugin?.name && plugin && plugin !== context.plugin.name) {
+    const plugin =
+      scope === "plugin"
+        ? context.plugin?.name
+        : (payload?.plugin ?? context.plugin?.name);
+    if (scope === "plugin" && !plugin) {
+      return {
+        accepted: false,
+        channel,
+        scope,
+        error: buildError(
+          "plugin_required",
+          "Plugin name is required for plugin scope",
+        ),
+      } satisfies TransportPortUpgradeResponse;
+    }
+
+    if (
+      context.plugin?.name &&
+      payload?.plugin &&
+      payload.plugin !== context.plugin.name
+    ) {
       return {
         accepted: false,
         channel,
@@ -468,6 +507,22 @@ function registerPortHandlers(transport: TuffMainTransport): void {
         error: buildError(
           "plugin_mismatch",
           "Plugin name does not match sender",
+        ),
+      } satisfies TransportPortUpgradeResponse;
+    }
+
+    const existingSenderPorts = portsBySender.get(sender);
+    if (
+      existingSenderPorts &&
+      existingSenderPorts.size >= MAX_PORTS_PER_SENDER
+    ) {
+      return {
+        accepted: false,
+        channel,
+        scope,
+        error: buildError(
+          "port_limit_exceeded",
+          "Maximum MessagePort limit reached for sender",
         ),
       } satisfies TransportPortUpgradeResponse;
     }
@@ -485,7 +540,6 @@ function registerPortHandlers(transport: TuffMainTransport): void {
         scope === "plugin" && isAuthoritativePluginContext(context.plugin)
           ? context.plugin
           : undefined,
-      permissions: payload?.permissions,
       confirmed: false,
       createdAt: Date.now(),
     };
@@ -505,7 +559,6 @@ function registerPortHandlers(transport: TuffMainTransport): void {
       channel,
       portId,
       scope,
-      permissions: payload?.permissions,
     };
 
     try {
@@ -535,7 +588,6 @@ function registerPortHandlers(transport: TuffMainTransport): void {
       accepted: true,
       channel,
       scope,
-      permissions: payload?.permissions,
       portId,
     } satisfies TransportPortUpgradeResponse;
   });
@@ -806,11 +858,17 @@ export class TuffMainTransport implements ITuffTransportMain {
     };
 
     const invokeHandler: InvokeHandler<TReq, TRes> = (payload, event) => {
+      const plugin = this.resolveSenderPluginContext(event.sender);
+      if (plugin && !isPluginFacingEvent(eventName)) {
+        throw new Error(
+          `Event "${eventName}" is not available to plugin senders`,
+        );
+      }
       const context: HandlerContext = {
         sender: event.sender as any,
         senderFrame: event.senderFrame,
         eventName,
-        plugin: this.resolveSenderPluginContext(event.sender),
+        plugin,
       };
       return baseHandler(payload, context);
     };

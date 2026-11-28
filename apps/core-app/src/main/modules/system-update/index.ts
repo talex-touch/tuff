@@ -2,11 +2,14 @@ import type { ModuleDestroyContext, ModuleInitContext, ModuleKey } from '@talex-
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import type { ScheduleOptions } from '../../db/db-write-scheduler'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
+import { Buffer } from 'node:buffer'
+import { createHash, timingSafeEqual } from 'node:crypto'
 import * as schema from '../../db/schema'
 import { AppPreviewChannel, resolveUpdateChannelLabel, splitUpdateTag } from '@talex-touch/utils'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { NEXUS_BASE_URL } from '@talex-touch/utils/env'
 import { eq, sql } from 'drizzle-orm'
+import { app } from 'electron'
 import { scheduleDbWrite } from '../../db/db-write'
 import { BaseModule } from '../abstract-base-module'
 import { fxRateProvider } from '../box-tool/addon/preview/providers'
@@ -35,6 +38,13 @@ const SYSTEM_UPDATE_STARTUP_REFRESH_DELAY_MS = 2_500
 const SYSTEM_UPDATE_STARTUP_REFRESH_JITTER_MS = 1_000
 const FX_RATE_DEFAULT_TTL_MS = 8 * 60 * 60 * 1000
 const FETCH_TIMEOUT_MS = 10_000
+const SHA256_HEX_RE = /^[a-f0-9]{64}$/i
+
+export const ALLOWED_REMOTE_SYSTEM_CONFIG_KEYS: ReadonlySet<string> = new Set([
+  'system-update.notice',
+  'system-update.feature-flags',
+  'system-update.fx-rate-policy'
+])
 
 type LogMeta = Record<string, string | number | boolean | null | undefined>
 
@@ -249,10 +259,30 @@ export class SystemUpdateModule extends BaseModule<TalexEvents> {
     return resolveUpdateChannelLabel(channelLabel)
   }
 
-  private resolveBaseUrl(path: string): string {
-    if (/^https?:\/\//i.test(path)) return path
-    const trimmed = path.startsWith('/') ? path : `/${path}`
-    return `${this.baseUrl}${trimmed}`
+  private resolveTrustedPayloadUrl(rawPath: string): string | null {
+    const trimmed = typeof rawPath === 'string' ? rawPath.trim() : ''
+    if (!trimmed) return null
+    let base: URL
+    let resolved: URL
+    try {
+      base = new URL(this.baseUrl)
+      resolved = new URL(trimmed, base)
+    } catch {
+      return null
+    }
+    const isAllowedDevLoopback =
+      resolved.protocol === 'http:' &&
+      !app?.isPackaged &&
+      (resolved.hostname === 'localhost' ||
+        resolved.hostname === '127.0.0.1' ||
+        resolved.hostname === '[::1]')
+    if (resolved.protocol !== 'https:' && !isAllowedDevLoopback) {
+      return null
+    }
+    if (resolved.origin !== base.origin) {
+      return null
+    }
+    return resolved.toString()
   }
 
   private resolveLocalizedText(text: LocalizedText | string): string {
@@ -318,7 +348,7 @@ export class SystemUpdateModule extends BaseModule<TalexEvents> {
       statusText: string
     }
     try {
-      response = await getNetworkService().request<{ updates?: DashboardUpdate[] }>({
+      response = await getNetworkService().requestNoRedirect<{ updates?: DashboardUpdate[] }>({
         method: 'GET',
         url: url.toString(),
         headers,
@@ -416,6 +446,12 @@ export class SystemUpdateModule extends BaseModule<TalexEvents> {
     if (!this.db) return
     const key =
       typeof payload?.key === 'string' && payload.key.trim() ? payload.key.trim() : update.id
+    if (!ALLOWED_REMOTE_SYSTEM_CONFIG_KEYS.has(key)) {
+      log.warn('Rejected remote system config update for non-allowlisted key', {
+        meta: { key, updateId: update.id }
+      })
+      return
+    }
     const value =
       payload && Object.prototype.hasOwnProperty.call(payload, 'value') ? payload.value : payload
     const serialized = JSON.stringify(value ?? null)
@@ -500,10 +536,26 @@ export class SystemUpdateModule extends BaseModule<TalexEvents> {
 
   private async fetchPayload(update: DashboardUpdate): Promise<unknown | null> {
     if (!update.payloadUrl) return null
-    const url = this.resolveBaseUrl(update.payloadUrl)
+    const expectedSha256 =
+      typeof update.payloadSha256 === 'string' ? update.payloadSha256.trim().toLowerCase() : ''
+    if (!SHA256_HEX_RE.test(expectedSha256)) {
+      log.warn('Rejected update payload without valid payloadSha256', {
+        meta: { updateId: update.id }
+      })
+      return null
+    }
+
+    const url = this.resolveTrustedPayloadUrl(update.payloadUrl)
+    if (!url) {
+      log.warn('Rejected untrusted update payloadUrl', {
+        meta: { updateId: update.id }
+      })
+      return null
+    }
+
     let response: { status: number; statusText: string; data: string }
     try {
-      response = await getNetworkService().request<string>({
+      response = await getNetworkService().requestNoRedirect<string>({
         method: 'GET',
         url,
         timeoutMs: FETCH_TIMEOUT_MS,
@@ -513,6 +565,21 @@ export class SystemUpdateModule extends BaseModule<TalexEvents> {
       log.warn('Failed to fetch update payload', { error })
       return null
     }
+
+    const actualDigest = createHash('sha256')
+      .update(Buffer.from(typeof response.data === 'string' ? response.data : '', 'utf8'))
+      .digest()
+    const expectedDigest = Buffer.from(expectedSha256, 'hex')
+    if (
+      actualDigest.length !== expectedDigest.length ||
+      !timingSafeEqual(actualDigest, expectedDigest)
+    ) {
+      log.warn('Rejected update payload with mismatched SHA-256 digest', {
+        meta: { updateId: update.id }
+      })
+      return null
+    }
+
     try {
       return JSON.parse(response.data)
     } catch (error) {

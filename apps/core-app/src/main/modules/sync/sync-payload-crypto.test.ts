@@ -101,13 +101,19 @@ describe('SyncPayloadCrypto', () => {
     )
   })
 
-  it('keeps b64 as a read-only migration fallback', async () => {
+  it('keeps b64 as a read-only migration fallback before E2EE initialization and rejects downgrade after', async () => {
     const crypto = new SyncPayloadCrypto(createMemoryStore())
     const migrationPayload = `b64:${Buffer.from('migration text', 'utf-8').toString('base64')}`
 
     await expect(crypto.decrypt(migrationPayload)).resolves.toEqual({
       rawText: 'migration text',
       requiresMigrationRewrite: true
+    })
+
+    // Once E2EE key is initialized via encrypt(), plaintext b64 downgrade is rejected
+    await crypto.encrypt('initialized')
+    await expect(crypto.decrypt(migrationPayload)).rejects.toMatchObject({
+      code: 'SYNC_PAYLOAD_PLAINTEXT_DOWNGRADE_REJECTED'
     })
   })
 
@@ -119,6 +125,19 @@ describe('SyncPayloadCrypto', () => {
     )
     await expect(crypto.decrypt('{"secret":"plain"}')).rejects.toMatchObject({
       code: 'SYNC_PAYLOAD_UNSUPPORTED_FORMAT'
+    })
+  })
+
+  it('fails closed on b64 payloads when secure storage is unavailable', async () => {
+    const unavailableStore = {
+      ...createMemoryStore(),
+      isAvailable: () => false
+    }
+    const crypto = new SyncPayloadCrypto(unavailableStore)
+    const legacy = `b64:${Buffer.from('{"theme":"dark"}', 'utf-8').toString('base64')}`
+
+    await expect(crypto.decrypt(legacy)).rejects.toMatchObject({
+      code: 'SYNC_SECURE_STORE_UNAVAILABLE'
     })
   })
 

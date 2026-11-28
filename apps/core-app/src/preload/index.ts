@@ -199,6 +199,11 @@ function assertBridgedChannel(channel: string): void {
  * The shape matches the toolkit's, including `on` returning its own remover, so the renderer
  * needs no change.
  */
+const bridgedListeners = new WeakMap<
+  (...args: unknown[]) => void,
+  Map<string, Set<(...args: unknown[]) => void>>
+>()
+
 const bridgedElectronAPI = {
   ipcRenderer: {
     send(channel: string, ...args: unknown[]): void {
@@ -207,12 +212,48 @@ const bridgedElectronAPI = {
     },
     on(channel: string, listener: (event: unknown, ...args: unknown[]) => void): () => void {
       assertBridgedChannel(channel)
-      const wrapped = (event: unknown, ...args: unknown[]): void => listener(event, ...args)
+      const wrapped = (_event: unknown, ...args: unknown[]): void => listener(undefined, ...args)
+      let channelMap = bridgedListeners.get(listener)
+      if (!channelMap) {
+        channelMap = new Map()
+        bridgedListeners.set(listener, channelMap)
+      }
+      let wrappers = channelMap.get(channel)
+      if (!wrappers) {
+        wrappers = new Set()
+        channelMap.set(channel, wrappers)
+      }
+      wrappers.add(wrapped)
       ipcRenderer.on(channel, wrapped as never)
-      return () => ipcRenderer.removeListener(channel, wrapped as never)
+      return () => {
+        ipcRenderer.removeListener(channel, wrapped as never)
+        const currentChannelMap = bridgedListeners.get(listener)
+        const currentWrappers = currentChannelMap?.get(channel)
+        if (currentWrappers) {
+          currentWrappers.delete(wrapped)
+          if (currentWrappers.size === 0) {
+            currentChannelMap?.delete(channel)
+          }
+          if (currentChannelMap && currentChannelMap.size === 0) {
+            bridgedListeners.delete(listener)
+          }
+        }
+      }
     },
     removeListener(channel: string, listener: (...args: unknown[]) => void): void {
       assertBridgedChannel(channel)
+      const channelMap = bridgedListeners.get(listener)
+      const wrappers = channelMap?.get(channel)
+      if (wrappers && wrappers.size > 0) {
+        for (const wrapped of wrappers) {
+          ipcRenderer.removeListener(channel, wrapped as never)
+        }
+        channelMap?.delete(channel)
+        if (channelMap && channelMap.size === 0) {
+          bridgedListeners.delete(listener)
+        }
+        return
+      }
       ipcRenderer.removeListener(channel, listener as never)
     }
   },

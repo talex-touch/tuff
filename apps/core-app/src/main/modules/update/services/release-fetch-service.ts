@@ -4,6 +4,7 @@ import type {
   UpdateProviderOutcome,
   UpdateSettings as SharedUpdateSettings
 } from '@talex-touch/utils'
+import { randomUUID } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 import {
@@ -121,7 +122,14 @@ export class ReleaseFetchService {
     const cacheFile = path.join(rootPath, 'config', 'update-cache.json')
     try {
       await fs.promises.mkdir(path.dirname(cacheFile), { recursive: true })
-      await fs.promises.writeFile(cacheFile, JSON.stringify(this.store, null, 2))
+      const tempFile = `${cacheFile}.${process.pid}.${randomUUID()}.tmp`
+      try {
+        await fs.promises.writeFile(tempFile, JSON.stringify(this.store, null, 2), 'utf8')
+        await fs.promises.rename(tempFile, cacheFile)
+      } catch (writeError) {
+        await fs.promises.rm(tempFile, { force: true }).catch(() => undefined)
+        throw writeError
+      }
     } catch (error) {
       this.deps.log.warn('Failed to save update cache', { error })
     }

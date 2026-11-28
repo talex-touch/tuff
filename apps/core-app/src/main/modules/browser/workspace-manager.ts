@@ -11,6 +11,7 @@ import { z } from 'zod'
 import {
   clampBrowserViewport,
   isAllowedBrowserUrl,
+  isAllowedGuestNavigationUrl,
   MAX_BROWSER_BOOKMARKS,
   MAX_BROWSER_RECENT,
   MAX_BROWSER_TABS,
@@ -588,7 +589,7 @@ export class BrowserWorkspaceManager {
     }
     const current = () => !this.disposed && this.guests.get(tab.id) === guest && !wc.isDestroyed()
     const block = (event: { preventDefault: () => void }, url: string) => {
-      if (!isAllowedBrowserUrl(url)) {
+      if (!isAllowedGuestNavigationUrl(url)) {
         event.preventDefault()
         tab.error = 'BROWSER_URL_BLOCKED'
         this.changed()
@@ -601,7 +602,7 @@ export class BrowserWorkspaceManager {
     )
     on('will-attach-webview', (event: { preventDefault: () => void }) => event.preventDefault())
     wc.setWindowOpenHandler(({ url }) => {
-      if (current() && isAllowedBrowserUrl(url))
+      if (current() && isAllowedGuestNavigationUrl(url))
         void this.createTab(url).catch(() => {
           if (current()) {
             tab.error = 'BROWSER_POPUP_FAILED'
@@ -639,7 +640,7 @@ export class BrowserWorkspaceManager {
     })
     on('page-favicon-updated', (_event: unknown, favicons: string[]) => {
       if (current()) {
-        tab.favicon = favicons.find(isAllowedBrowserUrl) ?? null
+        tab.favicon = favicons.find(isAllowedGuestNavigationUrl) ?? null
         this.changed()
       }
     })
@@ -719,7 +720,7 @@ export class BrowserWorkspaceManager {
       }
     })
     const navigated = (_event: unknown, url: string) => {
-      if (current() && isAllowedBrowserUrl(url)) {
+      if (current() && isAllowedGuestNavigationUrl(url)) {
         tab.url = url
         tab.error = null
         this.updateHistory(tab)
@@ -728,12 +729,12 @@ export class BrowserWorkspaceManager {
     }
     on('did-navigate', navigated)
     on('did-navigate-in-page', (event: unknown, url: string, mainFrame: boolean) => {
-      if (!mainFrame || !current() || !isAllowedBrowserUrl(url)) return
+      if (!mainFrame || !current() || !isAllowedGuestNavigationUrl(url)) return
       navigated(event, url)
       this.recordVisit(tab)
     })
     on('did-finish-load', () => {
-      if (!current() || !isAllowedBrowserUrl(wc.getURL())) return
+      if (!current() || !isAllowedGuestNavigationUrl(wc.getURL())) return
       tab.url = wc.getURL()
       tab.title = wc.getTitle().slice(0, 512)
       tab.loading = false

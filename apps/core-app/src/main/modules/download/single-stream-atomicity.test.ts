@@ -14,7 +14,7 @@ import fs from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { Readable } from 'node:stream'
+import { PassThrough, Readable } from 'node:stream'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 // The import graph reaches modules that touch electron at module scope; this harness is the
@@ -75,15 +75,25 @@ function createWorker(chunks: string[], failure?: Error): DownloadWorker {
 }
 
 /** downloadWithoutChunks is private; the property under test lives only on that path. */
-function run(worker: DownloadWorker, destination: string): Promise<unknown> {
+function run(
+  worker: DownloadWorker,
+  destination: string,
+  abortSignal?: AbortSignal
+): Promise<unknown> {
   const internals = worker as unknown as {
     downloadWithoutChunks: (
       task: DownloadTask,
       tracker: ProgressTracker,
-      headers?: Record<string, string>
+      headers?: Record<string, string>,
+      abortSignal?: AbortSignal
     ) => Promise<unknown>
   }
-  return internals.downloadWithoutChunks(task(destination), new ProgressTracker('task-1'))
+  return internals.downloadWithoutChunks(
+    task(destination),
+    new ProgressTracker('task-1'),
+    undefined,
+    abortSignal
+  )
 }
 
 describe('a single-stream download does not damage the destination', () => {
@@ -129,6 +139,37 @@ describe('a single-stream download does not damage the destination', () => {
       run(createWorker(['partial-'], new Error('connection reset')), dir)
     ).rejects.toThrow()
 
+    expect((await fs.readdir(dir)).filter((name) => name.endsWith('.part'))).toEqual([])
+  })
+
+  it('propagates abortSignal cancellation to single-stream downloads and cleans up .part files', async () => {
+    const dir = await createWorkspace()
+    const destination = path.join(dir, 'payload.bin')
+    await fs.writeFile(destination, 'existing-good-content')
+
+    const controller = new AbortController()
+    const stream = new PassThrough()
+    const streamRequested = Promise.withResolvers<void>()
+    requestStream.mockImplementation(async (options: { signal?: AbortSignal }) => {
+      expect(options.signal).toBeDefined()
+      streamRequested.resolve()
+      return { headers: {}, stream }
+    })
+
+    const worker = new DownloadWorker(
+      1,
+      {} as never,
+      {} as never,
+      { network: { timeout: 5_000 } } as never
+    )
+    const pending = run(worker, dir, controller.signal)
+    await streamRequested.promise
+
+    stream.write(Buffer.from('partial-'))
+    controller.abort()
+
+    await expect(pending).rejects.toThrow('Task was cancelled')
+    expect(await fs.readFile(destination, 'utf8')).toBe('existing-good-content')
     expect((await fs.readdir(dir)).filter((name) => name.endsWith('.part'))).toEqual([])
   })
 })

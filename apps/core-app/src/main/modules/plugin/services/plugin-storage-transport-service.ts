@@ -752,6 +752,12 @@ export function registerPluginStorageTransportHandlers(
   disposers.push(
     transport.on(PluginEvents.storage.openFolder, async (payload, context) => {
       try {
+        if (isRecord(context) && context.plugin !== undefined) {
+          const plugin = resolvePrivilegedPlugin(payload, context)
+          ensureStoragePermission(plugin, 'system:shell')
+          await shell.openPath(plugin.getConfigPath())
+          return
+        }
         const resolved = resolveTouchPlugin(payload, context)
         if ('error' in resolved) {
           return

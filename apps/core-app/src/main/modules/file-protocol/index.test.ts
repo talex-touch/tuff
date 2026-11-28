@@ -47,6 +47,11 @@ vi.mock('../../utils/local-file-policy', () => {
     },
     isAllowedLocalFilePath: (filePath: string, roots: string[]) =>
       roots.some((root) => filePath === root || filePath.startsWith(`${root}/`)),
+    canonicalizeLocalFileRoots: async (roots: string[]) => roots,
+    resolveCanonicalLocalFilePath: async (filePath: string) => ({
+      canonicalPath: filePath,
+      exists: false
+    }),
     normalizeDarwinUsersPath: (filePath: string) =>
       process.platform === 'darwin' && filePath.toLowerCase().startsWith('/users/demo/')
         ? `/Users/demo${filePath.slice('/users/demo'.length)}`
