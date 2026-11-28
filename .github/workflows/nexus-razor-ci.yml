@@ -88,7 +88,7 @@ jobs:
           test -f apps/nexus-api/.output/server/index.mjs
 
       - name: Upload Nexus API bundle
-        if: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/master') || (github.event_name == 'workflow_dispatch' && inputs.deploy_cloudflare == true) }}
+        if: ${{ github.ref == 'refs/heads/master' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.deploy_cloudflare == true)) }}
         uses: actions/upload-artifact@v7
         with:
           name: nexus-api-output
@@ -159,7 +159,7 @@ jobs:
           fi
 
       - name: Upload staged Tuff Web assets
-        if: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/master') || (github.event_name == 'workflow_dispatch' && inputs.deploy_cloudflare == true) }}
+        if: ${{ github.ref == 'refs/heads/master' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.deploy_cloudflare == true)) }}
         uses: actions/upload-artifact@v7
         with:
           name: tuff-web-dist-cf
@@ -214,7 +214,7 @@ jobs:
           test -d apps/nexus-console/dist/_console
 
       - name: Upload Nexus Console assets
-        if: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/master') || (github.event_name == 'workflow_dispatch' && inputs.deploy_cloudflare == true) }}
+        if: ${{ github.ref == 'refs/heads/master' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.deploy_cloudflare == true)) }}
         uses: actions/upload-artifact@v7
         with:
           name: nexus-console-dist
@@ -231,7 +231,7 @@ jobs:
       - nexus_api_ci
       - tuff_web_ci
       - nexus_console_ci
-    if: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/master') || (github.event_name == 'workflow_dispatch' && inputs.deploy_cloudflare == true) }}
+    if: ${{ github.ref == 'refs/heads/master' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.deploy_cloudflare == true)) }}
     steps:
       - name: Checkout Code
         uses: actions/checkout@v7
@@ -265,7 +265,10 @@ jobs:
           name: nexus-console-dist
           path: apps/nexus-console/dist
 
-      - name: Deploy with Wrangler when Cloudflare credentials are configured
+      - name: Install Wrangler dependencies without lifecycle scripts
+        run: pnpm install --frozen-lockfile --ignore-scripts --filter @talex-touch/nexus-api --filter @talex-touch/tuff-web --filter @talex-touch/nexus-console
+
+      - name: Preflight Cloudflare secrets and deploy Workers atomically
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -274,7 +277,28 @@ jobs:
             echo "Skipping Cloudflare Workers deploy: CLOUDFLARE_ACCOUNT_ID / CLOUDFLARE_API_TOKEN not configured."
             exit 0
           fi
-          pnpm install --frozen-lockfile --filter @talex-touch/nexus-api --filter @talex-touch/tuff-web --filter @talex-touch/nexus-console
+
+          SECRETS_JSON="$(pnpm -C apps/nexus-api exec wrangler secret list --format json 2>/dev/null || echo '[]')"
+          export SECRETS_JSON
+          MISSING_SECRETS="$(node -e '
+            const required = ["AUTH_SECRET", "APP_AUTH_JWT_SECRET", "PROVIDER_REGISTRY_SECURE_STORE_KEY"];
+            const names = new Set();
+            try {
+              const parsed = JSON.parse(process.env.SECRETS_JSON || "[]");
+              if (Array.isArray(parsed)) {
+                for (const entry of parsed) {
+                  if (entry && typeof entry.name === "string") names.add(entry.name);
+                }
+              }
+            } catch {}
+            process.stdout.write(required.filter((k) => !names.has(k)).join(", "));
+          ')"
+
+          if [ -n "${MISSING_SECRETS}" ]; then
+            echo "Skipping Cloudflare Workers deploy until required tuff-nexus-api production secrets are configured: ${MISSING_SECRETS}"
+            exit 0
+          fi
+
           pnpm -C apps/nexus-api exec wrangler deploy
           pnpm -C apps/nexus-console exec wrangler deploy
           pnpm -C apps/tuff-web exec wrangler deploy

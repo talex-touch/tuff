@@ -40,6 +40,19 @@ export const LEGACY_REDIRECTS = [
   { from: '/llms.txt', to: '/tuffex/llms.txt', status: 308 },
   { from: '/docs', to: '/en/docs', status: 308 },
   { from: '/terms', to: '/license', status: 308 },
+  // Legacy locale-prefixed console exact routes -> standalone nexus-console
+  { from: '/en/sign-in', to: '/sign-in', status: 308 },
+  { from: '/zh/sign-in', to: '/sign-in', status: 308 },
+  { from: '/en/verify', to: '/verify', status: 308 },
+  { from: '/zh/verify', to: '/verify', status: 308 },
+  { from: '/en/verify-waiting', to: '/verify-waiting', status: 308 },
+  { from: '/zh/verify-waiting', to: '/verify-waiting', status: 308 },
+  { from: '/en/device-auth', to: '/device-auth', status: 308 },
+  { from: '/zh/device-auth', to: '/device-auth', status: 308 },
+  { from: '/en/dashboard', to: '/dashboard', status: 308 },
+  { from: '/zh/dashboard', to: '/dashboard', status: 308 },
+  { from: '/en/admin', to: '/admin', status: 308 },
+  { from: '/zh/admin', to: '/admin', status: 308 },
   // Dynamic splat rules: TuffEx subpaths MUST precede `/docs/*`
   { from: '/en/docs/dev/components/*', to: '/tuffex/en/:splat', status: 308 },
   { from: '/zh/docs/dev/components/*', to: '/tuffex/zh/:splat', status: 308 },
@@ -48,6 +61,11 @@ export const LEGACY_REDIRECTS = [
   { from: '/docs/dev/components/*', to: '/tuffex/en/:splat', status: 308 },
   { from: '/docs/dev/concepts/*', to: '/tuffex/en/concepts/:splat', status: 308 },
   { from: '/docs/*', to: '/en/docs/:splat', status: 308 },
+  // Legacy locale-prefixed console splat routes -> standalone nexus-console
+  { from: '/en/dashboard/*', to: '/dashboard/:splat', status: 308 },
+  { from: '/zh/dashboard/*', to: '/dashboard/:splat', status: 308 },
+  { from: '/en/admin/*', to: '/admin/:splat', status: 308 },
+  { from: '/zh/admin/*', to: '/admin/:splat', status: 308 },
 ]
 
 const PUBLIC_SITEMAP_SLUGS = [
