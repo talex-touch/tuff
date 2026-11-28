@@ -2,6 +2,7 @@ import type { ModuleInitContext } from '@talex-touch/utils'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { NetworkEvents } from '@talex-touch/utils/transport/events'
+import { createTrustedTestPluginContext } from '@talex-touch/utils/transport/security/plugin-identity'
 import { idleBudgetCoordinator } from '../../service/idle-budget-coordinator'
 import { NetworkModule } from './network-module'
 
@@ -14,7 +15,9 @@ const mocks = vi.hoisted(() => ({
   on: vi.fn(),
   service: {
     getStatus: vi.fn(),
-    setOnlineStatus: vi.fn()
+    setOnlineStatus: vi.fn(),
+    request: vi.fn(),
+    requestForPlugin: vi.fn()
   },
   status: null as { changedAt: number; online: boolean; reason: string } | null,
   transportInvoke: vi.fn(),
@@ -81,6 +84,8 @@ describe('NetworkModule lifecycle status', () => {
     mocks.on.mockClear()
     mocks.service.getStatus.mockReset()
     mocks.service.setOnlineStatus.mockReset()
+    mocks.service.request.mockReset()
+    mocks.service.requestForPlugin.mockReset()
     mocks.status = null
     mocks.service.getStatus.mockImplementation(() => mocks.status)
     mocks.service.setOnlineStatus.mockImplementation((online: boolean, reason: string) => ({
@@ -141,7 +146,7 @@ describe('NetworkModule lifecycle status', () => {
     module.onDestroy({} as never)
   })
 
-  it('bridges verified plugin-view requests into the permission-gated network transport', async () => {
+  it('routes verified plugin requests once through isolated requestForPlugin and blocks file://', async () => {
     const module = new NetworkModule()
     const response = {
       status: 200,
@@ -158,30 +163,51 @@ describe('NetworkModule lifecycle status', () => {
       responseType: 'json',
       body: { text: 'Hello world' }
     }
-    mocks.transportInvoke.mockResolvedValueOnce(response)
+    mocks.service.requestForPlugin.mockResolvedValueOnce(response)
 
     module.onInit({} as ModuleInitContext<TalexEvents>)
-    const handler = mocks.rawHandlers.get(NetworkEvents.api.request.toEventName())
+    // Must not double-register NetworkEvents.api.request on raw plugin channel
+    expect(mocks.regChannel).not.toHaveBeenCalled()
 
-    await expect(
-      handler?.({
-        data: request,
-        pluginIdentity: {
-          name: 'touch-translation',
-          pluginInstanceId: 'translation-instance',
-          activationGeneration: 2,
-          key: 'translation-key'
-        },
-        header: { event: { sender } }
-      })
-    ).resolves.toEqual(response)
-    expect(mocks.transportInvoke).toHaveBeenCalledWith(NetworkEvents.api.request, request, {
-      sender,
-      plugin: {
-        name: 'touch-translation',
-        uniqueKey: 'translation-key'
-      }
+    const handler = mocks.handlers.get(NetworkEvents.api.request.toEventName()) as
+      | ((payload: unknown, context: unknown) => Promise<unknown>)
+      | undefined
+    expect(handler).toBeTypeOf('function')
+
+    const pluginContext = createTrustedTestPluginContext({
+      name: 'touch-translation',
+      pluginInstanceId: 'translation-instance',
+      activationGeneration: 2
     })
+
+    // Non-HTTP schemes such as file:// are rejected before hitting the network service
+    await expect(
+      handler?.(
+        { method: 'GET', url: 'file:///etc/passwd', responseType: 'text' },
+        { sender, eventName: NetworkEvents.api.request.toEventName(), plugin: pluginContext }
+      )
+    ).rejects.toThrow('NETWORK_UNSUPPORTED_PROTOCOL')
+    expect(mocks.service.request).not.toHaveBeenCalled()
+    expect(mocks.service.requestForPlugin).not.toHaveBeenCalled()
+
+    // Unverified plugin context is denied
+    await expect(
+      handler?.(request, {
+        sender,
+        eventName: NetworkEvents.api.request.toEventName(),
+        plugin: { name: 'touch-translation', uniqueKey: 'forged' }
+      })
+    ).rejects.toThrow()
+
+    // Host requests still go through service.request; plugin requests go through isolated requestForPlugin
+    await expect(
+      handler?.(request, {
+        sender,
+        eventName: NetworkEvents.api.request.toEventName(),
+        plugin: undefined
+      })
+    ).resolves.toBeUndefined()
+    expect(mocks.service.request).toHaveBeenCalledWith(request)
 
     module.onDestroy({} as never)
   })

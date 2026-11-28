@@ -1,4 +1,5 @@
-import { readdirSync } from 'node:fs'
+import { lstatSync, readdirSync, realpathSync } from 'node:fs'
+import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
@@ -99,12 +100,17 @@ export function getAllowedLocalFileRoots(options: { includeCwd?: boolean } = {})
       : []
   const linuxRoots = process.platform === 'linux' ? ['/usr/share', '/usr/local/share', '/opt'] : []
 
+  const userData = appPathSafe('userData')
+  const runtimeRoot = resolveRuntimeRootPath(app)
   const runtimePluginResourceRoots = getRuntimePluginResourceRoots()
   const candidates = [
     options.includeCwd ? process.cwd() : null,
     ...getAllowedHomeSubRoots(),
     path.join(appPathSafe('cache'), 'app-icons'),
-    appPathSafe('userData'),
+    path.join(userData, 'cache'),
+    path.join(userData, 'wallpapers'),
+    path.join(userData, 'temp'),
+    path.join(runtimeRoot, 'temp'),
     ...runtimePluginResourceRoots,
     appPathSafe('temp'),
     os.tmpdir(),
@@ -172,12 +178,8 @@ function foldDarwinPrivateAlias(filePath: string): string {
   return filePath.slice('/private'.length)
 }
 
-export function isAllowedLocalFilePath(filePath: string, roots: string[]): boolean {
-  const normalized = normalizeAbsolutePath(filePath)
-  if (!normalized) {
-    return false
-  }
-  const comparable = foldDarwinPrivateAlias(normalized)
+function isLexicallyWithinRoots(normalizedPath: string, roots: string[]): boolean {
+  const comparable = foldDarwinPrivateAlias(normalizedPath)
 
   if (process.platform === 'darwin') {
     const lower = comparable.toLowerCase()
@@ -202,6 +204,124 @@ export function isAllowedLocalFilePath(filePath: string, roots: string[]): boole
       }).resolvedPath
     )
   })
+}
+
+function canonicalizeExistingRootSync(root: string): string {
+  const normalizedRoot = normalizeAbsolutePath(root)
+  if (!normalizedRoot) return root
+  if (typeof realpathSync !== 'function') return normalizedRoot
+  try {
+    return normalizeAbsolutePath(realpathSync(normalizedRoot)) ?? normalizedRoot
+  } catch {
+    return normalizedRoot
+  }
+}
+
+export async function resolveCanonicalLocalFilePath(
+  filePath: string
+): Promise<{ canonicalPath: string; exists: boolean } | null> {
+  const normalized = normalizeAbsolutePath(filePath)
+  if (!normalized) {
+    return null
+  }
+  if (typeof fs.realpath !== 'function' || typeof fs.lstat !== 'function') {
+    return { canonicalPath: normalized, exists: false }
+  }
+  try {
+    const resolved = normalizeAbsolutePath(await fs.realpath(normalized))
+    return resolved ? { canonicalPath: resolved, exists: true } : null
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException | undefined)?.code
+    if (code === 'ELOOP' || code === 'EACCES' || code === 'EPERM') {
+      return null
+    }
+    if (code !== 'ENOENT' && code !== 'ENOTDIR') {
+      return null
+    }
+  }
+
+  const tail: string[] = []
+  let current = normalized
+  while (true) {
+    try {
+      const stat = await fs.lstat(current)
+      if (stat.isSymbolicLink()) {
+        try {
+          const canonicalAncestor = await fs.realpath(current)
+          const joined = normalizeAbsolutePath(
+            tail.length > 0 ? path.join(canonicalAncestor, ...tail) : canonicalAncestor
+          )
+          return joined ? { canonicalPath: joined, exists: false } : null
+        } catch {
+          return null
+        }
+      }
+      const canonicalAncestor = await fs.realpath(current)
+      const joined = normalizeAbsolutePath(
+        tail.length > 0 ? path.join(canonicalAncestor, ...tail) : canonicalAncestor
+      )
+      return joined ? { canonicalPath: joined, exists: false } : null
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException | undefined)?.code
+      if (code !== 'ENOENT' && code !== 'ENOTDIR') {
+        return null
+      }
+      const parent = path.dirname(current)
+      if (parent === current) {
+        return { canonicalPath: normalized, exists: false }
+      }
+      tail.unshift(path.basename(current))
+      current = parent
+    }
+  }
+}
+
+export async function canonicalizeLocalFileRoots(roots: string[]): Promise<string[]> {
+  if (typeof fs.realpath !== 'function') {
+    return roots
+  }
+  return await Promise.all(
+    roots.map(async (root) => {
+      const normalizedRoot = normalizeAbsolutePath(root)
+      if (!normalizedRoot) return root
+      const canonical = await resolveCanonicalLocalFilePath(normalizedRoot)
+      return canonical?.canonicalPath ?? normalizedRoot
+    })
+  )
+}
+
+export function isAllowedLocalFilePath(filePath: string, roots: string[]): boolean {
+  const normalized = normalizeAbsolutePath(filePath)
+  if (!normalized) {
+    return false
+  }
+  if (!isLexicallyWithinRoots(normalized, roots)) {
+    return false
+  }
+  if (typeof realpathSync !== 'function' || typeof lstatSync !== 'function') {
+    return true
+  }
+  try {
+    const canonicalTarget = normalizeAbsolutePath(realpathSync(normalized))
+    if (!canonicalTarget) {
+      return false
+    }
+    const canonicalRoots = roots.map(canonicalizeExistingRootSync)
+    return isLexicallyWithinRoots(canonicalTarget, canonicalRoots)
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException | undefined)?.code
+    if (code === 'ENOENT' || code === 'ENOTDIR') {
+      try {
+        if (lstatSync(normalized).isSymbolicLink()) {
+          return false
+        }
+      } catch {
+        // Truly absent path: lexical containment already passed.
+      }
+      return true
+    }
+    return false
+  }
 }
 
 /**

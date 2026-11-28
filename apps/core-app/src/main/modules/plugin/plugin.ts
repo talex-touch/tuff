@@ -1748,7 +1748,7 @@ export class TouchPlugin implements ITouchPlugin {
   }
 
   private async loadPreludeScript(): Promise<string> {
-    const shouldBundlePrelude = this.dev.enable
+    const shouldBundlePrelude = !app.isPackaged && this.dev.enable
     // A packaged build never fetches its Prelude over the network, whatever the manifest says.
     //
     // Three shipped manifests carried dev.enable/source with a localhost address, so an

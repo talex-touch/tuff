@@ -2088,7 +2088,14 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       const configDir = path.join(this.initContext.app.rootPath, 'config')
       const settingsFile = path.join(configDir, 'update-settings.json')
       await fs.promises.mkdir(configDir, { recursive: true })
-      await fs.promises.writeFile(settingsFile, JSON.stringify(this.settings, null, 2))
+      const tempFile = `${settingsFile}.${process.pid}.${randomUUID()}.tmp`
+      try {
+        await fs.promises.writeFile(tempFile, JSON.stringify(this.settings, null, 2), 'utf8')
+        await fs.promises.rename(tempFile, settingsFile)
+      } catch (writeError) {
+        await fs.promises.rm(tempFile, { force: true }).catch(() => undefined)
+        throw writeError
+      }
       updateLog.success(`Settings saved to: ${settingsFile}`)
     } catch (error) {
       updateLog.error('Failed to save settings', { error })

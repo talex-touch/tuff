@@ -1483,15 +1483,19 @@ describe('TdsCanvasSessionStore & host-only persistence IPC', () => {
     expect(loaded.ok).toBe(true)
     expect(loaded.session).toEqual(sample)
 
-    // Moving an envelope to another keyHash fails authentication cleanly
+    // Moving an envelope to another keyHash fails authentication with explicit error
     const otherHash = hashCanvasConversationId('other-conv')!
     await env.client.execute({
       sql: 'INSERT INTO tds_canvas_sessions (key_hash, envelope, updated_at) VALUES (?, ?, ?)',
       args: [otherHash, rawEnvelope, nowMs]
     })
-    expect(await storeB.load('other-conv')).toEqual({ ok: true, session: null })
+    expect(await storeB.load('other-conv')).toEqual({
+      ok: false,
+      session: null,
+      error: 'CANVAS_SESSION_DECRYPT_FAILED'
+    })
 
-    // Tampering ciphertext fails closed cleanly without throwing
+    // Tampering ciphertext fails closed with explicit error without throwing
     const tampered = JSON.stringify({
       ...parsedEnvelope,
       c: `${parsedEnvelope.c[0] === 'A' ? 'B' : 'A'}${parsedEnvelope.c.slice(1)}`
@@ -1500,7 +1504,11 @@ describe('TdsCanvasSessionStore & host-only persistence IPC', () => {
       sql: 'UPDATE tds_canvas_sessions SET envelope = ? WHERE key_hash = ?',
       args: [tampered, otherHash]
     })
-    expect(await storeB.load('other-conv')).toEqual({ ok: true, session: null })
+    expect(await storeB.load('other-conv')).toEqual({
+      ok: false,
+      session: null,
+      error: 'CANVAS_SESSION_DECRYPT_FAILED'
+    })
 
     const deleted = await storeB.delete(conversationId)
     expect(deleted).toEqual({ ok: true, deleted: true })
@@ -1620,7 +1628,7 @@ describe('TdsCanvasSessionStore & host-only persistence IPC', () => {
       expect(sanitized.session.history.cursor).toBe(0)
     }
 
-    // Corrupt non-envelope payload in SQLite returns null cleanly instead of throwing
+    // Corrupt/undecryptable payload in SQLite returns an error instead of masquerading as missing
     const store = new TdsCanvasSessionStore({
       getDb: () => env.db,
       scheduleWrite: env.scheduleWrite,
@@ -1632,7 +1640,13 @@ describe('TdsCanvasSessionStore & host-only persistence IPC', () => {
       sql: 'INSERT INTO tds_canvas_sessions (key_hash, envelope, updated_at) VALUES (?, ?, ?)',
       args: [hash, '{broken-envelope', 1_000]
     })
-    expect(await store.load('conv-corrupt')).toEqual({ ok: true, session: null })
+    expect(await store.load('conv-corrupt')).toEqual({
+      ok: false,
+      session: null,
+      error: 'CANVAS_SESSION_DECRYPT_FAILED'
+    })
+    // A genuinely absent conversation still returns ok: true, session: null
+    expect(await store.load('conv-truly-missing')).toEqual({ ok: true, session: null })
   })
 
   it('preserves every retained snapshot blob for >128 distinct sources and prunes oldest snapshots past MAX_CANVAS_HISTORY_BLOBS', async () => {

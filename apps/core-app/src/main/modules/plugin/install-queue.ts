@@ -382,8 +382,10 @@ export class PluginInstallQueue {
     return hasOptions ? options : undefined
   }
 
-  private shouldEnforceProdMode(task: InstallTask): boolean {
-    return Boolean(task.officialActual ?? task.officialHint)
+  private shouldEnforceProdMode(_task: InstallTask): boolean {
+    // All installed plugin packages (.tpex, .zip, GitHub, npm, registry) must strip dev.enable/source;
+    // only local dev-plugin-installer installs retain dev mode.
+    return true
   }
 
   private async requestConfirmation(

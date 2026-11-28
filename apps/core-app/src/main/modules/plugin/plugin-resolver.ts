@@ -2,7 +2,6 @@ import { PluginStatus, type IManifest } from '@talex-touch/utils/plugin'
 import crypto from 'node:crypto'
 import os from 'node:os'
 import path from 'node:path'
-import compressing from 'compressing'
 import fse from 'fs-extra'
 import { isSafePathSegment } from '@talex-touch/utils/common/utils/safe-path'
 import { createLogger } from '../../utils/logger'
@@ -10,7 +9,8 @@ import { extractTgzSafely } from './npm-tarball-inspector'
 import { pluginModule } from './plugin-module'
 import { removeNodeModulesDirs, shouldSkipNodeModulesPath } from './plugin-install-copy-utils'
 import { type PackagedManifest, ensurePluginRuntimeIntegrity } from './plugin-runtime-integrity'
-import { PRIVILEGED_PLUGIN_NAMES } from '../../../shared/privileged-plugins'
+import { extractArchiveSafely } from './safe-archive-extract'
+import { isReservedPrivilegedPluginName } from '../../../shared/privileged-plugins'
 
 type ResolverEvent = { msg: unknown }
 const pluginResolverLog = createLogger('PluginSystem').child('Resolver')
@@ -91,7 +91,7 @@ export class PluginResolver {
 
     const lower = source.toLowerCase()
     if (lower.endsWith('.tar') || lower.endsWith('.tpex')) {
-      await compressing.tar.uncompress(source, target)
+      await extractArchiveSafely(source, target, 'tar', { skipNodeModules: true })
       return
     }
 
@@ -104,7 +104,7 @@ export class PluginResolver {
     }
 
     if (lower.endsWith('.zip')) {
-      await compressing.zip.uncompress(source, target)
+      await extractArchiveSafely(source, target, 'zip', { skipNodeModules: true })
       return
     }
 
@@ -127,7 +127,7 @@ export class PluginResolver {
       return
     }
 
-    await compressing.tar.uncompress(source, target)
+    await extractArchiveSafely(source, target, 'tar', { skipNodeModules: true })
   }
 
   private async restorePreservedRuntimeEntries(
@@ -171,10 +171,17 @@ export class PluginResolver {
     if (typeof manifest.name !== 'string' || !isSafePathSegment(manifest.name)) {
       return cb('invalid plugin name', 'error')
     }
-    if (PRIVILEGED_PLUGIN_NAMES.includes(manifest.name)) {
+    if (isReservedPrivilegedPluginName(manifest.name)) {
       return cb('privileged plugin name is reserved for the bundled runtime', 'error')
     }
     const pluginsRoot = pluginModule.filePath!
+    const existingEntries = await fse.readdir(pluginsRoot).catch(() => [] as string[])
+    const caseCollision = existingEntries.find(
+      (entry) => entry.toLowerCase() === manifest.name.toLowerCase() && entry !== manifest.name
+    )
+    if (caseCollision) {
+      return cb('plugin name collides with an existing plugin directory', 'error')
+    }
     const _target = path.join(pluginsRoot, manifest.name)
     const existingPlugin = fse.existsSync(_target)
     if (existingPlugin && !options?.forceUpdate) {

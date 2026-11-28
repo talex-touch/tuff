@@ -3,6 +3,11 @@ import { AppEvents, PlatformEvents, PluginEvents } from '@talex-touch/utils/tran
 
 const {
   fsReadFileMock,
+  fsWriteFileMock,
+  fsStatMock,
+  fsLstatMock,
+  fsRealpathMock,
+  fsAccessMock,
   execFileMock,
   loggerWarnMock,
   perfDisposeMock,
@@ -37,6 +42,11 @@ const {
   markPrimaryRendererReadyMock
 } = vi.hoisted(() => ({
   fsReadFileMock: vi.fn(),
+  fsWriteFileMock: vi.fn(),
+  fsStatMock: vi.fn(),
+  fsLstatMock: vi.fn(async () => ({ isSymbolicLink: (): boolean => false })),
+  fsRealpathMock: vi.fn(async (target: string) => target),
+  fsAccessMock: vi.fn(async () => undefined),
   execFileMock: vi.fn(
     (
       _command: string,
@@ -110,26 +120,36 @@ vi.mock('@talex-touch/utils/transport/main', () => ({
 
 vi.mock('node:fs/promises', () => ({
   default: {
+    constants: { R_OK: 4 },
     readFile: fsReadFileMock,
-    writeFile: vi.fn(),
+    writeFile: fsWriteFileMock,
+    stat: fsStatMock,
+    lstat: fsLstatMock,
+    realpath: fsRealpathMock,
     mkdir: vi.fn(),
     rm: vi.fn(),
-    access: vi.fn()
+    access: fsAccessMock
   }
 }))
 
 vi.mock('node:fs', () => ({
   promises: {
+    constants: { R_OK: 4 },
     readFile: fsReadFileMock,
-    writeFile: vi.fn(),
+    writeFile: fsWriteFileMock,
+    stat: fsStatMock,
+    lstat: fsLstatMock,
+    realpath: fsRealpathMock,
     mkdir: vi.fn(),
     rm: vi.fn(),
-    access: vi.fn()
+    access: fsAccessMock
   },
   existsSync: vi.fn(() => false),
   readFileSync: vi.fn(() => ''),
   writeFileSync: vi.fn(),
-  mkdirSync: vi.fn()
+  mkdirSync: vi.fn(),
+  realpathSync: vi.fn((target: string) => target),
+  lstatSync: vi.fn(() => ({ isSymbolicLink: () => false }))
 }))
 
 vi.mock('node:child_process', () => {
@@ -2749,5 +2769,136 @@ describe('CommonChannelModule open settings request', () => {
     } finally {
       Reflect.deleteProperty(process, 'getCreationTime')
     }
+  })
+
+  it('splits read/write dialog grants, canonicalizes symlinks, gates wallpaper copy, and removes unsafe shell.openPath fallbacks', async () => {
+    const { BrowserWindow, dialog, shell } = await import('electron')
+    const { CommonChannelModule } = await import('./common')
+
+    vi.clearAllMocks()
+    fsRealpathMock.mockImplementation(async (target: string) => target)
+    fsLstatMock.mockImplementation(async () => ({ isSymbolicLink: () => false }))
+    fsAccessMock.mockResolvedValue(undefined)
+    fsStatMock.mockResolvedValue({ isFile: () => true, isDirectory: () => false, size: 128 })
+    fsReadFileMock.mockResolvedValue('secret-data')
+    fsWriteFileMock.mockResolvedValue(undefined)
+
+    const handlers = new Map<string, (payload: unknown, context?: unknown) => Promise<unknown>>()
+    const transport = {
+      on: vi.fn(
+        (
+          event: { toEventName?: () => string },
+          handler: (payload: unknown, context?: unknown) => Promise<unknown>
+        ) => {
+          handlers.set(event?.toEventName?.() ?? String(event), handler)
+          return vi.fn()
+        }
+      ),
+      broadcastToWindow: vi.fn(),
+      sendTo: vi.fn(async () => undefined)
+    }
+
+    const touchApp = {
+      app: { getPath: vi.fn(() => '/var/tuff-profile/core-app') },
+      version: '2.4.9-test',
+      rootPath: '/tmp/tuff-root',
+      window: {
+        window: { webContents: { id: 42 }, isDestroyed: () => true, previewFile: vi.fn() },
+        onMaximizedChanged: vi.fn(() => () => {})
+      }
+    }
+
+    const module = new CommonChannelModule() as unknown as {
+      touchApp: unknown
+      registerDialogWallpaperHandlers: (t: unknown, appObj: unknown) => void
+      registerPresetTransportHandlers: (t: unknown, safeReg: unknown) => void
+      registerIndexSettingsTransportHandlers: (t: unknown) => void
+    }
+    module.touchApp = touchApp
+    module.registerDialogWallpaperHandlers(transport, touchApp)
+    module.registerPresetTransportHandlers(
+      transport,
+      (
+        event: { toEventName?: () => string },
+        handler: (payload: unknown, context?: unknown) => Promise<unknown>
+      ) => {
+        handlers.set(event?.toEventName?.() ?? String(event), handler)
+        return vi.fn()
+      }
+    )
+    module.registerIndexSettingsTransportHandlers(transport)
+
+    // 1. dialog:open-file grants read-only (fs:read-file succeeds, fs:write-file is rejected).
+    vi.mocked(dialog.showOpenDialog).mockResolvedValueOnce({
+      canceled: false,
+      filePaths: ['/Users/demo/notes.txt']
+    } as never)
+    const openDialog = handlers.get('dialog:open-file')!
+    const saveDialog = handlers.get('dialog:save-file')!
+    const fsRead = handlers.get('fs:read-file')!
+    const fsWrite = handlers.get('fs:write-file')!
+
+    await openDialog({})
+    await expect(fsRead({ path: '/Users/demo/notes.txt' })).resolves.toEqual({
+      data: 'secret-data'
+    })
+    await expect(fsWrite({ path: '/Users/demo/notes.txt', data: 'overwrite' })).rejects.toThrow(
+      'Path is not approved'
+    )
+    expect(fsWriteFileMock).not.toHaveBeenCalled()
+
+    // 2. dialog:save-file grants write-only (fs:write-file succeeds, fs:read-file is rejected).
+    vi.mocked(BrowserWindow.getFocusedWindow).mockReturnValueOnce({ id: 1 } as never)
+    vi.mocked(dialog.showSaveDialog).mockResolvedValueOnce({
+      canceled: false,
+      filePath: '/Users/demo/export.json'
+    } as never)
+    await saveDialog({})
+    await expect(fsRead({ path: '/Users/demo/export.json' })).resolves.toMatchObject({
+      error: 'Path is not approved'
+    })
+    await expect(fsWrite({ path: '/Users/demo/export.json', data: '{}' })).resolves.toBeUndefined()
+    expect(fsWriteFileMock).toHaveBeenCalledWith('/Users/demo/export.json', '{}', 'utf-8')
+
+    // 3. Symlink swap on a save-approved path is rejected before writing.
+    fsWriteFileMock.mockClear()
+    fsLstatMock.mockResolvedValueOnce({ isSymbolicLink: () => true })
+    await expect(fsWrite({ path: '/Users/demo/export.json', data: 'evil' })).rejects.toThrow(
+      'Path cannot be a symbolic link'
+    )
+    expect(fsWriteFileMock).not.toHaveBeenCalled()
+
+    // 4. wallpaper:copy-to-library rejects arbitrary unapproved paths.
+    const wallpaperCopy = handlers.get('wallpaper:copy-to-library')!
+    await expect(
+      wallpaperCopy({ sourcePath: '/Users/demo/private/photo.png', type: 'file' })
+    ).resolves.toMatchObject({
+      storedPath: null,
+      error: 'Wallpaper source path is not approved.'
+    })
+
+    // 5. fileIndex.quickLook never falls back to shell.openPath when preview window is unavailable.
+    vi.mocked(shell.openPath).mockClear()
+    vi.mocked(shell.showItemInFolder).mockClear()
+    const quickLook = handlers.get(AppEvents.fileIndex.quickLook.toEventName())!
+    await expect(quickLook({ path: '/Users/demo/payload.command' }, {})).resolves.toEqual({
+      success: true
+    })
+    expect(shell.openPath).not.toHaveBeenCalled()
+    expect(shell.showItemInFolder).toHaveBeenCalledWith('/Users/demo/payload.command')
+
+    // 6. fileIndex.showPackageContents never falls back to shell.openPath(target) without Contents.
+    vi.mocked(shell.openPath).mockClear()
+    fsStatMock
+      .mockResolvedValueOnce({ isDirectory: () => false })
+      .mockRejectedValueOnce(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }))
+    const showPackageContents = handlers.get(AppEvents.fileIndex.showPackageContents.toEventName())!
+    await expect(showPackageContents({ path: '/Users/demo/payload.command' }, {})).resolves.toEqual(
+      {
+        success: false,
+        error: 'PACKAGE_CONTENTS_NOT_FOUND'
+      }
+    )
+    expect(shell.openPath).not.toHaveBeenCalled()
   })
 })

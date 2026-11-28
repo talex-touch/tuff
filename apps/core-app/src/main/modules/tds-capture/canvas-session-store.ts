@@ -793,23 +793,23 @@ export class TdsCanvasSessionStore {
           TDS_CANVAS_SESSION_SECURE_PURPOSE
         )
         if (plain === null) {
-          return { ok: true, session: null }
+          return { ok: false, session: null, error: 'CANVAS_SESSION_DECRYPT_FAILED' }
         }
 
         if (Buffer.byteLength(plain, 'utf8') > this.maxSessionBytes + 4096) {
-          return { ok: true, session: null, error: 'CANVAS_SESSION_CORRUPT_OVERSIZED' }
+          return { ok: false, session: null, error: 'CANVAS_SESSION_CORRUPT_OVERSIZED' }
         }
 
         const parsed = JSON.parse(plain) as unknown
         if (!isPlainRecord(parsed) || parsed.version !== 1 || parsed.keyHash !== keyHash) {
-          return { ok: true, session: null }
+          return { ok: false, session: null, error: 'CANVAS_SESSION_CORRUPT' }
         }
 
         const sanitized = sanitizeCanvasSessionData(parsed.session, {
           maxSessionBytes: this.maxSessionBytes
         })
         if (!sanitized.ok) {
-          return { ok: true, session: null }
+          return { ok: false, session: null, error: 'CANVAS_SESSION_CORRUPT' }
         }
 
         const touchedAt = this.now()
@@ -832,7 +832,7 @@ export class TdsCanvasSessionStore {
         return { ok: true, session: sanitized.session }
       } catch (error) {
         if (error instanceof SyntaxError) {
-          return { ok: true, session: null }
+          return { ok: false, session: null, error: 'CANVAS_SESSION_CORRUPT' }
         }
         return { ok: false, session: null, error: formatError(error) }
       }

@@ -84,6 +84,13 @@ function createIdleTimeout(idleMs: number): {
   }
 }
 
+class RangeNotSupportedError extends Error {
+  constructor() {
+    super('Server ignored Range request for multi-chunk download')
+    this.name = 'RangeNotSupportedError'
+  }
+}
+
 export class DownloadWorker {
   private readonly maxConcurrent: number
   private activeTasks: Set<string> = new Set()
@@ -236,7 +243,12 @@ export class DownloadWorker {
           throw DownloadErrorClass.networkError('Unable to determine file size', errorContext)
         }
 
-        const directResult = await this.downloadWithoutChunks(task, progressTracker, headers)
+        const directResult = await this.downloadWithoutChunks(
+          task,
+          progressTracker,
+          headers,
+          abortSignal
+        )
         const finalTotalSize = directResult.totalSize ?? directResult.downloadedSize
         progressTracker.updateProgress(directResult.downloadedSize, finalTotalSize)
         progressTracker.forceUpdate()
@@ -283,7 +295,47 @@ export class DownloadWorker {
       }
 
       // 并发下载切片
-      await this.downloadChunksConcurrently(task, chunks, progressTracker, onProgress, abortSignal)
+      try {
+        await this.downloadChunksConcurrently(
+          task,
+          chunks,
+          progressTracker,
+          onProgress,
+          abortSignal
+        )
+      } catch (error) {
+        if (error instanceof RangeNotSupportedError) {
+          downloadWorkerLog.warn(
+            'Server ignored Range requests; falling back to single-stream download',
+            { meta: { taskId: task.id } }
+          )
+          await this.chunkManager.cleanupChunks(chunks)
+          await this.chunkManager.cleanupTaskTempDir(task, this.config.storage.tempDir)
+          task.chunks = []
+
+          const directResult = await this.downloadWithoutChunks(
+            task,
+            progressTracker,
+            headers,
+            abortSignal
+          )
+          const finalTotalSize = directResult.totalSize ?? directResult.downloadedSize
+          progressTracker.updateProgress(directResult.downloadedSize, finalTotalSize)
+          progressTracker.forceUpdate()
+
+          if (onProgress) {
+            onProgress(task.id, {
+              percentage: 100,
+              totalSize: finalTotalSize,
+              downloadedSize: directResult.downloadedSize,
+              speed: 0,
+              remainingTime: 0
+            })
+          }
+          return
+        }
+        throw error
+      }
 
       // 验证切片完整性
       const isValid = await this.chunkManager.validateChunks(chunks)
@@ -408,27 +460,40 @@ export class DownloadWorker {
   private async downloadWithoutChunks(
     task: DownloadTask,
     progressTracker: ProgressTracker,
-    headers?: Record<string, string>
+    headers?: Record<string, string>,
+    abortSignal?: AbortSignal
   ): Promise<{ totalSize?: number; downloadedSize: number }> {
+    if (abortSignal?.aborted) {
+      throw new Error('Task was cancelled')
+    }
+
     const outputPath = path.join(task.destination, task.filename)
     await fs.mkdir(path.dirname(outputPath), { recursive: true })
 
+    const fallbackUrl =
+      typeof task.metadata?.fallbackUrl === 'string' ? task.metadata.fallbackUrl : undefined
+    const requestUrl = task.metadata?.fallbackUsed === true && fallbackUrl ? fallbackUrl : task.url
+
     // `network.timeout` is read as an idle window here, not a deadline for the whole transfer.
     const idle = createIdleTimeout(this.config.network.timeout)
+    const requestSignal = abortSignal ? AbortSignal.any([abortSignal, idle.signal]) : idle.signal
 
     let response: Awaited<ReturnType<ReturnType<typeof getNetworkService>['requestStream']>>
     try {
       response = await getNetworkService().requestStream({
         method: 'GET',
-        url: task.url,
+        url: requestUrl,
         headers,
         responseType: 'stream',
-        signal: idle.signal,
+        signal: requestSignal,
         streamTimeoutMode: 'caller-signal',
         retryPolicy: { maxRetries: 0 }
       })
     } catch (error) {
       idle.dispose()
+      if (abortSignal?.aborted) {
+        throw new Error('Task was cancelled')
+      }
       throw error
     }
 
@@ -449,6 +514,12 @@ export class DownloadWorker {
       progressTracker.updateProgress(downloadedSize, totalSize)
     })
 
+    if (abortSignal?.aborted) {
+      response.stream.destroy()
+      idle.dispose()
+      throw new Error('Task was cancelled')
+    }
+
     // Streamed into a sibling temp file and renamed into place, matching the chunked path (#781).
     // Opening the real filename with 'w' truncated whatever was already there before a single new
     // byte was known good, and the failure path then unlinked it - so a failed re-download did not
@@ -458,10 +529,18 @@ export class DownloadWorker {
     const writeStream = createWriteStream(tempOutputPath, { flags: 'w' })
 
     try {
-      await pipeline(response.stream, writeStream)
+      await pipeline(response.stream, writeStream, { signal: requestSignal })
+      if (abortSignal?.aborted) {
+        throw new Error('Task was cancelled')
+      }
       await fs.rename(tempOutputPath, outputPath)
     } catch (error) {
-      writeStream.destroy()
+      if (!writeStream.closed) {
+        await new Promise<void>((resolve) => {
+          writeStream.once('close', () => resolve())
+          writeStream.destroy()
+        })
+      }
       try {
         // The destination was never touched; only the partial download is dropped.
         await fs.unlink(tempOutputPath)
@@ -476,6 +555,9 @@ export class DownloadWorker {
             meta: { taskId: task.id }
           })
         }
+      }
+      if (abortSignal?.aborted) {
+        throw new Error('Task was cancelled')
       }
       throw error
     } finally {
@@ -505,6 +587,11 @@ export class DownloadWorker {
     }
 
     const concurrentLimit = Math.min(this.maxConcurrent, runnableChunks.length)
+    const isMultiChunk = chunks.length > 1
+    const laneAbortController = new AbortController()
+    const laneSignal = abortSignal
+      ? AbortSignal.any([abortSignal, laneAbortController.signal])
+      : laneAbortController.signal
     let terminalFailure: unknown
     let completedChunks = chunks.filter(
       (chunk) => chunk.status === ChunkStatus.COMPLETED || chunk.downloaded >= chunk.size
@@ -520,11 +607,14 @@ export class DownloadWorker {
         if (abortSignal?.aborted) {
           throw new Error('Task was cancelled')
         }
+        if (laneAbortController.signal.aborted) {
+          return
+        }
 
         const chunk = runnableChunks[chunkIndex]
 
         try {
-          await this.downloadChunk(chunk, task, progressTracker, abortSignal)
+          await this.downloadChunk(chunk, task, progressTracker, laneSignal, { isMultiChunk })
 
           if (abortSignal?.aborted) {
             throw new Error('Task was cancelled')
@@ -540,6 +630,17 @@ export class DownloadWorker {
           }
         } catch (error) {
           if (abortSignal?.aborted) {
+            return
+          }
+          if (error instanceof RangeNotSupportedError) {
+            terminalFailure ??= error
+            laneAbortController.abort()
+            return
+          }
+          if (
+            laneAbortController.signal.aborted &&
+            terminalFailure instanceof RangeNotSupportedError
+          ) {
             return
           }
           terminalFailure ??= error
@@ -575,7 +676,8 @@ export class DownloadWorker {
     chunk: ChunkInfo,
     task: DownloadTask,
     _progressTracker: ProgressTracker,
-    abortSignal?: AbortSignal
+    abortSignal?: AbortSignal,
+    options?: { isMultiChunk?: boolean }
   ): Promise<void> {
     if (chunk.downloaded >= chunk.size) {
       chunk.downloaded = chunk.size
@@ -584,10 +686,12 @@ export class DownloadWorker {
     }
 
     const maxRetries = this.config.chunk.maxRetries
+    const isMultiChunk = options?.isMultiChunk ?? (task.chunks?.length ?? 0) > 1
     const fallbackUrl =
       typeof task.metadata?.fallbackUrl === 'string' ? task.metadata.fallbackUrl : undefined
     const idleTimeoutMs = getDownloadIdleTimeoutMs(task, this.config.network.timeout)
     let retryCount = 0
+    let rangeResetAttempted = false
     let requestUrl = task.metadata?.fallbackUsed === true && fallbackUrl ? fallbackUrl : task.url
 
     const errorContext = {
@@ -624,7 +728,7 @@ export class DownloadWorker {
           return
         }
 
-        const requiresPartialContent = rangeStart > chunk.start
+        const requiresPartialContent = rangeStart > chunk.start || chunk.start > 0 || isMultiChunk
         const response = await getNetworkService().requestStream({
           method: 'GET',
           url: requestUrl,
@@ -640,12 +744,26 @@ export class DownloadWorker {
           retryPolicy: { maxRetries: 0 }
         })
 
+        if (requiresPartialContent && response.status === 200) {
+          response.stream.destroy()
+          throw Object.assign(new Error('HTTP 200 received for partial range request'), {
+            status: 200
+          })
+        }
+
         const writeStream = createWriteStream(chunk.filePath, {
           flags: chunk.downloaded > 0 ? 'a' : 'w'
         })
 
         const onData = (data: Buffer) => {
           idle.touch()
+          if (chunk.downloaded + data.length > chunk.size) {
+            const overflowError = new Error(
+              `Chunk ${chunk.index} exceeded expected size ${chunk.size}`
+            )
+            response.stream.destroy(overflowError)
+            return
+          }
           chunk.downloaded += data.length
         }
         response.stream.on('data', onData)
@@ -687,12 +805,17 @@ export class DownloadWorker {
           continue
         }
 
-        const isRangeIgnored = statusCode === 200 && chunk.downloaded > 0
-
-        if (isRangeIgnored) {
-          chunk.downloaded = 0
-          chunk.status = ChunkStatus.PENDING
-          continue
+        if (statusCode === 200) {
+          if (isMultiChunk || chunk.start > 0) {
+            chunk.status = ChunkStatus.FAILED
+            throw new RangeNotSupportedError()
+          }
+          if (chunk.downloaded > 0 && !rangeResetAttempted) {
+            rangeResetAttempted = true
+            chunk.downloaded = 0
+            chunk.status = ChunkStatus.PENDING
+            continue
+          }
         }
 
         retryCount++

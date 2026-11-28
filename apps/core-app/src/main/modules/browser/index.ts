@@ -10,7 +10,7 @@ import { useMainStorage } from '../storage'
 import { resolveAppConfigBackend } from '../storage/app-config-repository'
 import { BROWSER_WORKSPACE_STORAGE_KEY } from '../storage/main-storage-registry'
 import { registerBrowserHandlers } from './handlers'
-import { isAllowedBrowserUrl } from './policy'
+import { isAllowedGuestNavigationUrl } from './policy'
 import { SideBrowserManager } from './side-browser-manager'
 import { BrowserWorkspaceManager } from './workspace-manager'
 
@@ -28,7 +28,7 @@ export function secureBrowserSession(browserSession: Session): () => void {
   browserSession.setDisplayMediaRequestHandler((_request, callback) => callback({}))
   browserSession.webRequest.onBeforeRequest((details, callback) => {
     const navigation = details.resourceType === 'mainFrame' || details.resourceType === 'subFrame'
-    callback({ cancel: navigation && !isAllowedBrowserUrl(details.url) })
+    callback({ cancel: navigation && !isAllowedGuestNavigationUrl(details.url) })
   })
   const download = (event: ElectronEvent) => event.preventDefault()
   browserSession.on('will-download', download)

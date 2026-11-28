@@ -46,6 +46,32 @@ describe('classifyNetworkTarget', () => {
       expect(classifyNetworkTarget(url), url).toBe('local')
   })
 
+  it('treats IPv4-mapped IPv6, 0.0.0.0/8, CGNAT 100.64.0.0/10, and trailing-dot localhost as local', () => {
+    for (const url of [
+      'http://[::ffff:127.0.0.1]/',
+      'http://[::ffff:7f00:1]/',
+      'http://[::ffff:169.254.169.254]/latest/meta-data/',
+      'http://[::ffff:a9fe:a9fe]/latest/meta-data/',
+      'http://[::ffff:10.0.0.5]/',
+      'http://[::ffff:192.168.1.1]/',
+      'http://0.0.0.0/',
+      'http://0.1.2.3/',
+      'http://100.64.0.1/',
+      'http://100.127.255.254/',
+      'http://localhost./'
+    ]) {
+      expect(classifyNetworkTarget(url), url).toBe('local')
+    }
+    // Public addresses adjacent to CGNAT or IPv4-mapped public IPs remain internet
+    for (const url of [
+      'https://100.63.255.254/',
+      'https://100.128.0.1/',
+      'https://[::ffff:1.1.1.1]/'
+    ]) {
+      expect(classifyNetworkTarget(url), url).toBe('internet')
+    }
+  })
+
   it('treats mDNS and internal suffixes as local', () => {
     for (const host of ['printer.local', 'metadata.google.internal', 'app.localhost'])
       expect(classifyNetworkTarget(`http://${host}/`), host).toBe('local')

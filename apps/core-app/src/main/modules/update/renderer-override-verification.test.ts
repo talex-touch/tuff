@@ -13,7 +13,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
  * on either. These tests hold the override path to that same standard.
  */
 
-const uncompress = vi.fn(async () => {})
+const extractArchiveSafely = vi.fn(async () => {})
 const verifyFileSignature = vi.fn(async () => ({
   valid: true,
   reason: undefined as string | undefined
@@ -40,7 +40,7 @@ vi.mock('../analytics/message-store', () => ({
 }))
 vi.mock('../database', () => ({ databaseModule: { getDb: vi.fn() } }))
 vi.mock('../network', () => ({ getNetworkService: () => ({ request: vi.fn() }) }))
-vi.mock('compressing', () => ({ default: { zip: { uncompress } }, zip: { uncompress } }))
+vi.mock('../plugin/safe-archive-extract', () => ({ extractArchiveSafely }))
 
 vi.mock('fs-extra', () => {
   const api = {
@@ -114,7 +114,7 @@ describe('installRendererOverride verification', () => {
   it('refuses an artifact that declares no checksum', async () => {
     // Previously the `if (artifact.sha256)` guard meant no checksum was simply not checked.
     await expect(install(system, {})).rejects.toThrow(/checksum is required but missing/i)
-    expect(uncompress).not.toHaveBeenCalled()
+    expect(extractArchiveSafely).not.toHaveBeenCalled()
   })
 
   it('refuses an artifact whose checksum does not match', async () => {
@@ -122,14 +122,14 @@ describe('installRendererOverride verification', () => {
     await expect(install(system, { sha256: 'abc' }, 'https://example.test/r.sig')).rejects.toThrow(
       /checksum verification failed/i
     )
-    expect(uncompress).not.toHaveBeenCalled()
+    expect(extractArchiveSafely).not.toHaveBeenCalled()
   })
 
   it('refuses when no signature URL is published', async () => {
     await expect(install(system, { sha256: 'abc' })).rejects.toThrow(
       /signature is required but missing/i
     )
-    expect(uncompress).not.toHaveBeenCalled()
+    expect(extractArchiveSafely).not.toHaveBeenCalled()
   })
 
   it('refuses an invalid signature instead of warning and installing anyway', async () => {
@@ -138,7 +138,7 @@ describe('installRendererOverride verification', () => {
     await expect(install(system, { sha256: 'abc' }, 'https://example.test/r.sig')).rejects.toThrow(
       /signature verification failed: bad-signature/i
     )
-    expect(uncompress).not.toHaveBeenCalled()
+    expect(extractArchiveSafely).not.toHaveBeenCalled()
   })
 
   it('reports every refusal at error severity, not warn', async () => {
@@ -157,6 +157,6 @@ describe('installRendererOverride verification', () => {
     await expect(install(system, { sha256: 'abc' }, 'https://example.test/r.sig')).rejects.toThrow(
       /bundle missing index\.html/i
     )
-    expect(uncompress).toHaveBeenCalledTimes(1)
+    expect(extractArchiveSafely).toHaveBeenCalledTimes(1)
   })
 })

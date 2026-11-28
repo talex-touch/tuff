@@ -369,7 +369,7 @@ const MAC_PACKAGE_EXTENSIONS: ReadonlySet<string> = new Set([
   '.xcarchive'
 ])
 
-function hasMacPackageExtension(target: string): boolean {
+export function hasMacPackageExtension(target: string): boolean {
   return MAC_PACKAGE_EXTENSIONS.has(path.extname(target).toLowerCase())
 }
 
@@ -588,21 +588,37 @@ export function registerSystemShellHandlers(
         }
 
         let stats: Stats
+        let canonicalCommand: string
+        let canonicalRoot: string
         try {
           stats = await fs.stat(command)
+          canonicalCommand = await fs.realpath(command)
+          canonicalRoot = await fs.realpath(appRoot).catch(() => path.resolve(appRoot))
         } catch {
           throw new Error(SYSTEM_SHELL_PATH_UNAVAILABLE)
         }
-        // A macOS .app bundle is a directory that executes, so the directory check alone is
-        // not enough even inside the root.
-        if (!stats.isDirectory() || path.extname(command).toLowerCase() === '.app') {
+        if (!isWithinAppRoot(canonicalCommand, canonicalRoot)) {
+          options.logger.warn('Blocked executeCommand symlink escaping the app root', {
+            meta: { reason: SYSTEM_SHELL_PATH_OUTSIDE_APP_ROOT }
+          })
+          throw new Error(SYSTEM_SHELL_PATH_OUTSIDE_APP_ROOT)
+        }
+        // macOS packages (.app, .workflow, .pkg, .action, .scptd, etc.) are directories that
+        // launch, install, or execute when handed to shell.openPath, so the directory check alone
+        // is not enough even inside the root.
+        if (
+          !stats.isDirectory() ||
+          hasMacPackageExtension(command) ||
+          hasMacPackageExtension(canonicalCommand) ||
+          (await isMacPackageDirectory(command))
+        ) {
           options.logger.warn('Blocked executeCommand on a non-directory target', {
             meta: { reason: SYSTEM_SHELL_PATH_NOT_A_DIRECTORY }
           })
           throw new Error(SYSTEM_SHELL_PATH_NOT_A_DIRECTORY)
         }
 
-        const error = await shell.openPath(command)
+        const error = await shell.openPath(canonicalCommand)
         if (error) {
           throw new Error(error)
         }

@@ -1,8 +1,10 @@
 import type { IPluginFeature, ITouchPlugin } from '@talex-touch/utils/plugin'
 import type { WidgetRuntime } from '@talex-touch/utils/plugin/widget'
 import crypto from 'node:crypto'
+import fs from 'node:fs/promises'
 import path from 'node:path'
 import { makeWidgetId, resolveWidgetRuntime } from '@talex-touch/utils/plugin/widget'
+import { app } from 'electron'
 import fse from 'fs-extra'
 import { getNetworkService } from '../../network'
 import { pushWidgetFeatureIssue } from './widget-issue'
@@ -20,6 +22,19 @@ export interface WidgetSource {
 
 const WIDGET_ROOT = 'widgets'
 const ARROW_WIDGET_SOURCE_PATTERN = /\.arrow\.(ts|js)$/i
+
+export function isLoopbackWidgetDevOrigin(devAddress: string): boolean {
+  try {
+    const parsed = new URL(devAddress)
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return false
+    }
+    const host = parsed.hostname.replace(/^\[|\]$/g, '').toLowerCase()
+    return host === 'localhost' || host === '127.0.0.1' || host === '::1'
+  } catch {
+    return false
+  }
+}
 
 export function resolveWidgetFilePath(pluginPath: string, rawPath: string): string | null {
   const widgetsDir = path.resolve(pluginPath, WIDGET_ROOT)
@@ -56,14 +71,30 @@ export class WidgetLoader {
       return null
     }
 
-    const isDevSource = Boolean(plugin.dev?.enable && plugin.dev?.source)
-    if (isDevSource) {
+    const wantsDevSource = Boolean(plugin.dev?.enable && plugin.dev?.source)
+    if (wantsDevSource && app?.isPackaged) {
+      this.pushIssue(
+        plugin,
+        feature,
+        'WIDGET_DEV_SOURCE_BLOCKED_IN_PACKAGED',
+        'Remote widget dev.source is disabled in packaged builds.'
+      )
+    } else if (wantsDevSource) {
       if (!plugin.dev?.address) {
         this.pushIssue(
           plugin,
           feature,
           'WIDGET_DEV_ADDRESS_MISSING',
           'dev.source is enabled but dev.address is missing.'
+        )
+        return null
+      }
+      if (!isLoopbackWidgetDevOrigin(plugin.dev.address)) {
+        this.pushIssue(
+          plugin,
+          feature,
+          'WIDGET_DEV_ADDRESS_INVALID',
+          'dev.address must use an exact loopback HTTP(S) origin.'
         )
         return null
       }
@@ -87,6 +118,29 @@ export class WidgetLoader {
         feature,
         'WIDGET_NOT_FOUND',
         `widget source "${interactionPath}" does not exist.`
+      )
+      return null
+    }
+
+    try {
+      const widgetsRootReal = await fs.realpath(path.resolve(plugin.pluginPath, WIDGET_ROOT))
+      const widgetFileReal = await fs.realpath(widgetFile)
+      const rel = path.relative(widgetsRootReal, widgetFileReal)
+      if (rel.startsWith('..') || path.isAbsolute(rel)) {
+        this.pushIssue(
+          plugin,
+          feature,
+          'WIDGET_PATH_INVALID',
+          `widget path "${interactionPath}" resolves outside widgets directory.`
+        )
+        return null
+      }
+    } catch {
+      this.pushIssue(
+        plugin,
+        feature,
+        'WIDGET_PATH_INVALID',
+        `widget path "${interactionPath}" could not be canonicalized.`
       )
       return null
     }
@@ -135,6 +189,16 @@ export class WidgetLoader {
     interactionPath: string,
     devAddress: string
   ): Promise<WidgetSource | null> {
+    if (app?.isPackaged || !isLoopbackWidgetDevOrigin(devAddress)) {
+      this.pushIssue(
+        plugin,
+        feature,
+        'WIDGET_DEV_ADDRESS_INVALID',
+        'Remote widget dev.source requires an unpackaged build and a loopback origin.'
+      )
+      return null
+    }
+
     const widgetUrl = this.resolveRemoteWidgetUrl(devAddress, interactionPath)
     if (!widgetUrl) {
       this.pushIssue(
@@ -148,8 +212,17 @@ export class WidgetLoader {
 
     try {
       const fetchUrl = new URL(widgetUrl)
+      if (fetchUrl.origin !== new URL(devAddress).origin) {
+        this.pushIssue(
+          plugin,
+          feature,
+          'WIDGET_REMOTE_PATH_INVALID',
+          'Resolved widget dev URL origin does not match dev.address.'
+        )
+        return null
+      }
       fetchUrl.searchParams.set('raw', '1')
-      const response = await getNetworkService().request<string>({
+      const response = await getNetworkService().requestNoRedirect<string>({
         method: 'GET',
         url: fetchUrl.toString(),
         timeoutMs: 2000,

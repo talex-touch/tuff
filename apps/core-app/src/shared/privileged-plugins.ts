@@ -71,6 +71,23 @@ export const PRIVILEGED_PLUGIN_NAMES: readonly string[] = Object.freeze([
   ])
 ])
 
+const PRIVILEGED_PLUGIN_NAMES_LOWER: ReadonlySet<string> = new Set(
+  PRIVILEGED_PLUGIN_NAMES.map((name) => name.toLowerCase())
+)
+
+/**
+ * Case-insensitive reservation check for install/uninstall/dev-install boundaries so a plugin
+ * differing only in case (e.g. `Touch-System-Actions`) cannot overwrite a bundled privileged
+ * plugin directory on case-insensitive APFS/NTFS filesystems.
+ */
+export function isReservedPrivilegedPluginName(pluginName: string | undefined): boolean {
+  if (typeof pluginName !== 'string') {
+    return false
+  }
+  const normalized = pluginName.trim().toLowerCase()
+  return normalized.length > 0 && PRIVILEGED_PLUGIN_NAMES_LOWER.has(normalized)
+}
+
 /** Holders of either system-action tier, for the gate that admits both before splitting them. */
 export const SYSTEM_ACTION_PLUGIN_NAMES: readonly string[] = Object.freeze([
   ...PRIVILEGED_PLUGIN_CAPABILITIES.systemActionsBasic,

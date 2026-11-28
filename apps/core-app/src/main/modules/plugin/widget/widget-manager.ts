@@ -22,6 +22,7 @@ import crypto from 'node:crypto'
 import path from 'node:path'
 import { performance } from 'node:perf_hooks'
 import chokidar from 'chokidar'
+import { app } from 'electron'
 import fse from 'fs-extra'
 import { getRegisteredMainRuntime } from '../../../core/runtime-accessor'
 import { getCoreBoxWindow } from '../../box-tool/core-box/window'
@@ -131,6 +132,10 @@ function isRuntimeCompileExplicitlyEnabled(): boolean {
 }
 
 function canRuntimeCompileWidget(plugin: ITouchPlugin): boolean {
+  // Packaged builds must only load precompiled widget artifacts; never allow runtime compilation.
+  if (app?.isPackaged) {
+    return false
+  }
   // dev.enable is the local development marker, regardless of whether widget
   // source comes from disk or a dev server.
   return Boolean(plugin.dev?.enable) || isRuntimeCompileExplicitlyEnabled()

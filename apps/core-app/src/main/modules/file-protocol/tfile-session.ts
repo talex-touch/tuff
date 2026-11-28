@@ -4,11 +4,13 @@ import { normalizeAbsolutePath } from '@talex-touch/utils/common/utils/safe-path
 import { net } from 'electron'
 import { FILE_SCHEMA } from '../../config/default'
 import {
+  canonicalizeLocalFileRoots,
   configureAdditionalAllowedLocalFileRoots,
   getAdditionalAllowedLocalFileRoots,
   getAllowedLocalFileRoots,
   isAllowedLocalFilePath,
-  normalizeDarwinUsersPath
+  normalizeDarwinUsersPath,
+  resolveCanonicalLocalFilePath
 } from '../../utils/local-file-policy'
 import { createLogger } from '../../utils/logger'
 import {
@@ -159,10 +161,30 @@ export function registerTfileProtocolForSession(
         previewGrantAuthorized = false
       }
     }
+    let targetPath = normalizedPath
+    let rootAuthorized = false
+    if (normalizedPath && !hasTfilePreviewGrant(request.url)) {
+      if (isAllowedLocalFilePath(normalizedPath, allowedRoots)) {
+        const canonical =
+          typeof resolveCanonicalLocalFilePath === 'function'
+            ? await resolveCanonicalLocalFilePath(normalizedPath)
+            : { canonicalPath: normalizedPath, exists: false }
+        if (canonical) {
+          const canonicalRoots =
+            typeof canonicalizeLocalFileRoots === 'function'
+              ? await canonicalizeLocalFileRoots(allowedRoots)
+              : allowedRoots
+          if (isAllowedLocalFilePath(canonical.canonicalPath, canonicalRoots)) {
+            targetPath = canonical.canonicalPath
+            rootAuthorized = true
+          }
+        }
+      }
+    }
     if (
-      !normalizedPath ||
+      !targetPath ||
       (hasTfilePreviewGrant(request.url) && !previewGrantAuthorized) ||
-      (!isAllowedLocalFilePath(normalizedPath, allowedRoots) && !previewGrantAuthorized)
+      (!rootAuthorized && !previewGrantAuthorized)
     ) {
       if (shouldLogPathOnce(filePath)) {
         fileProtocolLog.warn(`Blocked path: ${filePath}`)
@@ -170,7 +192,7 @@ export function registerTfileProtocolForSession(
       return new Response('Forbidden', { status: 403 })
     }
 
-    const fileUrl = url.pathToFileURL(normalizedPath).toString()
+    const fileUrl = url.pathToFileURL(targetPath).toString()
 
     try {
       const response = await net.fetch(fileUrl, { bypassCustomProtocolHandlers: true })
@@ -183,10 +205,10 @@ export function registerTfileProtocolForSession(
         headers
       })
     } catch (error) {
-      if (shouldLogPathOnce(normalizedPath)) {
+      if (shouldLogPathOnce(targetPath)) {
         fileProtocolLog.error('tfile request error', {
           meta: {
-            filePath: normalizedPath,
+            filePath: targetPath,
             fileUrl
           },
           error: error instanceof Error ? error.message : String(error)

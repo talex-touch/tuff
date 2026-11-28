@@ -19,7 +19,13 @@ import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { DownloadEvents } from '@talex-touch/utils/transport/events'
 import { and, desc, eq, inArray, lt } from 'drizzle-orm'
 import { app, shell } from 'electron'
-import { evaluateDownloadTarget } from '../../utils/download-target-policy'
+import {
+  evaluateDownloadTarget,
+  isAllowedDownloadTempDir,
+  isDangerousDownloadOpenFile,
+  isSafeDownloadTaskId
+} from '../../utils/download-target-policy'
+import { isHttpUrl } from '../../utils/network-target-policy'
 import { downloadChunks, downloadHistory, downloadTasks } from '../../db/schema'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
 import { resolveMainRuntime } from '../../core/runtime-accessor'
@@ -325,6 +331,20 @@ export class DownloadCenterModule extends BaseModule {
 
   // 添加下载任务
   async addTask(request: DownloadRequest): Promise<string> {
+    if (!isHttpUrl(request.url)) {
+      downloadCenterLog.warn('Rejected download task with unsupported URL protocol', {
+        meta: { module: request.module }
+      })
+      throw new Error('Download URL must use http or https protocol')
+    }
+
+    if (request.id !== undefined && !isSafeDownloadTaskId(request.id)) {
+      downloadCenterLog.warn('Rejected download task with unsafe task id', {
+        meta: { module: request.module }
+      })
+      throw new Error('Download task id is invalid')
+    }
+
     const taskId = request.id || randomUUID()
     const now = new Date()
     // Callers that do not care where the file lands get the configured download folder.
@@ -686,8 +706,34 @@ export class DownloadCenterModule extends BaseModule {
       throw new Error(`Task ${taskId} is not completed`)
     }
 
-    const filePath = path.join(task.destination, task.filename)
-    await shell.openPath(filePath)
+    const target = evaluateDownloadTarget(task.destination, task.filename)
+    if (!target.allowed) {
+      throw new Error(`Download file path rejected: ${target.reason}`)
+    }
+
+    const filePath = path.join(target.destination, target.filename)
+    const canonicalPath = await fs.realpath(filePath)
+    const canonicalCheck = evaluateDownloadTarget(
+      path.dirname(canonicalPath),
+      path.basename(canonicalPath)
+    )
+    if (!canonicalCheck.allowed) {
+      throw new Error(`Download file path rejected: ${canonicalCheck.reason}`)
+    }
+
+    const stats = await fs.stat(canonicalPath)
+    if (!stats.isFile()) {
+      throw new Error('Opening non-file download targets is blocked')
+    }
+    const ext = path.extname(canonicalPath)
+    if (
+      isDangerousDownloadOpenFile(canonicalPath) ||
+      (process.platform !== 'win32' && !ext && (stats.mode & 0o111) !== 0)
+    ) {
+      throw new Error('Opening executable or script downloads is blocked')
+    }
+
+    await shell.openPath(canonicalPath)
   }
 
   // 在文件夹中显示文件
@@ -701,7 +747,12 @@ export class DownloadCenterModule extends BaseModule {
       throw new Error(`Task ${taskId} is not completed`)
     }
 
-    const filePath = path.join(task.destination, task.filename)
+    const target = evaluateDownloadTarget(task.destination, task.filename)
+    if (!target.allowed) {
+      throw new Error(`Download file path rejected: ${target.reason}`)
+    }
+
+    const filePath = path.join(target.destination, target.filename)
     shell.showItemInFolder(filePath)
   }
 
@@ -716,7 +767,12 @@ export class DownloadCenterModule extends BaseModule {
       throw new Error(`Task ${taskId} is not completed`)
     }
 
-    const filePath = path.join(task.destination, task.filename)
+    const target = evaluateDownloadTarget(task.destination, task.filename)
+    if (!target.allowed) {
+      throw new Error(`Download file path rejected: ${target.reason}`)
+    }
+
+    const filePath = path.join(target.destination, target.filename)
     await fs.unlink(filePath)
 
     await this.deleteTaskFromDb(taskId)
@@ -834,13 +890,43 @@ export class DownloadCenterModule extends BaseModule {
 
   // 更新配置
   updateConfig(config: Partial<DownloadConfig>): void {
-    this.config = { ...this.config, ...config }
+    const nextStorage = config.storage
+      ? {
+          ...this.config.storage,
+          ...config.storage
+        }
+      : this.config.storage
+
+    if (config.storage?.defaultDestination !== undefined) {
+      const target = evaluateDownloadTarget(config.storage.defaultDestination, 'probe.tmp')
+      if (!target.allowed) {
+        throw new Error(`Download defaultDestination rejected: ${target.reason}`)
+      }
+      nextStorage.defaultDestination = target.destination
+    }
+
+    if (config.storage?.tempDir !== undefined) {
+      const normalizedTempDir = path.resolve(config.storage.tempDir)
+      const currentTempDir = path.resolve(this.config.storage.tempDir)
+      if (normalizedTempDir !== currentTempDir && !isAllowedDownloadTempDir(normalizedTempDir)) {
+        throw new Error(
+          'Download tempDir must be a dedicated subdirectory inside an allowed temporary root'
+        )
+      }
+      nextStorage.tempDir = normalizedTempDir
+    }
+
+    this.config = {
+      ...this.config,
+      ...config,
+      storage: nextStorage
+    }
     if (config.concurrency?.maxConcurrent) {
       this.concurrencyAdjuster.setMaxConcurrency(config.concurrency.maxConcurrent)
     }
     // 如果临时目录配置改变，更新 ChunkManager
     if (config.storage?.tempDir) {
-      this.chunkManager.setBaseTempDir(config.storage.tempDir)
+      this.chunkManager.setBaseTempDir(nextStorage.tempDir)
     }
     // Without this the switch would only take effect after a restart, which is how the three
     // concurrency booleans used to behave before their controls were removed.
@@ -1103,7 +1189,15 @@ export class DownloadCenterModule extends BaseModule {
         return { task: this.getTaskStatus(payload.taskId) }
       }),
       registerSafeHandler(DownloadEvents.config.update, async (payload) => {
-        this.updateConfig(payload.config)
+        const nextConfig = payload?.config
+        if (
+          nextConfig?.storage?.tempDir !== undefined &&
+          path.resolve(String(nextConfig.storage.tempDir)) !==
+            path.resolve(this.config.storage.tempDir)
+        ) {
+          throw new Error('Modifying download tempDir over IPC is not allowed')
+        }
+        this.updateConfig(nextConfig)
       }),
       registerSafeHandler(DownloadEvents.task.retry, async (payload) => {
         await this.retryTask(payload.taskId)

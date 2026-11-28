@@ -61,6 +61,17 @@ describe('preload ipc bridge', () => {
     expect(channelSet).toContain('RAW_MAIN_PROCESS_CHANNEL')
     expect(channelSet).toContain('RAW_PLUGIN_PROCESS_CHANNEL')
   })
+
+  it('strips raw IpcRendererEvent and tracks wrapped listeners for removeListener', () => {
+    const shim = source.slice(
+      source.indexOf('const bridgedListeners'),
+      source.indexOf('if (process.contextIsolated)')
+    )
+    expect(shim).toContain('new WeakMap')
+    expect(shim).toContain('listener(undefined, ...args)')
+    expect(shim).not.toContain('listener(event, ...args)')
+    expect(shim).toContain('bridgedListeners.get(listener)')
+  })
 })
 
 describe('preload type declaration', () => {

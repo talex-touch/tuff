@@ -5,6 +5,7 @@ import { SyncPayloadCrypto } from './sync-payload-crypto'
 import {
   buildBlobSyncItem,
   buildSyncItemFromSnapshot,
+  extractQualifiedName,
   resolveEncryptedPayloadText,
   type StorageSyncSnapshot
 } from './sync-payload-wire'
@@ -128,5 +129,24 @@ describe('sync payload wire format', () => {
       rawText,
       requiresMigrationRewrite: true
     })
+  })
+
+  it('rejects items whose meta_plain.qualified_name disagrees with item_id', () => {
+    expect(
+      extractQualifiedName(
+        buildOutput({
+          item_id: 'storage::app-setting',
+          meta_plain: { qualified_name: 'mcp-host-settings' }
+        })
+      )
+    ).toBe('')
+    expect(
+      extractQualifiedName(
+        buildOutput({
+          item_id: 'storage::app-setting',
+          meta_plain: { qualified_name: 'app-setting' }
+        })
+      )
+    ).toBe('app-setting')
   })
 })

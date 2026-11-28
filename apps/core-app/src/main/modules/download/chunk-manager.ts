@@ -2,6 +2,8 @@ import type { ChunkInfo, DownloadTask } from '@talex-touch/utils'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { ChunkStatus } from '@talex-touch/utils'
+import { isSafePathSegment } from '@talex-touch/utils/common/utils/safe-path'
+import { isSafeDownloadTaskId } from '../../utils/download-target-policy'
 import { downloadChunkLog } from './logger'
 
 export class ChunkManager {
@@ -49,6 +51,12 @@ export class ChunkManager {
 
   // 合并切片文件
   async mergeChunks(task: DownloadTask, chunks: ChunkInfo[]): Promise<void> {
+    if (!isSafeDownloadTaskId(task.id)) {
+      throw new Error('Invalid download task id')
+    }
+    if (!isSafePathSegment(task.filename)) {
+      throw new Error('Invalid download filename')
+    }
     const outputPath = path.join(task.destination, task.filename)
     // Merged into a sibling temp file and renamed into place, rather than opened at the real
     // filename with 'w'. Truncating the destination first meant a crash or an incomplete chunk
@@ -180,11 +188,16 @@ export class ChunkManager {
 
   // 获取临时目录 - 使用配置的临时目录而不是目标目录
   getTempDir(task: DownloadTask, baseTempDir?: string): string {
-    // 如果提供了基础临时目录，使用它；否则使用任务目标目录下的 .tmp
-    if (baseTempDir) {
-      return path.join(baseTempDir, task.id)
+    if (!isSafeDownloadTaskId(task.id)) {
+      throw new Error('Invalid download task id')
     }
-    return path.join(task.destination, '.tmp', task.id)
+    // 如果提供了基础临时目录，使用它；否则使用任务目标目录下的 .tmp
+    const baseRoot = path.resolve(baseTempDir || path.join(task.destination, '.tmp'))
+    const resolved = path.resolve(baseRoot, task.id)
+    if (!resolved.startsWith(baseRoot + path.sep)) {
+      throw new Error('Download task temp directory escapes base temp root')
+    }
+    return resolved
   }
 
   // 确保临时目录存在

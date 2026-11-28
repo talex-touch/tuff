@@ -195,6 +195,15 @@ export class SyncPayloadCrypto {
     }
 
     if (normalized.startsWith(LEGACY_SYNC_PAYLOAD_PREFIX)) {
+      const existingKey = this.store.isAvailable()
+        ? await this.store.getValue(SYNC_PAYLOAD_KEY_SECURE_KEY)
+        : null
+      if (existingKey) {
+        throw new SyncPayloadCryptoError(
+          'SYNC_PAYLOAD_PLAINTEXT_DOWNGRADE_REJECTED',
+          'Unauthenticated b64 sync payloads are rejected once E2EE is initialized'
+        )
+      }
       const base64 = normalized.slice(LEGACY_SYNC_PAYLOAD_PREFIX.length)
       return { rawText: fromBase64(base64).toString('utf-8'), requiresMigrationRewrite: true }
     }

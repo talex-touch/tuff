@@ -531,4 +531,56 @@ describe('DownloadWorker chunk concurrency', () => {
     expect(await fs.readFile(chunkInfo.filePath, 'utf8')).toBe('abcd')
     expect(chunkInfo).toMatchObject({ downloaded: 4, status: ChunkStatus.COMPLETED })
   })
+
+  it('requires HTTP 206 for multi-chunk ranges and falls back cleanly to single-stream on HTTP 200', async () => {
+    const dir = await createWorkspace()
+    const downloadTask = {
+      ...task(dir),
+      module: DownloadModule.RESOURCE_DOWNLOAD
+    }
+    const validateStatuses: Array<number[] | undefined> = []
+
+    request.mockResolvedValue({
+      status: 200,
+      statusText: 'OK',
+      headers: { 'content-length': '8' }
+    })
+
+    requestStream.mockImplementation(
+      async (options: { headers?: { Range?: string }; validateStatus?: number[] }) => {
+        if (options.headers?.Range) {
+          validateStatuses.push(options.validateStatus)
+          throw Object.assign(new Error('NETWORK_HTTP_STATUS_200'), { status: 200 })
+        }
+        return {
+          status: 200,
+          headers: { 'content-length': '8' },
+          stream: Readable.from([Buffer.from('abcdefgh')])
+        }
+      }
+    )
+
+    const worker = new DownloadWorker(2, {} as never, new ChunkManager(4, path.join(dir, 'temp')), {
+      chunk: { maxRetries: 1 },
+      network: { timeout: 5_000, retryDelay: 0 },
+      storage: { tempDir: path.join(dir, 'temp') }
+    } as never)
+
+    await worker.startTask(downloadTask)
+
+    expect(validateStatuses.length).toBeGreaterThanOrEqual(1)
+    for (const statuses of validateStatuses) {
+      expect(statuses).toEqual([206])
+    }
+    expect(await fs.readFile(path.join(dir, downloadTask.filename), 'utf8')).toBe('abcdefgh')
+    expect(downloadTask.chunks).toEqual([])
+  })
+
+  it('rejects traversal task ids in ChunkManager.getTempDir', async () => {
+    const dir = await createWorkspace()
+    const manager = new ChunkManager(4, path.join(dir, 'temp'))
+    expect(() =>
+      manager.getTempDir({ ...task(dir), id: '../../outside' }, path.join(dir, 'temp'))
+    ).toThrow('Invalid download task id')
+  })
 })

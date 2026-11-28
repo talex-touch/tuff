@@ -45,6 +45,11 @@ if [ -z "$APP_PID" ] || [ -z "$LOG_FILE" ]; then
   exit 2
 fi
 
+if [ -L "$LOG_FILE" ]; then
+  echo "Refusing to write log to a symlink" >&2
+  exit 1
+fi
+
 mkdir -p "$(dirname "$LOG_FILE")" >/dev/null 2>&1 || exit 1
 : > "$LOG_FILE"
 
@@ -107,10 +112,25 @@ install_appimage() {
     log "appimage install missing args"
     return 1
   fi
-  if [ ! -f "$SOURCE_PACKAGE" ]; then
-    log "source AppImage not found"
+  if [ -L "$SOURCE_PACKAGE" ] || [ ! -f "$SOURCE_PACKAGE" ]; then
+    log "source AppImage missing or symlink"
     return 1
   fi
+  if [ -L "$DEST_APP" ]; then
+    log "refusing to overwrite symlink destination AppImage"
+    return 1
+  fi
+  if [ -L "$BACKUP_APP" ]; then
+    log "refusing to write backup to a symlink"
+    return 1
+  fi
+
+  local dest_dir
+  dest_dir="$(dirname "$DEST_APP")"
+  mkdir -p "$dest_dir" >/dev/null 2>&1 || {
+    log "failed to prepare destination directory"
+    return 1
+  }
 
   mkdir -p "$(dirname "$BACKUP_APP")" >/dev/null 2>&1 || true
   rm -f "$BACKUP_APP" >/dev/null 2>&1 || true
@@ -121,16 +141,31 @@ install_appimage() {
     }
   fi
 
-  if cp -f "$SOURCE_PACKAGE" "$DEST_APP" >/dev/null 2>&1; then
-    chmod +x "$DEST_APP" >/dev/null 2>&1 || true
-    log "AppImage replaced in place"
+  local staged_app
+  staged_app="$(mktemp "${dest_dir}/.tuff-appimage-update.XXXXXX" 2>/dev/null || true)"
+  if [ -z "$staged_app" ]; then
+    log "failed to create staging file"
+    return 1
+  fi
+
+  if cp -f "$SOURCE_PACKAGE" "$staged_app" >/dev/null 2>&1 \
+    && chmod +x "$staged_app" >/dev/null 2>&1 \
+    && mv -f "$staged_app" "$DEST_APP" >/dev/null 2>&1; then
+    log "AppImage replaced atomically"
     return 0
   fi
 
+  rm -f "$staged_app" >/dev/null 2>&1 || true
   log "AppImage replace failed, restoring backup"
-  if [ -f "$BACKUP_APP" ]; then
-    cp -f "$BACKUP_APP" "$DEST_APP" >/dev/null 2>&1 || true
-    chmod +x "$DEST_APP" >/dev/null 2>&1 || true
+  if [ -f "$BACKUP_APP" ] && [ ! -L "$DEST_APP" ]; then
+    local restore_staged
+    restore_staged="$(mktemp "${dest_dir}/.tuff-appimage-restore.XXXXXX" 2>/dev/null || true)"
+    if [ -n "$restore_staged" ] && cp -f "$BACKUP_APP" "$restore_staged" >/dev/null 2>&1 \
+      && chmod +x "$restore_staged" >/dev/null 2>&1; then
+      mv -f "$restore_staged" "$DEST_APP" >/dev/null 2>&1 || rm -f "$restore_staged" >/dev/null 2>&1 || true
+    else
+      rm -f "$restore_staged" >/dev/null 2>&1 || true
+    fi
   fi
   return 1
 }

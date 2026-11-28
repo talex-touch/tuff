@@ -6,19 +6,22 @@ import type {
   PluginProviderContext
 } from '@talex-touch/utils/plugin/providers'
 import type { TpexDetailResponse } from '@talex-touch/utils/plugin/providers/tpex-provider'
+import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { PluginProviderType } from '@talex-touch/utils/plugin/providers'
 import { resolvePackageDownloadTimeout } from '@talex-touch/utils/plugin/install-budgets'
-import compressing from 'compressing'
 import fse from 'fs-extra'
 import { getEnabledApiSources } from '../../../service/store-api.service'
 import { getNetworkService } from '../../network'
 import { getPluginCloudAuthPort } from '../plugin-ports'
+import { extractArchiveSafely, peekTarManifestBounded } from '../safe-archive-extract'
+import { extractPluginTrustMetadata, verifyPluginPackageTrust } from '../signature-verifier'
 import { createProviderLogger } from './logger'
 import { downloadToTempFile, mergeHeadersCaseInsensitive, stripAuthorizationHeader } from './utils'
 
 const tpexProviderLog = createProviderLogger(PluginProviderType.TPEX)
+const MAX_TPEX_DOWNLOAD_BYTES = 128 * 1024 * 1024
 
 function hasAuthorizationHeader(headers: Readonly<Record<string, string>>): boolean {
   return Object.keys(headers).some((key) => key.toLowerCase() === 'authorization')
@@ -43,10 +46,21 @@ function getPrimaryApiBase(): string {
 }
 
 async function peekTpexManifest(tpexPath: string): Promise<IManifest | undefined> {
-  const tempDir = path.join(os.tmpdir(), `talex-tpex-preview-${Date.now()}`)
   try {
-    await fse.ensureDir(tempDir)
-    await compressing.tar.uncompress(tpexPath, tempDir)
+    const manifestFromStream = await peekTarManifestBounded(tpexPath)
+    if (manifestFromStream && typeof manifestFromStream === 'object') {
+      return manifestFromStream as IManifest
+    }
+  } catch (streamError) {
+    tpexProviderLog.warn('Failed to stream-peek manifest; falling back to bounded temp extract', {
+      error: streamError
+    })
+  }
+
+  let tempDir = ''
+  try {
+    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'talex-tpex-preview-'))
+    await extractArchiveSafely(tpexPath, tempDir, 'tar')
     const manifestPath = path.join(tempDir, 'manifest.json')
     if (!(await fse.pathExists(manifestPath))) return undefined
     const manifestContent = await fse.readJSON(manifestPath)
@@ -55,7 +69,9 @@ async function peekTpexManifest(tpexPath: string): Promise<IManifest | undefined
     tpexProviderLog.warn('Failed to peek manifest', { error })
     return undefined
   } finally {
-    await fse.rm(tempDir, { recursive: true, force: true })
+    if (tempDir) {
+      await fse.rm(tempDir, { recursive: true, force: true })
+    }
   }
 }
 
@@ -179,6 +195,7 @@ export class TpexPluginProvider implements PluginProvider {
         this.log.debug('Detected remote TPEX resource, starting download')
         const requestHeaders = this.getExplicitRequestHeaders(context?.downloadOptions?.headers)
         filePath = await downloadToTempFile(request.source, '.tpex', {
+          maxBytes: MAX_TPEX_DOWNLOAD_BYTES,
           ...context?.downloadOptions,
           headers: requestHeaders,
           resolveHeadersForUrl: (requestUrl, headers) =>
@@ -311,19 +328,39 @@ export class TpexPluginProvider implements PluginProvider {
       context?.downloadOptions?.headers
     )
 
+    const advertisedSize =
+      typeof targetVersion.packageSize === 'number' &&
+      Number.isFinite(targetVersion.packageSize) &&
+      targetVersion.packageSize > 0
+        ? Math.min(Math.floor(targetVersion.packageSize), MAX_TPEX_DOWNLOAD_BYTES)
+        : MAX_TPEX_DOWNLOAD_BYTES
+
     // Use Node.js stream download instead of fetch + arrayBuffer
     const filePath = await downloadToTempFile(downloadUrl, '.tpex', {
       timeout: resolvePackageDownloadTimeout(targetVersion.packageSize),
+      maxBytes: advertisedSize,
       ...context?.downloadOptions,
       headers: downloadHeaders,
       resolveHeadersForUrl: (requestUrl, headers) => this.resolveRequestHeaders(requestUrl, headers)
     })
 
-    // Peek manifest from downloaded file
-    let manifest = await peekTpexManifest(filePath)
+    const registryMetadata = {
+      sourceType: 'registry' as const,
+      slug: plugin.slug,
+      pluginId: targetVersion.nexusAttestation.payload.pluginId,
+      pluginName: targetVersion.nexusAttestation.payload.pluginName,
+      version: targetVersion.version,
+      channel: targetVersion.channel,
+      packageSize: targetVersion.packageSize,
+      artifactSha256: targetVersion.artifactSha256,
+      nexusAttestation: targetVersion.nexusAttestation
+    }
 
-    // If peek failed but we have manifest from API, use that
-    if (!manifest && targetVersion.manifest) {
+    // Never extract an unverified registry archive before signature/trust verification.
+    // Prefer the registry API manifest; only inspect the tarball if API manifest is absent AND
+    // trust verification passes first.
+    let manifest: IManifest | undefined
+    if (targetVersion.manifest) {
       manifest = {
         id: plugin.slug,
         name: plugin.name,
@@ -334,6 +371,16 @@ export class TpexPluginProvider implements PluginProvider {
         icon: plugin.iconUrl ?? undefined,
         ...targetVersion.manifest
       } as IManifest
+    } else {
+      const trustMetadata = extractPluginTrustMetadata(registryMetadata)
+      if (!trustMetadata) {
+        throw new Error('PLUGIN_TRUST_METADATA_REQUIRED')
+      }
+      const trustResult = await verifyPluginPackageTrust(filePath, trustMetadata)
+      if (!trustResult.ok) {
+        throw new Error(trustResult.code)
+      }
+      manifest = await peekTpexManifest(filePath)
     }
 
     this.log.success('TPEX plugin fetched from registry', {

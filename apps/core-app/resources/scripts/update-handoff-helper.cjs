@@ -9,6 +9,7 @@ const process = require('node:process')
 const SCHEMA_VERSION = 1
 const POLL_INTERVAL_MS = 250
 const PARENT_EXIT_TIMEOUT_MS = 60_000
+const WINDOWS_NSIS_INSTALLER_RE = /(^|[\s._-])(setup|installer)([\s._-]|$)/i
 
 function isWithin(root, candidate) {
   const resolvedRoot = path.resolve(root)
@@ -25,7 +26,34 @@ function assertInternalPath(root, candidate) {
   return path.resolve(candidate)
 }
 
-function assertCommand(command) {
+function getAllowedBundledScriptDirs(root, attemptRoot) {
+  const dirs = [path.resolve(attemptRoot), path.resolve(root), path.resolve(__dirname)]
+  if (typeof process.resourcesPath === 'string' && process.resourcesPath.length > 0) {
+    dirs.push(
+      path.resolve(process.resourcesPath, 'resources', 'scripts'),
+      path.resolve(process.resourcesPath, 'scripts')
+    )
+  }
+  const execDir = path.dirname(process.execPath)
+  dirs.push(
+    path.resolve(execDir, 'resources', 'scripts'),
+    path.resolve(execDir, 'resources', 'resources', 'scripts')
+  )
+  return dirs
+}
+
+function isAllowedBundledScriptPath(root, attemptRoot, scriptPath, expectedFilename) {
+  if (typeof scriptPath !== 'string' || !path.isAbsolute(scriptPath)) {
+    return false
+  }
+  const resolved = path.resolve(scriptPath)
+  if (path.basename(resolved) !== expectedFilename) {
+    return false
+  }
+  return getAllowedBundledScriptDirs(root, attemptRoot).some((dir) => isWithin(dir, resolved))
+}
+
+function assertCommand(root, plan, command, role) {
   if (
     !command ||
     typeof command !== 'object' ||
@@ -37,6 +65,86 @@ function assertCommand(command) {
   ) {
     throw new Error('Update helper command is invalid')
   }
+
+  const attemptRoot = path.dirname(assertInternalPath(root, plan.ackPath))
+  const platform = plan.platform
+
+  if (platform === 'darwin') {
+    const expectedScript = role === 'handoff' ? 'macos-apply-update.sh' : 'macos-restore-update.sh'
+    const scriptArg = command.args[0]
+    if (
+      command.command !== '/bin/bash' ||
+      command.waitForExit !== true ||
+      typeof scriptArg !== 'string' ||
+      !path.isAbsolute(scriptArg) ||
+      !isWithin(attemptRoot, scriptArg) ||
+      path.basename(path.resolve(scriptArg)) !== expectedScript
+    ) {
+      throw new Error(`Disallowed macOS ${role} command`)
+    }
+    return
+  }
+
+  if (platform === 'linux') {
+    if (command.command === '/bin/bash') {
+      const scriptArg = command.args[0]
+      if (
+        command.waitForExit !== true ||
+        !isAllowedBundledScriptPath(root, attemptRoot, scriptArg, 'linux-apply-update.sh')
+      ) {
+        throw new Error(`Disallowed Linux ${role} bash command`)
+      }
+      return
+    }
+    if (role === 'recovery') {
+      const ext = path.extname(command.command).toLowerCase()
+      if (
+        ext === '.appimage' &&
+        command.waitForExit === false &&
+        command.args.length === 0 &&
+        isWithin(root, command.command)
+      ) {
+        return
+      }
+      if (
+        command.command === 'xdg-open' &&
+        command.waitForExit === false &&
+        command.args.length === 1 &&
+        path.extname(command.args[0]).toLowerCase() === '.deb' &&
+        isWithin(root, command.args[0])
+      ) {
+        return
+      }
+    }
+    throw new Error(`Disallowed Linux ${role} command`)
+  }
+
+  if (platform === 'win32') {
+    if (
+      command.command.toLowerCase() === 'msiexec.exe' &&
+      command.waitForExit === false &&
+      command.args.length === 2 &&
+      command.args[0] === '/i' &&
+      path.extname(command.args[1]).toLowerCase() === '.msi' &&
+      isWithin(root, command.args[1])
+    ) {
+      return
+    }
+    const ext = path.extname(command.command).toLowerCase()
+    const baseName = path.basename(command.command, ext)
+    if (
+      ext === '.exe' &&
+      WINDOWS_NSIS_INSTALLER_RE.test(baseName) &&
+      command.waitForExit === false &&
+      command.args.length === 0 &&
+      isWithin(root, command.command)
+    ) {
+      return
+    }
+    throw new Error(`Disallowed Windows ${role} command`)
+  }
+
+  throw new Error(`Unsupported update platform: ${String(platform)}`)
 }
 
 function validatePlan(root, plan) {
@@ -81,8 +189,6 @@ function validatePlan(root, plan) {
     )
       throw new Error('Invalid macOS update transaction paths')
   }
-  assertCommand(plan.handoff)
-  if (plan.recovery !== null) assertCommand(plan.recovery)
   assertInternalPath(root, plan.packagePath)
   assertInternalPath(root, plan.ackPath)
   assertInternalPath(root, plan.markerPath)
@@ -90,6 +196,8 @@ function validatePlan(root, plan) {
     assertInternalPath(root, plan.lockPath)
   }
   for (const cleanupPath of plan.cleanupPaths) assertInternalPath(root, cleanupPath)
+  assertCommand(root, plan, plan.handoff, 'handoff')
+  if (plan.recovery !== null) assertCommand(root, plan, plan.recovery, 'recovery')
   return plan
 }
 
@@ -257,6 +365,7 @@ async function recoverOnce(root, plan, reason) {
   })
 
   try {
+    assertCommand(root, plan, plan.recovery, 'recovery')
     await launchCommand(plan.recovery)
     return true
   } catch (error) {

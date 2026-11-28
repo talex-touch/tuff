@@ -1,4 +1,5 @@
 import type { AppPathLike } from './app-root-path'
+import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { isSafePathSegment } from '@talex-touch/utils/common/utils/safe-path'
@@ -20,6 +21,76 @@ export interface DownloadRootsAppLike extends AppPathLike {
   getPath: (name: AppPathName) => string
 }
 
+const SAFE_DOWNLOAD_TASK_ID_RE = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/
+
+const DANGEROUS_DOWNLOAD_OPEN_EXTENSIONS: ReadonlySet<string> = new Set([
+  '.action',
+  '.app',
+  '.appex',
+  '.appimage',
+  '.applescript',
+  '.bash',
+  '.bat',
+  '.bin',
+  '.bundle',
+  '.cmd',
+  '.com',
+  '.command',
+  '.component',
+  '.cpl',
+  '.csh',
+  '.deb',
+  '.desktop',
+  '.dext',
+  '.dmg',
+  '.exe',
+  '.framework',
+  '.hta',
+  '.inetloc',
+  '.inf',
+  '.jar',
+  '.js',
+  '.jse',
+  '.kext',
+  '.ksh',
+  '.lnk',
+  '.mpkg',
+  '.msi',
+  '.msp',
+  '.msu',
+  '.osascript',
+  '.php',
+  '.pif',
+  '.pkg',
+  '.pl',
+  '.plugin',
+  '.prefpane',
+  '.ps1',
+  '.psd1',
+  '.psm1',
+  '.py',
+  '.rb',
+  '.reg',
+  '.rpm',
+  '.run',
+  '.saver',
+  '.scpt',
+  '.scptd',
+  '.scr',
+  '.sh',
+  '.systemextension',
+  '.terminal',
+  '.vbe',
+  '.vbs',
+  '.wdgt',
+  '.webloc',
+  '.workflow',
+  '.wsf',
+  '.wsh',
+  '.xpc',
+  '.zsh'
+])
+
 function safeAppPath(
   appLike: Pick<DownloadRootsAppLike, 'getPath'>,
   name: AppPathName
@@ -31,14 +102,145 @@ function safeAppPath(
   }
 }
 
+function isWithinResolvedRoot(candidate: string, root: string): boolean {
+  return candidate === root || candidate.startsWith(root + path.sep)
+}
+
+function isStrictDescendantOfRoot(candidate: string, root: string): boolean {
+  return candidate !== root && candidate.startsWith(root + path.sep)
+}
+
+function canonicalizeWithNearestExistingAncestor(targetPath: string): string {
+  const resolved = path.resolve(targetPath)
+  const tail: string[] = []
+  let cursor = resolved
+
+  while (true) {
+    try {
+      const realCursor = fs.realpathSync(cursor)
+      return tail.length > 0 ? path.join(realCursor, ...tail.reverse()) : realCursor
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException)?.code
+      if (code !== 'ENOENT' && code !== 'ENOTDIR') {
+        return resolved
+      }
+      // Reject dangling symlinks rather than falling through to their parent directory.
+      try {
+        if (fs.lstatSync(cursor).isSymbolicLink()) {
+          throw new Error('DANGLING_SYMLINK')
+        }
+      } catch (lstatError) {
+        if (lstatError instanceof Error && lstatError.message === 'DANGLING_SYMLINK') {
+          throw lstatError
+        }
+      }
+      const parent = path.dirname(cursor)
+      if (parent === cursor) {
+        return resolved
+      }
+      tail.push(path.basename(cursor))
+      cursor = parent
+    }
+  }
+}
+
+function resolveRuntimeDownloadRoots(appLike: DownloadRootsAppLike): string[] {
+  try {
+    const runtimeRoot = resolveRuntimeRootPath(appLike)
+    if (!runtimeRoot) return []
+    return [
+      path.join(runtimeRoot, 'modules', 'update-packages'),
+      path.join(runtimeRoot, 'Downloads', 'dependencies', 'everything'),
+      path.join(runtimeRoot, 'temp')
+    ]
+  } catch {
+    return []
+  }
+}
+
+export function isSafeDownloadTaskId(taskId: unknown): taskId is string {
+  return (
+    typeof taskId === 'string' &&
+    isSafePathSegment(taskId) &&
+    SAFE_DOWNLOAD_TASK_ID_RE.test(taskId) &&
+    !taskId.includes('..')
+  )
+}
+
+export function getAllowedDownloadTempRoots(appLike: DownloadRootsAppLike = app): string[] {
+  const userData = safeAppPath(appLike, 'userData')
+  let runtimeTemp: string | null = null
+  try {
+    const runtimeRoot = resolveRuntimeRootPath(appLike)
+    runtimeTemp = runtimeRoot ? path.join(runtimeRoot, 'temp') : null
+  } catch {
+    runtimeTemp = null
+  }
+
+  const roots: Array<string | null> = [
+    runtimeTemp,
+    userData ? path.join(userData, 'temp') : null,
+    safeAppPath(appLike, 'temp'),
+    os.tmpdir()
+  ]
+
+  const seen: string[] = []
+  for (const root of roots) {
+    if (!root) continue
+    const resolved = path.resolve(root)
+    if (!seen.includes(resolved)) seen.push(resolved)
+  }
+  return seen
+}
+
+/**
+ * Validates that a download temp directory is a dedicated subdirectory beneath an allowed
+ * temporary root (never bare OS temp, home, or application config roots) and does not
+ * escape via symlinks.
+ */
+export function isAllowedDownloadTempDir(
+  tempDir: string | undefined,
+  tempRoots: string[] = getAllowedDownloadTempRoots()
+): boolean {
+  const requested = typeof tempDir === 'string' ? tempDir.trim() : ''
+  if (!requested || !path.isAbsolute(requested)) {
+    return false
+  }
+  const resolved = path.resolve(requested)
+  const resolvedRoots = tempRoots.map((root) => path.resolve(root))
+  if (!resolvedRoots.some((root) => isStrictDescendantOfRoot(resolved, root))) {
+    return false
+  }
+
+  try {
+    const canonicalTarget = canonicalizeWithNearestExistingAncestor(resolved)
+    const canonicalRoots = resolvedRoots.map((root) =>
+      canonicalizeWithNearestExistingAncestor(root)
+    )
+    return canonicalRoots.some((root) => isStrictDescendantOfRoot(canonicalTarget, root))
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Blocks launching downloaded executables, scripts, installers, or macOS packages through
+ * `shell.openPath`.
+ */
+export function isDangerousDownloadOpenFile(filePath: string): boolean {
+  const ext = path.extname(filePath).toLowerCase()
+  return Boolean(ext) && DANGEROUS_DOWNLOAD_OPEN_EXTENSIONS.has(ext)
+}
+
 /**
  * Directories a download may land in.
  *
  * Derived from where downloads actually go today rather than from a guess:
  *
- * - the app's own runtime root (`${userData}/tuff(-dev)`) — update packages
- *   (`modules/update-packages`) and the Everything bootstrap
- *   (`Downloads/dependencies/everything`) both sit under it
+ * - specific download subdirectories beneath the runtime root (`${userData}/tuff(-dev)`):
+ *   `modules/update-packages`, `Downloads/dependencies/everything`, and `temp` — never bare
+ *   runtime root, which also contains `config/` (`local-secret.v1.key`, `secure-store.json`),
+ *   `modules/plugins/`, and `browser-connector/`
  * - `${userData}/temp` — `TempFileService`'s base directory (e.g. `useSvgContent` caches
  *   remote SVGs under `${userData}/temp/icons/svg-cache`). Only the `temp` subdirectory is
  *   included — never bare `userData`, which holds `config.json`, `plugins`, and Electron
@@ -49,13 +251,7 @@ function safeAppPath(
 export function getAllowedDownloadRoots(appLike: DownloadRootsAppLike = app): string[] {
   const userData = safeAppPath(appLike, 'userData')
   const roots: Array<string | null> = [
-    (() => {
-      try {
-        return resolveRuntimeRootPath(appLike)
-      } catch {
-        return null
-      }
-    })(),
+    ...resolveRuntimeDownloadRoots(appLike),
     userData ? path.join(userData, 'temp') : null,
     safeAppPath(appLike, 'downloads'),
     safeAppPath(appLike, 'temp'),
@@ -102,11 +298,38 @@ export function evaluateDownloadTarget(
   }
 
   const resolved = path.resolve(requested)
-  const withinRoot = roots.some((root) => {
-    const resolvedRoot = path.resolve(root)
-    return resolved === resolvedRoot || resolved.startsWith(resolvedRoot + path.sep)
-  })
+  const resolvedRoots = roots.map((root) => path.resolve(root))
+  const withinRoot = resolvedRoots.some((resolvedRoot) =>
+    isWithinResolvedRoot(resolved, resolvedRoot)
+  )
   if (!withinRoot) {
+    return { allowed: false, reason: 'destination-outside-roots' }
+  }
+
+  try {
+    const canonicalDestination = canonicalizeWithNearestExistingAncestor(resolved)
+    const canonicalRoots = resolvedRoots.map((root) =>
+      canonicalizeWithNearestExistingAncestor(root)
+    )
+    const withinCanonicalRoot = canonicalRoots.some((canonicalRoot) =>
+      isWithinResolvedRoot(canonicalDestination, canonicalRoot)
+    )
+    if (!withinCanonicalRoot) {
+      return { allowed: false, reason: 'destination-outside-roots' }
+    }
+
+    const candidateFilePath = path.join(canonicalDestination, filename)
+    try {
+      if (fs.lstatSync(candidateFilePath).isSymbolicLink()) {
+        return { allowed: false, reason: 'destination-outside-roots' }
+      }
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException)?.code
+      if (code !== 'ENOENT' && code !== 'ENOTDIR') {
+        return { allowed: false, reason: 'destination-outside-roots' }
+      }
+    }
+  } catch {
     return { allowed: false, reason: 'destination-outside-roots' }
   }
 

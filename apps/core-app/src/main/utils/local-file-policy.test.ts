@@ -37,14 +37,18 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('node:fs', () => ({
-  readdirSync: vi.fn((directory: string) => {
-    if (directory === mockedRuntimePluginRoot) {
-      return [{ name: 'clipboard-history', isDirectory: () => true }]
-    }
-    throw new Error(`unexpected directory ${directory}`)
-  })
-}))
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs')>()
+  return {
+    ...actual,
+    readdirSync: vi.fn((directory: string) => {
+      if (directory === mockedRuntimePluginRoot) {
+        return [{ name: 'clipboard-history', isDirectory: () => true }]
+      }
+      throw new Error(`unexpected directory ${directory}`)
+    })
+  }
+})
 
 const { getAllowedLocalFileRoots, isAllowedLocalFilePath } = await import('./local-file-policy')
 
@@ -79,9 +83,12 @@ describe('getAllowedLocalFileRoots', () => {
     expect(roots).not.toContain(path.normalize(HOME))
   })
 
-  it('keeps app icons, userData and temp, which are the roots the protocol serves from', () => {
+  it('keeps app icons, non-sensitive userData asset subdirs, and temp without exposing bare userData', () => {
     expect(roots).toContain(path.join(CACHE, 'app-icons'))
-    expect(roots).toContain(path.normalize(USER_DATA))
+    expect(roots).toContain(path.join(USER_DATA, 'cache'))
+    expect(roots).toContain(path.join(USER_DATA, 'wallpapers'))
+    expect(roots).toContain(path.join(USER_DATA, 'temp'))
+    expect(roots).not.toContain(path.normalize(USER_DATA))
     expect(roots).toContain(path.normalize(os.tmpdir()))
   })
 
@@ -105,7 +112,11 @@ describe('isAllowedLocalFilePath against the narrowed roots', () => {
     path.join(HOME, '.ssh', 'id_rsa'),
     path.join(HOME, '.aws', 'credentials'),
     path.join(HOME, '.gnupg', 'secring.gpg'),
-    path.join(HOME, 'Documents', 'passwords.txt')
+    path.join(HOME, 'Documents', 'passwords.txt'),
+    path.join(USER_DATA, 'tuff', 'config', 'local-secret.v1.key'),
+    path.join(USER_DATA, 'tuff', 'config', 'secure-store.json'),
+    path.join(USER_DATA, 'tuff', 'database', 'core.db'),
+    path.join(USER_DATA, 'Cookies')
   ]
 
   it.each(secrets)('refuses %s', (filePath) => {
@@ -248,5 +259,28 @@ describe('isServableLocalFilePath', () => {
     expect(policy.isServableLocalFilePath('/definitely/not/allowed/shot.png')).toBe(true)
     release()
     expect(policy.isServableLocalFilePath('/definitely/not/allowed/shot.png')).toBe(false)
+  })
+
+  it('rejects symlinks inside an allowed root pointing outside the root', async () => {
+    const fsPromises = await import('node:fs/promises')
+    const allowedRoot = await fsPromises.mkdtemp(path.join(os.tmpdir(), 'lfp-allowed-'))
+    const outsideRoot = await fsPromises.mkdtemp(path.join(os.tmpdir(), 'lfp-outside-'))
+    try {
+      const secretFile = path.join(outsideRoot, 'secret.txt')
+      const insideFile = path.join(allowedRoot, 'ok.txt')
+      const escapeLink = path.join(allowedRoot, 'escape.txt')
+      const danglingLink = path.join(allowedRoot, 'dangling.txt')
+      await fsPromises.writeFile(secretFile, 'secret')
+      await fsPromises.writeFile(insideFile, 'ok')
+      await fsPromises.symlink(secretFile, escapeLink)
+      await fsPromises.symlink(path.join(outsideRoot, 'missing.txt'), danglingLink)
+
+      expect(isAllowedLocalFilePath(insideFile, [allowedRoot])).toBe(true)
+      expect(isAllowedLocalFilePath(escapeLink, [allowedRoot])).toBe(false)
+      expect(isAllowedLocalFilePath(danglingLink, [allowedRoot])).toBe(false)
+    } finally {
+      await fsPromises.rm(allowedRoot, { recursive: true, force: true })
+      await fsPromises.rm(outsideRoot, { recursive: true, force: true })
+    }
   })
 })

@@ -1397,4 +1397,105 @@ describe('networkService cooldown policy', () => {
       )
     }
   })
+
+  it('rejects non-HTTP(S) schemes like file:// across request, requestNoRedirect, and requestStream', async () => {
+    const service = new NetworkService()
+    for (const badUrl of ['file:///etc/passwd', 'tfile:///tmp/secret.txt', 'data:text/plain,hi']) {
+      await expect(service.request({ method: 'GET', url: badUrl })).rejects.toThrow(
+        'NETWORK_UNSUPPORTED_PROTOCOL'
+      )
+      await expect(service.requestNoRedirect({ method: 'GET', url: badUrl })).rejects.toThrow(
+        'NETWORK_UNSUPPORTED_PROTOCOL'
+      )
+      await expect(service.requestStream({ method: 'GET', url: badUrl })).rejects.toThrow(
+        'NETWORK_UNSUPPORTED_PROTOCOL'
+      )
+    }
+    expect(electronMocks.fetch).not.toHaveBeenCalled()
+  })
+
+  it('blocks DNS rebinding to local IPs, IPv4-mapped IPv6, and redirects to localhost in requestForPlugin', async () => {
+    const dnsLookup = vi.fn(async (hostname: string) => {
+      if (hostname === 'rebind-loopback.example.test') {
+        return [{ address: '127.0.0.1', family: 4 }]
+      }
+      if (hostname === 'rebind-metadata.example.test') {
+        return [{ address: '::ffff:169.254.169.254', family: 6 }]
+      }
+      return [{ address: '93.184.216.34', family: 4 }]
+    })
+    const service = new NetworkService({ dnsLookup })
+
+    // Non-HTTP scheme blocked immediately
+    await expect(
+      service.requestForPlugin(
+        { method: 'GET', url: 'file:///etc/passwd' },
+        { pluginName: 'untrusted-plugin', allowLocal: false }
+      )
+    ).rejects.toThrow('NETWORK_UNSUPPORTED_PROTOCOL')
+
+    // IPv4-mapped IPv6, 0.0.0.0/8, CGNAT blocked when allowLocal is false
+    for (const url of [
+      'http://[::ffff:127.0.0.1]/',
+      'http://[::ffff:7f00:1]/',
+      'http://0.1.2.3/',
+      'http://100.64.0.1/'
+    ]) {
+      await expect(
+        service.requestForPlugin(
+          { method: 'GET', url },
+          { pluginName: 'untrusted-plugin', allowLocal: false }
+        )
+      ).rejects.toThrow('NETWORK_LOCAL_ACCESS_DENIED')
+    }
+
+    // DNS resolving to loopback or IMDS blocked before connecting
+    await expect(
+      service.requestForPlugin(
+        { method: 'GET', url: 'https://rebind-loopback.example.test/api' },
+        { pluginName: 'untrusted-plugin', allowLocal: false }
+      )
+    ).rejects.toThrow('NETWORK_LOCAL_ACCESS_DENIED')
+
+    await expect(
+      service.requestForPlugin(
+        { method: 'GET', url: 'https://rebind-metadata.example.test/api' },
+        { pluginName: 'untrusted-plugin', allowLocal: false }
+      )
+    ).rejects.toThrow('NETWORK_LOCAL_ACCESS_DENIED')
+
+    // Under custom proxy: uses non-persistent per-plugin session partition with credentials omitted
+    // and rejects HTTP 302 redirects targeting localhost
+    electronMocks.fetch.mockResolvedValueOnce(
+      new Response(null, {
+        status: 302,
+        headers: { location: 'http://127.0.0.1:8080/internal-admin' }
+      })
+    )
+    await expect(
+      service.requestForPlugin(
+        {
+          method: 'GET',
+          url: 'https://public.example.test/start',
+          proxyOverride: {
+            mode: 'custom',
+            custom: { httpProxy: 'http://127.0.0.1:7890' }
+          }
+        },
+        { pluginName: 'untrusted-plugin', allowLocal: false }
+      )
+    ).rejects.toThrow('NETWORK_LOCAL_ACCESS_DENIED')
+
+    expect(electronMocks.session.fromPartition).toHaveBeenCalledWith(
+      expect.stringMatching(/^tuff-plugin-network-[a-f0-9]{16}$/)
+    )
+    expect(electronMocks.fetch).toHaveBeenCalledTimes(1)
+    expect(electronMocks.fetch).toHaveBeenCalledWith(
+      'https://public.example.test/start',
+      expect.objectContaining({
+        redirect: 'manual',
+        credentials: 'omit'
+      })
+    )
+  })
 })

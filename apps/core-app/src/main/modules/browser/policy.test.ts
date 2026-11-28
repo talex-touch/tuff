@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isAllowedBrowserUrl, normalizeBrowserInput } from './policy'
+import { isAllowedBrowserUrl, isAllowedGuestNavigationUrl, normalizeBrowserInput } from './policy'
 
 describe('browser address input', () => {
   it.each([
@@ -60,4 +60,14 @@ describe('remote browser navigation policy', () => {
       expect(isAllowedBrowserUrl(url)).toBe(false)
     }
   )
+
+  it('allows tuff:// only for host browser URLs and blocks tuff:// for guest navigation', () => {
+    expect(isAllowedBrowserUrl('tuff://settings')).toBe(true)
+    expect(isAllowedBrowserUrl('tuff://store')).toBe(true)
+    expect(isAllowedGuestNavigationUrl('tuff://settings')).toBe(false)
+    expect(isAllowedGuestNavigationUrl('tuff://store')).toBe(false)
+    expect(isAllowedGuestNavigationUrl('tuff://auth/callback?token=stolen')).toBe(false)
+    expect(isAllowedGuestNavigationUrl('https://example.com/path')).toBe(true)
+    expect(isAllowedGuestNavigationUrl('https://alice@example.com/')).toBe(false)
+  })
 })

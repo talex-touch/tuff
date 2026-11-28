@@ -287,6 +287,7 @@ export class PermissionStore {
   private data: PermissionData = createEmptyData()
   private dirty = false
   private initialized = false
+  private mutationChain: Promise<void> = Promise.resolve()
   private persistChain: Promise<void> = Promise.resolve()
   private backendMode: PermissionBackendMode = 'degraded/backend-unavailable'
   private backendReason = 'Permission backend is not initialized.'
@@ -327,7 +328,7 @@ export class PermissionStore {
     } catch (error) {
       await backend?.close().catch(() => {})
       this.data = createEmptyData()
-      this.markBackendUnavailable(error, 'initialize')
+      await this.markBackendUnavailable(error, 'initialize')
     }
 
     this.initialized = true
@@ -337,7 +338,7 @@ export class PermissionStore {
    * Save permissions to persistence backend.
    */
   async flush(): Promise<void> {
-    this.persistChain = this.persistChain.then(async () => {
+    const next = this.persistChain.then(async () => {
       if (!this.dirty) return
 
       if (this.backendMode !== 'sqlite' || !this.sqliteBackend) {
@@ -347,10 +348,13 @@ export class PermissionStore {
       await this.sqliteBackend.persist(cloneData(this.data))
       this.dirty = false
     })
-    return this.persistChain.catch((error) => {
-      this.markBackendUnavailable(error, 'persist')
+    this.persistChain = next.catch(() => {})
+    try {
+      await next
+    } catch (error) {
+      await this.markBackendUnavailable(error, 'persist')
       throw error
-    })
+    }
   }
 
   async shutdown(): Promise<void> {
@@ -359,7 +363,9 @@ export class PermissionStore {
     } catch {
       // keep degraded shutdown non-fatal
     }
-    await this.sqliteBackend?.close()
+    const backend = this.sqliteBackend
+    this.sqliteBackend = null
+    await backend?.close().catch(() => {})
   }
 
   getBackendMode(): PermissionBackendMode {
@@ -380,11 +386,15 @@ export class PermissionStore {
     )
   }
 
-  private markBackendUnavailable(error: unknown, phase: string): void {
+  private async markBackendUnavailable(error: unknown, phase: string): Promise<void> {
     const reason = error instanceof Error ? error.message : String(error)
+    const backend = this.sqliteBackend
     this.backendMode = 'degraded/backend-unavailable'
     this.backendReason = reason || 'backend unavailable'
     this.sqliteBackend = null
+    if (backend) {
+      await backend.close().catch(() => {})
+    }
     permissionStoreLog.warn(`SQLite backend unavailable during ${phase}`, {
       meta: { reason: this.backendReason, error }
     })
@@ -396,22 +406,60 @@ export class PermissionStore {
     }
   }
 
-  private async commitPersistentMutation(action: string, mutate: () => void): Promise<void> {
-    this.ensureWritable(action)
-    const previous = cloneData(this.data)
-    const previousDirty = this.dirty
-    const previousSessionGrants = cloneSessionGrants(this.sessionGrants)
+  private enqueueMutation<T>(task: () => Promise<T>): Promise<T> {
+    const next = this.mutationChain.then(task, task)
+    this.mutationChain = next.then(
+      () => undefined,
+      () => undefined
+    )
+    return next
+  }
 
-    try {
-      mutate()
-      this.dirty = true
-      await this.flush()
-    } catch (error) {
-      this.data = previous
-      this.dirty = previousDirty
-      this.sessionGrants = previousSessionGrants
-      throw error
-    }
+  private async commitPersistentMutation(action: string, mutate: () => void): Promise<void> {
+    return this.enqueueMutation(async () => {
+      this.ensureWritable(action)
+      const previous = cloneData(this.data)
+      const previousDirty = this.dirty
+      const previousSessionGrants = cloneSessionGrants(this.sessionGrants)
+
+      try {
+        mutate()
+        this.dirty = true
+        await this.flush()
+      } catch (error) {
+        this.data = previous
+        this.dirty = previousDirty
+        this.sessionGrants = previousSessionGrants
+        throw error
+      }
+    })
+  }
+
+  private async commitConditionalMutation<T>(
+    action: string,
+    mutate: () => { changed: boolean; result: T }
+  ): Promise<T> {
+    return this.enqueueMutation(async () => {
+      this.ensureWritable(action)
+      const previous = cloneData(this.data)
+      const previousDirty = this.dirty
+      const previousSessionGrants = cloneSessionGrants(this.sessionGrants)
+
+      try {
+        const outcome = mutate()
+        if (!outcome.changed) {
+          return outcome.result
+        }
+        this.dirty = true
+        await this.flush()
+        return outcome.result
+      } catch (error) {
+        this.data = previous
+        this.dirty = previousDirty
+        this.sessionGrants = previousSessionGrants
+        throw error
+      }
+    })
   }
 
   /**
@@ -450,19 +498,18 @@ export class PermissionStore {
   async revoke(pluginId: string, permissionId: string): Promise<string[]> {
     const normalizedPermissionId = normalizePermissionId(permissionId)
     const candidates = getPermissionIdCandidates(normalizedPermissionId)
-    this.ensureWritable('revoke')
 
-    const hasPersistentGrant = candidates.some((candidate) =>
-      Boolean(this.data.grants[pluginId]?.[candidate])
-    )
-    const hasSessionGrant = candidates.some(
-      (candidate) => this.sessionGrants[pluginId]?.has(candidate) ?? false
-    )
-    if (!hasPersistentGrant && !hasSessionGrant) {
-      return []
-    }
+    return this.commitConditionalMutation('revoke', () => {
+      const hasPersistentGrant = candidates.some((candidate) =>
+        Boolean(this.data.grants[pluginId]?.[candidate])
+      )
+      const hasSessionGrant = candidates.some(
+        (candidate) => this.sessionGrants[pluginId]?.has(candidate) ?? false
+      )
+      if (!hasPersistentGrant && !hasSessionGrant) {
+        return { changed: false, result: [] }
+      }
 
-    await this.commitPersistentMutation('revoke', () => {
       const persistentGrants = this.data.grants[pluginId]
       const sessionGrants = this.sessionGrants[pluginId]
       for (const candidate of candidates) {
@@ -477,38 +524,35 @@ export class PermissionStore {
       }
 
       this.addAuditLog('revoked', pluginId, normalizedPermissionId, 'user')
+      return { changed: true, result: [normalizedPermissionId] }
     })
-
-    return [normalizedPermissionId]
   }
 
   /**
    * Revoke all permissions for plugin
    */
   async revokeAll(pluginId: string): Promise<string[]> {
-    this.ensureWritable('revokeAll')
-    const permissions = Array.from(
-      new Set(
-        [
-          ...Object.keys(this.data.grants[pluginId] || {}),
-          ...(this.sessionGrants[pluginId] || new Set<string>())
-        ].map((permissionId) => normalizePermissionId(permissionId))
-      )
-    ).sort()
-    if (permissions.length === 0) {
-      return []
-    }
+    return this.commitConditionalMutation('revokeAll', () => {
+      const permissions = Array.from(
+        new Set(
+          [
+            ...Object.keys(this.data.grants[pluginId] || {}),
+            ...(this.sessionGrants[pluginId] || new Set<string>())
+          ].map((permissionId) => normalizePermissionId(permissionId))
+        )
+      ).sort()
+      if (permissions.length === 0) {
+        return { changed: false, result: [] }
+      }
 
-    await this.commitPersistentMutation('revokeAll', () => {
       delete this.data.grants[pluginId]
       delete this.sessionGrants[pluginId]
 
       for (const permissionId of permissions) {
         this.addAuditLog('revoked', pluginId, permissionId, 'user', 'Revoked via "revoke all"')
       }
+      return { changed: true, result: permissions }
     })
-
-    return permissions
   }
 
   /**

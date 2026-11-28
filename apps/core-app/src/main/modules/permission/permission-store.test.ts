@@ -386,4 +386,54 @@ describe('PermissionStore sqlite backend', () => {
     expect(JSON.parse(await fs.readFile(retiredJsonPath, 'utf-8'))).toEqual(retiredJsonPayload)
     await store.shutdown()
   })
+
+  it('serializes concurrent mutations, prevents rollback clobbering, recovers persistChain, and closes backend on failure', async () => {
+    let persistCount = 0
+    const firstPersistStarted = Promise.withResolvers<void>()
+    const releaseFirstPersist = Promise.withResolvers<void>()
+    const closeSpy = vi.fn(async () => undefined)
+    let persisted: PersistedPermissionData = { version: 1, grants: {}, auditLogs: [] }
+
+    const store = new PermissionStore(tempDir, {
+      createBackend: () => ({
+        initialize: async () => undefined,
+        load: async () => structuredClone(persisted),
+        persist: async (data: PersistedPermissionData) => {
+          persistCount += 1
+          if (persistCount === 1) {
+            firstPersistStarted.resolve()
+            await releaseFirstPersist.promise
+            persisted = structuredClone(data)
+            return
+          }
+          if (persistCount === 2) {
+            throw new Error('disk full')
+          }
+          persisted = structuredClone(data)
+        },
+        close: closeSpy
+      })
+    })
+    await store.initialize()
+
+    const first = store.grant('touch-demo', 'fs.read', 'user')
+    const second = store.grant('touch-demo', 'clipboard.read', 'user')
+
+    await firstPersistStarted.promise
+    releaseFirstPersist.resolve()
+
+    await expect(first).resolves.toBeUndefined()
+    await expect(second).rejects.toThrow('disk full')
+
+    // First grant remains intact; failed second grant is rolled back
+    expect(store.hasPermission('touch-demo', 'fs.read', 251212)).toBe(true)
+    expect(store.hasPermission('touch-demo', 'clipboard.read', 251212)).toBe(false)
+    // Underlying SQLite backend handle was closed on markBackendUnavailable
+    expect(closeSpy).toHaveBeenCalledTimes(1)
+    expect(store.getBackendMode()).toBe('degraded/backend-unavailable')
+
+    // persistChain is not permanently poisoned; flush() settles cleanly when not dirty
+    await expect(store.flush()).resolves.toBeUndefined()
+    await store.shutdown()
+  })
 })

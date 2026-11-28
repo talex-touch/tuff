@@ -42,7 +42,7 @@ import { getBooleanEnv } from '@talex-touch/utils/env'
 import { appSettingOriginData } from '@talex-touch/utils/common/storage/entity/app-settings'
 import { AccountEvents, AuthEvents } from '@talex-touch/utils/transport/events'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
-import { randomUUID, createHash } from 'node:crypto'
+import { randomBytes, randomUUID, createHash, timingSafeEqual } from 'node:crypto'
 import os from 'node:os'
 import { shell } from 'electron'
 import { isVisibleEvidenceHookEnabled } from '../../core/acceptance-mode'
@@ -141,8 +141,23 @@ let authAccessRefreshTimer: NodeJS.Timeout | null = null
 let authRefreshInFlight: Promise<AccessTokenRefreshResult> | null = null
 let stepUpToken: string | null = null
 let stepUpTokenExpiresAt = 0
+let activeStepUpState: string | null = null
+let activeStepUpStateExpiresAt = 0
+let activeAuthCallbackState: string | null = null
 let authStartupRefreshTimer: NodeJS.Timeout | null = null
 let deviceAuthLoginAttempt = 0
+
+function constantTimeTokenMatch(expected: string | null, received: string | undefined): boolean {
+  if (!expected || typeof received !== 'string' || !received) {
+    return false
+  }
+  const expectedBuf = Buffer.from(expected, 'utf8')
+  const receivedBuf = Buffer.from(received, 'utf8')
+  if (expectedBuf.byteLength !== receivedBuf.byteLength) {
+    return false
+  }
+  return timingSafeEqual(expectedBuf, receivedBuf)
+}
 
 /**
  * Main-process-only request controls. Transport events remain on the narrow
@@ -1147,7 +1162,7 @@ async function fetchRemoteUser(
     }
   })
   try {
-    const response = await getNetworkService().request<AuthUser | null>({
+    const response = await getNetworkService().requestNoRedirect<AuthUser | null>({
       method: 'GET',
       url,
       headers: { Authorization: normalizeBearerToken(token) },
@@ -1298,7 +1313,7 @@ async function refreshAccessToken(reason: string): Promise<AccessTokenRefreshRes
     const url = new URL('/api/app-auth/refresh', resolveAuthBaseUrl()).toString()
     authLog.info('Refreshing Nexus access token', { meta: { reason, url } })
     try {
-      const response = await getNetworkService().request<{
+      const response = await getNetworkService().requestNoRedirect<{
         appToken?: string | null
         ttlSeconds?: number | null
       }>({
@@ -1402,7 +1417,7 @@ async function patchRemoteUserProfile(
   payload: { name?: string | null; bio?: string | null; image?: string | null }
 ): Promise<AuthUser> {
   const url = new URL('/api/v1/auth/profile', resolveAuthBaseUrl()).toString()
-  const response = await getNetworkService().request<AuthUser>({
+  const response = await getNetworkService().requestNoRedirect<AuthUser>({
     method: 'PATCH',
     url,
     headers: {
@@ -1669,6 +1684,7 @@ async function cancelActiveDeviceAuth(): Promise<void> {
   const deviceCode = activeDeviceAuthCode
   deviceAuthLoginAttempt += 1
   activeDeviceAuthCode = null
+  activeAuthCallbackState = null
   if (deviceCode) {
     // Still polling, so nothing this login does from here on is applied. A new login need not
     // wait for it, and its loop stops now rather than after the interval. Past polling it is
@@ -1692,6 +1708,7 @@ async function completeDeviceAuthLogin(
   }
 
   activeDeviceAuthCode = null
+  activeAuthCallbackState = null
   if (result.status !== 'approved' || !result.token) {
     await abortDeviceAuth(deviceCode)
     authLog.warn('Device auth login did not complete', {
@@ -1776,6 +1793,7 @@ async function startLoginPage(
   const previousDeviceCode = activeDeviceAuthCode
   const attemptId = ++deviceAuthLoginAttempt
   activeDeviceAuthCode = null
+  activeAuthCallbackState = null
   if (previousDeviceCode) {
     await abortDeviceAuth(previousDeviceCode)
   }
@@ -1788,10 +1806,17 @@ async function startLoginPage(
   }
 
   activeDeviceAuthCode = deviceCode
+  const callbackState = randomBytes(24).toString('base64url')
+  activeAuthCallbackState = callbackState
+  const baseOrigin = new URL(resolveAuthBaseUrl()).origin
   const authorizeUrl = new URL(authorizeUrlRaw, resolveAuthBaseUrl())
+  if (authorizeUrl.origin !== baseOrigin) {
+    throw new Error('Device auth authorize URL must match the configured Nexus origin')
+  }
   if (mode === 'sign-up') {
     authorizeUrl.pathname = '/sign-up'
   }
+  authorizeUrl.searchParams.set('state', callbackState)
 
   authLog.info('Browser login page resolved', {
     meta: {
@@ -1822,6 +1847,7 @@ async function startLoginPage(
   ).catch((error) => {
     if (deviceAuthLoginAttempt === attemptId && activeDeviceAuthCode === deviceCode) {
       activeDeviceAuthCode = null
+      activeAuthCallbackState = null
       if (!authToken) {
         updateAuthState(null)
       }
@@ -1923,13 +1949,32 @@ async function handleExternalAuthCallback(
   return false
 }
 
-function resolveNexusRequestUrl(payload: { url?: string; path?: string }): string {
-  const rawUrl = payload.url
-  const rawPath = payload.path
+function resolveNexusRequestUrl(
+  payload: { url?: string; path?: string },
+  trustedBaseUrl?: string
+): string {
+  const rawUrl = typeof payload.url === 'string' ? payload.url.trim() : ''
+  const rawPath = typeof payload.path === 'string' ? payload.path.trim() : ''
   if (!rawUrl && !rawPath) {
     throw new Error('Missing request url/path')
   }
-  return rawUrl ? rawUrl : new URL(rawPath ?? '', resolveAuthBaseUrl()).toString()
+  const baseUrl = new URL(trustedBaseUrl?.trim() || resolveAuthBaseUrl())
+  if (baseUrl.protocol !== 'http:' && baseUrl.protocol !== 'https:') {
+    throw Object.assign(new Error('NEXUS_INVALID_REQUEST'), { code: 'INVALID_REQUEST' as const })
+  }
+  let resolved: URL
+  try {
+    resolved = rawUrl ? new URL(rawUrl) : new URL(rawPath, baseUrl)
+  } catch {
+    throw Object.assign(new Error('NEXUS_INVALID_REQUEST'), { code: 'INVALID_REQUEST' as const })
+  }
+  if (
+    (resolved.protocol !== 'http:' && resolved.protocol !== 'https:') ||
+    resolved.origin !== baseUrl.origin
+  ) {
+    throw Object.assign(new Error('NEXUS_INVALID_REQUEST'), { code: 'INVALID_REQUEST' as const })
+  }
+  return resolved.toString()
 }
 
 function toUploadBytes(data: NexusUploadFilePayload['data']): Uint8Array {
@@ -1996,7 +2041,7 @@ async function executeNexusRequest(
   })
 
   const sendRequest = () =>
-    getNetworkService().request<string>({
+    getNetworkService().requestNoRedirect<string>({
       method,
       url,
       headers: Object.fromEntries(headers.entries()),
@@ -2102,11 +2147,8 @@ export async function performNexusRequestWithAuth(
   options: NexusAuthenticatedRequestOptions = {}
 ): Promise<NexusResponsePayload | null> {
   const trustedBaseUrl = options.trustedBaseUrl?.trim() || resolveAuthBaseUrl()
-  const url = resolveNexusRequestUrl(payload)
+  const url = resolveNexusRequestUrl(payload, trustedBaseUrl)
   const trustedOrigin = new URL(trustedBaseUrl).origin
-  if (new URL(url).origin !== trustedOrigin) {
-    throw Object.assign(new Error('NEXUS_INVALID_REQUEST'), { code: 'INVALID_REQUEST' as const })
-  }
   const timeoutMs =
     typeof options.timeoutMs === 'number' && Number.isFinite(options.timeoutMs)
       ? Math.max(100, Math.floor(options.timeoutMs))
@@ -2146,9 +2188,9 @@ export async function performNexusRequestWithAuth(
       }
     }
     const sendRequest = () =>
-      options.rejectRedirects
-        ? getNetworkService().requestNoRedirect<string>(requestOptions)
-        : getNetworkService().request<string>(requestOptions)
+      options.rejectRedirects === false
+        ? getNetworkService().request<string>(requestOptions)
+        : getNetworkService().requestNoRedirect<string>(requestOptions)
     let response = await sendRequest()
     if (response.status === 401 && authRefreshToken && !signal.aborted) {
       const refreshed = await refreshAccessToken('request-unauthorized')
@@ -2542,7 +2584,7 @@ async function attestCurrentDevice(): Promise<boolean> {
   }
 
   const url = new URL('/api/v1/devices/attest', resolveAuthBaseUrl()).toString()
-  const response = await getNetworkService().request<string>({
+  const response = await getNetworkService().requestNoRedirect<string>({
     method: 'POST',
     url,
     headers: {
@@ -2567,8 +2609,12 @@ async function attestCurrentDevice(): Promise<boolean> {
 }
 
 async function requestStepUp(): Promise<void> {
-  const url = `${resolveAuthBaseUrl()}/auth/stepup-callback`
-  await openPageExternally(url)
+  const nonce = randomBytes(24).toString('base64url')
+  activeStepUpState = nonce
+  activeStepUpStateExpiresAt = Date.now() + STEP_UP_TOKEN_TTL_MS
+  const url = new URL('/auth/stepup-callback', resolveAuthBaseUrl())
+  url.searchParams.set('state', nonce)
+  await openPageExternally(url.toString())
 }
 
 function setStepUpToken(token: string): void {
@@ -2582,6 +2628,8 @@ function setStepUpToken(token: string): void {
 function clearStepUpToken(): void {
   stepUpToken = null
   stepUpTokenExpiresAt = 0
+  activeStepUpState = null
+  activeStepUpStateExpiresAt = 0
 }
 
 function getStepUpToken(): string | null {
@@ -2596,29 +2644,19 @@ function getStepUpToken(): string | null {
 /**
  * Entry point for the `tuff://auth/callback` deep link.
  *
- * Only honoured while a browser login this app started is still in flight.
- * Without that check any page could navigate the user's browser to
- * `tuff://auth/callback?token=…` and silently swap the session to the
- * attacker's account — everything written afterwards lands in their account
- * (#695).
- *
- * `activeDeviceAuthCode` is the signal: openLoginPage sets it, and it is
- * cleared on cancel, on a completed poll and on poll failure, so the window is
- * bounded by a login the user actually initiated.
- *
- * This is not full state binding. It does not tie the callback to *which*
- * login is in flight, so an attacker who lands one while the user has a
- * genuine login open still wins. Closing that needs a nonce carried through
- * the browser round-trip, which means changing the nexus callback URL too —
- * tracked on the issue rather than half-done here.
+ * Bound to both an in-flight device login AND its one-time cryptographic state nonce issued by
+ * `startLoginPage`. On valid callback entry the device code and nonce are consumed immediately
+ * so device polling stops racing and the callback cannot be replayed, and `isCurrentLogin` is
+ * propagated so cancel/logout discards any in-flight application.
  */
 export async function applyExternalAuthCallback(
   token: string,
   appToken?: string,
   refreshToken?: string,
-  ttlSeconds?: number
+  ttlSeconds?: number,
+  state?: string
 ): Promise<boolean> {
-  if (!activeDeviceAuthCode) {
+  if (!activeDeviceAuthCode || !activeAuthCallbackState) {
     authLog.warn('Rejected auth callback with no login in flight', {
       meta: {
         hasToken: Boolean(token),
@@ -2628,11 +2666,50 @@ export async function applyExternalAuthCallback(
     })
     return false
   }
-  return handleExternalAuthCallback(token, appToken, refreshToken, ttlSeconds)
+  if (!constantTimeTokenMatch(activeAuthCallbackState, state)) {
+    authLog.warn('Rejected auth callback with invalid or missing state nonce', {
+      meta: {
+        hasToken: Boolean(token),
+        hasAppToken: Boolean(appToken),
+        hasState: Boolean(state)
+      }
+    })
+    return false
+  }
+
+  const attemptId = deviceAuthLoginAttempt
+  activeDeviceAuthCode = null
+  activeAuthCallbackState = null
+  wakeDeviceAuthPoll?.()
+  const isCurrentLogin = () => deviceAuthLoginAttempt === attemptId
+  return handleExternalAuthCallback(
+    token,
+    appToken,
+    refreshToken,
+    ttlSeconds,
+    undefined,
+    isCurrentLogin
+  )
 }
 
-export function applyStepUpToken(token: string): void {
+export function applyStepUpToken(token: string, state?: string): boolean {
+  const now = Date.now()
+  if (!activeStepUpState || now >= activeStepUpStateExpiresAt) {
+    activeStepUpState = null
+    activeStepUpStateExpiresAt = 0
+    authLog.warn('Rejected step-up callback with no active step-up request')
+    return false
+  }
+  if (!constantTimeTokenMatch(activeStepUpState, state)) {
+    authLog.warn('Rejected step-up callback with invalid or missing state nonce', {
+      meta: { hasState: Boolean(state) }
+    })
+    return false
+  }
+  activeStepUpState = null
+  activeStepUpStateExpiresAt = 0
   setStepUpToken(token)
+  return true
 }
 
 type AuthModuleTestState = {
@@ -2666,8 +2743,11 @@ function resetAuthModuleTestState(): void {
   authRefreshInFlight = null
   stepUpToken = null
   stepUpTokenExpiresAt = 0
+  activeStepUpState = null
+  activeStepUpStateExpiresAt = 0
   deviceAuthLoginAttempt += 1
   activeDeviceAuthCode = null
+  activeAuthCallbackState = null
   activeDeviceAuthLogin = null
   wakeDeviceAuthPoll = null
   deviceAuthPollWaiters = []
@@ -2702,10 +2782,17 @@ export const __test__ = {
   setAuthToken,
   refreshAccessToken,
   performNexusRequest,
+  performNexusUpload,
+  requestStepUp,
+  getStepUpToken,
   /** Lets a test put a browser login "in flight" without running the device flow. */
-  setActiveDeviceAuthCode: (code: string | null): void => {
+  setActiveDeviceAuthCode: (code: string | null, callbackState?: string | null): void => {
     activeDeviceAuthCode = code
+    activeAuthCallbackState =
+      callbackState !== undefined ? callbackState : code ? 'test-callback-state' : null
   },
+  getActiveCallbackState: (): string | null => activeAuthCallbackState,
+  getActiveStepUpState: (): string | null => activeStepUpState,
   clearAuthToken,
   /** Lets a test await the origin cleanup that `getAuthToken()` starts without awaiting. */
   dropCredentialIssuedByAnotherOrigin,

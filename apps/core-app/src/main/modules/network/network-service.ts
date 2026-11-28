@@ -17,12 +17,14 @@ import type { ProxyConfig, Session } from 'electron'
 import type { IncomingHttpHeaders, RequestOptions as NodeHttpRequestOptions } from 'node:http'
 import type { ReadableStream as NodeReadableStream } from 'node:stream/web'
 import { createHash } from 'node:crypto'
+import { lookup as dnsLookup } from 'node:dns/promises'
 import { promises as fs } from 'node:fs'
 import { STATUS_CODES, request as httpRequest } from 'node:http'
 import { request as httpsRequest } from 'node:https'
 import { isIP } from 'node:net'
 import { PassThrough, Readable } from 'node:stream'
 import { StorageList } from '@talex-touch/utils'
+import { normalizeAbsolutePath } from '@talex-touch/utils/common/utils/safe-path'
 import {
   createNetworkGuard,
   isHttpSource,
@@ -38,7 +40,13 @@ import {
 } from '@talex-touch/utils/network'
 import { app, net, session } from 'electron'
 import { resolveRuntimeRootPath } from '../../utils/app-root-path'
-import { getAllowedLocalFileRoots, isAllowedLocalFilePath } from '../../utils/local-file-policy'
+import {
+  canonicalizeLocalFileRoots,
+  getAllowedLocalFileRoots,
+  isAllowedLocalFilePath,
+  resolveCanonicalLocalFilePath
+} from '../../utils/local-file-policy'
+import { isLocalHostname, isLocalIpAddress } from '../../utils/network-target-policy'
 import { isTfilePreviewGrantAuthorized } from '../file-protocol/tfile-preview-grant'
 import { createLogger } from '../../utils/logger'
 import { getSecureStoreValue } from '../../utils/secure-store'
@@ -100,6 +108,58 @@ interface NetworkAbortContext {
 export interface PinnedNetworkRequestPolicy {
   readonly resolvedAddresses: readonly string[]
   readonly maxResponseBytes: number
+}
+
+export interface PluginNetworkRequestPolicy {
+  readonly pluginName: string
+  readonly allowLocal: boolean
+  readonly allowInternet?: boolean
+  readonly maxRedirects?: number
+  readonly maxResponseBytes?: number
+}
+
+type NetworkDnsLookup = (hostname: string) => Promise<Array<{ address: string; family: number }>>
+
+const MAX_PLUGIN_REDIRECT_HOPS = 5
+const DEFAULT_PLUGIN_MAX_RESPONSE_BYTES = 16 * 1024 * 1024
+const REDIRECT_STATUS_CODES = new Set([301, 302, 303, 307, 308])
+const NON_RETRYABLE_NETWORK_ERRORS = new Set([
+  'NETWORK_URL_INVALID',
+  'NETWORK_UNSUPPORTED_PROTOCOL',
+  'NETWORK_LOCAL_ACCESS_DENIED',
+  'NETWORK_INTERNET_ACCESS_DENIED',
+  'NETWORK_REDIRECT_LIMIT_EXCEEDED',
+  'NETWORK_PINNED_URL_INVALID',
+  'NETWORK_PINNED_POLICY_INVALID',
+  'NETWORK_RESPONSE_TOO_LARGE'
+])
+
+function assertHttpNetworkUrl(rawUrl: string): URL {
+  let parsed: URL
+  try {
+    parsed = new URL(rawUrl)
+  } catch {
+    throw new Error('NETWORK_URL_INVALID')
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw new Error('NETWORK_UNSUPPORTED_PROTOCOL')
+  }
+  return parsed
+}
+
+function stripCrossOriginSensitiveHeaders(
+  headers: Record<string, string> | undefined
+): Record<string, string> | undefined {
+  if (!headers) return undefined
+  const filtered: Record<string, string> = {}
+  for (const [key, value] of Object.entries(headers)) {
+    const lower = key.toLowerCase()
+    if (lower === 'authorization' || lower === 'cookie' || lower === 'proxy-authorization') {
+      continue
+    }
+    filtered[key] = value
+  }
+  return filtered
 }
 
 export type NetworkFetchInit = RequestInit & {
@@ -593,9 +653,16 @@ export class NetworkService {
   private readonly guard = createNetworkGuard(DEFAULT_NETWORK_CONFIG.cooldown)
   private readonly sessionCache = new Map<string, Session>()
   private readonly sessionProxyCache = new Map<string, string>()
-  private readonly allowedRoots = getAllowedLocalFileRoots({ includeCwd: true })
+  private readonly allowedRoots = getAllowedLocalFileRoots()
   private readonly statusListeners = new Set<(payload: NetworkLifecycleStatusPayload) => void>()
+  private readonly resolveHostAddresses: NetworkDnsLookup
   private lastStatus: NetworkLifecycleStatusPayload | null = null
+
+  constructor(options: { dnsLookup?: NetworkDnsLookup } = {}) {
+    this.resolveHostAddresses =
+      options.dnsLookup ??
+      (async (hostname: string) => await dnsLookup(hostname, { all: true, verbatim: true }))
+  }
 
   private getConfigFromSettings(): NetworkConfigSnapshot {
     const appSettings = getMainConfig(StorageList.APP_SETTING) as AppSetting | undefined
@@ -657,7 +724,7 @@ export class NetworkService {
       return response.data
     }
 
-    const localPath = this.resolveReadableLocalPath(source)
+    const localPath = await this.resolveReadableLocalPath(source)
 
     try {
       const encoding = (options.encoding || 'utf-8') as BufferEncoding
@@ -700,7 +767,7 @@ export class NetworkService {
       return response.data
     }
 
-    const localPath = this.resolveReadableLocalPath(source)
+    const localPath = await this.resolveReadableLocalPath(source)
 
     try {
       const timeoutMs =
@@ -733,7 +800,7 @@ export class NetworkService {
    * `readBinary`.
    */
   async readLocalFileHead(source: string, maxBytes: number): Promise<Uint8Array> {
-    const localPath = this.resolveReadableLocalPath(source)
+    const localPath = await this.resolveReadableLocalPath(source)
     const limit = Math.max(0, Math.floor(maxBytes))
     const handle = await fs.open(localPath, 'r')
     try {
@@ -749,16 +816,53 @@ export class NetworkService {
    * A local source's path once it may be read: inside an allowed root, or carrying the short-lived
    * tfile grant a CoreBox preview reads through, which is what lets it show a file elsewhere.
    */
-  private resolveReadableLocalPath(source: string): string {
+  private async resolveReadableLocalPath(source: string): Promise<string> {
     const localPath = resolveLocalFilePath(source)
     if (!localPath) {
       throw new Error('NETWORK_UNSUPPORTED_FILE_SOURCE')
     }
-    const previewGrantAuthorized = isTfilePreviewGrantAuthorized(source, localPath)
-    if (!isAllowedLocalFilePath(localPath, this.allowedRoots) && !previewGrantAuthorized) {
+    const normalizedPath = normalizeAbsolutePath(localPath)
+    if (!normalizedPath) {
       throw new Error('NETWORK_FILE_FORBIDDEN')
     }
-    return localPath
+    let previewGrantAuthorized = isTfilePreviewGrantAuthorized(source, normalizedPath)
+    if (
+      previewGrantAuthorized &&
+      typeof fs.lstat === 'function' &&
+      typeof fs.realpath === 'function'
+    ) {
+      try {
+        const stat = await fs.lstat(normalizedPath)
+        const canonical = normalizeAbsolutePath(await fs.realpath(normalizedPath))
+        previewGrantAuthorized =
+          stat.isFile() &&
+          canonical === normalizedPath &&
+          isTfilePreviewGrantAuthorized(source, normalizedPath)
+      } catch {
+        previewGrantAuthorized = false
+      }
+    }
+    if (previewGrantAuthorized) {
+      return normalizedPath
+    }
+    if (!isAllowedLocalFilePath(normalizedPath, this.allowedRoots)) {
+      throw new Error('NETWORK_FILE_FORBIDDEN')
+    }
+    const canonical =
+      typeof resolveCanonicalLocalFilePath === 'function'
+        ? await resolveCanonicalLocalFilePath(normalizedPath)
+        : { canonicalPath: normalizedPath, exists: false }
+    if (!canonical) {
+      throw new Error('NETWORK_FILE_FORBIDDEN')
+    }
+    const canonicalRoots =
+      typeof canonicalizeLocalFileRoots === 'function'
+        ? await canonicalizeLocalFileRoots(this.allowedRoots)
+        : this.allowedRoots
+    if (!isAllowedLocalFilePath(canonical.canonicalPath, canonicalRoots)) {
+      throw new Error('NETWORK_FILE_FORBIDDEN')
+    }
+    return canonical.canonicalPath
   }
 
   async request<T = unknown>(options: NetworkRequestOptions): Promise<NetworkResponse<T>> {
@@ -766,6 +870,7 @@ export class NetworkService {
     if (responseType === 'stream') {
       throw new Error('NETWORK_STREAM_NOT_SUPPORTED_FOR_TYPED_RESPONSE')
     }
+    assertHttpNetworkUrl(appendQuery(options.url, options.query))
 
     return await this.executeWithPolicies(options, async () => {
       const timeoutMs = resolveRequestTimeoutMs(
@@ -801,6 +906,7 @@ export class NetworkService {
     if (responseType === 'stream') {
       throw new Error('NETWORK_STREAM_NOT_SUPPORTED_FOR_TYPED_RESPONSE')
     }
+    assertHttpNetworkUrl(appendQuery(options.url, options.query))
 
     return await this.executeWithPolicies(options, async () => {
       const timeoutMs = resolveRequestTimeoutMs(
@@ -826,6 +932,224 @@ export class NetworkService {
       } finally {
         abortContext.dispose()
       }
+    })
+  }
+
+  /**
+   * Executes an HTTP(S) request on behalf of an isolated plugin caller.
+   *
+   * - Enforces `http:`/`https:` scheme only.
+   * - Never shares the host's persistent Chromium session partition or cookies.
+   * - Validates DNS-resolved IPs and re-validates every redirect hop against `allowLocal` /
+   *   `allowInternet`, pinning direct connections to validated IPs to prevent DNS rebinding.
+   */
+  async requestForPlugin<T = unknown>(
+    options: NetworkRequestOptions,
+    policy: PluginNetworkRequestPolicy
+  ): Promise<NetworkResponse<T>> {
+    const responseType = options.responseType ?? 'json'
+    if (responseType === 'stream') {
+      throw new Error('NETWORK_STREAM_NOT_SUPPORTED_FOR_TYPED_RESPONSE')
+    }
+
+    const allowLocal = policy.allowLocal
+    const allowInternet = policy.allowInternet ?? true
+    const maxRedirects = policy.maxRedirects ?? MAX_PLUGIN_REDIRECT_HOPS
+    const maxResponseBytes = policy.maxResponseBytes ?? DEFAULT_PLUGIN_MAX_RESPONSE_BYTES
+    const config = this.getConfigFromSettings()
+    const proxyConfig = mergeProxyConfig(config.proxy, options.proxyOverride)
+
+    const resolveAndValidateTarget = async (
+      rawUrl: string
+    ): Promise<{
+      parsed: URL
+      addresses: string[]
+    }> => {
+      const parsed = assertHttpNetworkUrl(rawUrl)
+      const host = parsed.hostname.replace(/^\[|\]$/g, '')
+      const hostIsLocal = isLocalHostname(host)
+      if (hostIsLocal && !allowLocal) {
+        throw new Error('NETWORK_LOCAL_ACCESS_DENIED')
+      }
+      if (!hostIsLocal && !allowInternet) {
+        throw new Error('NETWORK_INTERNET_ACCESS_DENIED')
+      }
+
+      if (isIP(host) !== 0) {
+        const ipIsLocal = isLocalIpAddress(host)
+        if (ipIsLocal && !allowLocal) {
+          throw new Error('NETWORK_LOCAL_ACCESS_DENIED')
+        }
+        if (!ipIsLocal && !allowInternet) {
+          throw new Error('NETWORK_INTERNET_ACCESS_DENIED')
+        }
+        return { parsed, addresses: [host] }
+      }
+
+      const records = await this.resolveHostAddresses(host)
+      const addresses = [
+        ...new Set(records.map((entry) => entry.address).filter((addr) => isIP(addr) !== 0))
+      ]
+      if (addresses.length === 0) {
+        throw new Error('NETWORK_DNS_RESOLUTION_FAILED')
+      }
+      const anyLocal = addresses.some((addr) => isLocalIpAddress(addr))
+      if (anyLocal && !allowLocal) {
+        throw new Error('NETWORK_LOCAL_ACCESS_DENIED')
+      }
+      if (!anyLocal && !allowInternet) {
+        throw new Error('NETWORK_INTERNET_ACCESS_DENIED')
+      }
+      return { parsed, addresses }
+    }
+
+    const initialUrl = appendQuery(options.url, options.query)
+    assertHttpNetworkUrl(initialUrl)
+
+    // When a custom proxy is configured, route through a non-persistent per-plugin session with
+    // credentials omitted and manual redirect validation.
+    if (proxyConfig.mode === 'custom') {
+      return await this.executeWithPolicies(options, async () => {
+        const timeoutMs = resolveRequestTimeoutMs(options.timeoutMs, config.timeoutMs)
+        const abortContext = createNetworkAbortContext(options.signal, timeoutMs)
+        try {
+          let currentUrl = initialUrl
+          let currentMethod = (
+            options.method ?? 'GET'
+          ).toUpperCase() as NetworkRequestOptions['method']
+          let currentHeaders = options.headers
+          let currentBody = options.body
+          const partitionKey = `plugin:${policy.pluginName}`
+
+          for (let hop = 0; hop <= maxRedirects; hop += 1) {
+            await resolveAndValidateTarget(currentUrl)
+            const response = await this.executeFetch(
+              {
+                ...options,
+                url: currentUrl,
+                query: undefined,
+                method: currentMethod,
+                headers: currentHeaders,
+                body: currentBody,
+                validateStatus: [
+                  ...(options.validateStatus ?? Array.from({ length: 100 }, (_, i) => 200 + i)),
+                  ...REDIRECT_STATUS_CODES
+                ]
+              },
+              'manual',
+              abortContext,
+              { partitionKey, omitCredentials: true }
+            )
+            if (REDIRECT_STATUS_CODES.has(response.status)) {
+              const location = response.headers.get('location')
+              await response.body?.cancel().catch(() => undefined)
+              if (!location) {
+                throw new NetworkHttpStatusError(response.status, response.statusText, currentUrl)
+              }
+              if (hop === maxRedirects) {
+                throw new Error('NETWORK_REDIRECT_LIMIT_EXCEEDED')
+              }
+              const nextUrl = new URL(location, currentUrl).toString()
+              if (new URL(nextUrl).origin !== new URL(currentUrl).origin) {
+                currentHeaders = stripCrossOriginSensitiveHeaders(currentHeaders)
+              }
+              if (
+                response.status === 303 ||
+                ((response.status === 301 || response.status === 302) && currentMethod === 'POST')
+              ) {
+                currentMethod = 'GET'
+                currentBody = undefined
+              }
+              currentUrl = nextUrl
+              continue
+            }
+
+            if (!isSuccessStatus(response.status, options.validateStatus)) {
+              await response.body?.cancel().catch(() => undefined)
+              throw new NetworkHttpStatusError(response.status, response.statusText, response.url)
+            }
+            const headers = normalizeHeaders(response.headers)
+            const data = (await this.parseResponseBody(response, responseType)) as T
+            return {
+              status: response.status,
+              statusText: response.statusText,
+              headers,
+              data,
+              url: response.url,
+              ok: response.ok
+            }
+          }
+          throw new Error('NETWORK_REDIRECT_LIMIT_EXCEEDED')
+        } catch (error) {
+          throw projectNetworkRequestError(error, abortContext)
+        } finally {
+          abortContext.dispose()
+        }
+      })
+    }
+
+    // Direct / system-direct path: DNS-pinned per-hop execution without Chromium cookie jar or cache.
+    return await this.executeWithPolicies(options, async () => {
+      let currentUrl = initialUrl
+      let currentMethod = (options.method ?? 'GET').toUpperCase() as NetworkRequestOptions['method']
+      let currentHeaders = options.headers
+      let currentBody = options.body
+      const baseValidStatuses =
+        options.validateStatus ?? Array.from({ length: 100 }, (_, index) => 200 + index)
+      const hopValidStatuses = Array.from(new Set([...baseValidStatuses, ...REDIRECT_STATUS_CODES]))
+
+      for (let hop = 0; hop <= maxRedirects; hop += 1) {
+        const { parsed, addresses } = await resolveAndValidateTarget(currentUrl)
+        const hopResponse = await this.executePinnedRequest(
+          {
+            ...options,
+            url: currentUrl,
+            query: undefined,
+            method: currentMethod,
+            headers: currentHeaders,
+            body: currentBody,
+            validateStatus: hopValidStatuses
+          },
+          {
+            resolvedAddresses: addresses,
+            maxResponseBytes
+          }
+        )
+
+        if (REDIRECT_STATUS_CODES.has(hopResponse.status)) {
+          const location = hopResponse.headers.location
+          if (!location) {
+            throw new NetworkHttpStatusError(hopResponse.status, hopResponse.statusText, currentUrl)
+          }
+          if (hop === maxRedirects) {
+            throw new Error('NETWORK_REDIRECT_LIMIT_EXCEEDED')
+          }
+          const nextParsed = assertHttpNetworkUrl(new URL(location, parsed).toString())
+          if (nextParsed.origin !== parsed.origin) {
+            currentHeaders = stripCrossOriginSensitiveHeaders(currentHeaders)
+          }
+          if (
+            hopResponse.status === 303 ||
+            ((hopResponse.status === 301 || hopResponse.status === 302) && currentMethod === 'POST')
+          ) {
+            currentMethod = 'GET'
+            currentBody = undefined
+          }
+          currentUrl = nextParsed.toString()
+          continue
+        }
+
+        if (!isSuccessStatus(hopResponse.status, options.validateStatus)) {
+          throw new NetworkHttpStatusError(
+            hopResponse.status,
+            hopResponse.statusText,
+            hopResponse.url
+          )
+        }
+        return hopResponse as NetworkResponse<T>
+      }
+
+      throw new Error('NETWORK_REDIRECT_LIMIT_EXCEEDED')
     })
   }
 
@@ -987,6 +1311,7 @@ export class NetworkService {
     options: NetworkRequestOptions,
     redirect: RequestRedirect
   ): Promise<NetworkStreamResponse> {
+    assertHttpNetworkUrl(appendQuery(options.url, options.query))
     const timeoutMode = options.streamTimeoutMode ?? 'deadline'
     if (timeoutMode === 'caller-signal' && !options.signal) {
       throw new Error('NETWORK_CALLER_SIGNAL_REQUIRED')
@@ -1334,6 +1659,10 @@ export class NetworkService {
       return false
     }
 
+    if (error instanceof Error && NON_RETRYABLE_NETWORK_ERRORS.has(error.message)) {
+      return false
+    }
+
     if (error instanceof NetworkHttpStatusError) {
       return (retryPolicy.retryableStatusCodes ?? []).includes(error.status)
     }
@@ -1492,26 +1821,32 @@ export class NetworkService {
   private async executeFetch(
     options: NetworkRequestOptions,
     redirect: RequestRedirect,
-    abortContext: NetworkAbortContext
+    abortContext: NetworkAbortContext,
+    isolation?: { partitionKey: string; omitCredentials: boolean }
   ): Promise<Response> {
     const config = this.getConfigFromSettings()
     const proxyConfig = mergeProxyConfig(config.proxy, options.proxyOverride)
     const targetUrl = appendQuery(options.url, options.query)
+    assertHttpNetworkUrl(targetUrl)
 
-    const sessionInstance = await this.getSession(proxyConfig)
+    const sessionInstance = await this.getSession(proxyConfig, isolation?.partitionKey)
     const method = (options.method ?? 'GET').toUpperCase()
     const headers = new Headers(options.headers ?? {})
     const body = getBody(method, options.body, headers)
 
     let response: Response
     try {
-      response = await sessionInstance.fetch(targetUrl, {
+      const fetchInit: RequestInit = {
         method,
         headers,
         body,
         redirect,
         signal: abortContext.signal
-      })
+      }
+      if (isolation?.omitCredentials) {
+        fetchInit.credentials = 'omit'
+      }
+      response = await sessionInstance.fetch(targetUrl, fetchInit)
     } catch (error) {
       throw projectNetworkRequestError(error, abortContext)
     }
@@ -1556,15 +1891,22 @@ export class NetworkService {
     }
   }
 
-  private async getSession(proxyConfig: NetworkProxyConfig): Promise<Session> {
-    const key = this.getProxyConfigKey(proxyConfig)
+  private async getSession(
+    proxyConfig: NetworkProxyConfig,
+    partitionScope?: string
+  ): Promise<Session> {
+    const proxyKey = this.getProxyConfigKey(proxyConfig)
+    const key = partitionScope ? `${partitionScope}|${proxyKey}` : proxyKey
     const existing = this.sessionCache.get(key)
     if (existing) {
       await this.ensureProxy(existing, key, proxyConfig)
       return existing
     }
 
-    const partition = `persist:tuff-network-${createHash('sha1').update(key).digest('hex').slice(0, 16)}`
+    const hash = createHash('sha1').update(key).digest('hex').slice(0, 16)
+    const partition = partitionScope
+      ? `tuff-plugin-network-${hash}`
+      : `persist:tuff-network-${hash}`
     const created = session.fromPartition(partition)
     this.sessionCache.set(key, created)
     await this.ensureProxy(created, key, proxyConfig)

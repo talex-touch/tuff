@@ -109,6 +109,7 @@ export const API_PERMISSION_MAPPINGS: ApiPermissionMapping[] = [
   // Native APIs
   { pattern: 'native:screenshot:*', permissions: ['window.capture'] },
   { pattern: 'native:file-index:*', permissions: ['fs.index'] },
+  { pattern: 'native:file:open', permissions: ['fs.execute'] },
   { pattern: 'native:file:*', permissions: ['fs.read'] },
   { pattern: 'native:media:*', permissions: ['media.read'] },
 

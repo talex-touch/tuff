@@ -12,22 +12,15 @@ import type { TalexEvents } from '../../core/eventbus/touch-event'
 import { resolveMainRuntime } from '../../core/runtime-accessor'
 import { BaseModule } from '../abstract-base-module'
 import { getNetworkService } from './network-service'
-import type { HandlerContext, PluginActivationIdentity } from '@talex-touch/utils/transport/main'
+import type { HandlerContext } from '@talex-touch/utils/transport/main'
+import { isAuthoritativePluginContext } from '@talex-touch/utils/transport/security/plugin-identity'
 import { withPermission } from '../permission/channel-guard'
+import { getPermissionModule } from '../permission/permission-module-ref'
+import { resolvePermissionPluginDeclaredSdkApi } from '../permission/permission-ports'
 import { idleBudgetCoordinator, isStatePausedFor } from '../../service/idle-budget-coordinator'
-import { classifyNetworkTarget } from '../../utils/network-target-policy'
+import { classifyNetworkTarget, isHttpUrl } from '../../utils/network-target-policy'
 
 const NETWORK_STATUS_POLL_INTERVAL_MS = 5000
-
-interface PluginViewNetworkChannelData {
-  data?: unknown
-  pluginIdentity?: PluginActivationIdentity
-  header?: {
-    event?: {
-      sender?: HandlerContext['sender']
-    }
-  }
-}
 
 const NETWORK_RESPONSE_TYPES: Record<string, true> = {
   json: true,
@@ -38,7 +31,7 @@ const NETWORK_RESPONSE_TYPES: Record<string, true> = {
 
 function isPluginViewNetworkRequest(value: unknown): value is NetworkRequest {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false
-  if (!('url' in value) || typeof value.url !== 'string' || !value.url.trim()) return false
+  if (!('url' in value) || typeof value.url !== 'string' || !isHttpUrl(value.url)) return false
   if ('method' in value && typeof value.method !== 'string') return false
   if (
     'responseType' in value &&
@@ -54,6 +47,17 @@ function isPluginViewNetworkRequest(value: unknown): value is NetworkRequest {
     if (Object.values(value.headers).some((header) => typeof header !== 'string')) return false
   }
   return true
+}
+
+async function hasPluginNetworkPermission(
+  pluginId: string,
+  permissionId: 'network.local' | 'network.internet'
+): Promise<boolean> {
+  const permModule = getPermissionModule()
+  if (!permModule) return false
+  const declaredSdkApi = await resolvePermissionPluginDeclaredSdkApi(pluginId)
+  if (typeof declaredSdkApi !== 'number') return false
+  return permModule.getGuard().check(pluginId, permissionId, declaredSdkApi).allowed === true
 }
 
 function resolveKeyManager(value: unknown): unknown {
@@ -116,21 +120,33 @@ export class NetworkModule extends BaseModule {
     // escaping its own view policy.
     const guarded = <TPayload, TResult>(
       handler: (payload: TPayload, context: HandlerContext) => Promise<TResult>,
-      readTarget: (payload: TPayload) => unknown
+      readTarget: (payload: TPayload) => unknown,
+      options: { allowNonHttp?: boolean } = {}
     ) => {
       const forLocal = withPermission<TPayload, TResult>(
-        { permissionId: 'network.local', errorMessage: 'Permission network.local required' },
+        {
+          permissionId: 'network.local',
+          errorMessage: 'Permission network.local required',
+          failClosedForPlugin: true
+        },
         handler
       )
       const forInternet = withPermission<TPayload, TResult>(
-        { permissionId: 'network.internet', errorMessage: 'Permission network.internet required' },
+        {
+          permissionId: 'network.internet',
+          errorMessage: 'Permission network.internet required',
+          failClosedForPlugin: true
+        },
         handler
       )
 
       return async (payload: TPayload, context: HandlerContext): Promise<TResult> => {
         const target = classifyNetworkTarget(readTarget(payload))
-        // A local file source is not a network request; the local-file allowlist governs it.
+        // Local file sources are only valid on readText/readBinary, never on NetworkEvents.api.request.
         if (target === 'non-http') {
+          if (!options.allowNonHttp) {
+            throw new Error('NETWORK_UNSUPPORTED_PROTOCOL')
+          }
           return await handler(payload, context)
         }
         const wrapped = target === 'local' ? forLocal : forInternet
@@ -138,46 +154,51 @@ export class NetworkModule extends BaseModule {
       }
     }
 
-    const handlePluginViewNetworkRequest = async (event: PluginViewNetworkChannelData) => {
-      const identity = event.pluginIdentity
-      const sender = event.header?.event?.sender
-      if (!identity || !sender || !isPluginViewNetworkRequest(event.data)) {
-        throw new Error('PLUGIN_NETWORK_REQUEST_INVALID')
-      }
-      return await transport.invoke(NetworkEvents.api.request, event.data, {
-        sender,
-        plugin: {
-          name: identity.name,
-          uniqueKey: identity.key
-        }
-      })
-    }
-
     this.disposers.push(
-      runtime.channel.regChannel(
-        'plugin',
-        NetworkEvents.api.request.toEventName(),
-        handlePluginViewNetworkRequest
-      ),
       transport.on(
         NetworkEvents.api.request,
         guarded(
-          async (request) => await service.request(request),
-          (request) => (request as { url?: unknown } | undefined)?.url
+          async (request, context) => {
+            if (context.plugin) {
+              if (
+                !isAuthoritativePluginContext(context.plugin) ||
+                !isPluginViewNetworkRequest(request)
+              ) {
+                throw new Error('PLUGIN_NETWORK_REQUEST_INVALID')
+              }
+              const target = classifyNetworkTarget(request.url)
+              const allowLocal =
+                target === 'local' ||
+                (await hasPluginNetworkPermission(context.plugin.name, 'network.local'))
+              const allowInternet =
+                target === 'internet' ||
+                (await hasPluginNetworkPermission(context.plugin.name, 'network.internet'))
+              return await service.requestForPlugin(request, {
+                pluginName: context.plugin.name,
+                allowLocal,
+                allowInternet
+              })
+            }
+            return await service.request(request)
+          },
+          (request) => (request as { url?: unknown } | undefined)?.url,
+          { allowNonHttp: false }
         )
       ),
       transport.on(
         NetworkEvents.api.readText,
         guarded(
           async (payload) => await service.readText(payload.source, payload.options),
-          (payload) => payload?.source
+          (payload) => payload?.source,
+          { allowNonHttp: true }
         )
       ),
       transport.on(
         NetworkEvents.api.readBinary,
         guarded(
           async (payload) => await service.readBinary(payload.source, payload.options),
-          (payload) => payload?.source
+          (payload) => payload?.source,
+          { allowNonHttp: true }
         )
       ),
       transport.on(NetworkEvents.api.toTfileUrl, (payload) => service.toTfileUrl(payload.source)),

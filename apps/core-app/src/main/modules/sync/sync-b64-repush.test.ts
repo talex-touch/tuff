@@ -94,11 +94,15 @@ vi.mock('../storage', async () => {
   }
 })
 
+import { saveConfig } from '../storage'
+import { pluginModule } from '../plugin/plugin-module'
 import { __syncMigrationTestHooks } from './index'
 
 describe('sync b64 migration payload repush marker', () => {
   afterEach(() => {
     __syncMigrationTestHooks.resetDirtyStateForTest()
+    vi.mocked(saveConfig).mockClear()
+    ;(pluginModule as unknown as { pluginManager: unknown }).pluginManager = []
   })
 
   it('marks b64 migration reads dirty and schedules an encrypted repush', () => {
@@ -108,5 +112,74 @@ describe('sync b64 migration payload repush marker', () => {
 
     expect(__syncMigrationTestHooks.isDirtyForTest('app-setting')).toBe(true)
     expect(__syncMigrationTestHooks.hasScheduledPushForTest()).toBe(true)
+  })
+
+  it('rejects pulled non-sync storage keys and non-syncable plugin files', async () => {
+    const savePluginFile = vi.fn(() => ({ success: true }))
+    const deletePluginFile = vi.fn(() => ({ success: true }))
+    const fakePlugin = {
+      name: 'alpha',
+      isPluginStorageSyncFile: (fileName: string) => fileName === 'allowed.json',
+      getPluginFile: vi.fn(() => ({})),
+      savePluginFile,
+      deletePluginFile
+    }
+    ;(pluginModule as unknown as { pluginManager: unknown }).pluginManager = {
+      getPluginByName: (name: string) => (name === 'alpha' ? fakePlugin : undefined)
+    }
+
+    const b64Payload = `b64:${Buffer.from(JSON.stringify({ hacked: true }), 'utf8').toString('base64')}`
+    const applied = await __syncMigrationTestHooks.applyPulledStorageItemsForTest(
+      [
+        {
+          item_id: 'storage::arbitrary-local-config.json',
+          type: 'storage.snapshot',
+          schema_version: 1,
+          payload_enc: b64Payload,
+          payload_ref: null,
+          meta_plain: { qualified_name: 'arbitrary-local-config.json' },
+          payload_size: b64Payload.length,
+          updated_at: new Date().toISOString(),
+          deleted_at: null,
+          op_seq: 1,
+          op_hash: 'h1',
+          op_type: 'upsert'
+        },
+        {
+          item_id: 'storage::plugin::alpha::secrets.json',
+          type: 'storage.snapshot',
+          schema_version: 1,
+          payload_enc: b64Payload,
+          payload_ref: null,
+          meta_plain: { qualified_name: 'plugin::alpha::secrets.json' },
+          payload_size: b64Payload.length,
+          updated_at: new Date().toISOString(),
+          deleted_at: null,
+          op_seq: 2,
+          op_hash: 'h2',
+          op_type: 'upsert'
+        },
+        {
+          item_id: 'storage::plugin::alpha::secrets.json',
+          type: 'storage.snapshot',
+          schema_version: 1,
+          payload_enc: null,
+          payload_ref: null,
+          meta_plain: { qualified_name: 'plugin::alpha::secrets.json' },
+          payload_size: 0,
+          updated_at: new Date().toISOString(),
+          deleted_at: new Date().toISOString(),
+          op_seq: 3,
+          op_hash: 'h3',
+          op_type: 'delete'
+        }
+      ] as never,
+      {} as never
+    )
+
+    expect(applied).toBe(0)
+    expect(saveConfig).not.toHaveBeenCalled()
+    expect(savePluginFile).not.toHaveBeenCalled()
+    expect(deletePluginFile).not.toHaveBeenCalled()
   })
 })

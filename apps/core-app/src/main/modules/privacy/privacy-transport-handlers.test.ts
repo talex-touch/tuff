@@ -487,4 +487,94 @@ describe('privacy typed transport handlers', () => {
     expect(service.backupSecretsWrite).toHaveBeenCalledWith(password)
     expect(JSON.stringify(service)).not.toContain(password)
   })
+
+  it('accepts live main-frame 4-key HandlerContext and rejects subframes, detached, foreign, or null senderFrame', async () => {
+    const harness = createTransportHarness()
+    const service = createService()
+    registerPrivacyTransportHandlers(harness.transport as never, service as never)
+    const handler = harness.handlers.get(PrivacyEvents.summary.get.toEventName())!
+
+    const mainFrame = { parent: null, detached: false }
+    const liveSender = { id: 99, mainFrame, isDestroyed: () => false }
+
+    await expect(
+      handler(
+        { operation: 'summary.get', categories: ['clipboard-history'] },
+        {
+          sender: liveSender,
+          senderFrame: mainFrame,
+          eventName: PrivacyEvents.summary.get.toEventName(),
+          plugin: undefined
+        }
+      )
+    ).resolves.toMatchObject({ ok: true })
+    expect(service.getSummary).toHaveBeenCalledTimes(1)
+
+    // Subframe
+    await expect(
+      handler(
+        { operation: 'summary.get', categories: ['clipboard-history'] },
+        {
+          sender: liveSender,
+          senderFrame: { parent: mainFrame, detached: false },
+          eventName: PrivacyEvents.summary.get.toEventName(),
+          plugin: undefined
+        }
+      )
+    ).resolves.toEqual({ ok: false, code: 'PRIVACY_REQUEST_INVALID', retryable: false })
+
+    // Detached frame
+    await expect(
+      handler(
+        { operation: 'summary.get', categories: ['clipboard-history'] },
+        {
+          sender: liveSender,
+          senderFrame: { parent: null, detached: true },
+          eventName: PrivacyEvents.summary.get.toEventName(),
+          plugin: undefined
+        }
+      )
+    ).resolves.toEqual({ ok: false, code: 'PRIVACY_REQUEST_INVALID', retryable: false })
+
+    // Foreign mainFrame object
+    await expect(
+      handler(
+        { operation: 'summary.get', categories: ['clipboard-history'] },
+        {
+          sender: liveSender,
+          senderFrame: { parent: null, detached: false },
+          eventName: PrivacyEvents.summary.get.toEventName(),
+          plugin: undefined
+        }
+      )
+    ).resolves.toEqual({ ok: false, code: 'PRIVACY_REQUEST_INVALID', retryable: false })
+
+    // Null senderFrame (destroyed frame)
+    await expect(
+      handler(
+        { operation: 'summary.get', categories: ['clipboard-history'] },
+        {
+          sender: liveSender,
+          senderFrame: null,
+          eventName: PrivacyEvents.summary.get.toEventName(),
+          plugin: undefined
+        }
+      )
+    ).resolves.toEqual({ ok: false, code: 'PRIVACY_REQUEST_INVALID', retryable: false })
+
+    // Destroyed sender
+    await expect(
+      handler(
+        { operation: 'summary.get', categories: ['clipboard-history'] },
+        {
+          sender: { id: 99, mainFrame, isDestroyed: () => true },
+          senderFrame: mainFrame,
+          eventName: PrivacyEvents.summary.get.toEventName(),
+          plugin: undefined
+        }
+      )
+    ).resolves.toEqual({ ok: false, code: 'PRIVACY_REQUEST_INVALID', retryable: false })
+
+    expect(service.getSummary).toHaveBeenCalledTimes(1)
+  })
 })
