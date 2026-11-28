@@ -73,6 +73,27 @@ describe('useUrlProcessor', () => {
     expect(mocks.openExternal).not.toHaveBeenCalled()
   })
 
+  it('intercepts protocol-relative external links (//evil.com and /\\evil.com) instead of treating them as same-origin', async () => {
+    dispose = await useUrlProcessor()
+
+    for (const rawHref of ['//evil.com/phish', '/\\evil.com/phish']) {
+      mocks.confirmExternalLinkOpen.mockClear()
+      mocks.openExternal.mockClear()
+      const link = document.createElement('a')
+      link.setAttribute('href', rawHref)
+      document.body.appendChild(link)
+
+      const click = new MouseEvent('click', { bubbles: true, cancelable: true })
+      link.dispatchEvent(click)
+      await Promise.resolve()
+      await Promise.resolve()
+
+      expect(click.defaultPrevented).toBe(true)
+      expect(mocks.confirmExternalLinkOpen).toHaveBeenCalledWith('http://evil.com/phish')
+      expect(mocks.openExternal).toHaveBeenCalledWith('http://evil.com/phish')
+    }
+  })
+
   it('stops intercepting clicks after the returned disposer is called', async () => {
     dispose = await useUrlProcessor()
     dispose()

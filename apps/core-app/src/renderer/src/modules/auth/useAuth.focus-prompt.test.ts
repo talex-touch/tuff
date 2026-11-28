@@ -221,4 +221,71 @@ describe('useAuth focus-prompt interval lifecycle', () => {
 
     wrapper.unmount()
   })
+
+  it('does not clobber a newer login UI state or show a spurious toast when a superseded retry rejects late', async () => {
+    const staleRetry = Promise.withResolvers<unknown>()
+    let loginCalls = 0
+    mocks.send.mockImplementation(async (event: string) => {
+      if (event === 'auth:session:getState') {
+        return { isLoaded: true, isSignedIn: false, user: null, sessionId: null }
+      }
+      if (event === 'auth:session:login') {
+        loginCalls += 1
+        if (loginCalls === 2) {
+          return staleRetry.promise
+        }
+        return {
+          initiated: true,
+          authorizeUrl: `https://example.test/auth/${loginCalls}`,
+          userCode: `CODE-${loginCalls}`
+        }
+      }
+      if (event === 'auth:session:cancelLogin') {
+        return { cancelled: true }
+      }
+      return null
+    })
+
+    const { toast } = await import('vue-sonner')
+    const { useAuth } = await import('./useAuth')
+    let auth!: ReturnType<typeof useAuth>
+
+    const wrapper = mount(
+      defineComponent({
+        setup() {
+          auth = useAuth()
+          return () => h('div')
+        }
+      })
+    )
+    await flushPromises()
+
+    // Start login #1, then trigger a retry (#2) that hangs in flight
+    const firstLogin = auth.loginWithBrowser()
+    await flushPromises()
+    const pendingRetry = auth.reopenBrowserLogin()
+
+    // Supersede with a fresh login (#3) that settles into 'waiting'
+    const newerLogin = auth.loginWithBrowser()
+    await flushPromises()
+    expect((await firstLogin).success).toBe(false)
+    expect(auth.authLoadingState.isLoggingIn).toBe(true)
+    expect(auth.authLoadingState.loginStage).toBe('waiting')
+
+    vi.mocked(toast.error).mockClear()
+
+    // Now the stale retry (#2) rejects late: active login #3 UI state must remain intact
+    staleRetry.reject(new Error('stale retry failed'))
+    await pendingRetry
+    await flushPromises()
+
+    expect(auth.authLoadingState.isLoggingIn).toBe(true)
+    expect(auth.authLoadingState.loginStage).toBe('waiting')
+    expect(toast.error).not.toHaveBeenCalled()
+
+    auth.cancelPendingBrowserLogin()
+    await newerLogin
+    expect(vi.getTimerCount()).toBe(0)
+    wrapper.unmount()
+  })
 })

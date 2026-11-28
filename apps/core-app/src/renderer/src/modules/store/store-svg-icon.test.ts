@@ -64,17 +64,19 @@ describe('store-svg-icon', () => {
     expect(withFragmentRef).toContain('xlink:href="#p"')
     expect(withFragmentRef).toContain('fill="url(#g)"')
 
-    // Nested/smuggled tags, animation handlers, style tags, namespace-prefixed hrefs, CSS escapes, and remote url() references are stripped
+    // Nested/smuggled tags, animation handlers, style tags, namespace-prefixed hrefs, foreign namespaces, CSS escapes, and remote url() references are stripped
     const nestedAttack = sanitizeStoreSvg(
-      '<svg xmlns="http://www.w3.org/2000/svg" xmlns:x="http://www.w3.org/1999/xlink"><style>@import url(https://evil.invalid/a.css);</style><animate onbegin="alert(1)" attributeName="href" to="javascript:alert(1)"/><set attributeName="onmouseover" to="alert(1)"/><image href="https://evil.invalid/track.png"/><use x:href="https://evil.invalid/x.svg#p"/><path style="fill:\\75 rl(https://evil.invalid/g#x)" fill="url (https://evil.invalid/g#x)" d="M0 0h2"/></svg>'
+      '<svg xmlns="http://www.w3.org/2000/svg" xmlns:x="http://www.w3.org/1999/xlink"><style>@import url(https://evil.invalid/a.css);</style><title xmlns="http://www.w3.org/1999/xhtml">xhtml-injected</title><animate onbegin="alert(1)" attributeName="href" to="javascript:alert(1)"/><set attributeName="onmouseover" to="alert(1)"/><image href="https://evil.invalid/track.png"/><use x:href="https://evil.invalid/x.svg#p"/><path style="fill:\\75\r\nrl(https://evil.invalid/g#x)" fill="url (https://evil.invalid/g#x)" d="M0 0h2"/><path style="background:image-\\73/*c*/et(https://evil.invalid/a.png 1x)" d="M1 1h1"/><path style="width:exp\\72/*c*/ession(alert(1)) /* unclosed" d="M2 2h1"/></svg>'
     )
     expect(nestedAttack).not.toContain('<style')
+    expect(nestedAttack).not.toContain('xhtml-injected')
     expect(nestedAttack).not.toContain('<animate')
     expect(nestedAttack).not.toContain('<set')
     expect(nestedAttack).not.toContain('<image')
     expect(nestedAttack).not.toContain('evil.invalid')
     expect(nestedAttack).not.toContain('onbegin')
     expect(nestedAttack).not.toContain('x:href')
+    expect(nestedAttack).not.toContain('style=')
     expect(nestedAttack).toContain('<path')
 
     expect(sanitizeStoreSvg('<svg xmlns="http://www.w3.org/2000/svg"><path></svg>')).toBe('')

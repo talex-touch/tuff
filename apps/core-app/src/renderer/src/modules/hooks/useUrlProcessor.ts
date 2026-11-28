@@ -28,10 +28,10 @@ export async function useUrlProcessor(): Promise<() => void> {
       return
     }
 
+    const isRelativeRootPath =
+      rawHref.startsWith('/') && !rawHref.startsWith('//') && !rawHref.startsWith('/\\')
     const isSameOriginOrLocal =
-      rawHref.startsWith('/') ||
-      parsed.origin === window.location.origin ||
-      isLocalhostUrl(parsed.href)
+      isRelativeRootPath || parsed.origin === window.location.origin || isLocalhostUrl(parsed.href)
 
     if (isSameOriginOrLocal) {
       return

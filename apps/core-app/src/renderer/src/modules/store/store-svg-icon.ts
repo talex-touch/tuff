@@ -63,23 +63,33 @@ function decodeSafeXmlEntities(value: string): string {
     .replace(/&apos;/gi, "'")
 }
 
+const SVG_NAMESPACE = 'http://www.w3.org/2000/svg'
+const XLINK_NAMESPACE = 'http://www.w3.org/1999/xlink'
+
 function decodeCssForSvgAttr(value: string): string {
-  return value
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/\\([0-9a-fA-F]{1,6})\s?/g, (_m, hex: string) => {
+  const normalized = value.replaceAll('\u0000', '').replace(/\r\n?|\f/g, '\n')
+  const withDelimiters = normalized.replace(/\/\*[\s\S]*?\*\//g, '\u0000')
+  return withDelimiters
+    .replace(/\\([0-9a-fA-F]{1,6})[ \t\n]?/g, (_m, hex: string) => {
       const code = Number.parseInt(hex, 16)
       return Number.isFinite(code) && code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : ''
     })
-    .replace(/\\([^\n\r\f])/g, '$1')
+    .replace(/\\([^\n])/g, '$1')
+    .replaceAll('\u0000', '')
 }
 
 function isSafeSvgAttribute(name: string, value: string): boolean {
   const lowerName = name.toLowerCase()
   const localName = lowerName.includes(':') ? lowerName.split(':').pop()! : lowerName
   const decodedValue = decodeSafeXmlEntities(value).replaceAll('\u0000', '').trim()
-  const cssDecodedValue = decodeCssForSvgAttr(decodedValue)
 
   if (localName.startsWith('on') || lowerName.startsWith('on')) return false
+  if (lowerName === 'xmlns') {
+    return decodedValue === SVG_NAMESPACE
+  }
+  if (lowerName.startsWith('xmlns:')) {
+    return decodedValue === SVG_NAMESPACE || decodedValue === XLINK_NAMESPACE
+  }
   if (
     localName === 'href' ||
     localName === 'src' ||
@@ -89,16 +99,21 @@ function isSafeSvgAttribute(name: string, value: string): boolean {
     return localName === 'href' && SAFE_SVG_FRAGMENT_RE.test(decodedValue)
   }
 
+  // Reject unclosed CSS comments inside attribute values.
+  if (decodedValue.replace(/\/\*[\s\S]*?\*\//g, '').includes('/*')) {
+    return false
+  }
+
+  const cssDecodedValue = decodeCssForSvgAttr(decodedValue)
+
   for (const candidate of [decodedValue, cssDecodedValue]) {
     const lowered = candidate.toLowerCase()
     if (
       lowered.includes('javascript:') ||
       lowered.includes('vbscript:') ||
       lowered.includes('data:') ||
-      lowered.includes('expression(') ||
-      lowered.includes('@import') ||
-      lowered.includes('image-set(') ||
-      lowered.includes('cross-fade(') ||
+      /\b(?:expression|image-set|cross-fade)\s*\(/i.test(lowered) ||
+      /@import\b/i.test(lowered) ||
       lowered.includes('-moz-binding') ||
       lowered.includes('behavior:')
     ) {
@@ -134,7 +149,8 @@ function sanitizeSvgWithDomParser(slice: string): string {
     const doc = new DOMParser().parseFromString(slice, 'image/svg+xml')
     if (
       doc.getElementsByTagName('parsererror').length > 0 ||
-      doc.documentElement?.localName?.toLowerCase() !== 'svg'
+      doc.documentElement?.localName?.toLowerCase() !== 'svg' ||
+      doc.documentElement?.namespaceURI !== SVG_NAMESPACE
     ) {
       return ''
     }
@@ -153,7 +169,7 @@ function sanitizeSvgWithDomParser(slice: string): string {
         if (child.nodeType === 1) {
           const childEl = child as Element
           const tag = (childEl.localName || childEl.tagName).toLowerCase()
-          if (!ALLOWED_SVG_ELEMENTS.has(tag)) {
+          if (childEl.namespaceURI !== SVG_NAMESPACE || !ALLOWED_SVG_ELEMENTS.has(tag)) {
             childEl.parentNode?.removeChild(childEl)
             continue
           }
@@ -202,7 +218,16 @@ function sanitizeSvgWithStrictXmlAllowlist(slice: string): string {
       continue
     }
 
-    if (!ALLOWED_SVG_ELEMENTS.has(localTag)) {
+    const hasForeignNamespace =
+      !isClosing &&
+      /\bxmlns\s*=\s*(?:"([^"]*)"|'([^']*)')/i.test(rawAttrs) &&
+      (() => {
+        const nsMatch = /\bxmlns\s*=\s*(?:"([^"]*)"|'([^']*)')/i.exec(rawAttrs)
+        const ns = (nsMatch?.[1] ?? nsMatch?.[2] ?? '').trim()
+        return ns !== SVG_NAMESPACE
+      })()
+
+    if (!ALLOWED_SVG_ELEMENTS.has(localTag) || hasForeignNamespace) {
       if (!isClosing && !isSelfClosing) {
         skipDepth = 1
       }

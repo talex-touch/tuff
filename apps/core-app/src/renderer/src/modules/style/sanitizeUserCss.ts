@@ -1,14 +1,19 @@
 function decodeCssForInspection(css: string): string {
-  // Strip CSS comments first (e.g. `u/*x*/rl(` or `@im/*x*/port`)
-  const withoutComments = css.replace(/\/\*[\s\S]*?\*\//g, '')
-  // Decode CSS hex escapes (`\75 rl` -> `url`) and single-char escapes (`\u` -> `u`)
-  return withoutComments
-    .replace(/\\([0-9a-fA-F]{1,6})\s?/g, (_match, hex: string) => {
+  // CSS Syntax L3 preprocessing: remove NULs and normalize CRLF/CR/FF to LF before escape decoding.
+  const normalized = css.replaceAll('\u0000', '').replace(/\r\n?|\f/g, '\n')
+  // Replace CSS comments with a NUL delimiter so hex escapes cannot merge across comment boundaries
+  // (e.g. `cross-\66/*c*/ade` stays `cross-\66\0ade` -> `cross-f\0ade` -> `cross-fade`).
+  const withDelimiters = normalized.replace(/\/\*[\s\S]*?\*\//g, '\u0000')
+  // Decode CSS hex escapes (`\75\nrl` or `\75 rl` -> `url`) and single-char escapes (`\u` -> `u`),
+  // then drop the NUL comment delimiters.
+  return withDelimiters
+    .replace(/\\([0-9a-fA-F]{1,6})[ \t\n]?/g, (_match, hex: string) => {
       const codePoint = Number.parseInt(hex, 16)
       if (!Number.isFinite(codePoint) || codePoint <= 0 || codePoint > 0x10ffff) return ''
       return String.fromCodePoint(codePoint)
     })
-    .replace(/\\([^\n\r\f])/g, '$1')
+    .replace(/\\([^\n])/g, '$1')
+    .replaceAll('\u0000', '')
 }
 
 /**

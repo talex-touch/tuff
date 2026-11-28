@@ -1735,14 +1735,16 @@ function evaluateWidgetComponent(
 }
 
 function decodeCssEscapesForCheck(css: string): string {
-  return css
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/\\([0-9a-fA-F]{1,6})\s?/g, (_match, hex: string) => {
+  const normalized = css.replaceAll('\u0000', '').replace(/\r\n?|\f/g, '\n')
+  const withDelimiters = normalized.replace(/\/\*[\s\S]*?\*\//g, '\u0000')
+  return withDelimiters
+    .replace(/\\([0-9a-fA-F]{1,6})[ \t\n]?/g, (_match, hex: string) => {
       const codePoint = Number.parseInt(hex, 16)
       if (!Number.isFinite(codePoint) || codePoint <= 0 || codePoint > 0x10ffff) return ''
       return String.fromCodePoint(codePoint)
     })
-    .replace(/\\([^\n\r\f])/g, '$1')
+    .replace(/\\([^\n])/g, '$1')
+    .replaceAll('\u0000', '')
 }
 
 function escapeCssAttributeValue(value: string): string {
@@ -1815,12 +1817,10 @@ export function sanitizeWidgetCss(styles: string): string {
     decoded.includes('</style') ||
     decoded.includes('<script') ||
     decoded.includes('</script') ||
-    decoded.includes('@import') ||
-    decoded.includes('expression(') ||
+    /@import\b/i.test(decoded) ||
+    /\b(?:expression|image-set|cross-fade)\s*\(/i.test(decoded) ||
     decoded.includes('-moz-binding') ||
-    decoded.includes('behavior:') ||
-    decoded.includes('image-set(') ||
-    decoded.includes('cross-fade(')
+    decoded.includes('behavior:')
   ) {
     return ''
   }

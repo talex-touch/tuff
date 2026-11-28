@@ -921,6 +921,16 @@ describe('widget-registry runtime hosts', () => {
   it('scopes injected widget CSS and strips exfiltration, breakout, and dangerous directives', async () => {
     expect(sanitizeWidgetCss('@import url("https://evil.invalid/x.css");')).toBe('')
     expect(sanitizeWidgetCss('body { background: \\75 rl(https://evil.invalid/p.png); }')).toBe('')
+    expect(
+      sanitizeWidgetCss('body { background: \\75\r\nrl(https://evil.invalid/leak.png); }')
+    ).toBe('')
+    expect(sanitizeWidgetCss('@\\69\r\nmport "https://evil.invalid/x.css";')).toBe('')
+    expect(sanitizeWidgetCss('body { background: cross-\\66/*c*/ade(a, b, 50%); }')).toBe('')
+    expect(sanitizeWidgetCss('body { width: exp\\72/*c*/ession(alert(1)); }')).toBe('')
+    expect(
+      sanitizeWidgetCss('body { background: image-\\73/*c*/et("https://evil.invalid/a.png" 1x); }')
+    ).toBe('')
+    expect(sanitizeWidgetCss('body { \\62/*c*/ehavior: xss.htc; }')).toBe('')
     expect(sanitizeWidgetCss('.x { color: red; } } body { display: none } .y {')).toBe('')
     expect(sanitizeWidgetCss('.ok { color: red; } /* unclosed')).toBe('')
     expect(

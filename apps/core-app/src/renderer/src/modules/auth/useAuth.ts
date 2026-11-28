@@ -729,6 +729,7 @@ async function retryPendingBrowserLogin(): Promise<void> {
     } else {
       clearTimeout(nextTimeoutId)
       window.clearInterval(nextCountdownId)
+      return
     }
     const errorMessage = resolveAuthErrorMessage(error, 'BROWSER_OPEN_FAILED', translateAuthError)
     authLoadingState.loginStage = 'failed'

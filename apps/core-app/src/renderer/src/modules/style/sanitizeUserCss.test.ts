@@ -26,5 +26,17 @@ describe('sanitizeUserCss', () => {
     expect(sanitizeUserCss('body { background: \\75 rl(https://evil.invalid/p); }')).toBe('')
     expect(sanitizeUserCss('\\40 import "https://evil.invalid/a.css";')).toBe('')
     expect(sanitizeUserCss('body { color: red; } /* unclosed comment')).toBe('')
+    // CRLF after hex escape (CSS Syntax L3 normalizes CRLF -> LF as single whitespace terminator)
+    expect(sanitizeUserCss('body { background: \\75\r\nrl(https://evil.invalid/leak.png); }')).toBe(
+      ''
+    )
+    expect(sanitizeUserCss('@\\69\r\nmport "https://evil.invalid/x.css";')).toBe('')
+    // Comment between hex escape and hex-letter continuation
+    expect(sanitizeUserCss('body { background: cross-\\66/*c*/ade(a, b, 50%); }')).toBe('')
+    expect(sanitizeUserCss('body { width: exp\\72/*c*/ession(alert(1)); }')).toBe('')
+    expect(
+      sanitizeUserCss('body { background: image-\\73/*c*/et("https://evil.invalid/a.png" 1x); }')
+    ).toBe('')
+    expect(sanitizeUserCss('body { \\62/*c*/ehavior: xss.htc; }')).toBe('')
   })
 })
