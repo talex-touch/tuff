@@ -14,7 +14,7 @@
 
   [官网](https://tuff.tagzxia.com) · [下载](https://github.com/talex-touch/tuff/releases) · [文档](https://tuff.tagzxia.com/docs) · [插件商店](https://tuff.tagzxia.com/store)
 
-  [English](./README.md) | 简体中文
+  [English](./README.md) | 简体中文 | [Türkçe](./README.tr.md)
 
 </div>
 
