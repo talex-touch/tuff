@@ -35,9 +35,11 @@ const claiming = ref(false)
 
 const stats = computed<ConsoleStatItem[]>(() => {
   const s = summary.value
-  const balance = s?.balance ?? s?.remaining ?? s?.personal?.balance ?? 0
-  const used = s?.used ?? s?.personal?.used ?? 0
-  const quota = s?.quota ?? s?.personal?.quota ?? 0
+  const quota = s?.user?.quota ?? s?.quota ?? s?.personal?.quota ?? 0
+  const used = s?.user?.used ?? s?.used ?? s?.personal?.used ?? 0
+  const balance = s?.user
+    ? Math.max(0, quota - used)
+    : (s?.balance ?? s?.remaining ?? s?.personal?.balance ?? Math.max(0, quota - used))
   return [
     { key: 'balance', label: t('dashboard.creditBalance'), value: formatNumber(balance, locale.value), iconClass: 'i-carbon-currency' },
     { key: 'used', label: t('dashboard.creditUsed'), value: formatNumber(used, locale.value), iconClass: 'i-carbon-chart-bar' },
@@ -152,7 +154,7 @@ onMounted(() => void loadSummaryAndPricing())
         @update:limit="ledgerList.setLimit($event)"
       >
         <template #cell-createdAt="{ row }">
-          {{ formatDateTime(row.createdAt, locale) }}
+          {{ formatDateTime(row.createdAt ?? row.created_at, locale) }}
         </template>
         <template #cell-delta="{ row }">
           <TxStatusBadge
@@ -162,7 +164,7 @@ onMounted(() => void loadSummaryAndPricing())
           />
         </template>
         <template #cell-balanceAfter="{ row }">
-          {{ row.balanceAfter !== null && row.balanceAfter !== undefined ? formatNumber(row.balanceAfter, locale) : '—' }}
+          {{ (row.balanceAfter ?? row.balance_after) !== null && (row.balanceAfter ?? row.balance_after) !== undefined ? formatNumber((row.balanceAfter ?? row.balance_after) as number, locale) : '—' }}
         </template>
       </ConsoleTable>
     </ConsoleSection>

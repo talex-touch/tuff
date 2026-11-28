@@ -48,7 +48,7 @@ export const API_ROUTES = {
     oauthGitHub: '/api/auth/signin/github',
     oauthLinuxDo: '/api/auth/signin/linuxdo',
     emailSignIn: '/api/auth/signin/email',
-    passwordSignIn: '/api/auth/signin/credentials',
+    credentialsSignIn: '/api/auth/signin/credentials',
     signOut: '/api/auth/signout',
   },
   passkeys: {
@@ -163,10 +163,8 @@ export const consoleApi = {
     apiPost<{ success: boolean }>(API_ROUTES.auth.bindEmail, payload),
   requestEmailSignIn: (payload: { email: string, callbackUrl?: string }) =>
     apiPost<{ ok?: boolean, url?: string }>(API_ROUTES.auth.emailSignIn, payload),
-  signInWithPassword: (payload: { email: string, password: string, callbackUrl?: string }) =>
-    apiPost<{ ok?: boolean, url?: string, user?: AuthUser }>(API_ROUTES.auth.passwordSignIn, payload),
   signInWithLoginToken: (payload: { loginToken: string, callbackUrl?: string }) =>
-    apiPost<{ ok?: boolean, url?: string }>(API_ROUTES.auth.passwordSignIn, payload),
+    apiPost<{ ok?: boolean, url?: string, user?: AuthUser }>(API_ROUTES.auth.credentialsSignIn, payload),
   signOut: () => apiPost<{ ok?: boolean }>(API_ROUTES.auth.signOut, {}),
   getPasskeyOptions: (email?: string) =>
     apiGet<Record<string, unknown>>(API_ROUTES.passkeys.options, email ? { email } : undefined),
@@ -251,7 +249,15 @@ export const consoleApi = {
   revokeTeamInvite: (id: string) =>
     apiDelete<{ success?: boolean }>(API_ROUTES.team.inviteById(id)),
   getTeamCreditsUsage: () =>
-    apiGet<{ used?: number, limit?: number, totalCredits?: number, members?: Array<Record<string, unknown>> }>(
+    apiGet<{
+      scope?: string
+      month?: string
+      totalUsed?: number
+      totalQuota?: number
+      used?: number
+      totalCredits?: number
+      users?: Array<Record<string, unknown>>
+    }>(
       API_ROUTES.team.creditsUsage,
     ),
   listMyInvitations: () =>
@@ -330,20 +336,48 @@ export const consoleApi = {
       API_ROUTES.admin.releases,
       params,
     ),
-  createRelease: (payload: { tag: string, name?: string, channel: string, notes?: string }) =>
-    apiPost<{ release: ReleaseItem }>(API_ROUTES.admin.releases, payload),
-  updateRelease: (tag: string, payload: { name?: string, channel?: string, notes?: string, status?: string }) =>
-    apiPatch<{ release: ReleaseItem }>(API_ROUTES.admin.releaseByTag(tag), payload),
+  createRelease: (payload: {
+    tag: string
+    name: string
+    version: string
+    channel: string
+    rollbackFromVersion: string
+    rollbackCompatible: boolean
+    notes: { en: string, zh: string }
+  }) => apiPost<{ release: ReleaseItem }>(API_ROUTES.admin.releases, payload),
+  updateRelease: (tag: string, payload: {
+    name?: string
+    channel?: string
+    notes?: { en: string, zh: string }
+    status?: string
+  }) => apiPatch<{ release: ReleaseItem }>(API_ROUTES.admin.releaseByTag(tag), payload),
   publishRelease: (tag: string) =>
     apiPost<{ release: ReleaseItem, message?: string }>(API_ROUTES.admin.publishRelease(tag), {}),
   deleteRelease: (tag: string) =>
     apiDelete<{ success?: boolean }>(API_ROUTES.admin.releaseByTag(tag)),
   listUpdates: (params?: { scope?: string, channel?: string }) =>
     apiGet<{ updates: UpdateAnnouncementItem[] }>(API_ROUTES.admin.updates, params),
-  createUpdate: (payload: { title: string, summary?: string, content?: string, type?: string, scope?: string, channel?: string }) =>
-    apiPost<{ update: UpdateAnnouncementItem }>(API_ROUTES.admin.updates, payload),
-  updateAnnouncement: (id: string, payload: { title?: string, summary?: string, content?: string, type?: string, scope?: string, channel?: string }) =>
-    apiPatch<{ update: UpdateAnnouncementItem }>(API_ROUTES.admin.updateById(id), payload),
+  createUpdate: (payload: {
+    type: 'news' | 'announcement'
+    scope: 'web' | 'system' | 'both'
+    channels: string[]
+    releaseTag: string | null
+    title: { en: string, zh: string }
+    summary: { en: string, zh: string }
+    timestamp: string
+    link: string
+    tags: string[]
+  }) => apiPost<{ update: UpdateAnnouncementItem }>(API_ROUTES.admin.updates, payload),
+  updateAnnouncement: (id: string, payload: {
+    type?: 'news' | 'announcement'
+    scope?: 'web' | 'system' | 'both'
+    channels?: string[]
+    title?: { en: string, zh: string }
+    summary?: { en: string, zh: string }
+    timestamp?: string
+    link?: string
+    tags?: string[]
+  }) => apiPatch<{ update: UpdateAnnouncementItem }>(API_ROUTES.admin.updateById(id), payload),
   deleteAnnouncement: (id: string) =>
     apiDelete<{ success?: boolean }>(API_ROUTES.admin.updateById(id)),
   getExchangeLatest: () => apiGet<ExchangeLatestResponse>(API_ROUTES.admin.exchangeLatest),

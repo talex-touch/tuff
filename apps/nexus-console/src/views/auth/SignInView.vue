@@ -23,9 +23,8 @@ const route = useRoute()
 const router = useRouter()
 const session = useSession()
 
-const activeTab = ref<'email' | 'password' | 'passkey'>('email')
+const activeTab = ref<'email' | 'passkey'>('email')
 const email = ref('')
-const password = ref('')
 const submitting = ref(false)
 const errorMessage = ref<string | null>(
   typeof route.query.error_description === 'string'
@@ -64,29 +63,6 @@ async function handleEmailSignIn() {
       path: '/verify-waiting',
       query: { email: trimmed, redirect_url: redirectTarget.value },
     })
-  }
-  catch (cause) {
-    errorMessage.value = resolveErrorMessage(cause, t('common.unknownError'))
-  }
-  finally {
-    submitting.value = false
-  }
-}
-
-async function handlePasswordSignIn() {
-  const trimmed = email.value.trim().toLowerCase()
-  if (!trimmed || !password.value)
-    return
-  submitting.value = true
-  errorMessage.value = null
-  try {
-    await consoleApi.signInWithPassword({
-      email: trimmed,
-      password: password.value,
-      callbackUrl: redirectTarget.value,
-    })
-    await session.refresh()
-    await router.replace(redirectTarget.value)
   }
   catch (cause) {
     errorMessage.value = resolveErrorMessage(cause, t('common.unknownError'))
@@ -147,11 +123,11 @@ async function handlePasskeySignIn() {
   <div class="SignInView">
     <div class="SignInView-Header">
       <h1 class="SignInView-Title">
-{{ t('auth.signInTitle') }}
-</h1>
+        {{ t('auth.signInTitle') }}
+      </h1>
       <p class="SignInView-Subtitle">
-{{ t('auth.signInSubtitle') }}
-</p>
+        {{ t('auth.signInSubtitle') }}
+      </p>
     </div>
 
     <TxAlert
@@ -190,8 +166,8 @@ async function handlePasskeySignIn() {
     <TxTabs v-model="activeTab">
       <TxTabItem name="email">
         <template #name>
-{{ t('auth.tabEmail') }}
-</template>
+          {{ t('auth.tabEmail') }}
+        </template>
         <form class="console-form-stack SignInView-Form" @submit.prevent="handleEmailSignIn">
           <ConsoleFormField :label="t('auth.emailLabel')" for-id="signin-email-link">
             <TuffInput
@@ -215,47 +191,10 @@ async function handlePasskeySignIn() {
         </form>
       </TxTabItem>
 
-      <TxTabItem name="password">
-        <template #name>
-{{ t('auth.tabPassword') }}
-</template>
-        <form class="console-form-stack SignInView-Form" @submit.prevent="handlePasswordSignIn">
-          <ConsoleFormField :label="t('auth.emailLabel')" for-id="signin-email-pw">
-            <TuffInput
-              id="signin-email-pw"
-              v-model="email"
-              type="email"
-              autocomplete="email"
-              :placeholder="t('auth.emailPlaceholder')"
-              :disabled="submitting"
-            />
-          </ConsoleFormField>
-          <ConsoleFormField :label="t('auth.passwordLabel')" for-id="signin-password">
-            <TuffInput
-              id="signin-password"
-              v-model="password"
-              type="password"
-              autocomplete="current-password"
-              :placeholder="t('auth.passwordPlaceholder')"
-              :disabled="submitting"
-            />
-          </ConsoleFormField>
-          <TxButton
-            variant="primary"
-            native-type="submit"
-            block
-            :loading="submitting"
-            :disabled="!email.trim() || !password"
-          >
-            {{ t('auth.signInButton') }}
-          </TxButton>
-        </form>
-      </TxTabItem>
-
       <TxTabItem name="passkey">
         <template #name>
-{{ t('auth.tabPasskey') }}
-</template>
+          {{ t('auth.tabPasskey') }}
+        </template>
         <form class="console-form-stack SignInView-Form" @submit.prevent="handlePasskeySignIn">
           <ConsoleFormField
             :label="t('auth.emailLabel')"

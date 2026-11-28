@@ -5,6 +5,7 @@ import { API_ROUTES, consoleApi } from '@/api/endpoints'
 import { assertSameOriginApiPath } from '@/api/http'
 import { en } from '@/i18n/en'
 import { zh } from '@/i18n/zh'
+import { resolveLocalizedText } from '@/utils/format'
 
 const SRC_ROOT = resolve(__dirname, '../..')
 
@@ -94,6 +95,12 @@ describe('API client contract & deleted-route guard', () => {
     await consoleApi.approveDeviceAuth({ code: 'CODE-123', grantType: 'short' })
     await consoleApi.listSigningKeys()
     await consoleApi.listAdminStorePlugins({ page: 1, limit: 10 })
+    await consoleApi.updatePrivacySettings({
+      analytics: true,
+      crashReports: true,
+      usageData: false,
+      personalization: false,
+    })
 
     const calls = fetchMock.mock.calls.map(([url, init]) => `${(init as RequestInit)?.method ?? 'GET'} ${String(url)}`)
     expect(calls).toEqual([
@@ -115,7 +122,16 @@ describe('API client contract & deleted-route guard', () => {
       'POST /api/app-auth/device/approve',
       'GET /api/dashboard/plugin-signing-keys',
       'GET /api/admin/store/plugins?page=1&limit=10',
+      'PATCH /api/dashboard/privacy-settings',
     ])
+
+    const privacyCallBody = JSON.parse(String((fetchMock.mock.calls.at(-1)?.[1] as RequestInit)?.body))
+    expect(privacyCallBody).toEqual({
+      analytics: true,
+      crashReports: true,
+      usageData: false,
+      personalization: false,
+    })
   })
 
   it('contains zero references to deleted governance, checkin, oauth-idp, docs-runtime, or /_i18n/ endpoints', () => {
@@ -162,5 +178,13 @@ describe('API client contract & deleted-route guard', () => {
     expect(flattenKeys(en as unknown as Record<string, unknown>)).toEqual(
       flattenKeys(zh as unknown as Record<string, unknown>),
     )
+  })
+
+  it('resolves localized { en, zh } objects safely without [object Object]', () => {
+    expect(resolveLocalizedText({ en: 'Release Notes', zh: '发布说明' }, 'en')).toBe('Release Notes')
+    expect(resolveLocalizedText({ en: 'Release Notes', zh: '发布说明' }, 'zh')).toBe('发布说明')
+    expect(resolveLocalizedText({ en: 'Fallback EN' }, 'zh')).toBe('Fallback EN')
+    expect(resolveLocalizedText('Plain string', 'en')).toBe('Plain string')
+    expect(resolveLocalizedText(null, 'en')).toBe('')
   })
 })

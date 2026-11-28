@@ -132,7 +132,7 @@ async function loadTeam() {
       feedback.value = { type: 'error', message: resolveErrorMessage(overviewRes.reason, t('common.loadFailed')) }
 
     if (usageRes.status === 'fulfilled')
-      teamCreditsUsed.value = usageRes.value.used ?? usageRes.value.totalCredits ?? 0
+      teamCreditsUsed.value = usageRes.value.totalUsed ?? usageRes.value.used ?? usageRes.value.totalCredits ?? 0
   }
   finally {
     loading.value = false

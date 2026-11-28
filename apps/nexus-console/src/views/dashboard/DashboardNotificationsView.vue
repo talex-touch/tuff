@@ -16,6 +16,7 @@ import ConsoleSection from '@/components/ConsoleSection.vue'
 import ConsoleTable from '@/components/ConsoleTable.vue'
 import { sliceClientPage, useConsoleList } from '@/composables/useConsoleList'
 import { formatDateTime } from '@/utils/format'
+import { base64UrlToUint8Array } from '@/utils/webauthn'
 
 const { t, locale } = useI18n()
 
@@ -24,10 +25,20 @@ const markingAll = ref(false)
 const subscribingPush = ref(false)
 const feedback = ref<{ type: 'success' | 'error', message: string } | null>(null)
 const pushCache = ref<PushSubscriptionItem[] | null>(null)
+const vapidPublicKey = ref<string | null>(null)
+const pushServerEnabled = ref(false)
 
 const pushSupported = computed(() =>
   hasWindow() && hasNavigator() && 'serviceWorker' in navigator && 'PushManager' in window,
 )
+
+const canSubscribePush = computed(() =>
+  pushSupported.value && pushServerEnabled.value && Boolean(vapidPublicKey.value),
+)
+
+function isNotificationRead(item: NotificationItem): boolean {
+  return item.status === 'read' || Boolean(item.read || item.readAt)
+}
 
 const inboxList = useConsoleList<NotificationItem, { unreadOnly: string }>({
   defaults: { unreadOnly: 'false' },
@@ -54,6 +65,8 @@ const pushList = useConsoleList<PushSubscriptionItem, Record<string, never>>({
     if (!pushCache.value) {
       const res = await consoleApi.listPushSubscriptions()
       pushCache.value = res.subscriptions ?? res.items ?? []
+      vapidPublicKey.value = res.vapidPublicKey ?? null
+      pushServerEnabled.value = Boolean(res.enabled && res.vapidPublicKey)
     }
     return sliceClientPage(pushCache.value, page, limit)
   },
@@ -109,7 +122,7 @@ async function markAllRead() {
 }
 
 async function subscribeCurrentBrowser() {
-  if (!pushSupported.value || !hasNavigator()) {
+  if (!canSubscribePush.value || !hasNavigator() || !vapidPublicKey.value) {
     feedback.value = { type: 'error', message: t('dashboard.pushUnsupported') }
     return
   }
@@ -118,7 +131,10 @@ async function subscribeCurrentBrowser() {
   try {
     const registration = await navigator.serviceWorker.ready
     const sub = await registration.pushManager.getSubscription()
-      ?? await registration.pushManager.subscribe({ userVisibleOnly: true })
+      ?? await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: base64UrlToUint8Array(vapidPublicKey.value),
+      })
     const json = sub.toJSON()
     if (!json.endpoint || !json.keys?.p256dh || !json.keys?.auth)
       throw new Error(t('dashboard.pushUnsupported'))
@@ -205,20 +221,20 @@ async function removePush(item: PushSubscriptionItem) {
           </div>
         </template>
         <template #cell-category="{ row }">
-          <TxTag :label="row.category || 'system'" size="sm" variant="soft" />
+          <TxTag :label="row.action || row.resourceType || row.category || 'system'" size="sm" variant="soft" />
         </template>
         <template #cell-read="{ row }">
           <TxStatusBadge
-            :text="row.read ? t('common.yes') : t('dashboard.unreadCount')"
-            :status="row.read ? 'muted' : 'info'"
+            :text="isNotificationRead(row) ? t('common.yes') : t('dashboard.unreadCount')"
+            :status="isNotificationRead(row) ? 'muted' : 'info'"
             size="sm"
           />
         </template>
         <template #cell-createdAt="{ row }">
-          {{ formatDateTime(row.createdAt, locale) }}
+          {{ formatDateTime(row.occurredAt || row.createdAt, locale) }}
         </template>
         <template #cell-actions="{ row }">
-          <TxButton v-if="!row.read" variant="ghost" size="sm" @click="markRead(row)">
+          <TxButton v-if="!isNotificationRead(row)" variant="ghost" size="sm" @click="markRead(row)">
             {{ t('dashboard.markRead') }}
           </TxButton>
         </template>
@@ -236,7 +252,7 @@ async function removePush(item: PushSubscriptionItem) {
           size="sm"
           icon="i-carbon-notification-new"
           :loading="subscribingPush"
-          :disabled="!pushSupported"
+          :disabled="!canSubscribePush"
           @click="subscribeCurrentBrowser"
         >
           {{ t('dashboard.subscribePush') }}

@@ -65,11 +65,21 @@ export interface SubscriptionStatusResponse {
   }
 }
 
+export interface LocalizedText {
+  en: string
+  zh: string
+}
+
 export interface CreditSummaryResponse {
+  month?: string
   balance?: number
   quota?: number
   used?: number
   remaining?: number
+  user?: {
+    quota: number
+    used: number
+  }
   personal?: {
     balance?: number
     quota?: number
@@ -80,23 +90,36 @@ export interface CreditSummaryResponse {
     quota?: number
     used?: number
   }
+  teamContext?: {
+    id: string
+    name: string
+    type: string
+    hasTeamPool: boolean
+  } | null
   boost?: {
     eligible?: boolean
     claimed?: boolean
+    claimedThisMonth?: boolean
+    canClaimNow?: boolean
     amount?: number
-  }
+  } | null
 }
 
 export interface CreditLedgerEntry {
   id: string
   userId?: string
+  user_id?: string
   userEmail?: string | null
+  scope?: string
+  scope_id?: string
   delta: number
   balanceAfter?: number | null
+  balance_after?: number | null
   reason: string
   action?: string | null
   model?: string | null
-  createdAt: string
+  createdAt?: string
+  created_at?: string
 }
 
 export interface CreditPricingRule {
@@ -124,11 +147,10 @@ export interface ApiKeyItem {
 }
 
 export interface PrivacySettings {
-  telemetryEnabled?: boolean
-  crashReportingEnabled?: boolean
-  usageAnalyticsEnabled?: boolean
-  marketingEmailsEnabled?: boolean
-  [key: string]: unknown
+  analytics: boolean
+  crashReports: boolean
+  usageData: boolean
+  personalization: boolean
 }
 
 export interface SecuritySettings {
@@ -148,36 +170,47 @@ export interface ConnectedDevice {
   ip?: string | null
 }
 
+export interface SyncSessionItem {
+  device_id: string
+  expires_at: string
+  last_cursor: number
+  last_push_at: string | null
+  last_pull_at: string | null
+  last_error_code: string | null
+}
+
 export interface StorageStatusResponse {
   quota?: {
+    plan_tier?: string
+    limits?: {
+      storage_limit_bytes?: number
+      object_limit?: number
+      item_limit?: number
+      device_limit?: number
+    }
+    usage?: {
+      used_storage_bytes?: number
+      used_objects?: number
+      used_devices?: number
+    }
     usedBytes?: number
     limitBytes?: number
-    objectCount?: number
   }
   usedBytes?: number
   limitBytes?: number
   keyrings?: Array<{
-    id: string
+    id?: string
+    keyring_id?: string
+    device_id?: string
     deviceId?: string
     version?: number
     status?: string
+    created_at?: string
     createdAt?: string
   }>
   keyringCount?: number
   latestSession?: SyncSessionItem | null
-}
-
-export interface SyncSessionItem {
-  id: string
-  deviceId?: string | null
-  deviceName?: string | null
-  status: string
-  direction?: string | null
-  itemsSynced?: number
-  bytesTransferred?: number
-  startedAt?: string | null
-  completedAt?: string | null
-  createdAt?: string | null
+  generatedAt?: string
 }
 
 export interface PluginVersionItem {
@@ -285,10 +318,14 @@ export interface NotificationItem {
   title: string
   body?: string | null
   message?: string | null
+  action?: string | null
+  resourceType?: string | null
   category?: string | null
   level?: string | null
-  read: boolean
+  status?: 'unread' | 'read' | string
+  read?: boolean
   readAt?: string | null
+  occurredAt?: string | null
   createdAt: string
 }
 
@@ -396,9 +433,12 @@ export interface ReleaseItem {
   id: string
   tag: string
   name?: string | null
+  version?: string | null
   channel: 'RELEASE' | 'BETA' | 'SNAPSHOT' | string
   status: 'draft' | 'published' | 'archived' | string
-  notes?: string | null
+  rollbackFromVersion?: string | null
+  rollbackCompatible?: boolean
+  notes?: string | LocalizedText | null
   publishedAt?: string | null
   createdAt?: string | null
   assets?: Array<{ id: string, platform: string, arch: string, filename?: string }>
@@ -406,12 +446,16 @@ export interface ReleaseItem {
 
 export interface UpdateAnnouncementItem {
   id: string
-  title: string
-  summary?: string | null
-  content?: string | null
-  type?: string
-  scope?: string
+  title: string | LocalizedText
+  summary?: string | LocalizedText | null
+  type?: 'news' | 'release' | 'announcement' | 'config' | 'data' | string
+  scope?: 'web' | 'system' | 'both' | string
+  channels?: string[]
   channel?: string | null
+  releaseTag?: string | null
+  tags?: string[]
+  link?: string | null
+  timestamp?: string | null
   publishedAt?: string | null
   createdAt?: string | null
   updatedAt?: string | null

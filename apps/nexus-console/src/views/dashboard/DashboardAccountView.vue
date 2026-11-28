@@ -52,8 +52,10 @@ const security = reactive<SecuritySettings>({
 })
 
 const privacy = reactive<PrivacySettings>({
-  telemetryEnabled: true,
-  crashReportingEnabled: true,
+  analytics: true,
+  crashReports: true,
+  usageData: true,
+  personalization: false,
 })
 
 const localeOptions = [
@@ -111,9 +113,11 @@ async function loadSettings() {
   ])
   if (secRes.status === 'fulfilled')
     security.allowCliIpMismatch = Boolean(secRes.value.settings?.allowCliIpMismatch)
-  if (privRes.status === 'fulfilled') {
-    privacy.telemetryEnabled = privRes.value.settings?.telemetryEnabled !== false
-    privacy.crashReportingEnabled = privRes.value.settings?.crashReportingEnabled !== false
+  if (privRes.status === 'fulfilled' && privRes.value.settings) {
+    privacy.analytics = privRes.value.settings.analytics !== false
+    privacy.crashReports = privRes.value.settings.crashReports !== false
+    privacy.usageData = privRes.value.settings.usageData !== false
+    privacy.personalization = Boolean(privRes.value.settings.personalization)
   }
 }
 
@@ -191,8 +195,10 @@ async function saveSecurityAndPrivacy() {
     await Promise.all([
       consoleApi.updateSecuritySettings({ allowCliIpMismatch: security.allowCliIpMismatch }),
       consoleApi.updatePrivacySettings({
-        telemetryEnabled: Boolean(privacy.telemetryEnabled),
-        crashReportingEnabled: Boolean(privacy.crashReportingEnabled),
+        analytics: Boolean(privacy.analytics),
+        crashReports: Boolean(privacy.crashReports),
+        usageData: Boolean(privacy.usageData),
+        personalization: Boolean(privacy.personalization),
       }),
     ])
     feedback.value = { type: 'success', message: t('dashboard.profileSaved') }
@@ -361,12 +367,20 @@ onMounted(() => void loadSettings())
           <TxSwitch v-model="security.allowCliIpMismatch" />
         </div>
         <div class="AccountSwitchRow">
-          <span>{{ t('dashboard.telemetryEnabled') }}</span>
-          <TxSwitch v-model="privacy.telemetryEnabled" />
+          <span>{{ t('dashboard.privacyAnalytics') }}</span>
+          <TxSwitch v-model="privacy.analytics" />
         </div>
         <div class="AccountSwitchRow">
-          <span>{{ t('dashboard.crashReportingEnabled') }}</span>
-          <TxSwitch v-model="privacy.crashReportingEnabled" />
+          <span>{{ t('dashboard.privacyCrashReports') }}</span>
+          <TxSwitch v-model="privacy.crashReports" />
+        </div>
+        <div class="AccountSwitchRow">
+          <span>{{ t('dashboard.privacyUsageData') }}</span>
+          <TxSwitch v-model="privacy.usageData" />
+        </div>
+        <div class="AccountSwitchRow">
+          <span>{{ t('dashboard.privacyPersonalization') }}</span>
+          <TxSwitch v-model="privacy.personalization" />
         </div>
         <div>
           <TxButton variant="primary" size="sm" :loading="savingSettings" @click="saveSecurityAndPrivacy">

@@ -69,9 +69,10 @@ const sessionsList = useConsoleList<SyncSessionItem, Record<string, never>>({
 
 const storageStats = computed<ConsoleStatItem[]>(() => {
   const s = storageStatus.value
-  const used = s?.quota?.usedBytes ?? s?.usedBytes ?? 0
-  const limit = s?.quota?.limitBytes ?? s?.limitBytes ?? 0
+  const used = s?.quota?.usage?.used_storage_bytes ?? s?.quota?.usedBytes ?? s?.usedBytes ?? 0
+  const limit = s?.quota?.limits?.storage_limit_bytes ?? s?.quota?.limitBytes ?? s?.limitBytes ?? 0
   const keyrings = s?.keyringCount ?? s?.keyrings?.length ?? 0
+  const latestTs = s?.latestSession?.last_push_at ?? s?.latestSession?.last_pull_at ?? s?.latestSession?.expires_at
   return [
     { key: 'used', label: t('dashboard.storageUsed'), value: formatBytes(used), iconClass: 'i-carbon-data-base' },
     { key: 'quota', label: t('dashboard.storageQuota'), value: limit > 0 ? formatBytes(limit) : '—', iconClass: 'i-carbon-cloud' },
@@ -79,7 +80,7 @@ const storageStats = computed<ConsoleStatItem[]>(() => {
     {
       key: 'latest',
       label: t('dashboard.storageLatestSync'),
-      value: formatDateTime(s?.latestSession?.completedAt ?? s?.latestSession?.startedAt, locale.value),
+      value: formatDateTime(latestTs, locale.value),
       iconClass: 'i-carbon-sync-settings',
     },
   ]
@@ -94,12 +95,12 @@ const deviceColumns = computed<DataTableColumn<ConnectedDevice>[]>(() => [
 ])
 
 const sessionColumns = computed<DataTableColumn<SyncSessionItem>[]>(() => [
-  { key: 'deviceName', title: t('dashboard.sessionDevice'), minWidth: 140 },
-  { key: 'status', title: t('common.status'), minWidth: 100 },
-  { key: 'direction', title: t('dashboard.sessionDirection'), minWidth: 100 },
-  { key: 'itemsSynced', title: t('dashboard.sessionItems'), align: 'right', minWidth: 90 },
-  { key: 'bytesTransferred', title: t('dashboard.sessionBytes'), align: 'right', minWidth: 110 },
-  { key: 'startedAt', title: t('dashboard.sessionStarted'), minWidth: 150 },
+  { key: 'device_id', title: t('dashboard.sessionDevice'), minWidth: 160 },
+  { key: 'last_cursor', title: t('dashboard.sessionCursor'), align: 'right', minWidth: 100 },
+  { key: 'last_push_at', title: t('dashboard.sessionLastPush'), minWidth: 150 },
+  { key: 'last_pull_at', title: t('dashboard.sessionLastPull'), minWidth: 150 },
+  { key: 'expires_at', title: t('dashboard.sessionExpires'), minWidth: 150 },
+  { key: 'last_error_code', title: t('dashboard.sessionError'), minWidth: 120 },
 ])
 
 async function loadStorage() {
@@ -252,7 +253,7 @@ onMounted(() => void loadStorage())
       <ConsoleTable
         :columns="sessionColumns"
         :rows="sessionsList.rows.value"
-        row-key="id"
+        row-key="device_id"
         :loading="sessionsList.loading.value"
         :refreshing="sessionsList.refreshing.value"
         :error="sessionsList.error.value"
@@ -264,24 +265,27 @@ onMounted(() => void loadStorage())
         @update:page="sessionsList.setPage($event)"
         @update:limit="sessionsList.setLimit($event)"
       >
-        <template #cell-deviceName="{ row }">
-          {{ row.deviceName || row.deviceId || '—' }}
+        <template #cell-device_id="{ row }">
+          <span class="console-mono">{{ row.device_id }}</span>
         </template>
-        <template #cell-status="{ row }">
+        <template #cell-last_cursor="{ row }">
+          {{ formatNumber(row.last_cursor ?? 0, locale) }}
+        </template>
+        <template #cell-last_push_at="{ row }">
+          {{ formatDateTime(row.last_push_at, locale) }}
+        </template>
+        <template #cell-last_pull_at="{ row }">
+          {{ formatDateTime(row.last_pull_at, locale) }}
+        </template>
+        <template #cell-expires_at="{ row }">
+          {{ formatDateTime(row.expires_at, locale) }}
+        </template>
+        <template #cell-last_error_code="{ row }">
           <TxStatusBadge
-            :text="row.status"
-            :status="row.status === 'completed' || row.status === 'success' ? 'success' : row.status === 'failed' ? 'danger' : 'info'"
+            :text="row.last_error_code || t('common.active')"
+            :status="row.last_error_code ? 'danger' : 'success'"
             size="sm"
           />
-        </template>
-        <template #cell-itemsSynced="{ row }">
-          {{ formatNumber(row.itemsSynced ?? 0, locale) }}
-        </template>
-        <template #cell-bytesTransferred="{ row }">
-          {{ formatBytes(row.bytesTransferred ?? 0) }}
-        </template>
-        <template #cell-startedAt="{ row }">
-          {{ formatDateTime(row.startedAt || row.createdAt, locale) }}
         </template>
       </ConsoleTable>
     </ConsoleSection>

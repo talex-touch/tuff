@@ -41,10 +41,15 @@ describe('Cloudflare Static Assets & Vite bundle contracts', () => {
     expect(patterns).toContain('tuff.tagzxia.com/team/*')
   })
 
-  it('emits immutable /_console/* and no-cache HTML headers in public/_headers', () => {
+  it('emits /* no-cache shell first and detaches Cache-Control for immutable /_console/* assets', () => {
     const headers = readFileSync(resolve(APP_ROOT, 'public/_headers'), 'utf8')
-    expect(headers).toContain('/_console/*')
-    expect(headers).toContain('public, max-age=31536000, immutable')
-    expect(headers).toContain('no-cache')
+    const wildcardIdx = headers.indexOf('/*')
+    const consoleIdx = headers.indexOf('/_console/*')
+    expect(wildcardIdx).toBeGreaterThanOrEqual(0)
+    expect(consoleIdx).toBeGreaterThan(wildcardIdx)
+    const consoleBlock = headers.slice(consoleIdx)
+    expect(consoleBlock).toContain('! Cache-Control')
+    expect(consoleBlock).toContain('Cache-Control: public, max-age=31536000, immutable')
+    expect(headers.slice(0, consoleIdx)).toContain('no-cache, no-store, must-revalidate')
   })
 })

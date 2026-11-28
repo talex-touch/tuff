@@ -29,17 +29,30 @@ const storage = ref<StorageStatusResponse | null>(null)
 
 const adminDenied = computed(() => route.query.denied === 'admin')
 
+const creditUsed = computed(() => {
+  const c = credits.value
+  return c?.user?.used ?? c?.used ?? c?.personal?.used ?? 0
+})
+
 const creditBalance = computed(() => {
   const c = credits.value
+  if (c?.user)
+    return Math.max(0, (c.user.quota ?? 0) - (c.user.used ?? 0))
   return c?.balance ?? c?.remaining ?? c?.personal?.balance ?? 0
 })
 
 const storageUsedBytes = computed(() =>
-  storage.value?.quota?.usedBytes ?? storage.value?.usedBytes ?? 0,
+  storage.value?.quota?.usage?.used_storage_bytes
+  ?? storage.value?.quota?.usedBytes
+  ?? storage.value?.usedBytes
+  ?? 0,
 )
 
 const storageLimitBytes = computed(() =>
-  storage.value?.quota?.limitBytes ?? storage.value?.limitBytes ?? 0,
+  storage.value?.quota?.limits?.storage_limit_bytes
+  ?? storage.value?.quota?.limitBytes
+  ?? storage.value?.limitBytes
+  ?? 0,
 )
 
 const statItems = computed<ConsoleStatItem[]>(() => [
@@ -54,9 +67,7 @@ const statItems = computed<ConsoleStatItem[]>(() => [
     key: 'credits',
     label: t('dashboard.creditsCard'),
     value: formatNumber(creditBalance.value, locale.value),
-    meta: credits.value?.used !== undefined
-      ? `${t('dashboard.creditUsed')}: ${formatNumber(credits.value.used, locale.value)}`
-      : undefined,
+    meta: `${t('dashboard.creditUsed')}: ${formatNumber(creditUsed.value, locale.value)}`,
     iconClass: 'i-carbon-currency',
   },
   {

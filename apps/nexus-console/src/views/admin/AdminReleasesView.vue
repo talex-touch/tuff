@@ -23,7 +23,7 @@ import ConsoleStatGrid from '@/components/ConsoleStatGrid.vue'
 import type { ConsoleStatItem } from '@/components/ConsoleStatGrid.vue'
 import ConsoleTable from '@/components/ConsoleTable.vue'
 import { sliceClientPage, useConsoleList } from '@/composables/useConsoleList'
-import { formatDateTime } from '@/utils/format'
+import { formatDateTime, resolveLocalizedText } from '@/utils/format'
 
 const { t, locale } = useI18n()
 
@@ -53,8 +53,26 @@ const statusFilterOptions = [
 const scopeOptions = [
   { value: 'web', label: 'web' },
   { value: 'system', label: 'system' },
-  { value: 'all', label: 'all' },
+  { value: 'both', label: 'both' },
 ]
+
+const updateTypeOptions = [
+  { value: 'news', label: 'news' },
+  { value: 'announcement', label: 'announcement' },
+]
+
+function extractLocalizedPair(
+  value: string | { en?: string, zh?: string } | null | undefined,
+): { en: string, zh: string } {
+  if (!value)
+    return { en: '', zh: '' }
+  if (typeof value === 'string')
+    return { en: value, zh: value }
+  return {
+    en: value.en || value.zh || '',
+    zh: value.zh || value.en || '',
+  }
+}
 
 // ─── Releases ─────────────────────────────────────────────────────────────────
 const releasesCache = ref<ReleaseItem[] | null>(null)
@@ -68,7 +86,8 @@ const releaseForm = reactive({
   tag: '',
   name: '',
   channel: 'RELEASE',
-  notes: '',
+  notesEn: '',
+  notesZh: '',
 })
 
 const releasesList = useConsoleList<ReleaseItem, { q: string, channel: string, status: string }>({
@@ -115,7 +134,8 @@ function openCreateRelease() {
   releaseForm.tag = ''
   releaseForm.name = ''
   releaseForm.channel = 'RELEASE'
-  releaseForm.notes = ''
+  releaseForm.notesEn = ''
+  releaseForm.notesZh = ''
   releaseModalOpen.value = true
 }
 
@@ -124,28 +144,42 @@ function openEditRelease(item: ReleaseItem) {
   releaseForm.tag = item.tag
   releaseForm.name = item.name ?? ''
   releaseForm.channel = item.channel
-  releaseForm.notes = item.notes ?? ''
+  const pair = extractLocalizedPair(item.notes)
+  releaseForm.notesEn = pair.en
+  releaseForm.notesZh = pair.zh
   releaseModalOpen.value = true
 }
 
 async function saveRelease() {
-  if (!releaseForm.tag.trim())
+  const tag = releaseForm.tag.trim()
+  if (!tag)
     return
   savingRelease.value = true
   try {
+    const notes = {
+      en: releaseForm.notesEn.trim() || releaseForm.notesZh.trim(),
+      zh: releaseForm.notesZh.trim() || releaseForm.notesEn.trim(),
+    }
     if (editingRelease.value) {
       await consoleApi.updateRelease(editingRelease.value.tag, {
-        name: releaseForm.name.trim() || undefined,
+        name: releaseForm.name.trim() || tag,
         channel: releaseForm.channel,
-        notes: releaseForm.notes,
+        notes,
       })
     }
     else {
+      const version = tag.replace(/^v/i, '')
+      const prevVersion = releasesCache.value?.[0]?.version
+        || releasesCache.value?.[0]?.tag?.replace(/^v/i, '')
+        || '0.0.0'
       await consoleApi.createRelease({
-        tag: releaseForm.tag.trim(),
-        name: releaseForm.name.trim() || undefined,
+        tag,
+        name: releaseForm.name.trim() || tag,
+        version,
         channel: releaseForm.channel,
-        notes: releaseForm.notes,
+        rollbackFromVersion: prevVersion,
+        rollbackCompatible: true,
+        notes,
       })
     }
     releaseModalOpen.value = false
@@ -198,10 +232,13 @@ const deleteUpdateTarget = ref<UpdateAnnouncementItem | null>(null)
 const deletingUpdate = ref(false)
 
 const updateForm = reactive({
-  title: '',
-  summary: '',
-  content: '',
-  scope: 'web',
+  type: 'announcement' as 'news' | 'announcement',
+  titleEn: '',
+  titleZh: '',
+  summaryEn: '',
+  summaryZh: '',
+  link: 'https://tuff.tagzxia.com/updates',
+  scope: 'web' as 'web' | 'system' | 'both',
   channel: 'RELEASE',
 })
 
@@ -212,30 +249,51 @@ const updatesList = useConsoleList<UpdateAnnouncementItem, { q: string }>({
   debounceKeys: ['q'],
   fetch: async ({ page, limit, filters }) => {
     if (!updatesCache.value) {
-      const res = await consoleApi.listUpdates({ scope: 'web' })
-      updatesCache.value = res.updates ?? []
+      const [webRes, sysRes] = await Promise.allSettled([
+        consoleApi.listUpdates({ scope: 'web' }),
+        consoleApi.listUpdates({ scope: 'system' }),
+      ])
+      if (webRes.status === 'rejected' && sysRes.status === 'rejected')
+        throw webRes.reason
+      const byId = new Map<string, UpdateAnnouncementItem>()
+      if (webRes.status === 'fulfilled') {
+        for (const item of webRes.value.updates ?? [])
+          byId.set(item.id, item)
+      }
+      if (sysRes.status === 'fulfilled') {
+        for (const item of sysRes.value.updates ?? [])
+          byId.set(item.id, item)
+      }
+      updatesCache.value = Array.from(byId.values())
     }
     const q = filters.q.toLowerCase()
     const rows = q
-      ? updatesCache.value.filter(u => `${u.title} ${u.summary ?? ''}`.toLowerCase().includes(q))
+      ? updatesCache.value.filter((u) => {
+          const titleText = `${resolveLocalizedText(u.title, 'en')} ${resolveLocalizedText(u.title, 'zh')}`
+          const summaryText = `${resolveLocalizedText(u.summary, 'en')} ${resolveLocalizedText(u.summary, 'zh')}`
+          return `${titleText} ${summaryText}`.toLowerCase().includes(q)
+        })
       : updatesCache.value
     return sliceClientPage(rows, page, limit)
   },
 })
 
 const updateColumns = computed<DataTableColumn<UpdateAnnouncementItem>[]>(() => [
-  { key: 'title', title: t('admin.updateTitle'), minWidth: 220 },
+  { key: 'title', title: t('admin.updateTitle'), minWidth: 240 },
   { key: 'scope', title: t('admin.updateScope'), minWidth: 100 },
-  { key: 'channel', title: t('admin.releaseChannel'), minWidth: 110 },
+  { key: 'channels', title: t('admin.releaseChannel'), minWidth: 120 },
   { key: 'updatedAt', title: t('common.updatedAt'), minWidth: 160 },
   { key: 'actions', title: t('common.actions'), type: 'actions', align: 'right', minWidth: 170 },
 ])
 
 function openCreateUpdate() {
   editingUpdate.value = null
-  updateForm.title = ''
-  updateForm.summary = ''
-  updateForm.content = ''
+  updateForm.type = 'announcement'
+  updateForm.titleEn = ''
+  updateForm.titleZh = ''
+  updateForm.summaryEn = ''
+  updateForm.summaryZh = ''
+  updateForm.link = 'https://tuff.tagzxia.com/updates'
   updateForm.scope = 'web'
   updateForm.channel = 'RELEASE'
   updateModalOpen.value = true
@@ -243,25 +301,38 @@ function openCreateUpdate() {
 
 function openEditUpdate(item: UpdateAnnouncementItem) {
   editingUpdate.value = item
-  updateForm.title = item.title
-  updateForm.summary = item.summary ?? ''
-  updateForm.content = item.content ?? ''
-  updateForm.scope = item.scope ?? 'web'
-  updateForm.channel = item.channel ?? 'RELEASE'
+  updateForm.type = item.type === 'news' ? 'news' : 'announcement'
+  const titlePair = extractLocalizedPair(item.title)
+  const summaryPair = extractLocalizedPair(item.summary)
+  updateForm.titleEn = titlePair.en
+  updateForm.titleZh = titlePair.zh
+  updateForm.summaryEn = summaryPair.en
+  updateForm.summaryZh = summaryPair.zh
+  updateForm.link = item.link || 'https://tuff.tagzxia.com/updates'
+  updateForm.scope = (item.scope === 'system' || item.scope === 'both' ? item.scope : 'web')
+  updateForm.channel = item.channels?.[0] ?? item.channel ?? 'RELEASE'
   updateModalOpen.value = true
 }
 
 async function saveUpdate() {
-  if (!updateForm.title.trim())
+  const titleEn = updateForm.titleEn.trim() || updateForm.titleZh.trim()
+  const titleZh = updateForm.titleZh.trim() || updateForm.titleEn.trim()
+  const summaryEn = updateForm.summaryEn.trim() || updateForm.summaryZh.trim() || titleEn
+  const summaryZh = updateForm.summaryZh.trim() || updateForm.summaryEn.trim() || titleZh
+  if (!titleEn)
     return
   savingUpdate.value = true
   try {
     const payload = {
-      title: updateForm.title.trim(),
-      summary: updateForm.summary.trim() || undefined,
-      content: updateForm.content.trim() || undefined,
+      type: updateForm.type,
       scope: updateForm.scope,
-      channel: updateForm.channel,
+      channels: [updateForm.channel],
+      releaseTag: null,
+      title: { en: titleEn, zh: titleZh },
+      summary: { en: summaryEn, zh: summaryZh },
+      timestamp: new Date().toISOString(),
+      link: updateForm.link.trim() || 'https://tuff.tagzxia.com/updates',
+      tags: [],
     }
     if (editingUpdate.value)
       await consoleApi.updateAnnouncement(editingUpdate.value.id, payload)
@@ -379,8 +450,8 @@ onMounted(() => void loadExchange())
     <TxTabs v-model="activeTab">
       <TxTabItem name="releases">
         <template #name>
-{{ t('admin.tabReleases') }}
-</template>
+          {{ t('admin.tabReleases') }}
+        </template>
         <div class="console-form-stack ReleasesTab">
           <ConsoleFilterBar :active="releasesList.hasActiveFilters.value" @clear="releasesList.clearFilters()">
             <ConsoleFormField :label="t('common.search')" for-id="rel-q">
@@ -416,8 +487,8 @@ onMounted(() => void loadExchange())
                 <div>
                   <span class="console-mono">{{ row.tag }}</span>
                   <div v-if="row.name" class="console-muted">
-{{ row.name }}
-</div>
+                    {{ row.name }}
+                  </div>
                 </div>
               </template>
               <template #cell-channel="{ row }">
@@ -453,8 +524,8 @@ onMounted(() => void loadExchange())
 
       <TxTabItem name="updates">
         <template #name>
-{{ t('admin.tabUpdates') }}
-</template>
+          {{ t('admin.tabUpdates') }}
+        </template>
         <div class="console-form-stack ReleasesTab">
           <ConsoleFilterBar :active="updatesList.hasActiveFilters.value" @clear="updatesList.clearFilters()">
             <ConsoleFormField :label="t('common.search')" for-id="upd-q">
@@ -479,11 +550,30 @@ onMounted(() => void loadExchange())
               @update:page="updatesList.setPage($event)"
               @update:limit="updatesList.setLimit($event)"
             >
+              <template #cell-title="{ row }">
+                <div>
+                  <div>{{ resolveLocalizedText(row.title, locale) }}</div>
+                  <div v-if="row.summary" class="console-muted">
+                    {{ resolveLocalizedText(row.summary, locale) }}
+                  </div>
+                </div>
+              </template>
               <template #cell-scope="{ row }">
                 <TxTag :label="row.scope || 'web'" size="sm" variant="soft" />
               </template>
+              <template #cell-channels="{ row }">
+                <div class="console-inline-actions">
+                  <TxTag
+                    v-for="ch in (row.channels?.length ? row.channels : (row.channel ? [row.channel] : ['RELEASE']))"
+                    :key="ch"
+                    :label="ch"
+                    size="sm"
+                    variant="plain"
+                  />
+                </div>
+              </template>
               <template #cell-updatedAt="{ row }">
-                {{ formatDateTime(row.updatedAt || row.publishedAt || row.createdAt, locale) }}
+                {{ formatDateTime(row.updatedAt || row.timestamp || row.publishedAt || row.createdAt, locale) }}
               </template>
               <template #cell-actions="{ row }">
                 <div class="console-inline-actions">
@@ -502,8 +592,8 @@ onMounted(() => void loadExchange())
 
       <TxTabItem name="exchange">
         <template #name>
-{{ t('admin.tabExchange') }}
-</template>
+          {{ t('admin.tabExchange') }}
+        </template>
         <div class="console-form-stack ReleasesTab">
           <ConsoleStatGrid :items="exchangeStats" :loading="exchangeLoading" :skeleton-count="3" />
           <ConsoleSection :title="t('admin.exchangeTitle')" :description="t('admin.exchangeDesc')" :padded="false">
@@ -543,7 +633,7 @@ onMounted(() => void loadExchange())
       v-model="releaseModalOpen"
       :title="editingRelease ? t('admin.editRelease') : t('admin.newRelease')"
       :close-label="t('common.close')"
-      width="520px"
+      width="540px"
     >
       <div class="console-form-stack">
         <div class="console-form-grid">
@@ -557,8 +647,11 @@ onMounted(() => void loadExchange())
         <ConsoleFormField :label="t('admin.releaseName')" for-id="rel-name">
           <TuffInput id="rel-name" v-model="releaseForm.name" />
         </ConsoleFormField>
-        <ConsoleFormField :label="t('admin.releaseNotes')" for-id="rel-notes">
-          <TxTextarea id="rel-notes" v-model="releaseForm.notes" :rows="5" />
+        <ConsoleFormField :label="`${t('admin.releaseNotes')} (EN)`" for-id="rel-notes-en">
+          <TxTextarea id="rel-notes-en" v-model="releaseForm.notesEn" :rows="3" />
+        </ConsoleFormField>
+        <ConsoleFormField :label="`${t('admin.releaseNotes')} (ZH)`" for-id="rel-notes-zh">
+          <TxTextarea id="rel-notes-zh" v-model="releaseForm.notesZh" :rows="3" />
         </ConsoleFormField>
       </div>
       <template #footer>
@@ -575,13 +668,13 @@ onMounted(() => void loadExchange())
       v-model="updateModalOpen"
       :title="editingUpdate ? t('admin.editUpdate') : t('admin.newUpdate')"
       :close-label="t('common.close')"
-      width="520px"
+      width="540px"
     >
       <div class="console-form-stack">
-        <ConsoleFormField :label="t('admin.updateTitle')" for-id="upd-title">
-          <TuffInput id="upd-title" v-model="updateForm.title" />
-        </ConsoleFormField>
         <div class="console-form-grid">
+          <ConsoleFormField :label="t('admin.updateType')">
+            <TxSelect v-model="updateForm.type" :options="updateTypeOptions" />
+          </ConsoleFormField>
           <ConsoleFormField :label="t('admin.updateScope')">
             <TxSelect v-model="updateForm.scope" :options="scopeOptions" />
           </ConsoleFormField>
@@ -589,18 +682,35 @@ onMounted(() => void loadExchange())
             <TxSelect v-model="updateForm.channel" :options="releaseChannelSelect" />
           </ConsoleFormField>
         </div>
-        <ConsoleFormField :label="t('admin.updateSummary')" for-id="upd-summary">
-          <TuffInput id="upd-summary" v-model="updateForm.summary" />
+        <div class="console-form-grid">
+          <ConsoleFormField :label="`${t('admin.updateTitle')} (EN)`" for-id="upd-title-en">
+            <TuffInput id="upd-title-en" v-model="updateForm.titleEn" />
+          </ConsoleFormField>
+          <ConsoleFormField :label="`${t('admin.updateTitle')} (ZH)`" for-id="upd-title-zh">
+            <TuffInput id="upd-title-zh" v-model="updateForm.titleZh" />
+          </ConsoleFormField>
+        </div>
+        <ConsoleFormField :label="`${t('admin.updateSummary')} (EN)`" for-id="upd-summary-en">
+          <TxTextarea id="upd-summary-en" v-model="updateForm.summaryEn" :rows="2" />
         </ConsoleFormField>
-        <ConsoleFormField :label="t('admin.updateContent')" for-id="upd-content">
-          <TxTextarea id="upd-content" v-model="updateForm.content" :rows="4" />
+        <ConsoleFormField :label="`${t('admin.updateSummary')} (ZH)`" for-id="upd-summary-zh">
+          <TxTextarea id="upd-summary-zh" v-model="updateForm.summaryZh" :rows="2" />
+        </ConsoleFormField>
+        <ConsoleFormField :label="t('admin.updateLink')" for-id="upd-link">
+          <TuffInput id="upd-link" v-model="updateForm.link" />
         </ConsoleFormField>
       </div>
       <template #footer>
         <TxButton variant="secondary" size="sm" @click="updateModalOpen = false">
           {{ t('common.cancel') }}
         </TxButton>
-        <TxButton variant="primary" size="sm" :loading="savingUpdate" :disabled="!updateForm.title.trim()" @click="saveUpdate">
+        <TxButton
+          variant="primary"
+          size="sm"
+          :loading="savingUpdate"
+          :disabled="!updateForm.titleEn.trim() && !updateForm.titleZh.trim()"
+          @click="saveUpdate"
+        >
           {{ t('common.save') }}
         </TxButton>
       </template>
@@ -618,7 +728,7 @@ onMounted(() => void loadExchange())
     <ConsoleConfirmDialog
       :open="Boolean(deleteUpdateTarget)"
       :title="t('admin.deleteUpdateTitle')"
-      :description="t('admin.deleteUpdateDesc', { title: deleteUpdateTarget?.title || '' })"
+      :description="t('admin.deleteUpdateDesc', { title: resolveLocalizedText(deleteUpdateTarget?.title, locale) })"
       :loading="deletingUpdate"
       @update:open="!$event && (deleteUpdateTarget = null)"
       @confirm="confirmDeleteUpdate"

@@ -29,6 +29,19 @@ export function formatBytes(bytes: number | null | undefined): string {
   return `${current >= 100 || idx === 0 ? current.toFixed(0) : current.toFixed(1)} ${units[idx]}`
 }
 
+export function resolveLocalizedText(
+  value: string | { en?: string, zh?: string } | null | undefined,
+  locale = 'en',
+): string {
+  if (!value)
+    return ''
+  if (typeof value === 'string')
+    return value
+  return locale === 'zh'
+    ? (value.zh || value.en || '')
+    : (value.en || value.zh || '')
+}
+
 export function formatPercent(value: number | null | undefined): string {
   const num = Number(value ?? 0)
   if (!Number.isFinite(num))
