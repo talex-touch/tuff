@@ -151,6 +151,12 @@ describe('tuff-web pure-SSG architecture & contracts', () => {
     expect(resolveTuffWebManualChunk('/app/.nuxt/tuff-web-docs-nav-zh.mjs')).toBe('tuff-web-nav-zh')
     expect(resolveTuffWebManualChunk('/app/foo.css')).toBeUndefined()
   })
+
+  it('checks top-level /api/auth/me user id in StoreView for signed-in review submission', () => {
+    const storeViewSource = readFileSync(join(APP_ROOT, 'app/components/views/StoreView.vue'), 'utf8')
+    expect(storeViewSource).toContain("requestJson<{ id?: string, user?: { id?: string } | null }>('/api/auth/me')")
+    expect(storeViewSource).toContain('Boolean(res?.id || res?.user?.id)')
+  })
 })
 
 describe('prerender routes, navigation & link rewriting', () => {

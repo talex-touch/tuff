@@ -76,8 +76,8 @@ async function ensureReviewAuthChecked() {
     return
   }
   try {
-    const res = await requestJson<{ user?: { id?: string } | null }>('/api/auth/me')
-    isLoggedIn.value = Boolean(res?.user?.id)
+    const res = await requestJson<{ id?: string, user?: { id?: string } | null }>('/api/auth/me')
+    isLoggedIn.value = Boolean(res?.id || res?.user?.id)
   }
   catch {
     isLoggedIn.value = false
