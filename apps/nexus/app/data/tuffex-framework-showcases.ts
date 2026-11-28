@@ -1,87 +1,19 @@
-import type { Phase1ReadyComponentId } from './tuffex-framework-matrix'
+import type { ReadyComponentId } from './tuffex-framework-matrix'
+import type { FrameworkShowcaseDefinition, ReactModuleLike, ShowcaseLocale } from './framework-showcases/types'
+import { BASE_A_FRAMEWORK_SHOWCASES } from './framework-showcases/base-a'
+import { BASE_B_FRAMEWORK_SHOWCASES } from './framework-showcases/base-b'
+import {
+  createStageRow,
+  createStatusReadout,
+  createWcEl,
+  pickReactComponent,
+} from './framework-showcases/types'
 
-export type ShowcaseLocale = 'zh' | 'en'
+export type { FrameworkShowcaseDefinition, ReactModuleLike, ShowcaseLocale }
 
-export interface ReactModuleLike {
-  createElement: (type: unknown, props?: Record<string, unknown> | null, ...children: unknown[]) => unknown
-  Fragment: unknown
-  useState: <T>(initial: T | (() => T)) => [T, (next: T | ((prev: T) => T)) => void]
-}
-
-export interface FrameworkShowcaseDefinition {
-  id: Phase1ReadyComponentId
-  wcTag: string
-  wcCode: (locale: ShowcaseLocale) => string
-  reactCode: (locale: ShowcaseLocale) => string
-  mountWc: (container: HTMLElement, locale: ShowcaseLocale) => () => void
-  renderReact: (
-    React: ReactModuleLike,
-    TuffexReact: Record<string, unknown>,
-    locale: ShowcaseLocale,
-  ) => unknown
-}
-
-type ElAttrs = Record<string, string | number | boolean | undefined>
-type ElProps = Record<string, unknown>
-
-function createWcEl(
-  tag: string,
-  options: {
-    attrs?: ElAttrs
-    props?: ElProps
-    text?: string
-    children?: Node[]
-    events?: Record<string, EventListener>
-  } = {},
-  disposers?: Array<() => void>,
-): HTMLElement {
-  const el = document.createElement(tag)
-  if (options.attrs) {
-    for (const [key, value] of Object.entries(options.attrs)) {
-      if (value === undefined || value === false)
-        continue
-      el.setAttribute(key, value === true ? '' : String(value))
-    }
-  }
-  if (options.props) {
-    for (const [key, value] of Object.entries(options.props))
-      (el as unknown as Record<string, unknown>)[key] = value
-  }
-  if (options.text !== undefined)
-    el.textContent = options.text
-  if (options.children) {
-    for (const child of options.children)
-      el.appendChild(child)
-  }
-  if (options.events) {
-    for (const [eventName, handler] of Object.entries(options.events)) {
-      el.addEventListener(eventName, handler)
-      disposers?.push(() => el.removeEventListener(eventName, handler))
-    }
-  }
-  return el
-}
-
-function createStageRow(children: Node[], vertical = false): HTMLDivElement {
-  const row = document.createElement('div')
-  row.className = vertical ? 'tuff-fw-stage__stack' : 'tuff-fw-stage__row'
-  for (const child of children)
-    row.appendChild(child)
-  return row
-}
-
-function createStatusReadout(initialText: string): HTMLSpanElement {
-  const span = document.createElement('span')
-  span.className = 'tuff-fw-stage__readout'
-  span.textContent = initialText
-  return span
-}
-
-function pickReactComponent(TuffexReact: Record<string, unknown>, name: string): unknown {
-  return TuffexReact[name] ?? TuffexReact.default ?? 'div'
-}
-
-export const TUFFEX_FRAMEWORK_SHOWCASES: Readonly<Record<Phase1ReadyComponentId, FrameworkShowcaseDefinition>> = {
+export const TUFFEX_FRAMEWORK_SHOWCASES: Readonly<Record<ReadyComponentId, FrameworkShowcaseDefinition>> = {
+  ...BASE_A_FRAMEWORK_SHOWCASES,
+  ...BASE_B_FRAMEWORK_SHOWCASES,
   button: {
     id: 'button',
     wcTag: 'tx-button',
@@ -1649,6 +1581,6 @@ export function MarkdownViewDemo() {
 export function getFrameworkShowcase(slug: string | null | undefined): FrameworkShowcaseDefinition | null {
   if (!slug)
     return null
-  const normalized = slug.trim().toLowerCase() as Phase1ReadyComponentId
+  const normalized = slug.trim().toLowerCase() as ReadyComponentId
   return TUFFEX_FRAMEWORK_SHOWCASES[normalized] ?? null
 }

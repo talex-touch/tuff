@@ -1,8 +1,12 @@
 import type { DefineTxElementOptions, TxCustomElementConstructor, TxElementBundle } from '../runtime/factory'
+import { BASE_A_BUNDLES } from './base-a'
+import { BASE_B_BUNDLES } from './base-b'
 import { TIER_A_BUNDLES } from './tier-a'
 import { TIER_B_BUNDLES } from './tier-b'
 import { TIER_C_BUNDLES } from './tier-c'
 
+export * from './base-a'
+export * from './base-b'
 export * from './tier-a'
 export * from './tier-b'
 export * from './tier-c'
@@ -11,6 +15,8 @@ export const ALL_TUFFEX_ELEMENT_BUNDLES: readonly TxElementBundle[] = [
   ...TIER_A_BUNDLES,
   ...TIER_B_BUNDLES,
   ...TIER_C_BUNDLES,
+  ...BASE_A_BUNDLES,
+  ...BASE_B_BUNDLES,
 ]
 
 export interface RegisterTuffexElementsOptions extends Omit<DefineTxElementOptions, 'tagName'> {
@@ -23,7 +29,8 @@ export interface RegisterTuffexElementsOptions extends Omit<DefineTxElementOptio
 }
 
 /**
- * Bulk-register all 32 TuffEx Phase-1 modules (36 custom element tags) idempotently.
+ * Bulk-register all 100 TuffEx Web Component modules (99 Basics Suite + `stream-text`,
+ * 123 custom element tags) idempotently.
  * Uses Light DOM (`shadowRoot: false`) by default; pass `{ shadowRoot: true, styles }`
  * for Shadow DOM encapsulation.
  */
