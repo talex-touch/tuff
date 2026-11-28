@@ -19,6 +19,7 @@ const require = createRequire(import.meta.url)
 interface HelperOptions {
   hostPlatform?: 'linux' | 'darwin' | 'win32'
   bundledScriptDirs?: string[]
+  allowedLinuxDestPaths?: string[]
 }
 const { launchCommand, recoverOnce, runHelper, validatePlan } =
   require('./update-handoff-helper.cjs') as {
@@ -253,7 +254,9 @@ describe('update handoff helper', () => {
   )
 
   it('waits for an already-exited parent and accepts a matching health acknowledgement', async () => {
-    const { root, bundledDir, planPath, plan, options } = await createPlan({ platform: 'linux' })
+    const { root, attemptRoot, bundledDir, planPath, plan, options } = await createPlan({
+      platform: 'linux'
+    })
     const acknowledgement = JSON.stringify({
       schemaVersion: 1,
       attemptId: plan.attemptId,
@@ -262,11 +265,21 @@ describe('update handoff helper', () => {
       version: plan.targetVersion
     })
     const scriptPath = path.join(bundledDir, 'linux-apply-update.sh')
-    await writeFile(scriptPath, `#!/bin/bash\nprintf '%s' "$1" > "$2"\n`, 'utf8')
+    await writeFile(
+      scriptPath,
+      `#!/bin/bash\nprintf '%s' ${JSON.stringify(acknowledgement)} > ${JSON.stringify(plan.ackPath)}\n`,
+      'utf8'
+    )
     await chmod(scriptPath, 0o755)
     plan.handoff = {
       command: '/bin/bash',
-      args: [scriptPath, acknowledgement, plan.ackPath],
+      args: [
+        scriptPath,
+        '--pid',
+        String(plan.parentPid),
+        '--log',
+        path.join(attemptRoot, 'linux-update.log')
+      ],
       waitForExit: true
     }
     await writeFile(planPath, JSON.stringify(plan))
@@ -281,18 +294,18 @@ describe('update handoff helper', () => {
 
   it('starts the configured previous recovery only once after a health timeout', async () => {
     const { root, attemptRoot, plan, options } = await createPlan({ platform: 'darwin' })
-    const counterPath = path.join(root, 'recovery-count.txt')
+    const counterPath = path.join(attemptRoot, 'recovery-count.log')
     const scriptPath = path.join(attemptRoot, 'macos-restore-update.sh')
     await writeFile(
       scriptPath,
-      `#!/bin/bash\ncount=0\nif [ -f "$1" ]; then count=$(cat "$1"); fi\nprintf '%s' "$((count + 1))" > "$1"\n`,
+      `#!/bin/bash\ncount=0\nif [ -f "$2" ]; then count=$(cat "$2"); fi\nprintf '%s' "$((count + 1))" > "$2"\n`,
       'utf8'
     )
     await chmod(scriptPath, 0o755)
     plan.recoveryAvailable = true
     plan.recovery = {
       command: '/bin/bash',
-      args: [scriptPath, counterPath],
+      args: [scriptPath, '--log', counterPath],
       waitForExit: true
     }
 
@@ -440,6 +453,13 @@ describe('update handoff helper', () => {
         options
       )
     ).toThrow(/Disallowed macOS handoff destination path/)
+    const validPreparedApp = path.join(stageRoot, 'prepared.app')
+    const validMacLog = path.join(attemptRoot, 'macos-update.log')
+    const validRestoreScript = path.join(attemptRoot, 'macos-restore-update.sh')
+    await writeFile(validRestoreScript, '#!/bin/bash\nexit 0\n', 'utf8')
+    await chmod(validRestoreScript, 0o755)
+
+    // Duplicate macOS flags (shell last-wins RCE bypass) are rejected.
     expect(() =>
       validatePlan(
         root,
@@ -451,8 +471,160 @@ describe('update handoff helper', () => {
               validMacScript,
               '--swap-helper',
               validSwapHelper,
+              '--swap-helper',
+              '/tmp/evil',
               '--dest',
               macPlanWithTx.macosTransaction!.appBundlePath
+            ],
+            waitForExit: true
+          }
+        },
+        options
+      )
+    ).toThrow(/Duplicate macOS handoff flag: --swap-helper/)
+    expect(() =>
+      validatePlan(
+        root,
+        {
+          ...macPlanWithTx,
+          handoff: {
+            command: '/bin/bash',
+            args: [
+              validMacScript,
+              '--dest',
+              macPlanWithTx.macosTransaction!.appBundlePath,
+              '--dest',
+              '/Applications/Other.app'
+            ],
+            waitForExit: true
+          }
+        },
+        options
+      )
+    ).toThrow(/Duplicate macOS handoff flag: --dest/)
+    expect(() =>
+      validatePlan(
+        root,
+        {
+          ...macPlanWithTx,
+          handoff: {
+            command: '/bin/bash',
+            args: [validMacScript, '--log', validMacLog, '--log', '/tmp/outside.log'],
+            waitForExit: true
+          }
+        },
+        options
+      )
+    ).toThrow(/Duplicate macOS handoff flag: --log/)
+    expect(() =>
+      validatePlan(
+        root,
+        {
+          ...macPlanWithTx,
+          handoff: {
+            command: '/bin/bash',
+            args: [validMacScript, '--unknown', 'value'],
+            waitForExit: true
+          }
+        },
+        options
+      )
+    ).toThrow(/Disallowed macOS handoff flag/)
+    expect(() =>
+      validatePlan(
+        root,
+        {
+          ...macPlanWithTx,
+          handoff: {
+            command: '/bin/bash',
+            args: [validMacScript, '--log'],
+            waitForExit: true
+          }
+        },
+        options
+      )
+    ).toThrow(/Disallowed macOS handoff arguments/)
+    expect(() =>
+      validatePlan(
+        root,
+        {
+          ...macPlanWithTx,
+          handoff: {
+            command: '/bin/bash',
+            args: [validMacScript, '--prepared', '/tmp/outside/Evil.app'],
+            waitForExit: true
+          }
+        },
+        options
+      )
+    ).toThrow(/Disallowed macOS handoff prepared path/)
+    expect(() =>
+      validatePlan(
+        root,
+        {
+          ...macPlanWithTx,
+          recovery: {
+            command: '/bin/bash',
+            args: [
+              validRestoreScript,
+              '--backup',
+              '/tmp/outside/Evil.app',
+              '--dest',
+              macPlanWithTx.macosTransaction!.appBundlePath,
+              '--swap-helper',
+              validSwapHelper,
+              '--log',
+              validMacLog
+            ],
+            waitForExit: true
+          }
+        },
+        options
+      )
+    ).toThrow(/Disallowed macOS recovery backup path/)
+
+    expect(() =>
+      validatePlan(
+        root,
+        {
+          ...macPlanWithTx,
+          handoff: {
+            command: '/bin/bash',
+            args: [
+              validMacScript,
+              '--prepared',
+              validPreparedApp,
+              '--dest',
+              macPlanWithTx.macosTransaction!.appBundlePath,
+              '--swap-helper',
+              validSwapHelper,
+              '--version',
+              '2.4.10',
+              '--previous-version',
+              '2.4.9',
+              '--pid',
+              '12345',
+              '--log',
+              validMacLog
+            ],
+            waitForExit: true
+          },
+          recovery: {
+            command: '/bin/bash',
+            args: [
+              validRestoreScript,
+              '--backup',
+              validPreparedApp,
+              '--dest',
+              macPlanWithTx.macosTransaction!.appBundlePath,
+              '--swap-helper',
+              validSwapHelper,
+              '--version',
+              '2.4.9',
+              '--failed-version',
+              '2.4.10',
+              '--log',
+              validMacLog
             ],
             waitForExit: true
           }
@@ -524,6 +696,183 @@ describe('update handoff helper', () => {
         linux.options
       )
     ).toThrow(/Disallowed Linux recovery command/)
+
+    // Linux handoff script flags: reject external --source/--deb/--backup/--log/--dest, duplicates,
+    // unknown flags, and combined --source + --deb; accept valid AppImage and .deb flags.
+    const bundledLinuxScript = path.join(linux.bundledDir, 'linux-apply-update.sh')
+    const validAppImage = path.join(linux.attemptRoot, 'tuff.AppImage')
+    const validDeb = path.join(linux.attemptRoot, 'tuff.deb')
+    const validLinuxBackup = path.join(linux.attemptRoot, 'linux-backup.AppImage')
+    const validLinuxLog = path.join(linux.attemptRoot, 'linux-update.log')
+    const resolvedExecPath = await realpath(process.execPath)
+    await writeFile(validAppImage, 'appimage', 'utf8')
+    await writeFile(validDeb, 'deb', 'utf8')
+    const outsideDeb = path.join(path.dirname(outsideScript), 'evil.deb')
+    await writeFile(outsideDeb, 'deb', 'utf8')
+    const symlinkedDeb = path.join(linux.attemptRoot, 'linked.deb')
+    await symlink(outsideDeb, symlinkedDeb)
+    expect(() =>
+      validatePlan(
+        linux.root,
+        {
+          ...linux.plan,
+          handoff: {
+            command: '/bin/bash',
+            args: [bundledLinuxScript, '--deb', symlinkedDeb],
+            waitForExit: true
+          }
+        },
+        linux.options
+      )
+    ).toThrow(/Disallowed Linux handoff deb path/)
+    expect(() =>
+      validatePlan(
+        linux.root,
+        {
+          ...linux.plan,
+          handoff: {
+            command: '/bin/bash',
+            args: [bundledLinuxScript, '--log', '/tmp/outside.log'],
+            waitForExit: true
+          }
+        },
+        linux.options
+      )
+    ).toThrow(/Disallowed Linux handoff log path/)
+    expect(() =>
+      validatePlan(
+        linux.root,
+        {
+          ...linux.plan,
+          handoff: {
+            command: '/bin/bash',
+            args: [bundledLinuxScript, '--log', validLinuxLog, '--log', '/tmp/evil.log'],
+            waitForExit: true
+          }
+        },
+        linux.options
+      )
+    ).toThrow(/Duplicate Linux handoff flag: --log/)
+    expect(() =>
+      validatePlan(
+        linux.root,
+        {
+          ...linux.plan,
+          handoff: {
+            command: '/bin/bash',
+            args: [bundledLinuxScript, '--deb', '/tmp/outside/evil.deb'],
+            waitForExit: true
+          }
+        },
+        linux.options
+      )
+    ).toThrow(/Disallowed Linux handoff deb path/)
+    expect(() =>
+      validatePlan(
+        linux.root,
+        {
+          ...linux.plan,
+          handoff: {
+            command: '/bin/bash',
+            args: [bundledLinuxScript, '--source', '/tmp/outside/evil.AppImage'],
+            waitForExit: true
+          }
+        },
+        linux.options
+      )
+    ).toThrow(/Disallowed Linux handoff source path/)
+    expect(() =>
+      validatePlan(
+        linux.root,
+        {
+          ...linux.plan,
+          handoff: {
+            command: '/bin/bash',
+            args: [bundledLinuxScript, '--backup', '/tmp/outside/backup.AppImage'],
+            waitForExit: true
+          }
+        },
+        linux.options
+      )
+    ).toThrow(/Disallowed Linux handoff backup path/)
+    expect(() =>
+      validatePlan(
+        linux.root,
+        {
+          ...linux.plan,
+          handoff: {
+            command: '/bin/bash',
+            args: [bundledLinuxScript, '--dest', '/tmp/evil-relaunch'],
+            waitForExit: true
+          }
+        },
+        linux.options
+      )
+    ).toThrow(/Disallowed Linux handoff destination path/)
+    expect(() =>
+      validatePlan(
+        linux.root,
+        {
+          ...linux.plan,
+          handoff: {
+            command: '/bin/bash',
+            args: [bundledLinuxScript, '--source', validAppImage, '--deb', validDeb],
+            waitForExit: true
+          }
+        },
+        linux.options
+      )
+    ).toThrow(/cannot combine --source and --deb/)
+    expect(() =>
+      validatePlan(
+        linux.root,
+        {
+          ...linux.plan,
+          handoff: {
+            command: '/bin/bash',
+            args: [
+              bundledLinuxScript,
+              '--source',
+              validAppImage,
+              '--dest',
+              resolvedExecPath,
+              '--backup',
+              validLinuxBackup,
+              '--pid',
+              '12345',
+              '--log',
+              validLinuxLog
+            ],
+            waitForExit: true
+          }
+        },
+        linux.options
+      )
+    ).not.toThrow()
+    expect(() =>
+      validatePlan(
+        linux.root,
+        {
+          ...linux.plan,
+          handoff: {
+            command: '/bin/bash',
+            args: [
+              bundledLinuxScript,
+              '--deb',
+              validDeb,
+              '--dest',
+              resolvedExecPath,
+              '--pid',
+              '12345',
+              '--log',
+              validLinuxLog
+            ],
+            waitForExit: true
+          }
+        },
+        linux.options
+      )
+    ).not.toThrow()
 
     // Windows: arbitrary executables, external MSI, and non-installer EXE are rejected;
     // real MSI inside root passes.

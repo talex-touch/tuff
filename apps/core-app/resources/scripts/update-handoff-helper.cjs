@@ -11,6 +11,26 @@ const SCHEMA_VERSION = 1
 const POLL_INTERVAL_MS = 250
 const PARENT_EXIT_TIMEOUT_MS = 60_000
 const WINDOWS_NSIS_INSTALLER_RE = /(^|[\s._-])(setup|installer)([\s._-]|$)/i
+const SAFE_VERSION_RE = /^[a-zA-Z0-9._+-]+$/
+const POSITIVE_INT_RE = /^[1-9]\d*$/
+const MACOS_HANDOFF_FLAGS = new Set([
+  '--prepared',
+  '--dest',
+  '--swap-helper',
+  '--version',
+  '--previous-version',
+  '--pid',
+  '--log'
+])
+const MACOS_RECOVERY_FLAGS = new Set([
+  '--backup',
+  '--dest',
+  '--swap-helper',
+  '--version',
+  '--failed-version',
+  '--log'
+])
+const LINUX_HANDOFF_FLAGS = new Set(['--source', '--dest', '--backup', '--deb', '--pid', '--log'])
 
 function normalizeComparable(targetPath, platform = process.platform) {
   const resolved = path.resolve(targetPath)
@@ -56,6 +76,7 @@ function canonicalizeNearestExistingSync(targetPath) {
 }
 
 function assertNoSymlinkBetween(root, candidate, options = {}) {
+  const platform = options.platform || process.platform
   const resolvedRoot = path.resolve(root)
   const resolvedCandidate = path.resolve(candidate)
   const allowMissing = options.allowMissing === true
@@ -76,7 +97,7 @@ function assertNoSymlinkBetween(root, candidate, options = {}) {
         throw error
       }
     }
-    if (normalizeComparable(cursor) === normalizeComparable(resolvedRoot)) {
+    if (normalizeComparable(cursor, platform) === normalizeComparable(resolvedRoot, platform)) {
       break
     }
     const parent = path.dirname(cursor)
@@ -84,6 +105,25 @@ function assertNoSymlinkBetween(root, candidate, options = {}) {
       break
     }
     cursor = parent
+  }
+}
+
+function assertNonSymlinkPath(candidate, options = {}) {
+  if (typeof candidate !== 'string' || !path.isAbsolute(candidate) || candidate.includes('\0')) {
+    return false
+  }
+  const allowMissing = options.allowMissing === true
+  try {
+    if (fsSync.lstatSync(candidate).isSymbolicLink()) {
+      return false
+    }
+    return true
+  } catch (error) {
+    const code = error && error.code
+    if (allowMissing && (code === 'ENOENT' || code === 'ENOTDIR')) {
+      return true
+    }
+    return false
   }
 }
 
@@ -102,7 +142,10 @@ function isWithin(root, candidate, options = {}) {
       return false
     }
     if (options.rejectSymlink) {
-      assertNoSymlinkBetween(root, candidate, { allowMissing: options.allowMissing === true })
+      assertNoSymlinkBetween(root, candidate, {
+        platform,
+        allowMissing: options.allowMissing === true
+      })
     }
     return true
   } catch {
@@ -173,13 +216,27 @@ function isAllowedBundledScriptPath(root, scriptPath, expectedFilename, options 
   )
 }
 
-function getFlagValue(args, flagName) {
-  for (let i = 1; i < args.length; i += 1) {
-    if (args[i] === flagName && i + 1 < args.length) {
-      return args[i + 1]
-    }
+function parseStrictScriptFlags(args, allowedFlags, label) {
+  const flagArgs = args.slice(1)
+  if (flagArgs.length % 2 !== 0) {
+    throw new Error(`Disallowed ${label} arguments`)
   }
-  return null
+  const parsed = new Map()
+  for (let i = 0; i < flagArgs.length; i += 2) {
+    const flag = flagArgs[i]
+    const value = flagArgs[i + 1]
+    if (!allowedFlags.has(flag)) {
+      throw new Error(`Disallowed ${label} flag: ${flag}`)
+    }
+    if (parsed.has(flag)) {
+      throw new Error(`Duplicate ${label} flag: ${flag}`)
+    }
+    if (typeof value !== 'string' || value.length === 0 || value.includes('\0')) {
+      throw new Error(`Invalid ${label} flag value for ${flag}`)
+    }
+    parsed.set(flag, value)
+  }
+  return parsed
 }
 
 function assertCommand(root, plan, command, role, options = {}) {
@@ -223,8 +280,11 @@ function assertCommand(root, plan, command, role, options = {}) {
       throw new Error(`Disallowed macOS ${role} command`)
     }
 
-    const swapHelperArg = getFlagValue(command.args, '--swap-helper')
-    if (swapHelperArg !== null) {
+    const allowedFlags = role === 'handoff' ? MACOS_HANDOFF_FLAGS : MACOS_RECOVERY_FLAGS
+    const flags = parseStrictScriptFlags(command.args, allowedFlags, `macOS ${role}`)
+
+    const swapHelperArg = flags.get('--swap-helper')
+    if (swapHelperArg !== undefined) {
       if (
         !path.isAbsolute(swapHelperArg) ||
         path.basename(path.resolve(swapHelperArg)) !== 'tuff-native-update' ||
@@ -238,10 +298,11 @@ function assertCommand(root, plan, command, role, options = {}) {
       }
     }
 
-    const destArg = getFlagValue(command.args, '--dest')
-    if (destArg !== null) {
+    const destArg = flags.get('--dest')
+    if (destArg !== undefined) {
       if (
         !plan.macosTransaction ||
+        !assertNonSymlinkPath(destArg, { allowMissing: true }) ||
         normalizeComparable(destArg, platform) !==
           normalizeComparable(plan.macosTransaction.appBundlePath, platform)
       ) {
@@ -249,12 +310,50 @@ function assertCommand(root, plan, command, role, options = {}) {
       }
     }
 
-    const logArg = getFlagValue(command.args, '--log')
+    const logArg = flags.get('--log')
     if (
-      logArg !== null &&
-      !isWithin(attemptRoot, logArg, { platform, rejectSymlink: true, allowMissing: true })
+      logArg !== undefined &&
+      (!path.isAbsolute(logArg) ||
+        !isWithin(attemptRoot, logArg, { platform, rejectSymlink: true, allowMissing: true }))
     ) {
       throw new Error(`Disallowed macOS ${role} log path`)
+    }
+
+    const stagedFlag = role === 'handoff' ? '--prepared' : '--backup'
+    const stagedArg = flags.get(stagedFlag)
+    if (stagedArg !== undefined) {
+      const inAttempt = isWithin(attemptRoot, stagedArg, {
+        platform,
+        rejectSymlink: true,
+        allowMissing: true
+      })
+      const inStageRoot = Boolean(
+        plan.macosTransaction &&
+        isWithin(plan.macosTransaction.stageRoot, stagedArg, {
+          platform,
+          rejectSymlink: true,
+          allowMissing: true
+        })
+      )
+      if (
+        !path.isAbsolute(stagedArg) ||
+        path.extname(stagedArg).toLowerCase() !== '.app' ||
+        (!inAttempt && !inStageRoot)
+      ) {
+        throw new Error(`Disallowed macOS ${role} ${stagedFlag.slice(2)} path`)
+      }
+    }
+
+    const pidArg = flags.get('--pid')
+    if (pidArg !== undefined && !POSITIVE_INT_RE.test(pidArg)) {
+      throw new Error(`Disallowed macOS ${role} pid argument`)
+    }
+
+    for (const versionFlag of ['--version', '--previous-version', '--failed-version']) {
+      const versionArg = flags.get(versionFlag)
+      if (versionArg !== undefined && !SAFE_VERSION_RE.test(versionArg)) {
+        throw new Error(`Disallowed macOS ${role} version argument`)
+      }
     }
     return
   }
@@ -271,6 +370,89 @@ function assertCommand(root, plan, command, role, options = {}) {
         })
       ) {
         throw new Error(`Disallowed Linux ${role} command`)
+      }
+
+      const flags = parseStrictScriptFlags(command.args, LINUX_HANDOFF_FLAGS, 'Linux handoff')
+      if (flags.has('--source') && flags.has('--deb')) {
+        throw new Error('Disallowed Linux handoff flags: cannot combine --source and --deb')
+      }
+
+      const sourceArg = flags.get('--source')
+      if (
+        sourceArg !== undefined &&
+        (!path.isAbsolute(sourceArg) ||
+          path.extname(sourceArg).toLowerCase() !== '.appimage' ||
+          !isWithin(root, sourceArg, { platform, rejectSymlink: true, allowMissing: false }))
+      ) {
+        throw new Error('Disallowed Linux handoff source path')
+      }
+
+      const debArg = flags.get('--deb')
+      if (
+        debArg !== undefined &&
+        (!path.isAbsolute(debArg) ||
+          path.extname(debArg).toLowerCase() !== '.deb' ||
+          !isWithin(root, debArg, { platform, rejectSymlink: true, allowMissing: false }))
+      ) {
+        throw new Error('Disallowed Linux handoff deb path')
+      }
+
+      const backupArg = flags.get('--backup')
+      if (
+        backupArg !== undefined &&
+        (!path.isAbsolute(backupArg) ||
+          !isWithin(attemptRoot, backupArg, { platform, rejectSymlink: true, allowMissing: true }))
+      ) {
+        throw new Error('Disallowed Linux handoff backup path')
+      }
+
+      const logArg = flags.get('--log')
+      if (
+        logArg !== undefined &&
+        (!path.isAbsolute(logArg) ||
+          !isWithin(attemptRoot, logArg, { platform, rejectSymlink: true, allowMissing: true }))
+      ) {
+        throw new Error('Disallowed Linux handoff log path')
+      }
+
+      const destArg = flags.get('--dest')
+      if (destArg !== undefined) {
+        const allowedDestCandidates = [
+          ...(Array.isArray(options.allowedLinuxDestPaths) ? options.allowedLinuxDestPaths : []),
+          process.execPath,
+          ...(typeof process.env.APPIMAGE === 'string' && process.env.APPIMAGE.length > 0
+            ? [process.env.APPIMAGE]
+            : [])
+        ].filter((entry) => typeof entry === 'string' && path.isAbsolute(entry))
+        let matchesAllowedDest = false
+        if (assertNonSymlinkPath(destArg, { allowMissing: true })) {
+          try {
+            const destCanonical = normalizeComparable(
+              canonicalizeNearestExistingSync(destArg),
+              platform
+            )
+            matchesAllowedDest = allowedDestCandidates.some((allowed) => {
+              try {
+                return (
+                  normalizeComparable(canonicalizeNearestExistingSync(allowed), platform) ===
+                  destCanonical
+                )
+              } catch {
+                return false
+              }
+            })
+          } catch {
+            matchesAllowedDest = false
+          }
+        }
+        if (!matchesAllowedDest) {
+          throw new Error('Disallowed Linux handoff destination path')
+        }
+      }
+
+      const pidArg = flags.get('--pid')
+      if (pidArg !== undefined && !POSITIVE_INT_RE.test(pidArg)) {
+        throw new Error('Disallowed Linux handoff pid argument')
       }
       return
     }
