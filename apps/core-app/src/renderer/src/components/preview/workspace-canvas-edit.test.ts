@@ -546,5 +546,10 @@ describe('workspace-canvas-edit', () => {
     expect(computeInlineRevealSegments('旧句子。', '完全崭新的第一段文字。')).toEqual([
       { kind: 'reveal', text: '完全崭新的第一段文字。' }
     ])
+
+    // 5. Never splits a UTF-16 surrogate pair across anchor and reveal segments.
+    expect(computeInlineRevealSegments('😀 old', '😁 new')).toEqual([
+      { kind: 'reveal', text: '😁 new' }
+    ])
   })
 })

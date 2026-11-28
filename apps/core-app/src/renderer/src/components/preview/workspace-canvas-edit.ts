@@ -1446,6 +1446,14 @@ export function computeInlineRevealSegments(before: string, after: string): Inli
     prefixLen += 1
   }
 
+  // Keep UTF-16 surrogate pairs intact (e.g. 😀 vs 😁 share a high surrogate 0xD83D).
+  if (prefixLen > 0) {
+    const prevCode = after.charCodeAt(prefixLen - 1)
+    if (prevCode >= 0xd800 && prevCode <= 0xdbff) {
+      prefixLen -= 1
+    }
+  }
+
   // Snap prefix back to a clean boundary if we landed mid-ASCII word so half a word never stays frozen.
   if (
     prefixLen > 0 &&

@@ -307,7 +307,7 @@ function copyReply(text: string): void {
   .tx-bui-context-chunk__body {
     margin: 8px 11px 9px;
     padding: 0;
-    white-space: pre-line;
+    white-space: pre-wrap;
     display: -webkit-box;
     -webkit-line-clamp: 6;
     -webkit-box-orient: vertical;

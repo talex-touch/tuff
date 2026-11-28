@@ -2400,7 +2400,16 @@ watch(isCanvasLocked, (locked, prevLocked) => {
   })
 })
 
+watch(canvasShowDiff, (open) => {
+  if (open && canvasSweepActive.value) {
+    finishCanvasSweep()
+  }
+})
+
 watch(viewMode, (mode) => {
+  if (mode !== 'preview' && canvasSweepActive.value) {
+    finishCanvasSweep()
+  }
   if (!isCanvasLocked.value) {
     clearMdSelection()
     selectionPrompt.value = ''
@@ -3623,6 +3632,7 @@ function adjustZoom(delta: number): void {
                   class="WorkspaceFileViewer-CanvasOldLayer tx-markdown-editor"
                   :class="{ 'tx-markdown-editor--dark': beamTheme === 'dark' }"
                   aria-hidden="true"
+                  inert
                   data-testid="file-viewer-canvas-old-layer"
                 />
                 <!-- Paper-matched gradient mist riding seamlessly along the active old->new frontier -->

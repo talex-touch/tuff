@@ -1220,11 +1220,10 @@ onBeforeUnmount(() => {
   :deep(.tx-bui-context-chunk__body) {
     margin: 8px 12px 9px;
     padding: 0;
-    white-space: pre-line;
-    display: -webkit-box;
-    -webkit-line-clamp: 6;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 168px;
+    overflow-y: auto;
   }
 }
 
