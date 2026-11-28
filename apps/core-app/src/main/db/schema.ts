@@ -2299,3 +2299,22 @@ export const conversationFileReviews = sqliteTable(
     ownerIdx: index('idx_conversation_file_reviews_owner').on(table.conversationId, table.createdAt)
   })
 )
+
+/**
+ * Encrypted local-only TDS Design Canvas sessions keyed by SHA-256(conversationId).
+ *
+ * Each row holds an AES-256-GCM envelope sealed via `wrapSecureStoreValue` under the machine root
+ * secret (`local-secret.v1.key`) and authenticated against `keyHash` + purpose `tds-canvas-session`.
+ * Raw conversation IDs and frame/note/history plaintext are never stored unencrypted.
+ */
+export const tdsCanvasSessions = sqliteTable(
+  'tds_canvas_sessions',
+  {
+    keyHash: text('key_hash').primaryKey(),
+    envelope: text('envelope').notNull(),
+    updatedAt: integer('updated_at').notNull()
+  },
+  (table) => ({
+    updatedIdx: index('idx_tds_canvas_sessions_updated').on(table.updatedAt)
+  })
+)

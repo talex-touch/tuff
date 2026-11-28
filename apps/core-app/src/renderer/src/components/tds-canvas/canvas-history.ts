@@ -8,7 +8,10 @@ import type {
 
 const FNV_OFFSET_BASIS_32 = 0x811c9dc5
 const FNV_PRIME_32 = 0x01000193
-const DEFAULT_MAX_ENTRIES = 60
+export const MAX_CANVAS_HISTORY_ENTRIES = 50
+export const MAX_CANVAS_HISTORY_BLOBS = 512
+const DEFAULT_MAX_ENTRIES = MAX_CANVAS_HISTORY_ENTRIES
+const DEFAULT_MAX_BLOBS = MAX_CANVAS_HISTORY_BLOBS
 
 /**
  * Fast, deterministic 32-bit FNV-1a content hash with length discriminator.
@@ -106,6 +109,7 @@ export interface CommitSnapshotOptions {
   now?: number
   id?: string
   maxEntries?: number
+  maxBlobs?: number
   /**
    * When true, appends at the end of the timeline without dropping entries after `cursor`.
    * Used by `restoreSnapshot` so pre-restore states remain intact.
@@ -121,6 +125,7 @@ export function commitSnapshot(
 ): { state: TdsCanvasHistoryState; entry: TdsCanvasHistoryEntry } {
   const createdAt = options.now ?? Date.now()
   const maxEntries = Math.max(2, options.maxEntries ?? DEFAULT_MAX_ENTRIES)
+  const maxBlobs = Math.max(1, options.maxBlobs ?? DEFAULT_MAX_BLOBS)
   const baseEntries = options.preserveFuture
     ? [...state.entries]
     : state.cursor >= 0
@@ -141,7 +146,14 @@ export function commitSnapshot(
     nextEntries = nextEntries.slice(nextEntries.length - maxEntries)
   }
 
-  const prunedBlobs = pruneUnreferencedBlobs(nextBlobs, nextEntries)
+  let prunedBlobs = pruneUnreferencedBlobs(nextBlobs, nextEntries)
+  // Never drop a blob that is still referenced by a retained snapshot: prune oldest snapshots first
+  // so every retained entry can always materialize its full frame source cleanly.
+  while (Object.keys(prunedBlobs).length > maxBlobs && nextEntries.length > 1) {
+    nextEntries = nextEntries.slice(1)
+    prunedBlobs = pruneUnreferencedBlobs(nextBlobs, nextEntries)
+  }
+
   return {
     state: {
       blobs: prunedBlobs,

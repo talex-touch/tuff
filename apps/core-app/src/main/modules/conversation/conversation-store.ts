@@ -6,9 +6,16 @@ import {
   conversations,
   conversationSyncState,
   localAiCliSessions,
-  projects
+  projects,
+  tdsCanvasSessions
 } from '../../db/schema'
 import { databaseModule } from '../database'
+import {
+  clearTdsCanvasConversationDeletedTombstone,
+  deleteTdsCanvasSessionForConversation,
+  hashCanvasConversationId,
+  markTdsCanvasConversationDeleted
+} from '../tds-capture/canvas-session-cascade'
 
 export type ConversationRole = 'user' | 'assistant'
 export type ConversationMessageStatus = 'complete' | 'streaming' | 'failed'
@@ -172,6 +179,10 @@ async function writeConversationSnapshot(
       })
     })
   await (mutationFence ? mutationFence.write(snapshot.id, write) : write())
+
+  if (applied) {
+    clearTdsCanvasConversationDeletedTombstone(snapshot.id)
+  }
 
   if (notifySource && applied) {
     emitConversationMutation({
@@ -408,35 +419,52 @@ export async function saveConversation(input: SaveConversationInput): Promise<St
 export async function deleteConversation(id: string): Promise<{ deleted: boolean }> {
   const db = databaseModule.getDb()
   const deletedAt = Date.now()
+  const canvasKeyHash = hashCanvasConversationId(id)
   let projectId: string | null = null
   let deleted = false
   const remove = () =>
     scheduleDbWrite('conversation.delete', async () => {
-      await db.transaction(async (tx) => {
-        const [conversation] = await tx
-          .select({ projectId: conversations.projectId })
-          .from(conversations)
-          .where(eq(conversations.id, id))
-        if (!conversation) return
-        projectId = conversation.projectId
-        await tx.delete(localAiCliSessions).where(eq(localAiCliSessions.conversationId, id))
-        await tx.delete(conversations).where(eq(conversations.id, id))
-        if (projectId === null) {
-          await tx
-            .insert(conversationSyncState)
-            .values({ conversationId: id, dirtyAt: deletedAt, deletedAt })
-            .onConflictDoUpdate({
-              target: conversationSyncState.conversationId,
-              set: { dirtyAt: deletedAt, deletedAt }
-            })
-        } else {
-          await tx.delete(conversationSyncState).where(eq(conversationSyncState.conversationId, id))
+      let markedTombstone = false
+      try {
+        await db.transaction(async (tx) => {
+          const [conversation] = await tx
+            .select({ projectId: conversations.projectId })
+            .from(conversations)
+            .where(eq(conversations.id, id))
+          if (!conversation) return
+          projectId = conversation.projectId
+          markTdsCanvasConversationDeleted(id)
+          markedTombstone = true
+          await tx.delete(localAiCliSessions).where(eq(localAiCliSessions.conversationId, id))
+          if (canvasKeyHash) {
+            await tx.delete(tdsCanvasSessions).where(eq(tdsCanvasSessions.keyHash, canvasKeyHash))
+          }
+          await tx.delete(conversations).where(eq(conversations.id, id))
+          if (projectId === null) {
+            await tx
+              .insert(conversationSyncState)
+              .values({ conversationId: id, dirtyAt: deletedAt, deletedAt })
+              .onConflictDoUpdate({
+                target: conversationSyncState.conversationId,
+                set: { dirtyAt: deletedAt, deletedAt }
+              })
+          } else {
+            await tx
+              .delete(conversationSyncState)
+              .where(eq(conversationSyncState.conversationId, id))
+          }
+          deleted = true
+        })
+      } catch (error) {
+        if (markedTombstone) {
+          clearTdsCanvasConversationDeletedTombstone(id)
         }
-        deleted = true
-      })
+        throw error
+      }
     })
   await (mutationFence ? mutationFence.remove(id, remove) : remove())
   if (deleted) {
+    await deleteTdsCanvasSessionForConversation(id)
     emitConversationMutation({
       type: 'delete',
       conversationId: id,
@@ -582,23 +610,38 @@ export async function applyConversationSyncSnapshot(
 
 export async function applyConversationSyncDeletion(id: string, deletedAt: number): Promise<void> {
   const db = databaseModule.getDb()
+  const canvasKeyHash = hashCanvasConversationId(id)
   let applied = false
   const remove = () =>
     scheduleDbWrite('conversation.sync-delete', async () => {
-      applied = await db.transaction(async (tx) => {
-        const [local] = await tx
-          .select({ projectId: conversations.projectId })
-          .from(conversations)
-          .where(eq(conversations.id, id))
-        if (local && local.projectId !== null) return false
-        await tx.delete(localAiCliSessions).where(eq(localAiCliSessions.conversationId, id))
-        await tx.delete(conversations).where(eq(conversations.id, id))
-        await tx.delete(conversationSyncState).where(eq(conversationSyncState.conversationId, id))
-        return true
-      })
+      let markedTombstone = false
+      try {
+        applied = await db.transaction(async (tx) => {
+          const [local] = await tx
+            .select({ projectId: conversations.projectId })
+            .from(conversations)
+            .where(eq(conversations.id, id))
+          if (local && local.projectId !== null) return false
+          markTdsCanvasConversationDeleted(id)
+          markedTombstone = true
+          await tx.delete(localAiCliSessions).where(eq(localAiCliSessions.conversationId, id))
+          if (canvasKeyHash) {
+            await tx.delete(tdsCanvasSessions).where(eq(tdsCanvasSessions.keyHash, canvasKeyHash))
+          }
+          await tx.delete(conversations).where(eq(conversations.id, id))
+          await tx.delete(conversationSyncState).where(eq(conversationSyncState.conversationId, id))
+          return true
+        })
+      } catch (error) {
+        if (markedTombstone) {
+          clearTdsCanvasConversationDeletedTombstone(id)
+        }
+        throw error
+      }
     })
   await (mutationFence ? mutationFence.remove(id, remove) : remove())
   if (applied) {
+    await deleteTdsCanvasSessionForConversation(id)
     emitConversationMutation({
       type: 'delete',
       conversationId: id,

@@ -1,8 +1,11 @@
 import { Buffer } from 'node:buffer'
 import { EventEmitter } from 'node:events'
-import { mkdtemp, readdir, rm, stat, symlink, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readdir, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
+import process from 'node:process'
+import { fileURLToPath } from 'node:url'
+import { createClient, type Client } from '@libsql/client'
 import type { ModuleDestroyContext, ModuleInitContext } from '@talex-touch/utils'
 import type { HandlerContext, ITuffTransportMain } from '@talex-touch/utils/transport/main'
 import {
@@ -12,8 +15,13 @@ import {
   TdsCaptureEvents,
   type TdsCanvasSessionData
 } from '@talex-touch/utils/transport/sdk/domains/tds-capture'
+import { drizzle } from 'drizzle-orm/libsql'
+import { migrate } from 'drizzle-orm/libsql/migrator'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
+import type { MainDatabase } from '../../db/db-write'
+import * as schema from '../../db/schema'
+import { LOCAL_SECRET_FILE } from '../../utils/secure-store'
 
 const { mockApp, mockTransportHandlers, mockResolveMainRuntime } = vi.hoisted(() => {
   const listeners = new Map<string, Set<(...args: unknown[]) => void>>()
@@ -81,10 +89,15 @@ vi.mock('../../core/runtime-accessor', () => ({
 }))
 
 import {
+  assertAppRendererCaller,
+  estimateCanvasSessionLowerBoundBytes,
   hashCanvasConversationId,
   IDLE_TTL_MS,
   injectCaptureCsp,
   isAllowedTdsCaptureUrl,
+  MAX_CANVAS_FRAMES,
+  MAX_CANVAS_HISTORY_BLOBS,
+  MAX_CANVAS_HISTORY_ENTRIES,
   MAX_CANVAS_SESSION_BYTES,
   MAX_CANVAS_SESSIONS,
   MAX_CONCURRENT_SLOTS,
@@ -1333,89 +1346,261 @@ function makeSampleCanvasSession(
   }
 }
 
-describe('TdsCanvasSessionStore & host-only persistence IPC', () => {
-  const tempDirs: string[] = []
+const migrationsFolder = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '../../../../resources/db/migrations'
+)
 
-  async function createTempDir(): Promise<string> {
-    const dir = await mkdtemp(path.join(os.tmpdir(), 'tds-canvas-store-test-'))
-    tempDirs.push(dir)
-    return dir
+interface CanvasStoreTestEnv {
+  tempDir: string
+  rootPath: string
+  dbPath: string
+  legacyDir: string
+  client: Client
+  db: MainDatabase
+  scheduleWrite: <T>(label: string, op: () => Promise<T>) => Promise<T>
+}
+
+describe('TdsCanvasSessionStore & host-only persistence IPC', () => {
+  const activeEnvs: CanvasStoreTestEnv[] = []
+
+  async function createStoreEnv(): Promise<CanvasStoreTestEnv> {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), 'tds-canvas-store-test-'))
+    const rootPath = path.join(tempDir, 'root')
+    const legacyDir = path.join(tempDir, 'legacy-tds-canvas-sessions')
+    const dbPath = path.join(tempDir, 'test.db')
+    const client = createClient({ url: `file:${dbPath}` })
+    const db = drizzle(client, { schema })
+    await migrate(db, { migrationsFolder })
+    const env: CanvasStoreTestEnv = {
+      tempDir,
+      rootPath,
+      dbPath,
+      legacyDir,
+      client,
+      db,
+      scheduleWrite: async (_label, op) => await op()
+    }
+    activeEnvs.push(env)
+    return env
   }
 
   afterEach(async () => {
+    vi.restoreAllMocks()
     mockTransportHandlers.clear()
     mockApp.removeAllListeners('before-quit')
-    while (tempDirs.length > 0) {
-      const dir = tempDirs.pop()!
-      await rm(dir, { recursive: true, force: true })
+    while (activeEnvs.length > 0) {
+      const env = activeEnvs.pop()!
+      env.client.close()
+      await rm(env.tempDir, { recursive: true, force: true })
     }
   })
 
-  it('persists and reloads full canvas sessions across store restarts using hashed owner-only files', async () => {
-    const storageDir = await createTempDir()
+  it('encrypts sessions into SQLite via secure-store across restarts with zero plaintext on disk', async () => {
+    const env = await createStoreEnv()
     let nowMs = 10_000
     const storeA = new TdsCanvasSessionStore({
-      storageDir,
+      getDb: () => env.db,
+      scheduleWrite: env.scheduleWrite,
+      rootPath: env.rootPath,
+      legacyStorageDir: env.legacyDir,
       now: () => nowMs
     })
 
     const conversationId = '../conv/secret:id?v=1'
-    const sample = makeSampleCanvasSession()
+    const canaryFrame = 'CANARY-FRAME-SECRET-8841'
+    const canaryNote = 'CANARY-NOTE-SECRET-9912'
+    const canaryHistory = 'CANARY-HIST-SECRET-4477'
+    const sample = makeSampleCanvasSession({
+      frames: [
+        {
+          ...makeSampleCanvasSession().frames[0]!,
+          source: `<!doctype html><html><body><h1>${canaryFrame}</h1></body></html>`
+        }
+      ],
+      notes: [
+        {
+          ...makeSampleCanvasSession().notes[0]!,
+          text: canaryNote
+        }
+      ],
+      history: {
+        ...makeSampleCanvasSession().history,
+        blobs: {
+          h1: `<!doctype html><html><body><h1>${canaryHistory}</h1></body></html>`
+        }
+      }
+    })
+
     const saveRes = await storeA.save(conversationId, sample)
     expect(saveRes.ok).toBe(true)
     expect(saveRes.bytes).toBeGreaterThan(0)
 
-    const files = await readdir(storageDir)
+    // Verify raw SQLite row stores ONLY hashed key and AES-256-GCM envelope with zero plaintext
     const expectedHash = hashCanvasConversationId(conversationId)!
-    expect(files).toEqual([`${expectedHash}.json`])
-    expect(files[0]).not.toContain('secret')
+    const rows = await env.client.execute({
+      sql: 'SELECT key_hash, envelope, updated_at FROM tds_canvas_sessions',
+      args: []
+    })
+    expect(rows.rows).toHaveLength(1)
+    expect(rows.rows[0]?.key_hash).toBe(expectedHash)
+    const rawEnvelope = String(rows.rows[0]?.envelope ?? '')
+    const parsedEnvelope = JSON.parse(rawEnvelope) as {
+      v: number
+      backend: string
+      alg: string
+      c: string
+    }
+    expect(parsedEnvelope.v).toBe(1)
+    expect(parsedEnvelope.backend).toBe('local-secret')
+    expect(parsedEnvelope.alg).toBe('A256GCM')
+    expect(rawEnvelope).not.toContain(canaryFrame)
+    expect(rawEnvelope).not.toContain(canaryNote)
+    expect(rawEnvelope).not.toContain(canaryHistory)
+    expect(rawEnvelope).not.toContain(conversationId)
 
-    const fileStats = await stat(path.join(storageDir, files[0]!))
-    expect(fileStats.mode & 0o777).toBe(0o600)
+    // Verify raw SQLite database file contains zero plaintext as well
+    const dbBytes = await readFile(env.dbPath, 'latin1')
+    expect(dbBytes).not.toContain(canaryFrame)
+    expect(dbBytes).not.toContain(canaryNote)
+    expect(dbBytes).not.toContain(canaryHistory)
+    expect(dbBytes).not.toContain('secret:id')
+
+    if (process.platform !== 'win32') {
+      const secretStats = await stat(path.join(env.rootPath, 'config', LOCAL_SECRET_FILE))
+      expect(secretStats.mode & 0o777).toBe(0o600)
+    }
 
     // Re-instantiate store to simulate a full process restart
     const storeB = new TdsCanvasSessionStore({
-      storageDir,
+      getDb: () => env.db,
+      scheduleWrite: env.scheduleWrite,
+      rootPath: env.rootPath,
+      legacyStorageDir: env.legacyDir,
       now: () => (nowMs += 100)
     })
     const loaded = await storeB.load(conversationId)
     expect(loaded.ok).toBe(true)
     expect(loaded.session).toEqual(sample)
 
+    // Moving an envelope to another keyHash fails authentication cleanly
+    const otherHash = hashCanvasConversationId('other-conv')!
+    await env.client.execute({
+      sql: 'INSERT INTO tds_canvas_sessions (key_hash, envelope, updated_at) VALUES (?, ?, ?)',
+      args: [otherHash, rawEnvelope, nowMs]
+    })
+    expect(await storeB.load('other-conv')).toEqual({ ok: true, session: null })
+
+    // Tampering ciphertext fails closed cleanly without throwing
+    const tampered = JSON.stringify({
+      ...parsedEnvelope,
+      c: `${parsedEnvelope.c[0] === 'A' ? 'B' : 'A'}${parsedEnvelope.c.slice(1)}`
+    })
+    await env.client.execute({
+      sql: 'UPDATE tds_canvas_sessions SET envelope = ? WHERE key_hash = ?',
+      args: [tampered, otherHash]
+    })
+    expect(await storeB.load('other-conv')).toEqual({ ok: true, session: null })
+
     const deleted = await storeB.delete(conversationId)
     expect(deleted).toEqual({ ok: true, deleted: true })
     expect(await storeB.load(conversationId)).toEqual({ ok: true, session: null })
+
+    // Corrupt root secret fails closed on save (never falls back to plaintext)
+    await writeFile(path.join(env.rootPath, 'config', LOCAL_SECRET_FILE), 'bad-secret', 'utf8')
+    const encryptFail = await storeB.save('conv-fail-closed', sample)
+    expect(encryptFail.ok).toBe(false)
+    expect(encryptFail.error).toBe('CANVAS_SESSION_ENCRYPT_FAILED')
   })
 
-  it('sanitizes untrusted session payloads, strips prototype-polluting keys, and tolerates corrupt disk files', async () => {
-    const storageDir = await createTempDir()
-    const polluted = JSON.parse(
-      JSON.stringify({
-        ...makeSampleCanvasSession(),
-        extraField: 'should-be-stripped',
-        notes: [
+  it('cleans up legacy plaintext JSON files best-effort while ignoring symlinks and unrelated files', async () => {
+    const env = await createStoreEnv()
+    await mkdir(env.legacyDir, { recursive: true })
+    const legacyHash = hashCanvasConversationId('legacy-conv')!
+    const symlinkHash = hashCanvasConversationId('legacy-symlink')!
+    const legacyJson = path.join(env.legacyDir, `${legacyHash}.json`)
+    const legacyTmp = path.join(env.legacyDir, `${legacyHash}.1234.aabbcc.tmp`)
+    const outsideTarget = path.join(env.tempDir, 'outside.txt')
+    const symlinkFile = path.join(env.legacyDir, `${symlinkHash}.json`)
+    const unrelatedFile = path.join(env.legacyDir, 'keep-me.txt')
+
+    await writeFile(legacyJson, '{"plaintext":"secret"}', 'utf8')
+    await writeFile(legacyTmp, 'partial', 'utf8')
+    await writeFile(outsideTarget, 'do-not-delete', 'utf8')
+    await writeFile(unrelatedFile, 'unrelated', 'utf8')
+    await symlink(outsideTarget, symlinkFile)
+
+    const store = new TdsCanvasSessionStore({
+      getDb: () => env.db,
+      scheduleWrite: env.scheduleWrite,
+      rootPath: env.rootPath,
+      legacyStorageDir: env.legacyDir
+    })
+    await store.cleanupLegacyPlaintextFiles()
+
+    const remaining = await readdir(env.legacyDir)
+    expect(remaining.sort()).toEqual([`${symlinkHash}.json`, 'keep-me.txt'].sort())
+    expect(await readFile(outsideTarget, 'utf8')).toBe('do-not-delete')
+  })
+
+  it('sanitizes untrusted session payloads, strips prototype-polluting keys, and tolerates corrupt SQLite envelopes', async () => {
+    const env = await createStoreEnv()
+    const rawBlobs = JSON.parse(
+      '{"good":"<p>ok</p>","__proto__":"evil","constructor":"evil","prototype":"evil","orphan":"<p>unused</p>"}'
+    ) as Record<string, string>
+    const polluted = {
+      ...makeSampleCanvasSession(),
+      extraField: 'should-be-stripped',
+      notes: [
+        {
+          id: 'n1',
+          frameId: 'frame-1',
+          xRatio: 2.5,
+          yRatio: -0.4,
+          text: 'Clamped coords',
+          resolved: 'yes',
+          createdAt: Number.NaN
+        }
+      ],
+      history: {
+        blobs: rawBlobs,
+        entries: [
           {
-            id: 'n1',
-            frameId: 'frame-1',
-            xRatio: 2.5,
-            yRatio: -0.4,
-            text: 'Clamped coords',
-            resolved: 'yes',
-            createdAt: Number.NaN
+            id: 'e-valid',
+            label: 'Valid',
+            createdAt: 100,
+            frameSnapshots: [
+              {
+                id: 'frame-1',
+                title: 'Valid',
+                kind: 'html',
+                deviceId: 'desktop-hd',
+                x: 0,
+                y: 0,
+                sourceHash: 'good'
+              }
+            ]
+          },
+          {
+            id: 'e-missing-blob',
+            label: 'Broken',
+            createdAt: 200,
+            frameSnapshots: [
+              {
+                id: 'frame-1',
+                title: 'Broken',
+                kind: 'html',
+                deviceId: 'desktop-hd',
+                x: 0,
+                y: 0,
+                sourceHash: 'does-not-exist'
+              }
+            ]
           }
         ],
-        history: {
-          blobs: {
-            good: '<p>ok</p>',
-            __proto__: 'evil',
-            constructor: 'evil',
-            prototype: 'evil'
-          },
-          entries: [],
-          cursor: 99
-        }
-      })
-    ) as unknown
+        cursor: 99
+      }
+    }
 
     const sanitized = sanitizeCanvasSessionData(polluted)
     expect(sanitized.ok).toBe(true)
@@ -1431,24 +1616,191 @@ describe('TdsCanvasSessionStore & host-only persistence IPC', () => {
         createdAt: 0
       })
       expect(Object.keys(sanitized.session.history.blobs)).toEqual(['good'])
-      expect(sanitized.session.history.cursor).toBe(-1)
+      expect(sanitized.session.history.entries.map((e) => e.id)).toEqual(['e-valid'])
+      expect(sanitized.session.history.cursor).toBe(0)
     }
 
-    // Corrupt file on disk returns null cleanly instead of throwing
-    const store = new TdsCanvasSessionStore({ storageDir })
+    // Corrupt non-envelope payload in SQLite returns null cleanly instead of throwing
+    const store = new TdsCanvasSessionStore({
+      getDb: () => env.db,
+      scheduleWrite: env.scheduleWrite,
+      rootPath: env.rootPath,
+      legacyStorageDir: env.legacyDir
+    })
     const hash = hashCanvasConversationId('conv-corrupt')!
-    await writeFile(path.join(storageDir, `${hash}.json`), '{broken-json', 'utf8')
+    await env.client.execute({
+      sql: 'INSERT INTO tds_canvas_sessions (key_hash, envelope, updated_at) VALUES (?, ?, ?)',
+      args: [hash, '{broken-envelope', 1_000]
+    })
     expect(await store.load('conv-corrupt')).toEqual({ ok: true, session: null })
   })
 
-  it('enforces payload byte bounds without clobbering existing sessions and evicts oldest LRU sessions beyond cap', async () => {
+  it('preserves every retained snapshot blob for >128 distinct sources and prunes oldest snapshots past MAX_CANVAS_HISTORY_BLOBS', async () => {
+    expect(MAX_CANVAS_HISTORY_ENTRIES).toBe(50)
+    expect(MAX_CANVAS_HISTORY_BLOBS).toBe(512)
+
+    const env = await createStoreEnv()
+    const store = new TdsCanvasSessionStore({
+      getDb: () => env.db,
+      scheduleWrite: env.scheduleWrite,
+      rootPath: env.rootPath,
+      legacyStorageDir: env.legacyDir
+    })
+
+    // 40 snapshots x 4 distinct frames = 160 distinct referenced blobs (> 128 legacy cap)
+    const blobs160: Record<string, string> = {}
+    const entries40 = Array.from({ length: 40 }, (_, snapIdx) => ({
+      id: `snap-${snapIdx}`,
+      label: `Snapshot ${snapIdx}`,
+      createdAt: 1000 + snapIdx,
+      frameSnapshots: Array.from({ length: 4 }, (_, frameIdx) => {
+        const hash = `h-${snapIdx}-${frameIdx}`
+        blobs160[hash] = `<p>snap=${snapIdx},frame=${frameIdx}</p>`
+        return {
+          id: `f-${frameIdx}`,
+          title: `Frame ${frameIdx}`,
+          kind: 'html' as const,
+          deviceId: 'desktop-hd',
+          x: frameIdx * 100,
+          y: 0,
+          sourceHash: hash
+        }
+      })
+    }))
+
+    const session160 = makeSampleCanvasSession({
+      history: {
+        blobs: blobs160,
+        entries: entries40,
+        cursor: 39
+      }
+    })
+    expect((await store.save('conv-160-blobs', session160)).ok).toBe(true)
+
+    const reloaded = await store.load('conv-160-blobs')
+    expect(reloaded.ok).toBe(true)
+    expect(reloaded.session?.history.entries).toHaveLength(40)
+    expect(Object.keys(reloaded.session?.history.blobs ?? {})).toHaveLength(160)
+    for (const entry of reloaded.session!.history.entries) {
+      for (const snap of entry.frameSnapshots) {
+        expect(reloaded.session!.history.blobs[snap.sourceHash]).toBe(blobs160[snap.sourceHash])
+      }
+    }
+
+    // 30 snapshots x 20 distinct frames = 600 distinct blobs (> MAX_CANVAS_HISTORY_BLOBS = 512)
+    // Oldest snapshots must be pruned so ZERO retained snapshot references a dropped blob.
+    const blobs600: Record<string, string> = {}
+    const entries30 = Array.from({ length: 30 }, (_, snapIdx) => ({
+      id: `big-${snapIdx}`,
+      label: `Big ${snapIdx}`,
+      createdAt: 2000 + snapIdx,
+      frameSnapshots: Array.from({ length: 20 }, (_, frameIdx) => {
+        const hash = `big-${snapIdx}-${frameIdx}`
+        blobs600[hash] = `<div>${snapIdx}:${frameIdx}</div>`
+        return {
+          id: `bf-${frameIdx}`,
+          title: `Big Frame ${frameIdx}`,
+          kind: 'html' as const,
+          deviceId: 'desktop-hd',
+          x: 0,
+          y: 0,
+          sourceHash: hash
+        }
+      })
+    }))
+
+    const pruned = sanitizeCanvasSessionData(
+      makeSampleCanvasSession({
+        history: { blobs: blobs600, entries: entries30, cursor: 29 }
+      })
+    )
+    expect(pruned.ok).toBe(true)
+    if (pruned.ok) {
+      expect(pruned.session.history.entries.length).toBe(25)
+      expect(pruned.session.history.entries[0]?.id).toBe('big-5')
+      expect(pruned.session.history.entries.at(-1)?.id).toBe('big-29')
+      expect(Object.keys(pruned.session.history.blobs).length).toBeLessThanOrEqual(
+        MAX_CANVAS_HISTORY_BLOBS
+      )
+      for (const entry of pruned.session.history.entries) {
+        for (const snap of entry.frameSnapshots) {
+          expect(pruned.session.history.blobs[snap.sourceHash]).toBe(blobs600[snap.sourceHash])
+        }
+      }
+    }
+  })
+
+  it('rejects over-limit frame snapshots with CANVAS_SESSION_FRAME_LIMIT while keeping previous session intact', async () => {
+    expect(MAX_CANVAS_FRAMES).toBe(64)
+    const env = await createStoreEnv()
+    const store = new TdsCanvasSessionStore({
+      getDb: () => env.db,
+      scheduleWrite: env.scheduleWrite,
+      rootPath: env.rootPath,
+      legacyStorageDir: env.legacyDir
+    })
+
+    const initial = makeSampleCanvasSession()
+    expect((await store.save('conv-frame-limit', initial)).ok).toBe(true)
+
+    const tooManyFrames = makeSampleCanvasSession({
+      frames: Array.from({ length: MAX_CANVAS_FRAMES + 1 }, (_, index) => ({
+        id: `frame-${index}`,
+        title: `Frame ${index}`,
+        kind: 'html' as const,
+        source: `<p>${index}</p>`,
+        deviceId: 'desktop-hd',
+        x: index * 10,
+        y: 0
+      }))
+    })
+    const frameLimitRes = await store.save('conv-frame-limit', tooManyFrames)
+    expect(frameLimitRes.ok).toBe(false)
+    expect(frameLimitRes.error).toContain('CANVAS_SESSION_FRAME_LIMIT')
+
+    // Previous saved session must remain intact
+    expect((await store.load('conv-frame-limit')).session).toEqual(initial)
+
+    // History snapshot exceeding MAX_CANVAS_FRAMES also rejects cleanly
+    const overLimitHistory = makeSampleCanvasSession({
+      history: {
+        blobs: { shared: '<p>x</p>' },
+        entries: [
+          {
+            id: 'hist-over',
+            label: 'Over limit',
+            createdAt: 1,
+            frameSnapshots: Array.from({ length: MAX_CANVAS_FRAMES + 1 }, (_, index) => ({
+              id: `hf-${index}`,
+              title: `H ${index}`,
+              kind: 'html' as const,
+              deviceId: 'desktop-hd',
+              x: 0,
+              y: 0,
+              sourceHash: 'shared'
+            }))
+          }
+        ],
+        cursor: 0
+      }
+    })
+    const historyLimitRes = await store.save('conv-frame-limit', overLimitHistory)
+    expect(historyLimitRes.ok).toBe(false)
+    expect(historyLimitRes.error).toContain('CANVAS_SESSION_FRAME_LIMIT')
+    expect((await store.load('conv-frame-limit')).session).toEqual(initial)
+  })
+
+  it('enforces pre-stringify byte budget, exact UTF-8 byte bounds, and LRU eviction across restarts', async () => {
     expect(MAX_CANVAS_SESSIONS).toBe(20)
     expect(MAX_CANVAS_SESSION_BYTES).toBe(4 * 1024 * 1024)
 
-    const storageDir = await createTempDir()
+    const env = await createStoreEnv()
     let clockMs = 1_000
     const store = new TdsCanvasSessionStore({
-      storageDir,
+      getDb: () => env.db,
+      scheduleWrite: env.scheduleWrite,
+      rootPath: env.rootPath,
+      legacyStorageDir: env.legacyDir,
       maxSessions: 2,
       maxSessionBytes: 4 * 1024,
       now: () => (clockMs += 100)
@@ -1457,7 +1809,7 @@ describe('TdsCanvasSessionStore & host-only persistence IPC', () => {
     const initial = makeSampleCanvasSession()
     expect((await store.save('conv-1', initial)).ok).toBe(true)
 
-    // Oversized session (> 4 KiB cap) must fail cleanly AND preserve conv-1 on disk
+    // Aggregate frame + note + blob bytes > 4 KiB -> rejected BEFORE calling JSON.stringify
     const oversized = makeSampleCanvasSession({
       frames: [
         {
@@ -1466,9 +1818,28 @@ describe('TdsCanvasSessionStore & host-only persistence IPC', () => {
         }
       ]
     })
+    expect(estimateCanvasSessionLowerBoundBytes(oversized)).toBeGreaterThan(4 * 1024)
+    const stringifySpy = vi.spyOn(JSON, 'stringify')
     const oversizedRes = await store.save('conv-1', oversized)
     expect(oversizedRes.ok).toBe(false)
     expect(oversizedRes.error).toContain('CANVAS_SESSION_TOO_LARGE')
+    expect(stringifySpy).not.toHaveBeenCalled()
+    stringifySpy.mockRestore()
+    expect((await store.load('conv-1')).session).toEqual(initial)
+
+    // Borderline session: lower bound <= 4096, but full serialized JSON envelope > 4096 -> still rejected
+    const borderline = makeSampleCanvasSession({
+      frames: [
+        {
+          ...initial.frames[0]!,
+          source: 'a'.repeat(3_600)
+        }
+      ]
+    })
+    expect(estimateCanvasSessionLowerBoundBytes(borderline)).toBeLessThanOrEqual(4 * 1024)
+    const borderlineRes = await store.save('conv-1', borderline)
+    expect(borderlineRes.ok).toBe(false)
+    expect(borderlineRes.error).toContain('CANVAS_SESSION_TOO_LARGE')
     expect((await store.load('conv-1')).session).toEqual(initial)
 
     // Save conv-2, then touch conv-1 via load() so conv-2 becomes oldest LRU
@@ -1497,32 +1868,111 @@ describe('TdsCanvasSessionStore & host-only persistence IPC', () => {
     expect((await store.load('conv-3')).session?.canvasThemePackId).toBe('tds-graphite-emerald')
   })
 
-  it('refuses symlink targets and enforces host-only IPC on all canvas session transport handlers', async () => {
-    const storageDir = await createTempDir()
-    const targetOutside = path.join(storageDir, 'outside.txt')
-    await writeFile(targetOutside, 'secret', 'utf8')
-    const symlinkHash = hashCanvasConversationId('conv-symlink')!
-    await symlink(targetOutside, path.join(storageDir, `${symlinkHash}.json`))
+  it('retains index tracking and surfaces cleanup failures when SQLite delete or eviction fails', async () => {
+    const env = await createStoreEnv()
+    let clockMs = 1_000
+    let failLabel: string | null = null
+    const store = new TdsCanvasSessionStore({
+      getDb: () => env.db,
+      scheduleWrite: async (label, op) => {
+        if (failLabel === label) {
+          throw new Error(`FORCED_FAIL:${label}`)
+        }
+        return await op()
+      },
+      rootPath: env.rootPath,
+      legacyStorageDir: env.legacyDir,
+      maxSessions: 2,
+      now: () => (clockMs += 100)
+    })
 
-    const store = new TdsCanvasSessionStore({ storageDir })
-    const loadSymlink = await store.load('conv-symlink')
-    expect(loadSymlink.ok).toBe(false)
-    expect(loadSymlink.error).toBe('CANVAS_SESSION_UNSAFE_TARGET')
+    const sample = makeSampleCanvasSession()
+    expect((await store.save('conv-a', sample)).ok).toBe(true)
+    expect((await store.save('conv-b', sample)).ok).toBe(true)
+    expect(await store.getStoredSessionCount()).toBe(2)
 
-    const saveSymlink = await store.save('conv-symlink', makeSampleCanvasSession())
-    expect(saveSymlink.ok).toBe(false)
-    expect(saveSymlink.error).toBe('CANVAS_SESSION_UNSAFE_TARGET')
+    // Failing explicit delete must NOT drop conv-a from index tracking
+    failLabel = 'tds-canvas.delete'
+    const failedDelete = await store.delete('conv-a')
+    expect(failedDelete).toEqual({
+      ok: false,
+      deleted: false,
+      error: 'FORCED_FAIL:tds-canvas.delete'
+    })
+    expect(await store.getStoredSessionCount()).toBe(2)
+    expect((await store.load('conv-a')).session).toEqual(sample)
 
-    // Module IPC integration + host-only enforcement
+    // Failing LRU eviction must propagate observably AND keep failed victim tracked in index
+    failLabel = 'tds-canvas.evict'
+    const failedEvictSave = await store.save('conv-c', sample)
+    expect(failedEvictSave.ok).toBe(false)
+    expect(failedEvictSave.error).toBe('FORCED_FAIL:tds-canvas.evict')
+    expect(await store.getStoredSessionCount()).toBe(3)
+
+    // Once DB recovers, next save evicts both excess rows cleanly back down to maxSessions=2
+    failLabel = null
+    expect((await store.save('conv-c', sample)).ok).toBe(true)
+    expect(await store.getStoredSessionCount()).toBe(2)
+  })
+
+  it('fences late or queued saves for deleted conversations via tombstones and clears on recreation', async () => {
+    const env = await createStoreEnv()
+    let clockMs = 10_000
+    const store = new TdsCanvasSessionStore({
+      getDb: () => env.db,
+      scheduleWrite: env.scheduleWrite,
+      rootPath: env.rootPath,
+      legacyStorageDir: env.legacyDir,
+      deleteTombstoneTtlMs: 30_000,
+      now: () => clockMs
+    })
+
+    const sample = makeSampleCanvasSession()
+    expect((await store.save('conv-race', sample)).ok).toBe(true)
+
+    const delRes = await store.deleteForDeletedConversation('conv-race')
+    expect(delRes).toEqual({ ok: true, deleted: true })
+
+    // Late queued save within tombstone window must be rejected and NOT recreate row
+    const lateSave = await store.save('conv-race', sample)
+    expect(lateSave).toEqual({ ok: false, error: 'CANVAS_SESSION_CONVERSATION_DELETED' })
+    expect((await store.load('conv-race')).session).toBeNull()
+
+    // Explicit tombstone clear (when conversation ID is legitimately created again) re-enables saves
+    store.clearConversationDeletedTombstone('conv-race')
+    expect((await store.save('conv-race', sample)).ok).toBe(true)
+  })
+
+  it('enforces strict host-window & main-frame IPC checks across all TDS transport handlers', async () => {
+    const env = await createStoreEnv()
+    const mainFrame = { parent: null, detached: false, isDestroyed: () => false }
+    const subFrame = { parent: mainFrame, detached: false, isDestroyed: () => false }
+    const detachedFrame = { parent: null, detached: true, isDestroyed: () => false }
+    const hostWebContents = {
+      id: 1,
+      mainFrame,
+      isDestroyed: () => false,
+      getType: () => 'window'
+    }
+    const hostWindow = {
+      isDestroyed: () => false,
+      webContents: hostWebContents
+    }
+
     const mod = new TdsCaptureModule({
-      canvasSessionStore: { storageDir }
+      hostWindow: hostWindow as unknown as Electron.BrowserWindow,
+      canvasSessionStore: {
+        getDb: () => env.db,
+        scheduleWrite: env.scheduleWrite,
+        rootPath: env.rootPath,
+        legacyStorageDir: env.legacyDir
+      }
     })
     mod.onInit({} as ModuleInitContext<TalexEvents>)
 
-    const appContext = { sender: { id: 1 } } as unknown as HandlerContext
-    const pluginContext = {
-      sender: { id: 2 },
-      plugin: { name: 'untrusted-plugin' }
+    const appContext = {
+      sender: hostWebContents,
+      senderFrame: mainFrame
     } as unknown as HandlerContext
 
     const sdk = createTdsCanvasSessionSdk({
@@ -1538,16 +1988,59 @@ describe('TdsCanvasSessionStore & host-only persistence IPC', () => {
     expect((await sdk.load('conv-ipc')).session).toEqual(sample)
     expect(await sdk.delete('conv-ipc')).toEqual({ ok: true, deleted: true })
 
+    const untrustedContexts: HandlerContext[] = [
+      {
+        sender: hostWebContents,
+        senderFrame: mainFrame,
+        plugin: { name: 'untrusted-plugin' }
+      } as unknown as HandlerContext,
+      {
+        sender: hostWebContents,
+        senderFrame: subFrame
+      } as unknown as HandlerContext,
+      {
+        sender: hostWebContents,
+        senderFrame: detachedFrame
+      } as unknown as HandlerContext,
+      {
+        sender: hostWebContents,
+        senderFrame: null
+      } as unknown as HandlerContext,
+      {
+        sender: { id: 99, mainFrame, isDestroyed: () => false, getType: () => 'window' },
+        senderFrame: mainFrame
+      } as unknown as HandlerContext,
+      {
+        sender: { id: 100, mainFrame, isDestroyed: () => false, getType: () => 'webview' },
+        senderFrame: mainFrame
+      } as unknown as HandlerContext,
+      {
+        sender: { id: 1, mainFrame, isDestroyed: () => true, getType: () => 'window' },
+        senderFrame: mainFrame
+      } as unknown as HandlerContext
+    ]
+
     for (const event of [
       TdsCanvasSessionEvents.load,
       TdsCanvasSessionEvents.save,
       TdsCanvasSessionEvents.delete
     ]) {
       const handler = mockTransportHandlers.get(event.toEventName())!
-      await expect(
-        handler({ conversationId: 'conv-ipc', session: sample }, pluginContext)
-      ).rejects.toThrow('TDS_CAPTURE_HOST_ONLY')
+      for (const badContext of untrustedContexts) {
+        await expect(
+          handler({ conversationId: 'conv-ipc', session: sample }, badContext)
+        ).rejects.toThrow('TDS_CAPTURE_HOST_ONLY')
+      }
     }
+
+    // Direct helper check for destroyed host window
+    const destroyedHost = {
+      isDestroyed: () => true,
+      webContents: hostWebContents
+    } as unknown as Electron.BrowserWindow
+    expect(() => assertAppRendererCaller(appContext, destroyedHost)).toThrow(
+      'TDS_CAPTURE_HOST_ONLY'
+    )
 
     mod.onDestroy({} as ModuleDestroyContext<TalexEvents>)
     expect(mockTransportHandlers.size).toBe(0)

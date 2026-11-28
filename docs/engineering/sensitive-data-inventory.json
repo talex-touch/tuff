@@ -356,8 +356,8 @@
         "database.db: conversations/conversation_messages",
         "database.db: conversation_sync_state (opaque ids, dirty revisions, and deletion timestamps only)",
         "database.db local-only: conversation_workspaces, conversation_queued_inputs, conversation_workspace_receipts, conversation_attachments, conversation_message_attachments, conversation_file_reviews",
+        "database.db local-only: tds_canvas_sessions (keyed by sha256(conversationId), payloads AES-256-GCM encrypted via CoreApp secure-store local-secret.v1.key under purpose tds-canvas-session; legacy userData/tds-canvas-sessions plaintext JSON files removed best-effort; never persisted in renderer Web Storage)",
         "main-owned userData/conversation-attachments/<sha256(conversationId)> regular UUID image copies and voice-message WAV copies; original user files excluded",
-        "main-owned userData/tds-canvas-sessions/<sha256(conversationId)>.json mode-0600 bounded local canvas sessions (frames, pin notes, snapshot history, and canvas theme pack selection; never persisted in renderer Web Storage)",
         "Nexus sync payload/blob storage (device-key encrypted ciphertext)"
       ],
       "writers": [
@@ -368,19 +368,22 @@
         "main-owned encrypted sync apply"
       ],
       "readers": ["host conversation UI", "host canvas UI", "main-owned encrypted sync collector"],
-      "exportPolicy": "account/device cloud sync only as device-key encrypted per-conversation public content; outgoing and incoming metadata allowlists exclude native pointers, project roots, queue/runtime/approval authority, private attachment paths and previews, review snapshots, local canvas session files and credentials; local workspace/review/canvas stores never portable or ordinary-exported; no plaintext logs, analytics, config, renderer Web Storage or plugin storage",
-      "deletionPolicy": "both local and sync deletion fence new admission, cancel and settle active execution, await rollback, then delete the root/tombstone in the existing primary writer transaction; FK cascade clears workspace/queue/receipt/attachment/review rows including private snapshot payloads; after commit remove only the Main-owned hashed attachment directory and its regular UUID images and voice recordings; canvas sessions support explicit typed delete and LRU eviction beyond 20 conversations; original project files, parent/other sessions and external native JSONL files are never deleted",
-      "retentionPolicy": "until explicit conversation deletion or app-data reset; queues capped at 8 inputs and start held after restart; attachment images capped at 10 MiB each and voice-message recordings at 10 MiB of PCM; review snapshots capped at 16 MiB per path, textual preview at 512 KiB with bounded line/LCS work; canvas sessions bounded to 20 conversations LRU and 4 MiB serialized UTF-8 per session; sensitive credential/auth content is explicitly non-reversible and never snapshotted; tombstones persist only until sync acknowledgement",
-      "rendererExposure": "host-only typed public conversation/workspace/review/canvas DTOs and owned tfile image and voice-message audio descriptors; no snapshot bytes, private roots, native pointers, saved grants, API keys or OAuth credentials; plugins rejected at every transport boundary",
+      "exportPolicy": "account/device cloud sync only as device-key encrypted per-conversation public content; outgoing and incoming metadata allowlists exclude native pointers, project roots, queue/runtime/approval authority, private attachment paths and previews, review snapshots, encrypted local canvas session rows and credentials; local workspace/review/canvas stores never portable or ordinary-exported; no plaintext logs, analytics, config, renderer Web Storage or plugin storage",
+      "deletionPolicy": "both local and sync deletion fence new admission, cancel and settle active execution, await rollback, mark an in-memory canvas deletion tombstone to reject late/queued canvas saves, then delete the root/tombstone and tds_canvas_sessions row in the existing primary writer transaction; FK cascade clears workspace/queue/receipt/attachment/review rows including private snapshot payloads; after commit drain/clear the active TdsCanvasSessionStore and remove only the Main-owned hashed attachment directory and its regular UUID images and voice recordings; canvas sessions also support explicit typed delete and LRU eviction beyond 20 conversations (removing tracking state only after SQLite delete succeeds); original project files, parent/other sessions and external native JSONL files are never deleted",
+      "retentionPolicy": "until explicit conversation deletion or app-data reset; queues capped at 8 inputs and start held after restart; attachment images capped at 10 MiB each and voice-message recordings at 10 MiB of PCM; review snapshots capped at 16 MiB per path, textual preview at 512 KiB with bounded line/LCS work; canvas sessions bounded to 20 conversations LRU, 64 frames, 50 history snapshots / 512 referenced blobs, and 4 MiB serialized UTF-8 per session; sensitive credential/auth content is explicitly non-reversible and never snapshotted; tombstones persist only until sync acknowledgement",
+      "rendererExposure": "host-only typed public conversation/workspace/review/canvas DTOs and owned tfile image and voice-message audio descriptors; no snapshot bytes, private roots, native pointers, saved grants, API keys or OAuth credentials; plugins, subframes and non-host windows rejected at the transport boundary",
       "portable": false,
-      "migrationStatus": "additive-0052-primary-owned; no auxiliary copy or second SQLite writer; encrypted public conversation sync unchanged",
+      "migrationStatus": "additive-0052-and-0057-primary-owned; encrypted tds_canvas_sessions via CoreApp secure-store; no auxiliary copy or second SQLite writer; encrypted public conversation sync unchanged",
       "evidence": [
         "apps/core-app/src/main/modules/conversation/conversation-store.ts#symbol=applyConversationSyncSnapshot",
+        "apps/core-app/src/main/modules/conversation/conversation-store.ts#symbol=deleteConversation",
+        "apps/core-app/src/main/modules/conversation/conversation-store.ts#symbol=applyConversationSyncDeletion",
         "apps/core-app/src/main/modules/conversation/workspace-service.ts#symbol=ConversationWorkspaceService",
         "apps/core-app/src/main/modules/conversation/workspace-runner.ts#symbol=ConversationWorkspaceRunner",
         "apps/core-app/src/main/modules/conversation/file-review-service.ts#symbol=FileReviewService",
         "apps/core-app/src/main/modules/conversation/workspace-attachments.ts#symbol=WorkspaceAttachmentStore",
         "apps/core-app/src/main/modules/tds-capture/canvas-session-store.ts#symbol=TdsCanvasSessionStore",
+        "apps/core-app/src/main/modules/tds-capture/index.ts#symbol=assertAppRendererCaller",
         "apps/core-app/src/main/modules/sync/index.ts#symbol=collectStorageSnapshots"
       ]
     },

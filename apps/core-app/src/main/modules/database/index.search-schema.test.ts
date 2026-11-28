@@ -541,6 +541,7 @@ describe('initSearchDatabase size cap', () => {
       )
       // Every later journal row must be undone too, or the migrator skips 0055 on reopen.
       await client.execute('DROP TABLE ai_orchestrator_run_messages')
+      await client.execute('DROP TABLE tds_canvas_sessions')
       const undone = await client.execute({
         sql: 'DELETE FROM __drizzle_migrations WHERE created_at >= ?',
         args: [migration!.when]

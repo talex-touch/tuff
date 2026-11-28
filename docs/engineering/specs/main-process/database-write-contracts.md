@@ -187,6 +187,13 @@ this by running a newer drizzle-kit: it would re-diff the whole schema against 0
   `scripts/check-drizzle-snapshot-drift.mjs`; this acknowledges the known snapshot gap,
   not a regenerated baseline. The ratchet test and real libSQL run-message store test
   cover registration, per-run sequencing and cascading deletion.
+- Migration `0057_tds_canvas_sessions` adds the primary-homed encrypted `tds_canvas_sessions`
+  table (`key_hash` PK = `sha256(conversationId)`, opaque AES-256-GCM `envelope` sealed via
+  CoreApp `secure-store` under purpose `tds-canvas-session`, `updated_at` with LRU index).
+  It is local-only, not an aux hot table, and never exported; both local and sync conversation
+  deletions remove its row in the primary writer transaction and tombstone the conversation ID
+  in memory to block late renderer saves. This raises `KNOWN_MISSING_SNAPSHOTS` from 43 to 44
+  in `scripts/check-drizzle-snapshot-drift.mjs`.
 
 ### 4. Validation & error matrix
 

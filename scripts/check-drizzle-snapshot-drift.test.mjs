@@ -43,11 +43,12 @@ describe('drizzle snapshot drift', () => {
     })
   })
 
-  it('pins the repository gap and includes the run-message migration', () => {
+  it('pins the repository gap and includes the run-message and canvas-session migrations', () => {
     const gap = snapshotGap()
 
     assert.equal(gap.missing.length, KNOWN_MISSING_SNAPSHOTS)
     assert.ok(gap.missing.includes('0056'))
+    assert.ok(gap.missing.includes('0057'))
   })
 
   it('is satisfied only by an exact match', () => {
