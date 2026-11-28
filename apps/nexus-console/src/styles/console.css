@@ -1,0 +1,80 @@
+/* Base layout tokens and semantic resets built exclusively on --tx-* tokens */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  margin: 0;
+  padding: 0;
+  min-height: 100%;
+  background-color: var(--tx-bg-color-page);
+  color: var(--tx-text-color-primary);
+  font-family: var(--tx-font-family, -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.console-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.9em;
+}
+
+.console-muted {
+  color: var(--tx-text-color-regular);
+  font-size: 12px;
+}
+
+.console-inline-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.console-form-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.console-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.console-bar-track {
+  width: 100%;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--tx-fill-color-light);
+  overflow: hidden;
+}
+
+.console-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--tx-color-primary);
+}
+
+.console-bar-fill--danger {
+  background: var(--tx-color-danger);
+}
+
+.console-bar-fill--success {
+  background: var(--tx-color-success);
+}
+
+.console-bar-fill--warning {
+  background: var(--tx-color-warning);
+}

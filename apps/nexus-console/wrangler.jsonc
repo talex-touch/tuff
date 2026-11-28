@@ -1,0 +1,25 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "tuff-nexus-console",
+  "compatibility_date": "2026-11-24",
+  "routes": [
+    { "pattern": "tuff.tagzxia.com/_console/*", "zone_name": "tagzxia.com" },
+    { "pattern": "tuff.tagzxia.com/sign-in", "zone_name": "tagzxia.com" },
+    { "pattern": "tuff.tagzxia.com/sign-in/*", "zone_name": "tagzxia.com" },
+    { "pattern": "tuff.tagzxia.com/verify", "zone_name": "tagzxia.com" },
+    { "pattern": "tuff.tagzxia.com/verify/*", "zone_name": "tagzxia.com" },
+    { "pattern": "tuff.tagzxia.com/verify-waiting", "zone_name": "tagzxia.com" },
+    { "pattern": "tuff.tagzxia.com/device-auth", "zone_name": "tagzxia.com" },
+    { "pattern": "tuff.tagzxia.com/device-auth/*", "zone_name": "tagzxia.com" },
+    { "pattern": "tuff.tagzxia.com/dashboard", "zone_name": "tagzxia.com" },
+    { "pattern": "tuff.tagzxia.com/dashboard/*", "zone_name": "tagzxia.com" },
+    { "pattern": "tuff.tagzxia.com/admin", "zone_name": "tagzxia.com" },
+    { "pattern": "tuff.tagzxia.com/admin/*", "zone_name": "tagzxia.com" },
+    { "pattern": "tuff.tagzxia.com/team", "zone_name": "tagzxia.com" },
+    { "pattern": "tuff.tagzxia.com/team/*", "zone_name": "tagzxia.com" }
+  ],
+  "assets": {
+    "directory": "dist",
+    "not_found_handling": "single-page-application"
+  }
+}
