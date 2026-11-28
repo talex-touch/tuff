@@ -96,14 +96,20 @@ vi.mock('./flow-audit-logger', () => ({
   }
 }))
 
-const permissionMocks = vi.hoisted(() => ({
-  enforcePermission: vi.fn()
-}))
+const permissionMocks = vi.hoisted(() => {
+  const enforcePermission = vi.fn()
+  return {
+    enforcePermission,
+    getPermissionModule: vi.fn<() => { enforcePermission: typeof enforcePermission } | null>(
+      () => ({
+        enforcePermission
+      })
+    )
+  }
+})
 
 vi.mock('../permission', () => ({
-  getPermissionModule: vi.fn(() => ({
-    enforcePermission: permissionMocks.enforcePermission
-  }))
+  getPermissionModule: permissionMocks.getPermissionModule
 }))
 
 vi.mock('../plugin/plugin-module', () => ({
@@ -350,6 +356,16 @@ describe('FlowBus delivery', () => {
         'clipboard:write',
         undefined
       )
+      expect(electronMock.clipboard.writeText).not.toHaveBeenCalled()
+
+      // Fail closed when permission module is unavailable.
+      permissionMocks.getPermissionModule.mockReturnValueOnce(null)
+      const permNullResult = await flowBus.dispatch(
+        'plugin-sender',
+        { type: 'text', data: 'copy me when perm null' },
+        { preferredTarget: 'notes.capture', fallbackAction: 'copy' }
+      )
+      expect(permNullResult.state).toBe('FAILED')
       expect(electronMock.clipboard.writeText).not.toHaveBeenCalled()
     } finally {
       dispose()

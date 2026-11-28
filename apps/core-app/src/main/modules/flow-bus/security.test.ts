@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   handlers: new Map<string, (payload: unknown, context: HandlerContext) => unknown>(),
   enforcePermission: vi.fn(),
   checkPermission: vi.fn(() => ({ allowed: true })),
+  getPermissionModule: vi.fn(),
   dispatch: vi.fn(async (senderId: string) => ({
     sessionId: `sess-${senderId}`,
     state: 'DELIVERED'
@@ -20,15 +21,13 @@ const mocks = vi.hoisted(() => ({
   resolveTargetSelection: vi.fn(),
   plugins: new Map<string, { sdkapi?: number }>([
     ['plugin-a', { sdkapi: 260101 }],
-    ['plugin-b', { sdkapi: 260101 }]
+    ['plugin-b', { sdkapi: 260101 }],
+    ['legacy-plugin', {}]
   ])
 }))
 
 vi.mock('../permission', () => ({
-  getPermissionModule: vi.fn(() => ({
-    enforcePermission: mocks.enforcePermission,
-    checkPermission: mocks.checkPermission
-  }))
+  getPermissionModule: () => mocks.getPermissionModule()
 }))
 
 vi.mock('../plugin/plugin-module', () => ({
@@ -92,6 +91,10 @@ describe('FlowBus security boundaries', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    mocks.getPermissionModule.mockReturnValue({
+      enforcePermission: mocks.enforcePermission,
+      checkPermission: mocks.checkPermission
+    })
     mocks.handlers.clear()
     flowSessionManager.clear()
     const transport = {
@@ -157,13 +160,30 @@ describe('FlowBus security boundaries', () => {
     expect(mocks.dispatch).toHaveBeenCalledWith('plugin-a', { type: 'text', data: 'x' }, undefined)
   })
 
-  it('rejects _sdkapi spoofing when payload _sdkapi mismatches manifest sdkapi', async () => {
+  it('rejects _sdkapi spoofing when payload _sdkapi mismatches or manifest omits sdkapi, and fails closed if permission module is null', async () => {
     const dispatchHandler = mocks.handlers.get(FlowEvents.dispatch.toEventName())!
-    const res = await dispatchHandler(
+    const mismatchRes = await dispatchHandler(
       { payload: { type: 'text', data: 'x' }, _sdkapi: 999999 },
       pluginCtx('plugin-a')
     )
-    expect(res).toMatchObject({ success: false })
+    expect(mismatchRes).toMatchObject({ success: false, error: { code: 'SDKAPI_MISMATCH' } })
+    expect(mocks.dispatch).not.toHaveBeenCalled()
+
+    // Plugin omitting sdkapi in manifest must not spoof _sdkapi to bypass SDK hard-cut gate.
+    const omittedSpoofRes = await dispatchHandler(
+      { payload: { type: 'text', data: 'x' }, _sdkapi: 260121 },
+      pluginCtx('legacy-plugin')
+    )
+    expect(omittedSpoofRes).toMatchObject({ success: false, error: { code: 'SDKAPI_MISMATCH' } })
+    expect(mocks.dispatch).not.toHaveBeenCalled()
+
+    // Fail closed when permission module is unavailable for plugin callers.
+    mocks.getPermissionModule.mockReturnValueOnce(null)
+    const permNullRes = await dispatchHandler(
+      { payload: { type: 'text', data: 'x' } },
+      pluginCtx('plugin-a', 260101)
+    )
+    expect(permNullRes).toMatchObject({ success: false, error: { code: 'PERMISSION_DENIED' } })
     expect(mocks.dispatch).not.toHaveBeenCalled()
   })
 

@@ -83,11 +83,15 @@ impl SearchPool {
             return;
         }
 
-        let Ok(_dispatch_guard) = self.dispatch_lock.try_lock() else {
-            for i in 0..num_tasks {
-                task_fn(i);
+        let _dispatch_guard = match self.dispatch_lock.try_lock() {
+            Ok(guard) => guard,
+            Err(std::sync::TryLockError::Poisoned(poisoned)) => poisoned.into_inner(),
+            Err(std::sync::TryLockError::WouldBlock) => {
+                for i in 0..num_tasks {
+                    task_fn(i);
+                }
+                return;
             }
-            return;
         };
 
         unsafe fn trampoline<F: Fn(usize) + Sync>(ptr: *const (), task_idx: usize) {
@@ -234,21 +238,52 @@ mod tests {
 
     #[test]
     fn caller_panic_does_not_deadlock_pool_or_break_subsequent_calls() {
-        let pool = SearchPool::init_global();
+        let pool: &'static SearchPool = Box::leak(Box::new(SearchPool {
+            dispatch_lock: Mutex::new(()),
+            shared: Mutex::new(PoolState {
+                epoch: 0,
+                job: std::ptr::null(),
+                shutdown: false,
+            }),
+            wake_cvar: Condvar::new(),
+            worker_count: AtomicUsize::new(0),
+        }));
+        let worker_handle = std::thread::Builder::new()
+            .name("tuff-arena-search-test".into())
+            .spawn(move || pool_worker_loop(pool))
+            .expect("spawn test worker");
+        pool.worker_count.store(1, AtomicOrdering::Release);
+
         let panic_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            pool.scope_chunks(8, &|_idx| {
+            pool.scope_chunks(4, &|_idx| {
                 panic!("simulated chunk panic");
             });
         }));
         assert!(panic_result.is_err());
+        // The caller panic poisoned dispatch_lock; recovery must still dispatch in parallel.
+        assert!(pool.dispatch_lock.is_poisoned());
 
-        // Pool must remain healthy and non-deadlocked on subsequent calls.
-        let visited = (0..8).map(|_| AtomicUsize::new(0)).collect::<Vec<_>>();
-        pool.scope_chunks(8, &|idx| {
+        let caller_tid = std::thread::current().id();
+        let barrier = std::sync::Barrier::new(2);
+        let used_worker = AtomicUsize::new(0);
+        let visited = (0..2).map(|_| AtomicUsize::new(0)).collect::<Vec<_>>();
+        pool.scope_chunks(2, &|idx| {
             visited[idx].fetch_add(1, AtomicOrdering::SeqCst);
+            if std::thread::current().id() != caller_tid {
+                used_worker.fetch_add(1, AtomicOrdering::SeqCst);
+            }
+            barrier.wait();
         });
         for slot in &visited {
             assert_eq!(slot.load(AtomicOrdering::SeqCst), 1);
         }
+        assert_eq!(used_worker.load(AtomicOrdering::SeqCst), 1);
+
+        {
+            let mut state = pool.shared.lock().unwrap_or_else(|e| e.into_inner());
+            state.shutdown = true;
+            pool.wake_cvar.notify_all();
+        }
+        worker_handle.join().expect("join test worker");
     }
 }

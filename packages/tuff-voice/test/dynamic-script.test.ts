@@ -133,6 +133,46 @@ describe('dynamic-script provider and SSRF protection', () => {
       expect(seenHeaders[1]['x-api-key']).toBeUndefined()
       expect(seenHeaders[1].accept).toBe('application/json')
     })
+
+    it('runs DNS SSRF validation by default for wrapped fetchImpl and cancels 30x response bodies', async () => {
+      const wrappedFetch = vi.fn(async () => new Response('should not execute', { status: 200 }))
+      // Without lookup or skipDnsLookup, a wrapped fetchImpl must still run DNS validation
+      // (failing closed on an unresolvable/invalid host instead of silently opting out).
+      await expect(
+        safeFetchWithRedirects(
+          { url: 'https://nonexistent.invalid/secret' },
+          { fetchImpl: wrappedFetch as unknown as typeof fetch },
+        ),
+      ).rejects.toMatchObject({ code: 'VOICE_SCRIPT_URL_DENIED' })
+      expect(wrappedFetch).not.toHaveBeenCalled()
+
+      // Intermediate 30x response bodies must be canceled before following the redirect.
+      let cancelCalled = false
+      const redirectFetch = vi.fn(async (input: string | URL | Request) => {
+        if (String(input).endsWith('/hop1')) {
+          const stream = new ReadableStream({
+            cancel() {
+              cancelCalled = true
+            },
+          })
+          return new Response(stream, {
+            status: 302,
+            headers: { location: 'https://public.example.test/final' },
+          })
+        }
+        return new Response('done', { status: 200 })
+      })
+
+      const finalRes = await safeFetchWithRedirects(
+        { url: 'https://public.example.test/hop1' },
+        {
+          fetchImpl: redirectFetch as unknown as typeof fetch,
+          lookup: async () => [{ address: '93.184.216.34', family: 4 }],
+        },
+      )
+      expect(finalRes.status).toBe(200)
+      expect(cancelCalled).toBe(true)
+    })
   })
 
   describe('main-process RCE prevention (fail-closed scriptContent)', () => {
@@ -263,6 +303,64 @@ describe('dynamic-script provider and SSRF protection', () => {
         })
         await expect(stream.ready).rejects.toMatchObject({ code: 'VOICE_SCRIPT_URL_DENIED' })
       }
+    })
+
+    it('rejects DNS SSRF targets in context.connectWebSocket and custom httpClient context.fetch by default', async () => {
+      const socketConnect = vi.fn()
+      const wsRebindProvider = new DynamicScriptVoiceProvider({
+        socketFactory: { connect: socketConnect },
+        lookup: async () => [{ address: '127.0.0.1' }],
+        adapter: {
+          createSession: async (ctx) => {
+            await ctx.connectWebSocket?.('wss://rebind.example.test/ws')
+            return { writePcm: () => {}, end: () => {} }
+          },
+        },
+      })
+      const wsStream = await wsRebindProvider.createStream({
+        model: 'default',
+        audio: { format: 'pcm', sampleRate: 16000, channels: 1, bitsPerSample: 16 },
+        requestId: 'req-ws-ssrf',
+      })
+      await expect(wsStream.ready).rejects.toMatchObject({ code: 'VOICE_SCRIPT_URL_DENIED' })
+      expect(socketConnect).not.toHaveBeenCalled()
+
+      // Even without explicit lookup option, connectWebSocket must run default DNS validation (not skip it).
+      const wsDefaultDnsProvider = new DynamicScriptVoiceProvider({
+        socketFactory: { connect: socketConnect },
+        adapter: {
+          createSession: async (ctx) => {
+            await ctx.connectWebSocket?.('wss://nonexistent.invalid/ws')
+            return { writePcm: () => {}, end: () => {} }
+          },
+        },
+      })
+      const wsDefaultStream = await wsDefaultDnsProvider.createStream({
+        model: 'default',
+        audio: { format: 'pcm', sampleRate: 16000, channels: 1, bitsPerSample: 16 },
+        requestId: 'req-ws-default-dns',
+      })
+      await expect(wsDefaultStream.ready).rejects.toMatchObject({ code: 'VOICE_SCRIPT_URL_DENIED' })
+      expect(socketConnect).not.toHaveBeenCalled()
+
+      // Custom httpClient path must also run default DNS validation rather than skipping it.
+      const httpRequest = vi.fn()
+      const httpDefaultDnsProvider = new DynamicScriptVoiceProvider({
+        httpClient: { request: httpRequest },
+        adapter: {
+          createSession: async (ctx) => {
+            await ctx.fetch('https://nonexistent.invalid/api')
+            return { writePcm: () => {}, end: () => {} }
+          },
+        },
+      })
+      const httpDefaultStream = await httpDefaultDnsProvider.createStream({
+        model: 'default',
+        audio: { format: 'pcm', sampleRate: 16000, channels: 1, bitsPerSample: 16 },
+        requestId: 'req-http-default-dns',
+      })
+      await expect(httpDefaultStream.ready).rejects.toMatchObject({ code: 'VOICE_SCRIPT_URL_DENIED' })
+      expect(httpRequest).not.toHaveBeenCalled()
     })
 
     it('executes transcribeUpload successfully via trusted adapter', async () => {

@@ -311,12 +311,24 @@ describe('speech catalog failure projection', () => {
     const order: number[] = []
     let seq = 0
 
+    const createDeferred = () => {
+      let resolve!: () => void
+      const promise = new Promise<void>((res) => {
+        resolve = res
+      })
+      return { promise, resolve }
+    }
+
+    const started = [createDeferred(), createDeferred(), createDeferred()]
+    const release = [createDeferred(), createDeferred(), createDeferred()]
+
     vi.mocked(installSpeechBundle).mockImplementation(async () => {
       const mySeq = ++seq
       active += 1
       peakActive = Math.max(peakActive, active)
       order.push(mySeq)
-      await new Promise((resolve) => setTimeout(resolve, 15))
+      started[mySeq - 1]!.resolve()
+      await release[mySeq - 1]!.promise
       active -= 1
       return {
         id: 'model-a',
@@ -327,11 +339,28 @@ describe('speech catalog failure projection', () => {
       }
     })
 
-    const results = await Promise.all([
+    const installs = [
       installSpeechModel('model-a', '1.0.0'),
       installSpeechModel('model-a', '1.0.0'),
       installSpeechModel('model-a', '1.0.0')
-    ])
+    ]
+
+    await started[0]!.promise
+    expect(order).toEqual([1])
+    expect(active).toBe(1)
+
+    release[0]!.resolve()
+    await started[1]!.promise
+    expect(order).toEqual([1, 2])
+    expect(active).toBe(1)
+
+    release[1]!.resolve()
+    await started[2]!.promise
+    expect(order).toEqual([1, 2, 3])
+    expect(active).toBe(1)
+
+    release[2]!.resolve()
+    const results = await Promise.all(installs)
 
     expect(results).toHaveLength(3)
     expect(peakActive).toBe(1)

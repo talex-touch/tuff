@@ -23,6 +23,7 @@
  */
 
 import type { Buffer } from 'node:buffer'
+import type { DnsLookupFn } from '../http'
 import type { SpeechRuntimeEntryV1 } from './model-catalog'
 import { execFile } from 'node:child_process'
 import { createHash } from 'node:crypto'
@@ -33,9 +34,27 @@ import { isAbsolute, join, resolve, sep } from 'node:path'
 import process from 'node:process'
 import { Readable } from 'node:stream'
 import { promisify } from 'node:util'
+import { isSafeRemoteUrl, safeFetchWithRedirects } from '../http'
 
 const run = promisify(execFile)
 const ARCHIVE_EXTRACT_TIMEOUT_MS = 120_000
+const MAX_ARCHIVE_ENTRIES = 10_000
+const MAX_ARCHIVE_LISTING_BUFFER = 16 * 1024 * 1024
+const ALLOWED_RUNTIME_IDS = new Set(['whisper-cpp', 'sherpa-onnx'])
+const VERSION_PATTERN = /^\d+\.\d+\.\d+$/
+const SHA256_PATTERN = /^[a-f0-9]{64}$/
+const ALLOWED_ARCHIVES = new Set(['tar.bz2', 'tar.gz', 'zip'])
+const WINDOWS_DRIVE_PREFIX = /^[a-z]:/i
+const STAGING_DIR_NAME = '.extract'
+
+function hasControlChar(value: string): boolean {
+  for (let i = 0; i < value.length; i += 1) {
+    const code = value.charCodeAt(i)
+    if (code <= 0x1F || code === 0x7F)
+      return true
+  }
+  return false
+}
 
 export const ENGINE_MANIFEST_FILE = 'runtime.json'
 
@@ -182,6 +201,55 @@ export interface InstallSpeechRuntimeOptions {
   fetchImpl?: typeof fetch
   onProgress?: (progress: { received: number, total: number }) => void
   signal?: AbortSignal
+  lookup?: DnsLookupFn
+  /** Explicit test-only opt-out for skipping DNS SSRF checks; keep unset/false in production. */
+  skipDnsLookup?: boolean
+}
+
+function validateRuntimeEntry(entry: SpeechRuntimeEntryV1, directory: string): void {
+  if (!ALLOWED_RUNTIME_IDS.has(entry.id)) {
+    throw new SpeechRuntimeInstallError(
+      'SPEECH_RUNTIME_INVALID',
+      `unknown runtime id "${String(entry.id)}"`,
+    )
+  }
+  if (typeof entry.version !== 'string' || !VERSION_PATTERN.test(entry.version)) {
+    throw new SpeechRuntimeInstallError(
+      'SPEECH_RUNTIME_INVALID',
+      `runtime ${entry.id}: version "${String(entry.version)}" is not valid semver`,
+    )
+  }
+  if (!Number.isInteger(entry.bytes) || entry.bytes <= 0) {
+    throw new SpeechRuntimeInstallError(
+      'SPEECH_RUNTIME_INVALID',
+      `${entry.id}@${entry.version}: bytes must be a positive integer`,
+    )
+  }
+  if (typeof entry.sha256 !== 'string' || !SHA256_PATTERN.test(entry.sha256)) {
+    throw new SpeechRuntimeInstallError(
+      'SPEECH_RUNTIME_INVALID',
+      `${entry.id}@${entry.version}: sha256 is malformed`,
+    )
+  }
+  if (!ALLOWED_ARCHIVES.has(entry.archive)) {
+    throw new SpeechRuntimeInstallError(
+      'SPEECH_RUNTIME_INVALID',
+      `${entry.id}@${entry.version}: unsupported archive format "${String(entry.archive)}"`,
+    )
+  }
+  if (typeof entry.binary !== 'string' || !entry.binary.trim()) {
+    throw new SpeechRuntimeInstallError(
+      'SPEECH_RUNTIME_INVALID',
+      `${entry.id}@${entry.version}: binary path is required`,
+    )
+  }
+  resolveInside(directory, entry.binary)
+  if (typeof entry.url !== 'string' || !isSafeRemoteUrl(entry.url, ['https:'])) {
+    throw new SpeechRuntimeInstallError(
+      'SPEECH_RUNTIME_INVALID',
+      `${entry.id}@${entry.version}: url must be a safe remote HTTPS URL`,
+    )
+  }
 }
 
 /** Download, verify and unpack one runtime. Returns the executable's path. */
@@ -191,6 +259,7 @@ export async function installSpeechRuntime(
 ): Promise<{ binaryPath: string, directory: string, downloaded: boolean }> {
   const root = options.root ?? resolveEngineRoot()
   const directory = versionDirectory(root, entry.id, entry.version)
+  validateRuntimeEntry(entry, directory)
   const manifestPath = join(directory, ENGINE_MANIFEST_FILE)
 
   // Already installed: the manifest is the completion marker, so this cannot see a
@@ -220,7 +289,24 @@ export async function installSpeechRuntime(
   const activeSignal = options.signal ? AbortSignal.any([options.signal, downloadAbort.signal]) : downloadAbort.signal
 
   const fetchImpl = options.fetchImpl ?? fetch
-  const response = await fetchImpl(entry.url, { redirect: 'follow', signal: activeSignal })
+  let response: Response
+  try {
+    response = await safeFetchWithRedirects(
+      { url: entry.url, method: 'GET', signal: activeSignal },
+      {
+        fetchImpl,
+        allowedProtocols: ['https:'],
+        lookup: options.lookup,
+        skipDnsLookup: options.skipDnsLookup,
+      },
+    )
+  }
+  catch (error) {
+    throw new SpeechRuntimeInstallError(
+      'SPEECH_RUNTIME_DOWNLOAD_FAILED',
+      `${entry.id}@${entry.version}: ${error instanceof Error ? error.message : String(error)}`,
+    )
+  }
   if (!response.ok) {
     throw new SpeechRuntimeInstallError(
       'SPEECH_RUNTIME_DOWNLOAD_FAILED',
@@ -234,10 +320,11 @@ export async function installSpeechRuntime(
     )
   }
   const declaredLengthHeader = response.headers.get('content-length')
-  if (declaredLengthHeader && entry.bytes > 0) {
+  if (declaredLengthHeader) {
     const declaredLength = Number(declaredLengthHeader)
     if (Number.isFinite(declaredLength) && declaredLength > entry.bytes) {
       downloadAbort.abort()
+      await response.body.cancel().catch(() => {})
       throw new SpeechRuntimeInstallError(
         'SPEECH_RUNTIME_DIGEST_MISMATCH',
         `${entry.id}@${entry.version}: response Content-Length (${declaredLength}) exceeds declared size (${entry.bytes} bytes).`,
@@ -254,7 +341,7 @@ export async function installSpeechRuntime(
     for await (const chunk of bodyStream) {
       const buffer = chunk as Buffer
       received += buffer.byteLength
-      if (entry.bytes > 0 && received > entry.bytes) {
+      if (received > entry.bytes) {
         downloadAbort.abort()
         bodyStream.destroy()
         throw new SpeechRuntimeInstallError(
@@ -287,7 +374,7 @@ export async function installSpeechRuntime(
   }
 
   const digest = hash.digest('hex')
-  if (digest !== entry.sha256 || (entry.bytes > 0 && received !== entry.bytes)) {
+  if (digest !== entry.sha256 || received !== entry.bytes) {
     await rm(archive, { force: true })
     throw new SpeechRuntimeInstallError(
       'SPEECH_RUNTIME_DIGEST_MISMATCH',
@@ -295,17 +382,20 @@ export async function installSpeechRuntime(
     )
   }
 
-  // Extract into a staging directory, then move the pieces in: an archive that unpacks to
-  // something unexpected leaves the install directory untouched.
-  const staging = join(directory, '.extract')
+  // Pre-inspect archive entries BEFORE extracting so Zip/Tar-Slip, symlinks, hardlinks,
+  // or reserved names (.extract, runtime.json) can never touch the filesystem.
+  const staging = join(directory, STAGING_DIR_NAME)
   await rm(staging, { recursive: true, force: true })
   await mkdir(staging, { recursive: true })
   try {
+    await inspectRuntimeArchiveBeforeExtract(entry.archive, archive, options.signal)
     await extractRuntimeArchive(entry.archive, archive, staging, options.signal)
   }
   catch (error) {
     await rm(staging, { recursive: true, force: true })
     await rm(archive, { force: true })
+    if (error instanceof SpeechRuntimeInstallError)
+      throw error
     throw new SpeechRuntimeInstallError(
       'SPEECH_RUNTIME_EXTRACT_FAILED',
       `${entry.id}@${entry.version}: archive extraction failed — ${error instanceof Error ? error.message : String(error)}`,
@@ -313,6 +403,24 @@ export async function installSpeechRuntime(
   }
 
   const extracted = await readdir(staging)
+  if (extracted.length === 0) {
+    await rm(staging, { recursive: true, force: true })
+    await rm(archive, { force: true })
+    throw new SpeechRuntimeInstallError(
+      'SPEECH_RUNTIME_INVALID',
+      `${entry.id}@${entry.version}: archive extracted no files`,
+    )
+  }
+  for (const name of extracted) {
+    if (name === STAGING_DIR_NAME || name === ENGINE_MANIFEST_FILE || name.startsWith('.runtime.')) {
+      await rm(staging, { recursive: true, force: true })
+      await rm(archive, { force: true })
+      throw new SpeechRuntimeInstallError(
+        'SPEECH_RUNTIME_INVALID',
+        `${entry.id}@${entry.version}: archive contains reserved entry "${name}"`,
+      )
+    }
+  }
   const payload = extracted.length === 1 ? join(staging, extracted[0] as string) : staging
   const stagedBinary = resolveInside(payload, entry.binary)
   try {
@@ -379,6 +487,128 @@ export async function installSpeechRuntime(
   return { binaryPath: installedBinary, directory, downloaded: true }
 }
 
+function splitNonEmptyLines(stdout: string): string[] {
+  return stdout
+    .split(/\r?\n/)
+    .filter(line => line.length > 0)
+}
+
+function validateArchiveEntryPath(rawPath: string): void {
+  if (!rawPath || hasControlChar(rawPath)) {
+    throw new SpeechRuntimeInstallError(
+      'SPEECH_RUNTIME_INVALID',
+      `Archive contains an invalid entry path: ${JSON.stringify(rawPath)}`,
+    )
+  }
+  if (rawPath.startsWith('/') || rawPath.startsWith('\\') || WINDOWS_DRIVE_PREFIX.test(rawPath)) {
+    throw new SpeechRuntimeInstallError(
+      'SPEECH_RUNTIME_INVALID',
+      `Archive entry "${rawPath}" must not be an absolute path.`,
+    )
+  }
+  const normalized = rawPath.replace(/\\/g, '/').replace(/\/+$/, '')
+  let stripped = normalized
+  while (stripped.startsWith('./')) {
+    stripped = stripped.slice(2)
+  }
+  if (!stripped || stripped === '.') {
+    return
+  }
+  const segments = stripped.split('/')
+  for (const segment of segments) {
+    if (!segment || segment === '.' || segment === '..') {
+      throw new SpeechRuntimeInstallError(
+        'SPEECH_RUNTIME_INVALID',
+        `Archive entry "${rawPath}" contains a disallowed path traversal segment.`,
+      )
+    }
+    if (segment === STAGING_DIR_NAME || segment === ENGINE_MANIFEST_FILE) {
+      throw new SpeechRuntimeInstallError(
+        'SPEECH_RUNTIME_INVALID',
+        `Archive entry "${rawPath}" uses reserved path segment "${segment}".`,
+      )
+    }
+  }
+  if (segments[0]?.startsWith('.runtime.')) {
+    throw new SpeechRuntimeInstallError(
+      'SPEECH_RUNTIME_INVALID',
+      `Archive entry "${rawPath}" uses reserved runtime archive prefix.`,
+    )
+  }
+}
+
+async function inspectRuntimeArchiveBeforeExtract(
+  archiveType: SpeechRuntimeEntryV1['archive'],
+  archivePath: string,
+  signal?: AbortSignal,
+): Promise<void> {
+  const execOptions = {
+    timeout: ARCHIVE_EXTRACT_TIMEOUT_MS,
+    windowsHide: true,
+    maxBuffer: MAX_ARCHIVE_LISTING_BUFFER,
+    ...(signal ? { signal } : {}),
+  }
+
+  let verboseLines: string[]
+  let nameLines: string[]
+
+  if (archiveType === 'zip' && process.platform !== 'win32') {
+    const [verboseRes, nameRes] = await Promise.all([
+      run('unzip', ['-Z', archivePath], execOptions),
+      run('unzip', ['-Z', '-1', archivePath], execOptions),
+    ])
+    verboseLines = splitNonEmptyLines(verboseRes.stdout).filter(
+      line =>
+        !line.startsWith('Archive:')
+        && !line.startsWith('Zip file size:')
+        && !/^\d+\s+files?,\s/.test(line),
+    )
+    nameLines = splitNonEmptyLines(nameRes.stdout)
+  }
+  else {
+    const listVerboseFlag = archiveType === 'tar.gz'
+      ? '-tzvf'
+      : archiveType === 'tar.bz2'
+        ? '-tjvf'
+        : '-tvf'
+    const listNamesFlag = archiveType === 'tar.gz'
+      ? '-tzf'
+      : archiveType === 'tar.bz2'
+        ? '-tjf'
+        : '-tf'
+    const [verboseRes, nameRes] = await Promise.all([
+      run('tar', [listVerboseFlag, archivePath], execOptions),
+      run('tar', [listNamesFlag, archivePath], execOptions),
+    ])
+    verboseLines = splitNonEmptyLines(verboseRes.stdout)
+    nameLines = splitNonEmptyLines(nameRes.stdout)
+  }
+
+  if (nameLines.length === 0 || nameLines.length > MAX_ARCHIVE_ENTRIES) {
+    throw new SpeechRuntimeInstallError(
+      'SPEECH_RUNTIME_INVALID',
+      `Archive entry count (${nameLines.length}) is outside allowed bounds.`,
+    )
+  }
+  if (verboseLines.length !== nameLines.length) {
+    throw new SpeechRuntimeInstallError(
+      'SPEECH_RUNTIME_INVALID',
+      'Archive listing mismatch (possible embedded newline or malformed header).',
+    )
+  }
+
+  for (let i = 0; i < verboseLines.length; i += 1) {
+    const modeChar = verboseLines[i]![0]
+    if (modeChar !== '-' && modeChar !== 'd') {
+      throw new SpeechRuntimeInstallError(
+        'SPEECH_RUNTIME_INVALID',
+        `Archive contains disallowed non-regular entry type "${modeChar ?? ''}" for "${nameLines[i]}".`,
+      )
+    }
+    validateArchiveEntryPath(nameLines[i]!)
+  }
+}
+
 async function extractRuntimeArchive(
   archiveType: SpeechRuntimeEntryV1['archive'],
   archivePath: string,
@@ -414,16 +644,26 @@ async function assertExtractedTreeContained(rootDir: string): Promise<void> {
       const fullPath = join(current, entryName)
       const info = await lstat(fullPath)
       if (info.isSymbolicLink()) {
-        const targetReal = await realpath(fullPath)
-        if (targetReal !== rootReal && !targetReal.startsWith(rootReal + sep)) {
-          throw new SpeechRuntimeInstallError(
-            'SPEECH_RUNTIME_INVALID',
-            `Archive symlink "${entryName}" escapes extraction root.`,
-          )
-        }
+        throw new SpeechRuntimeInstallError(
+          'SPEECH_RUNTIME_INVALID',
+          `Archive symlink "${entryName}" is not allowed inside runtime archive.`,
+        )
       }
-      else if (info.isDirectory()) {
+      const entryReal = await realpath(fullPath)
+      if (entryReal === rootReal || !entryReal.startsWith(rootReal + sep)) {
+        throw new SpeechRuntimeInstallError(
+          'SPEECH_RUNTIME_INVALID',
+          `Archive entry "${entryName}" resolves outside extraction root.`,
+        )
+      }
+      if (info.isDirectory()) {
         queue.push(fullPath)
+      }
+      else if (!info.isFile()) {
+        throw new SpeechRuntimeInstallError(
+          'SPEECH_RUNTIME_INVALID',
+          `Archive entry "${entryName}" is not a regular file or directory.`,
+        )
       }
     }
   }

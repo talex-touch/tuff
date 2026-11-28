@@ -194,6 +194,7 @@ describe('doubao-ime protocol & provider', () => {
       credentials: TEST_CREDENTIALS,
       socketFactory: mockSocketFactory,
       fetchImpl: mockFetch as unknown as typeof fetch,
+      lookup: async () => [{ address: '93.184.216.34' }],
     })
 
     const req: VoiceStreamRequest = {
@@ -214,5 +215,19 @@ describe('doubao-ime protocol & provider', () => {
     await session.end()
     expect(sentMessages.length).toBe(3)
     expect(JSON.parse(sentMessages[2]).event).toBe('FinishTask')
+
+    // Reject streamUrl whose DNS resolves to a private/loopback IP before opening WebSocket.
+    const blockedConnect = vi.fn()
+    const rebindProvider = new DoubaoImeVoiceProvider({
+      credentials: TEST_CREDENTIALS,
+      socketFactory: { connect: blockedConnect },
+      streamUrl: 'wss://rebind.example.test/ws',
+      fetchImpl: mockFetch as unknown as typeof fetch,
+      lookup: async () => [{ address: '127.0.0.1' }],
+    })
+    await expect(rebindProvider.createStream(req)).rejects.toMatchObject({
+      code: 'VOICE_SCRIPT_URL_DENIED',
+    })
+    expect(blockedConnect).not.toHaveBeenCalled()
   })
 })

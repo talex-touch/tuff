@@ -77,6 +77,8 @@ export interface DynamicScriptVoiceProviderOptions {
   socketFactory?: VoiceSocketFactory
   allowLocalhost?: boolean
   lookup?: DnsLookupFn
+  /** Explicit test-only opt-out for skipping DNS SSRF checks; keep unset/false in production. */
+  skipDnsLookup?: boolean
 }
 
 export class DynamicScriptVoiceProvider implements VoiceProviderAdapter {
@@ -142,7 +144,7 @@ export class DynamicScriptVoiceProvider implements VoiceProviderAdapter {
       const activeSignal = reqOptions.signal ?? signal
 
       if (this.options.httpClient) {
-        if (this.options.lookup) {
+        if (!this.options.skipDnsLookup) {
           await assertSafeRemoteUrlAsync(rawUrl, {
             allowedProtocols: ['https:'],
             allowLocalhost,
@@ -189,6 +191,7 @@ export class DynamicScriptVoiceProvider implements VoiceProviderAdapter {
           allowedProtocols: ['https:'],
           allowLocalhost,
           lookup: this.options.lookup,
+          skipDnsLookup: this.options.skipDnsLookup,
         },
       )
 
@@ -209,7 +212,7 @@ export class DynamicScriptVoiceProvider implements VoiceProviderAdapter {
   private createSafeWebSocket(signal?: AbortSignal) {
     return async (rawUrl: string, headers: Record<string, string> = {}) => {
       const allowLocalhost = this.options.allowLocalhost === true
-      if (this.options.lookup) {
+      if (!this.options.skipDnsLookup) {
         await assertSafeRemoteUrlAsync(rawUrl, {
           allowedProtocols: ['wss:'],
           allowLocalhost,

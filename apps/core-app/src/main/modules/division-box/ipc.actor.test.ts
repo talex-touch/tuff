@@ -40,6 +40,22 @@ describe('resolveDivisionBoxPermissionActor', () => {
     expect(resolvePluginSdkapi).toHaveBeenCalledWith('context-plugin')
   })
 
+  it('rejects payload _sdkapi spoofing when manifest omits sdkapi instead of falling back', () => {
+    const resolvePluginSdkapi = vi.fn().mockReturnValue(undefined)
+    expect(() =>
+      resolveDivisionBoxPermissionActor(
+        createContext('legacy-plugin'),
+        { _sdkapi: 260121 },
+        resolvePluginSdkapi
+      )
+    ).toThrowError(expect.objectContaining({ code: 'SDKAPI_MISMATCH' }))
+
+    // Omitting payload _sdkapi returns undefined (preserving hard-cut gate behavior).
+    expect(
+      resolveDivisionBoxPermissionActor(createContext('legacy-plugin'), {}, resolvePluginSdkapi)
+    ).toEqual({ pluginId: 'legacy-plugin', sdkapi: undefined })
+  })
+
   it('rejects unverified plugin contexts', () => {
     expect(() =>
       resolveDivisionBoxPermissionActor(

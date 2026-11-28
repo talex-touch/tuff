@@ -7,16 +7,25 @@ const {
   unlinkMock,
   openExternalMock,
   showShareResultMock,
-  checkPermissionMock
-} = vi.hoisted(() => ({
-  clipboardWriteTextMock: vi.fn(),
-  execFileSafeMock: vi.fn(async () => ({ stdout: '', stderr: '' })),
-  writeFileMock: vi.fn(async () => undefined),
-  unlinkMock: vi.fn(async () => undefined),
-  openExternalMock: vi.fn(async () => undefined),
-  showShareResultMock: vi.fn(),
-  checkPermissionMock: vi.fn(() => ({ allowed: true }))
-}))
+  enforcePermissionMock,
+  getPermissionModuleMock
+} = vi.hoisted(() => {
+  const enforcePermissionMock = vi.fn()
+  return {
+    clipboardWriteTextMock: vi.fn(),
+    execFileSafeMock: vi.fn(async () => ({ stdout: '', stderr: '' })),
+    writeFileMock: vi.fn(async () => undefined),
+    unlinkMock: vi.fn(async () => undefined),
+    openExternalMock: vi.fn(async () => undefined),
+    showShareResultMock: vi.fn(),
+    enforcePermissionMock,
+    getPermissionModuleMock: vi.fn<
+      () => { enforcePermission: typeof enforcePermissionMock } | null
+    >(() => ({
+      enforcePermission: enforcePermissionMock
+    }))
+  }
+})
 
 vi.mock('@talex-touch/utils/common/utils/safe-shell', () => ({
   execFileSafe: execFileSafeMock
@@ -30,9 +39,7 @@ vi.mock('node:fs/promises', () => ({
 }))
 
 vi.mock('../permission', () => ({
-  getPermissionModule: vi.fn(() => ({
-    checkPermission: checkPermissionMock
-  }))
+  getPermissionModule: getPermissionModuleMock
 }))
 
 vi.mock('electron', () => ({
@@ -151,16 +158,57 @@ describe('native-share behavior', () => {
 
   it('enforces clipboard:write for plugin callers invoking macOS Messages share', async () => {
     await withPlatform('darwin', async () => {
-      checkPermissionMock.mockReturnValueOnce({ allowed: false })
-      const result = await nativeShareService.share(
+      // Denied path: enforcePermission throws -> blocked before clipboard write
+      enforcePermissionMock.mockImplementationOnce(() => {
+        throw new Error('Permission denied: clipboard:write')
+      })
+      const deniedResult = await nativeShareService.share(
         {
           target: 'messages',
           text: 'secret from plugin'
         },
         { callerPluginId: 'untrusted-plugin', callerSdkApi: 260101 }
       )
-      expect(result.success).toBe(false)
+      expect(deniedResult.success).toBe(false)
+      expect(deniedResult.error).toBe('nativeShare.errors.systemFailed')
+      expect(enforcePermissionMock).toHaveBeenCalledWith(
+        'untrusted-plugin',
+        'clipboard:write',
+        260101
+      )
       expect(clipboardWriteTextMock).not.toHaveBeenCalled()
+
+      // Fail-closed path: null permission module -> blocked before clipboard write
+      getPermissionModuleMock.mockReturnValueOnce(null)
+      const unavailableResult = await nativeShareService.share(
+        {
+          target: 'messages',
+          text: 'secret while perm unavailable'
+        },
+        { callerPluginId: 'untrusted-plugin', callerSdkApi: 260101 }
+      )
+      expect(unavailableResult.success).toBe(false)
+      expect(clipboardWriteTextMock).not.toHaveBeenCalled()
+
+      // Allowed path: enforcePermission succeeds -> writes clipboard and succeeds
+      const allowedResult = await nativeShareService.share(
+        {
+          target: 'messages',
+          text: 'allowed plugin message'
+        },
+        { callerPluginId: 'trusted-plugin', callerSdkApi: 260101 }
+      )
+      expect(allowedResult).toEqual({
+        success: true,
+        target: 'messages',
+        requiresUserAction: true
+      })
+      expect(enforcePermissionMock).toHaveBeenLastCalledWith(
+        'trusted-plugin',
+        'clipboard:write',
+        260101
+      )
+      expect(clipboardWriteTextMock).toHaveBeenCalledWith('allowed plugin message')
     })
   })
 

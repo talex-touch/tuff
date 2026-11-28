@@ -65,19 +65,22 @@ export class FlowBusModule extends BaseModule<TalexEvents> {
   }
 
   private registerTransportHandlers(tx: ReturnType<typeof getTuffTransportMain>): void {
-    const resolvePluginSdkapi = (pluginId: string, payloadSdkapi?: number): number | undefined => {
-      const declaredSdkapi = pluginModule.pluginManager?.plugins.get(pluginId)?.sdkapi
-      if (
-        typeof declaredSdkapi === 'number' &&
-        typeof payloadSdkapi === 'number' &&
-        payloadSdkapi !== declaredSdkapi
-      ) {
+    const resolvePluginSdkapi = (
+      pluginId: string,
+      payloadSdkapi?: number,
+      contextSdkapi?: number
+    ): number | undefined => {
+      const declaredSdkapi =
+        typeof contextSdkapi === 'number'
+          ? contextSdkapi
+          : pluginModule.pluginManager?.plugins.get(pluginId)?.sdkapi
+      if (typeof payloadSdkapi === 'number' && payloadSdkapi !== declaredSdkapi) {
         throw createModuleSecurityError(
           'SDKAPI_MISMATCH',
           `Plugin sdkapi mismatch: payload=${payloadSdkapi}, declared=${declaredSdkapi}`
         )
       }
-      return declaredSdkapi ?? payloadSdkapi
+      return declaredSdkapi
     }
 
     const resolveCallerPlugin = (
@@ -100,11 +103,17 @@ export class FlowBusModule extends BaseModule<TalexEvents> {
             'Plugin cannot modify Flow targets owned by another plugin.'
           )
         }
-        const sdkapi = resolvePluginSdkapi(pluginId, payloadSdkapi)
+        const rawContextSdkapi = (context.plugin as { sdkapi?: unknown }).sdkapi
+        const contextSdkapi = typeof rawContextSdkapi === 'number' ? rawContextSdkapi : undefined
+        const sdkapi = resolvePluginSdkapi(pluginId, payloadSdkapi, contextSdkapi)
         const perm = getPermissionModule()
-        if (perm) {
-          perm.enforcePermission(pluginId, apiName, sdkapi)
+        if (!perm) {
+          throw createModuleSecurityError(
+            'PERMISSION_DENIED',
+            'Permission module is unavailable for Flow target operation.'
+          )
         }
+        perm.enforcePermission(pluginId, apiName, sdkapi)
         return { pluginId, sdkapi, isPluginCaller: true }
       }
 
@@ -276,6 +285,7 @@ export class FlowBusModule extends BaseModule<TalexEvents> {
       if (!result.success) {
         throw new Error(result.error || 'Native share delivery failed')
       }
+      flowBus.acknowledge(session.sessionId, result)
     })
     this.flowDeliveryDisposers.set('native', disposeNative)
 

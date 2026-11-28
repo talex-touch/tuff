@@ -191,26 +191,10 @@ fn open_regular_image_file(path: &Path) -> Result<(File, fs::Metadata), (&'stati
 
     let mut open_options = OpenOptions::new();
     open_options.read(true);
-    #[cfg(target_os = "macos")]
+    #[cfg(unix)]
     {
         use std::os::unix::fs::OpenOptionsExt;
-        const O_NONBLOCK: i32 = 0x0004;
-        const O_NOFOLLOW: i32 = 0x0100;
-        open_options.custom_flags(O_NONBLOCK | O_NOFOLLOW);
-    }
-    #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        const O_NONBLOCK: i32 = 0x0800;
-        const O_NOFOLLOW: i32 = 0x20000;
-        open_options.custom_flags(O_NONBLOCK | O_NOFOLLOW);
-    }
-    #[cfg(all(target_os = "linux", target_arch = "aarch64"))]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        const O_NONBLOCK: i32 = 0x0800;
-        const O_NOFOLLOW: i32 = 0x10000;
-        open_options.custom_flags(O_NONBLOCK | O_NOFOLLOW);
+        open_options.custom_flags(libc::O_NONBLOCK | libc::O_NOFOLLOW);
     }
 
     let file = open_options.open(path).map_err(|err| {

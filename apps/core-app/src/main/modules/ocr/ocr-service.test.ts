@@ -11,14 +11,25 @@ const {
   getCapabilityOptionsMock,
   aiInvokeMock,
   embeddingGenerateMock,
-  pushInboxEntryMock
-} = vi.hoisted(() => ({
-  ensureIntelligenceConfigLoadedMock: vi.fn(),
-  getCapabilityOptionsMock: vi.fn(),
-  aiInvokeMock: vi.fn(),
-  embeddingGenerateMock: vi.fn(),
-  pushInboxEntryMock: vi.fn()
-}))
+  pushInboxEntryMock,
+  checkPermissionMock,
+  getPermissionModuleMock
+} = vi.hoisted(() => {
+  const checkPermissionMock = vi.fn(() => ({ allowed: true }))
+  return {
+    ensureIntelligenceConfigLoadedMock: vi.fn(),
+    getCapabilityOptionsMock: vi.fn(),
+    aiInvokeMock: vi.fn(),
+    embeddingGenerateMock: vi.fn(),
+    pushInboxEntryMock: vi.fn(),
+    checkPermissionMock,
+    getPermissionModuleMock: vi.fn<() => { checkPermission: typeof checkPermissionMock } | null>(
+      () => ({
+        checkPermission: checkPermissionMock
+      })
+    )
+  }
+})
 
 vi.mock('electron', () => {
   const electronMock = {
@@ -116,6 +127,10 @@ vi.mock('../notification', () => ({
   notificationModule: {
     pushInboxEntry: pushInboxEntryMock
   }
+}))
+
+vi.mock('../permission', () => ({
+  getPermissionModule: getPermissionModuleMock
 }))
 
 vi.mock('../ai/intelligence-config', () => ({
@@ -1001,21 +1016,70 @@ describe('OcrService security and reliability regressions', () => {
     }
   })
 
-  it('does not broadcast OCR metadata to an attached plugin without clipboard:read permission', async () => {
+  it('gates OCR metadata broadcasts on clipboard:read permission for attached plugins', async () => {
     const { windowManager } = await import('../box-tool/core-box/window')
-    vi.mocked(windowManager.getAttachedPlugin).mockReturnValue({
-      name: 'unauthorized-plugin',
-      _uniqueChannelKey: 'ch-1'
-    } as never)
+    const broadcastPlugin = vi.fn()
+    const channelStub = {
+      regChannel: vi.fn(() => vi.fn()),
+      sendTo: vi.fn(async () => undefined),
+      sendPlugin: vi.fn(async () => undefined),
+      broadcast: vi.fn(),
+      broadcastTo: vi.fn(),
+      broadcastPlugin
+    }
 
-    const sendToPlugin = vi.fn(async () => undefined)
     const service = ocrService as unknown as {
-      transport: { sendToPlugin: typeof sendToPlugin } | null
+      setTransportChannel: (channel: unknown) => void
       broadcastMetaUpdate: (clipboardId: number, patch: Record<string, unknown>) => void
     }
-    service.transport = { sendToPlugin }
+    service.setTransportChannel(channelStub)
 
-    service.broadcastMetaUpdate(12, { ocr_text: 'sensitive screenshot text' })
-    expect(sendToPlugin).not.toHaveBeenCalled()
+    try {
+      // Denied plugin: permission checked, broadcast suppressed.
+      vi.mocked(windowManager.getAttachedPlugin).mockReturnValue({
+        name: 'unauthorized-plugin',
+        _uniqueChannelKey: 'ch-1',
+        sdkapi: 260101
+      } as never)
+      checkPermissionMock.mockReturnValueOnce({ allowed: false })
+
+      service.broadcastMetaUpdate(12, { ocr_text: 'sensitive screenshot text' })
+      expect(checkPermissionMock).toHaveBeenCalledWith(
+        'unauthorized-plugin',
+        'clipboard:read',
+        260101
+      )
+      expect(broadcastPlugin).not.toHaveBeenCalled()
+
+      // Unavailable permission module: fail closed, broadcast suppressed.
+      getPermissionModuleMock.mockReturnValueOnce(null)
+      service.broadcastMetaUpdate(12, { ocr_text: 'sensitive screenshot text' })
+      expect(broadcastPlugin).not.toHaveBeenCalled()
+
+      // Authorized plugin: broadcastPlugin receives event and payload.
+      vi.mocked(windowManager.getAttachedPlugin).mockReturnValue({
+        name: 'authorized-plugin',
+        _uniqueChannelKey: 'ch-2',
+        sdkapi: 260101
+      } as never)
+      checkPermissionMock.mockReturnValueOnce({ allowed: true })
+
+      service.broadcastMetaUpdate(12, { ocr_text: 'allowed screenshot text' })
+      expect(checkPermissionMock).toHaveBeenLastCalledWith(
+        'authorized-plugin',
+        'clipboard:read',
+        260101
+      )
+      expect(broadcastPlugin).toHaveBeenCalledWith(
+        'authorized-plugin',
+        'core-box:clipboard-meta-updated',
+        {
+          clipboardId: 12,
+          patch: { ocr_text: 'allowed screenshot text' }
+        }
+      )
+    } finally {
+      service.setTransportChannel(null)
+    }
   })
 })

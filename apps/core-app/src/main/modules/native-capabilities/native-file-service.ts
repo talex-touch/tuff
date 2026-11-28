@@ -40,31 +40,45 @@ const BLOCKED_PLUGIN_OPEN_EXTENSIONS = new Set([
   'appex',
   'appimage',
   'applescript',
+  'application',
+  'appref-ms',
+  'appx',
+  'appxbundle',
   'bash',
   'bat',
   'bin',
+  'bundle',
+  'chm',
   'cmd',
   'com',
   'command',
   'cpl',
   'csh',
   'desktop',
+  'diagcab',
   'dll',
   'dmg',
   'dylib',
   'exe',
+  'fileloc',
   'fish',
   'hta',
   'inetloc',
   'inf',
+  'iso',
   'jar',
+  'jnlp',
   'js',
   'jse',
   'ksh',
+  'library-ms',
   'lnk',
+  'mobileconfig',
   'mpkg',
   'msc',
   'msi',
+  'msix',
+  'msixbundle',
   'msp',
   'osa',
   'out',
@@ -74,13 +88,22 @@ const BLOCKED_PLUGIN_OPEN_EXTENSIONS = new Set([
   'ps1',
   'psd1',
   'psm1',
+  'py',
+  'pyw',
   'reg',
   'run',
+  'scf',
   'scpt',
   'scptd',
   'scr',
+  'sct',
+  'search-ms',
+  'service',
+  'settingcontent-ms',
   'sh',
   'so',
+  'sparsebundle',
+  'sparseimage',
   'terminal',
   'tool',
   'url',
@@ -88,8 +111,11 @@ const BLOCKED_PLUGIN_OPEN_EXTENSIONS = new Set([
   'vbs',
   'webloc',
   'workflow',
+  'wsc',
   'wsf',
   'wsh',
+  'xbap',
+  'xip',
   'zsh'
 ])
 
@@ -99,20 +125,41 @@ export interface NativeFileOpenCallerOptions {
   confirmPluginOpen?: (targetPath: string, pluginName?: string) => Promise<boolean>
 }
 
-async function isBlockedPluginOpenTarget(
-  filePath: string,
-  stats: Awaited<ReturnType<typeof fs.stat>>
-): Promise<boolean> {
-  if (BLOCKED_PLUGIN_OPEN_EXTENSIONS.has(getExtension(filePath))) {
-    return true
+function getSecurityExtension(filePath: string): string {
+  // Windows strips trailing dots and spaces when resolving filenames (e.g. "run.bat." -> "run.bat").
+  const trimmed = filePath.replace(/[\\/]+$/, '').replace(/[. ]+$/, '')
+  return path.extname(trimmed).replace(/^\./, '').toLowerCase()
+}
+
+async function resolveRealPathForPluginOpen(filePath: string): Promise<string> {
+  if (typeof fs.realpath !== 'function') {
+    throw createCodedError(
+      'Unable to resolve canonical file path for plugin open',
+      'ERR_NATIVE_FILE_OPEN_BLOCKED'
+    )
   }
   try {
-    const resolved = typeof fs.realpath === 'function' ? await fs.realpath(filePath) : filePath
-    if (BLOCKED_PLUGIN_OPEN_EXTENSIONS.has(getExtension(resolved))) {
-      return true
-    }
-  } catch {
-    // Keep extension check on the requested path if realpath is unavailable.
+    return await fs.realpath(filePath)
+  } catch (error) {
+    const coded = createCodedError(
+      'Unable to resolve canonical file path for plugin open',
+      'ERR_NATIVE_FILE_OPEN_BLOCKED'
+    )
+    coded.cause = error
+    throw coded
+  }
+}
+
+function isBlockedPluginOpenTarget(
+  requestedPath: string,
+  resolvedPath: string,
+  stats: Awaited<ReturnType<typeof fs.stat>>
+): boolean {
+  if (
+    BLOCKED_PLUGIN_OPEN_EXTENSIONS.has(getSecurityExtension(requestedPath)) ||
+    BLOCKED_PLUGIN_OPEN_EXTENSIONS.has(getSecurityExtension(resolvedPath))
+  ) {
+    return true
   }
   if (
     process.platform !== 'win32' &&
@@ -123,6 +170,18 @@ async function isBlockedPluginOpenTarget(
     return true
   }
   return false
+}
+
+async function validatePluginOpenTarget(filePath: string): Promise<{ resolvedPath: string }> {
+  const resolvedPath = await resolveRealPathForPluginOpen(filePath)
+  const stats = await getFileStats(resolvedPath)
+  if (isBlockedPluginOpenTarget(filePath, resolvedPath, stats)) {
+    throw createCodedError(
+      'Opening executable, script, or application package files is blocked for plugin callers',
+      'ERR_NATIVE_FILE_OPEN_BLOCKED'
+    )
+  }
+  return { resolvedPath }
 }
 
 async function confirmPluginFileOpen(targetPath: string, pluginName?: string): Promise<boolean> {
@@ -382,26 +441,30 @@ export class NativeFileService {
     callerOptions?: NativeFileOpenCallerOptions
   ): Promise<NativeFileActionResult> {
     const filePath = normalizePathRequest(request)
-    const stats = await getFileStats(filePath)
+    await getFileStats(filePath)
+    let targetPathToOpen = filePath
     if (callerOptions?.isPluginCaller) {
-      if (await isBlockedPluginOpenTarget(filePath, stats)) {
-        throw createCodedError(
-          'Opening executable, script, or application package files is blocked for plugin callers',
-          'ERR_NATIVE_FILE_OPEN_BLOCKED'
-        )
-      }
+      const { resolvedPath: resolvedBefore } = await validatePluginOpenTarget(filePath)
       const confirmFn = callerOptions.confirmPluginOpen ?? confirmPluginFileOpen
-      const approved = await confirmFn(filePath, callerOptions.pluginName)
+      const approved = await confirmFn(resolvedBefore, callerOptions.pluginName)
       if (!approved) {
         throw createCodedError(
           'Opening file was declined by the user',
           'ERR_NATIVE_FILE_OPEN_DECLINED'
         )
       }
+      const { resolvedPath: resolvedAfter } = await validatePluginOpenTarget(filePath)
+      if (resolvedAfter !== resolvedBefore) {
+        throw createCodedError(
+          'File target changed during user confirmation',
+          'ERR_NATIVE_FILE_OPEN_BLOCKED'
+        )
+      }
+      targetPathToOpen = resolvedAfter
     }
-    const message = await shell.openPath(filePath)
+    const message = await shell.openPath(targetPathToOpen)
     return {
-      path: filePath,
+      path: targetPathToOpen,
       success: !message,
       message: message || undefined
     }

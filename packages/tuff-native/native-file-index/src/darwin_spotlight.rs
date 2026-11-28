@@ -209,13 +209,16 @@ pub fn query_spotlight(
             }
 
             let ok = MDQueryExecute(query_ref, K_MD_QUERY_SYNCHRONOUS);
+            // Clear the shared active_query handle immediately after MDQueryExecute returns so
+            // a concurrent caller timeout cannot call MDQueryStop while we enumerate results or
+            // release the query. Acquiring this lock also serializes with any in-flight MDQueryStop.
+            {
+                let mut guard = active_query_worker
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner());
+                *guard = None;
+            }
             if ok == 0 || cancelled_worker.load(Ordering::Acquire) {
-                {
-                    let mut guard = active_query_worker
-                        .lock()
-                        .unwrap_or_else(|e| e.into_inner());
-                    *guard = None;
-                }
                 MDQueryStop(query_ref);
                 CFRelease(query_ref.cast::<c_void>());
                 let _ = tx.send(Ok(Vec::new()));
@@ -285,12 +288,6 @@ pub fn query_spotlight(
                 });
             }
 
-            {
-                let mut guard = active_query_worker
-                    .lock()
-                    .unwrap_or_else(|e| e.into_inner());
-                *guard = None;
-            }
             MDQueryStop(query_ref);
             CFRelease(query_ref.cast::<c_void>());
             let _ = tx.send(Ok(hits));

@@ -133,17 +133,43 @@ describe('NativeFileService', () => {
       '/tmp/evil.app',
       '/tmp/evil.exe',
       '/tmp/evil.bat',
+      '/tmp/evil.bat.',
+      '/tmp/evil.bat   ',
       '/tmp/evil.ps1',
       '/tmp/evil.dmg',
-      '/tmp/evil.pkg'
+      '/tmp/evil.pkg',
+      '/tmp/evil.chm',
+      '/tmp/evil.jnlp',
+      '/tmp/evil.msix',
+      '/tmp/evil.iso',
+      '/tmp/evil.mobileconfig',
+      '/tmp/evil.py',
+      '/tmp/evil.pyw',
+      '/tmp/evil.fileloc',
+      '/tmp/evil.search-ms'
     ]) {
       await expect(
         service.open({ path: dangerousPath }, { isPluginCaller: true, pluginName: 'demo.plugin' })
       ).rejects.toMatchObject({ code: 'ERR_NATIVE_FILE_OPEN_BLOCKED' })
     }
 
+    // Fail closed when realpath fails for plugin callers.
+    mocks.realpath.mockRejectedValueOnce(new Error('EACCES'))
+    await expect(
+      service.open({ path: '/tmp/report.pdf' }, { isPluginCaller: true, pluginName: 'demo.plugin' })
+    ).rejects.toMatchObject({ code: 'ERR_NATIVE_FILE_OPEN_BLOCKED' })
+    expect(mocks.openPath).not.toHaveBeenCalled()
+
     // POSIX executable bit on an innocent-looking extension must also be blocked on non-Windows.
     if (process.platform !== 'win32') {
+      mocks.stat.mockResolvedValueOnce({
+        isFile: () => true,
+        isDirectory: () => false,
+        mode: 0o755,
+        size: 64,
+        birthtime: new Date(),
+        mtime: new Date()
+      })
       mocks.stat.mockResolvedValueOnce({
         isFile: () => true,
         isDirectory: () => false,
@@ -167,12 +193,29 @@ describe('NativeFileService', () => {
     ).rejects.toMatchObject({ code: 'ERR_NATIVE_FILE_OPEN_DECLINED' })
     expect(mocks.openPath).not.toHaveBeenCalled()
 
-    // Approved when user confirms (response === 0).
+    // Confirmation dialog receives canonical resolved path and shell.openPath opens the resolved path.
+    mocks.realpath
+      .mockResolvedValueOnce('/tmp/canonical/report.pdf')
+      .mockResolvedValueOnce('/tmp/canonical/report.pdf')
     mocks.showMessageBox.mockResolvedValueOnce({ response: 0 })
     await expect(
-      service.open({ path: '/tmp/report.pdf' }, { isPluginCaller: true, pluginName: 'demo.plugin' })
-    ).resolves.toMatchObject({ success: true })
-    expect(mocks.openPath).toHaveBeenCalledWith('/tmp/report.pdf')
+      service.open({ path: '/tmp/alias.pdf' }, { isPluginCaller: true, pluginName: 'demo.plugin' })
+    ).resolves.toMatchObject({ success: true, path: '/tmp/canonical/report.pdf' })
+    expect(mocks.showMessageBox).toHaveBeenLastCalledWith(
+      expect.objectContaining({ detail: '/tmp/canonical/report.pdf' })
+    )
+    expect(mocks.openPath).toHaveBeenCalledWith('/tmp/canonical/report.pdf')
+
+    // TOCTOU symlink swap across confirmation dialog must be blocked before shell.openPath.
+    mocks.openPath.mockClear()
+    mocks.realpath
+      .mockResolvedValueOnce('/tmp/canonical/safe.pdf')
+      .mockResolvedValueOnce('/tmp/canonical/swapped.pdf')
+    mocks.showMessageBox.mockResolvedValueOnce({ response: 0 })
+    await expect(
+      service.open({ path: '/tmp/toctou.pdf' }, { isPluginCaller: true, pluginName: 'demo.plugin' })
+    ).rejects.toMatchObject({ code: 'ERR_NATIVE_FILE_OPEN_BLOCKED' })
+    expect(mocks.openPath).not.toHaveBeenCalled()
   })
 
   it('stores generated thumbnails as native tfile refs by default', async () => {

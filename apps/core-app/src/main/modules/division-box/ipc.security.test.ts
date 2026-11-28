@@ -65,6 +65,7 @@ const mocks = vi.hoisted(() => {
       { sessionId: sessionB.sessionId, state: 'active', meta: sessionB.meta }
     ]),
     enforcePermission: vi.fn(),
+    getPermissionModule: vi.fn(),
     plugins: new Map<string, { sdkapi?: number }>([
       ['plugin-a', { sdkapi: 260101 }],
       ['plugin-b', { sdkapi: 260101 }]
@@ -73,9 +74,7 @@ const mocks = vi.hoisted(() => {
 })
 
 vi.mock('../permission', () => ({
-  getPermissionModule: vi.fn(() => ({
-    enforcePermission: mocks.enforcePermission
-  }))
+  getPermissionModule: () => mocks.getPermissionModule()
 }))
 
 vi.mock('../plugin/plugin-module', () => ({
@@ -127,6 +126,9 @@ describe('DivisionBoxIPC cross-plugin ownership isolation', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    mocks.getPermissionModule.mockReturnValue({
+      enforcePermission: mocks.enforcePermission
+    })
     mocks.handlers.clear()
     const transport = {
       on: vi.fn(
@@ -219,5 +221,10 @@ describe('DivisionBoxIPC cross-plugin ownership isolation', () => {
 
     const unverifiedRes = await listHandler(undefined, unverifiedCtx('plugin-a'))
     expect(unverifiedRes).toMatchObject({ success: false })
+
+    // Fail closed when permission module is unavailable for plugin callers.
+    mocks.getPermissionModule.mockReturnValueOnce(null)
+    const permUnavailableRes = await listHandler(undefined, pluginCtx('plugin-a'))
+    expect(permUnavailableRes).toMatchObject({ success: false })
   })
 })

@@ -253,7 +253,7 @@ export class NativeShareService {
     options: NativeShareOptions,
     callerContext?: NativeShareCallerContext
   ): Promise<NativeShareResult> {
-    let result: NativeShareResult
+    let result: NativeShareResult = { success: false }
     let createdTempFile: string | null = null
 
     try {
@@ -482,13 +482,14 @@ return item 1 of shareChoice
 
     if (callerContext?.callerPluginId) {
       const perm = getPermissionModule()
-      if (perm) {
-        perm.enforcePermission(
-          callerContext.callerPluginId,
-          'clipboard:write',
-          callerContext.callerSdkApi
-        )
+      if (!perm) {
+        throw new Error('Permission module is unavailable for clipboard write')
       }
+      perm.enforcePermission(
+        callerContext.callerPluginId,
+        'clipboard:write',
+        callerContext.callerSdkApi
+      )
     }
 
     const script = `

@@ -2820,6 +2820,7 @@ name = "tuff-native-ocr"
 version = "0.1.0"
 dependencies = [
  "cc",
+ "libc",
  "serde",
  "serde_json",
 ]

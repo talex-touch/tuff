@@ -578,10 +578,11 @@ export class FlowBus {
     try {
       if (senderId && senderId !== 'corebox' && senderId !== 'system') {
         const perm = getPermissionModule()
-        if (perm) {
-          const sdkapi = pluginModule.pluginManager?.plugins.get(senderId)?.sdkapi
-          perm.enforcePermission(senderId, 'clipboard:write', sdkapi)
+        if (!perm) {
+          throw new Error('Permission module is unavailable for fallback clipboard copy')
         }
+        const sdkapi = pluginModule.pluginManager?.plugins.get(senderId)?.sdkapi
+        perm.enforcePermission(senderId, 'clipboard:write', sdkapi)
       }
       const { clipboard } = await import('electron')
       if (payload.type === 'text' && typeof payload.data === 'string') {

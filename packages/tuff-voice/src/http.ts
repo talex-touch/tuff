@@ -381,7 +381,7 @@ export interface SafeFetchRequest {
 export interface SafeFetchOptions extends SafeRemoteUrlOptions {
   fetchImpl?: typeof fetch
   maxRedirects?: number
-  /** Skip DNS lookup when calling a mocked fetch implementation without an explicit lookup hook. */
+  /** Explicit test-only opt-out for skipping DNS SSRF checks; keep unset/false in production. */
   skipDnsLookup?: boolean
 }
 
@@ -393,7 +393,7 @@ export async function safeFetchWithRedirects(
   const allowedProtocols = options.allowedProtocols ?? ['https:']
   const allowLocalhost = options.allowLocalhost === true
   const maxRedirects = options.maxRedirects ?? MAX_SAFE_REDIRECTS
-  const validateDns = !options.skipDnsLookup && (fetchImpl === fetch || options.lookup !== undefined)
+  const validateDns = !options.skipDnsLookup
 
   const validateHop = async (candidateUrl: string): Promise<URL> => {
     if (validateDns) {
@@ -434,6 +434,7 @@ export async function safeFetchWithRedirects(
     if (!location) {
       return response
     }
+    await response.body?.cancel().catch(() => {})
     if (hop === maxRedirects) {
       throw new VoiceProviderError(
         'VOICE_HTTP_TOO_MANY_REDIRECTS',

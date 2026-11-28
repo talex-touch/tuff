@@ -240,7 +240,10 @@ export class DivisionBoxIPC {
       }
       const perm = getPermissionModule()
       if (!perm) {
-        return
+        throw new DivisionBoxError(
+          DivisionBoxErrorCode.PERMISSION_DENIED,
+          'Permission module is unavailable for DivisionBox operation.'
+        )
       }
       perm.enforcePermission(pluginId, apiName, sdkapi)
     }

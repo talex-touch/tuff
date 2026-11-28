@@ -37,11 +37,7 @@ function resolveVerifiedSdkapi(
 ): number | undefined {
   const declaredSdkapi =
     typeof contextSdkapi === 'number' ? contextSdkapi : resolvePluginSdkapi(pluginId)
-  if (
-    typeof declaredSdkapi === 'number' &&
-    typeof payloadSdkapi === 'number' &&
-    payloadSdkapi !== declaredSdkapi
-  ) {
+  if (typeof payloadSdkapi === 'number' && payloadSdkapi !== declaredSdkapi) {
     const error = new Error(
       `Plugin sdkapi mismatch: payload=${payloadSdkapi}, declared=${declaredSdkapi}`
     ) as Error & { code?: string; pluginId?: string }
@@ -49,7 +45,7 @@ function resolveVerifiedSdkapi(
     error.pluginId = pluginId
     throw error
   }
-  return declaredSdkapi ?? payloadSdkapi
+  return declaredSdkapi
 }
 
 export function resolveDivisionBoxPermissionActor(

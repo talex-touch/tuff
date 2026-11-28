@@ -7,10 +7,11 @@ import type {
   VoiceStreamRequest,
   VoiceUploadRequest,
 } from '../contracts'
+import type { DnsLookupFn } from '../http'
 import type { DoubaoImeCredentials } from '../protocol/doubao-ime'
 import { Buffer } from 'node:buffer'
 import { assertVoiceProviderRequestId, VoiceProviderError } from '../contracts'
-import { isSafeRemoteUrl } from '../http'
+import { assertSafeRemoteUrlAsync, isSafeRemoteUrl } from '../http'
 import {
   acquireDoubaoImeToken,
   buildDoubaoImeAudioRequest,
@@ -26,6 +27,9 @@ export interface DoubaoImeVoiceProviderOptions {
   socketFactory: VoiceSocketFactory
   streamUrl?: string
   fetchImpl?: typeof fetch
+  lookup?: DnsLookupFn
+  /** Explicit test-only opt-out for skipping DNS SSRF checks; keep unset/false in production. */
+  skipDnsLookup?: boolean
 }
 
 export class DoubaoImeVoiceProvider implements VoiceProviderAdapter {
@@ -67,6 +71,13 @@ export class DoubaoImeVoiceProvider implements VoiceProviderAdapter {
 
   async createStream(request: VoiceStreamRequest): Promise<VoiceStreamConnection> {
     assertVoiceProviderRequestId(request.requestId)
+
+    if (!this.options.skipDnsLookup) {
+      await assertSafeRemoteUrlAsync(this.streamUrl, {
+        allowedProtocols: ['wss:'],
+        lookup: this.options.lookup,
+      })
+    }
 
     const token = await acquireDoubaoImeToken(this.credentials, this.options.fetchImpl)
     const appKey = this.credentials.appKey

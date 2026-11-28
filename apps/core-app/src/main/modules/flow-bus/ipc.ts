@@ -93,22 +93,20 @@ export class FlowBusIPC {
 
     const resolveVerifiedSdkapi = (
       pluginId: string,
-      payloadRecord: Record<string, unknown> | null
+      payloadRecord: Record<string, unknown> | null,
+      contextSdkapi?: number
     ): number | undefined => {
       const payloadSdkapi =
         typeof payloadRecord?._sdkapi === 'number' ? payloadRecord._sdkapi : undefined
-      const declaredSdkapi = resolvePluginSdkapi(pluginId)
-      if (
-        typeof declaredSdkapi === 'number' &&
-        typeof payloadSdkapi === 'number' &&
-        payloadSdkapi !== declaredSdkapi
-      ) {
+      const declaredSdkapi =
+        typeof contextSdkapi === 'number' ? contextSdkapi : resolvePluginSdkapi(pluginId)
+      if (typeof payloadSdkapi === 'number' && payloadSdkapi !== declaredSdkapi) {
         throw createFlowSecurityError(
           'SDKAPI_MISMATCH',
           `Plugin sdkapi mismatch: payload=${payloadSdkapi}, declared=${declaredSdkapi}`
         )
       }
-      return declaredSdkapi ?? payloadSdkapi
+      return declaredSdkapi
     }
 
     const getAuthoritativePluginOrThrow = (context: HandlerContext) => {
@@ -129,9 +127,11 @@ export class FlowBusIPC {
       const authoritativePlugin = getAuthoritativePluginOrThrow(context)
       if (authoritativePlugin) {
         const pluginId = authoritativePlugin.name
+        const rawContextSdkapi = (authoritativePlugin as { sdkapi?: unknown }).sdkapi
+        const contextSdkapi = typeof rawContextSdkapi === 'number' ? rawContextSdkapi : undefined
         return {
           pluginId,
-          sdkapi: resolveVerifiedSdkapi(pluginId, payloadRecord),
+          sdkapi: resolveVerifiedSdkapi(pluginId, payloadRecord, contextSdkapi),
           isPluginCaller: true as const
         }
       }
@@ -164,7 +164,10 @@ export class FlowBusIPC {
       }
       const perm = getPermissionModule()
       if (!perm) {
-        return actor
+        throw createFlowSecurityError(
+          'PERMISSION_DENIED',
+          'Permission module is unavailable for Flow operation.'
+        )
       }
       perm.enforcePermission(actor.pluginId, eventName, actor.sdkapi)
       return actor
