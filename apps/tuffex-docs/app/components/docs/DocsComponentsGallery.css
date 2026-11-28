@@ -13,12 +13,15 @@
 
 .docs-gallery {
   --docs-gallery-line: color-mix(in srgb, var(--docs-border) 72%, transparent);
+  --docs-gallery-radius: 18px;
+  --docs-gallery-bar-pad: 8px;
+  --docs-gallery-control-radius: calc(var(--docs-gallery-radius) - var(--docs-gallery-bar-pad) - 1px);
   --docs-gallery-sticky-top: 68px;
-  --docs-gallery-sticky-bar-h: 53px;
+  --docs-gallery-sticky-bar-h: 45px;
   --docs-gallery-sticky-bg: color-mix(in srgb, var(--docs-surface, #ffffff) 94%, transparent);
 
   border: 1px solid var(--docs-gallery-line);
-  border-radius: 14px;
+  border-radius: var(--docs-gallery-radius);
   /* Use clip (not hidden) so rounded corners clip cleanly without breaking position: sticky inside */
   overflow: clip;
 }
@@ -36,20 +39,20 @@
   -webkit-backdrop-filter: blur(12px) saturate(140%);
   backdrop-filter: blur(12px) saturate(140%);
   border-bottom: 1px solid var(--docs-gallery-line);
-  border-top-left-radius: 13px;
-  border-top-right-radius: 13px;
+  border-top-left-radius: calc(var(--docs-gallery-radius) - 1px);
+  border-top-right-radius: calc(var(--docs-gallery-radius) - 1px);
   /* Seal the narrow gap beneath the floating DocsHeader pill when stuck; clipped by .docs-gallery at y=0. */
   box-shadow: 0 -18px 0 0 var(--docs-surface, #ffffff);
 }
 
 .docs-gallery__bar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   /* Install command anchors the left edge, framework switcher & version the right. */
   justify-content: space-between;
-  gap: 10px;
-  min-height: 52px;
-  padding: 10px 20px;
+  gap: 8px;
+  padding: var(--docs-gallery-bar-pad);
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 12px;
   color: var(--docs-muted);
@@ -65,23 +68,30 @@
    here, so a theme selector is not an option. Measured at this ratio:
    4.66:1 on white, 10.97:1 on the dark page. */
 .docs-gallery__version {
-  padding: 2px 7px;
-  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  box-sizing: border-box;
+  padding: 0 9px;
+  border-radius: var(--docs-gallery-control-radius);
   border: 1px solid color-mix(in srgb, var(--tx-color-success) 40%, transparent);
   background: color-mix(in srgb, var(--tx-color-success) 12%, transparent);
   color: color-mix(in srgb, var(--tx-color-success) 55%, var(--tx-text-color-primary));
-  line-height: 1.4;
+  line-height: 1;
 }
 
 .docs-gallery__install {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 4px 10px;
+  height: 28px;
+  box-sizing: border-box;
+  padding: 0 10px;
   border: 1px solid var(--docs-inline-code-border);
-  border-radius: 8px;
+  border-radius: var(--docs-gallery-control-radius);
   background: var(--docs-inline-code-bg);
   font: inherit;
+  line-height: 1;
   color: inherit;
   cursor: pointer;
   transition: color 0.18s ease, border-color 0.18s ease;

@@ -21,6 +21,77 @@ const externalDeps = [
   'marked',
 ]
 
+const TUFFEX_WC_MEDIA_COMPONENTS = new Set([
+  'avatar',
+  'file-uploader',
+  'icon-morph',
+  'icon-picker',
+  'image-gallery',
+  'image-preview',
+  'image-uploader',
+])
+
+const TUFFEX_WC_DATA_COMPONENTS = new Set([
+  'cascader',
+  'data-table',
+  'date-picker',
+  'descriptions',
+  'drawer-form',
+  'form',
+  'modal-form',
+  'picker',
+  'sortable-list',
+  'steps',
+  'steps-form',
+  'timeline',
+  'transfer',
+  'tree',
+  'tree-select',
+])
+
+const TUFFEX_WC_EXTRAS_COMPONENTS = new Set([
+  'ai-elements',
+  'alert',
+  'badge',
+  'breadcrumb',
+  'collapse',
+  'container',
+  'context-menu',
+  'dialog',
+  'filter-chips',
+  'flat-dropdown',
+  'flat-select',
+  'grid',
+  'grid-layout',
+  'group-block',
+  'inline-citation',
+  'markdown-view',
+  'nav-bar',
+  'pagination',
+  'progress',
+  'progress-bar',
+  'radio',
+  'rating',
+  'scrub-field',
+  'search-select',
+  'segmented-slider',
+  'selection-actions',
+  'sensitive-input',
+  'sidebar-nav',
+  'slider',
+  'splitter',
+  'stat-card',
+  'status-badge',
+  'status-hint',
+  'stream-text',
+  'tab-bar',
+  'tabs',
+  'tag-input',
+  'textarea',
+  'toast',
+  'toast-panel',
+])
+
 export default defineConfig({
   resolve: {
     alias: [
@@ -69,6 +140,12 @@ export default defineConfig({
         chunkFileNames: 'chunks/[name].js',
         manualChunks(id) {
           const normalized = id.replace(/\\/g, '/')
+          // Isolate Vue SFC & Vite virtual helpers into zero-dependency leaf chunks
+          // so Rollup can never create circular chunk TDZ on `_export_sfc`.
+          if (normalized.includes('plugin-vue:export-helper'))
+            return 'vue-export-helper'
+          if (normalized.includes('vite/preload-helper'))
+            return 'vite-preload-helper'
           if (normalized.includes('/src/runtime/'))
             return 'wc-runtime'
           if (normalized.includes('/src/elements/tier-a'))
@@ -77,62 +154,33 @@ export default defineConfig({
             return 'tier-b'
           if (normalized.includes('/src/elements/tier-c'))
             return 'tier-c'
-          if (normalized.includes('/packages/tuffex/packages/utils/'))
-            return 'tuffex-shared'
-          const tuffexMatch = normalized.match(/\/packages\/tuffex\/packages\/components\/src\/([^/]+)\//)
-          if (tuffexMatch) {
-            const comp = tuffexMatch[1]!
-            if ([
-              'markdown-view',
-              'stream-text',
-              'thinking-indicator',
-              'typing-indicator',
-            ].includes(comp)) {
-              return 'tier-c'
-            }
-            if ([
-              'base-anchor',
-              'card-item',
-              'checkbox',
-              'collapse',
-              'copy-button',
-              'dialog',
-              'drawer',
-              'input',
-              'modal',
-              'popover',
-              'progress-bar',
-              'radio',
-              'search-input',
-              'select',
-              'slider',
-              'tabs',
-              'textarea',
-              'tooltip',
-            ].includes(comp)) {
-              return 'tier-b'
-            }
-            if ([
-              'alert',
-              'avatar',
-              'badge',
-              'dot-indicator',
-              'empty',
-              'empty-state',
-              'kbd',
-              'no-data',
-              'progress',
-              'skeleton',
-              'stat-card',
-              'status-badge',
-              'status-hint',
-              'switch',
-              'tag',
-            ].includes(comp)) {
-              return 'tier-a'
-            }
+          if (normalized.includes('/src/elements/base-a'))
+            return 'base-a'
+          if (normalized.includes('/src/elements/base-b'))
+            return 'base-b'
+          // Keep dynamically imported icon-picker glyph tables & lazy image-generation effects on-demand
+          if (
+            normalized.includes('/packages/tuffex/packages/components/src/icon-picker/src/generated/')
+            || normalized.includes('/packages/tuffex/packages/components/src/image-generation/')
+          ) {
+            return undefined
+          }
+          // Partition TuffEx Vue components into strictly cycle-free layered chunks so
+          // each chunk stays comfortably under Nexus's 600 KB client chunk budget and
+          // element wrappers (`tier-*` / `base-*`) import them strictly one-way.
+          const tuffexCompMatch = normalized.match(/\/packages\/tuffex\/packages\/components\/src\/([^/]+)\//)
+          if (tuffexCompMatch) {
+            const comp = tuffexCompMatch[1]!
+            if (TUFFEX_WC_MEDIA_COMPONENTS.has(comp))
+              return 'tuffex-media'
+            if (TUFFEX_WC_DATA_COMPONENTS.has(comp))
+              return 'tuffex-data'
+            if (TUFFEX_WC_EXTRAS_COMPONENTS.has(comp))
+              return 'tuffex-extras'
             return 'tuffex-shared'
           }
+          if (normalized.includes('/packages/tuffex/packages/utils/'))
+            return 'tuffex-shared'
           return undefined
         },
       },

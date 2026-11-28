@@ -345,6 +345,7 @@ const CANONICAL_SLUG_ORDER: string[] = [
   'code-editor',
   'terminal',
   'virtual-list',
+  'device-mockup',
   'version-capsule',
   'motion-form',
   'motion-control',

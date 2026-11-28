@@ -176,6 +176,7 @@ export const STATIC_COMPONENT_SUITE_MAP: Record<string, DocsSuiteKey> = {
   '/data-table': 'base',
   '/date-picker': 'base',
   '/descriptions': 'base',
+  '/device-mockup': 'pro',
   '/dialog': 'base',
   '/diff-table': 'data',
   '/dither-chart': 'motion',

@@ -1,4 +1,7 @@
-export type ReactComponentTier = 'A' | 'B' | 'C'
+import { BASE_A_REACT_MANIFEST } from './components/base-a/manifest'
+import { BASE_B_REACT_MANIFEST } from './components/base-b/manifest'
+
+export type ReactComponentTier = 'A' | 'B' | 'C' | 'D'
 export type ReactComponentStatus = 'ready'
 
 export interface ReactComponentManifestEntry {
@@ -10,7 +13,7 @@ export interface ReactComponentManifestEntry {
 }
 
 /**
- * Locked 32-component Phase-1 manifest for `@talex-touch/tuffex-react`.
+ * Locked 100-component manifest (99/99 Basics Suite + `stream-text`) for `@talex-touch/tuffex-react`.
  * Matches `tuffex-core/compat`, `tuffex-wc`, and `apps/nexus`.
  */
 export const REACT_COMPONENTS_MANIFEST: Readonly<Record<string, ReactComponentManifestEntry>> = {
@@ -243,6 +246,12 @@ export const REACT_COMPONENTS_MANIFEST: Readonly<Record<string, ReactComponentMa
     tier: 'C',
     sampleTsx: `<TxMarkdownView content="## TuffEx React\n\nSupports **GFM** & safe sanitization." />`,
   },
+
+  // Pack A Basics Suite (35)
+  ...BASE_A_REACT_MANIFEST,
+
+  // Pack B Basics Suite (33)
+  ...BASE_B_REACT_MANIFEST,
 }
 
 export const REACT_COMPONENT_IDS: readonly string[] = Object.keys(REACT_COMPONENTS_MANIFEST)

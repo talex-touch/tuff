@@ -1,0 +1,343 @@
+---
+title: "DeviceMockup"
+description: "A tree-shakeable multi-device mockup frame with extruded 3D and studio scenes."
+category: Advanced
+status: stable
+since: 0.9.6
+tags: [mockup, device, preview, studio, export, pro]
+syncStatus: reviewed
+verified: true
+---
+
+## Installation
+
+:::TuffCodeBlock{lang="bash"}
+---
+code: |
+  pnpm add @talex-touch/tuffex
+---
+:::
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { TxDeviceMockup } from '@talex-touch/tuffex/device-mockup'
+  import '@talex-touch/tuffex/device-mockup/style.css'
+  import '@talex-touch/tuffex/base.css' // tokens + resets, once per app
+---
+:::
+
+## Usage
+
+`TxDeviceMockup` ships 75+ tree-shakeable phone, tablet, desktop, rounded/circular watch, and browser presets with an extruded 3D hardware chassis, Shots.so shadows and curated scene pairings, spring morph animations, and lazy client-side SVG/PNG/WebP export.
+
+### Device Catalog & Spring Morph
+
+Browse or search 75+ presets across six hardware families; switching devices or flipping portrait ↔ landscape smoothly morphs dimensions and silhouette (`animated` enabled by default).
+
+:::TuffDemoWrapper{demo="DeviceMockupBasicDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { iphone17Pro } from '@talex-touch/tuffex/device-mockup/presets/ios'
+  import { ref } from 'vue'
+
+  const orientation = ref<'portrait' | 'landscape'>('portrait')
+  </script>
+
+  <template>
+    <TxDeviceMockup
+      :device="iphone17Pro"
+      :orientation="orientation"
+      animated
+      show-status-bar
+      show-cutout
+      fit="contain"
+      :max-height="380"
+    >
+      <div class="my-app-preview">Live UI</div>
+    </TxDeviceMockup>
+  </template>
+---
+:::
+
+### Extruded 3D, Shadows & Framing
+
+Render a physical Z-depth chassis with decoupled floor shadows, 7 Shots.so shadow presets, 5 bleed/framing modes, 8 bezel styles, and optional studio screen glare.
+
+:::TuffDemoWrapper{demo="DeviceMockupStylesDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { iphone17Pro } from '@talex-touch/tuffex/device-mockup/presets/ios'
+  </script>
+
+  <template>
+    <TxDeviceMockup
+      :device="iphone17Pro"
+      frame-style="default"
+      finish="titanium"
+      perspective="isometric"
+      shadow="grounded"
+      framing="center"
+      interactive-tilt
+      screen-glare
+      backdrop="mesh"
+      gradient-preset="aurora"
+      backdrop-noise
+    >
+      <div class="my-feature-card">TuffEx Pro</div>
+    </TxDeviceMockup>
+  </template>
+---
+:::
+
+### Mockup Studio, Scenes & Export
+
+Apply any of 8 curated Shots.so `scene` pairings in one click, customize 12 gradients, film grain, glare, and watermarks, and export standalone SVG / PNG / WebP assets asynchronously in the browser.
+
+:::TuffDemoWrapper{demo="DeviceMockupStudioDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import type { TxDeviceMockupInstance } from '@talex-touch/tuffex/device-mockup'
+  import { downloadDeviceMockupBlob } from '@talex-touch/tuffex/device-mockup/export'
+  import { macbookPro14 } from '@talex-touch/tuffex/device-mockup/presets/desktop'
+  import { appstoreHeroScene } from '@talex-touch/tuffex/device-mockup/scenes'
+  import { ref } from 'vue'
+
+  const mockupRef = ref<TxDeviceMockupInstance | null>(null)
+
+  async function savePng() {
+    const blob = await mockupRef.value?.exportImage({ format: 'png', scale: 2 })
+    if (blob)
+      downloadDeviceMockupBlob(blob, 'preview.png')
+  }
+  </script>
+
+  <template>
+    <TxDeviceMockup
+      ref="mockupRef"
+      :device="macbookPro14"
+      :scene="appstoreHeroScene"
+      stage-ratio="16:9"
+      src="/screenshots/dashboard.png"
+      watermark="tuff.tagzxia.com"
+    />
+  </template>
+---
+:::
+
+### Tree-Shaking & Subpath Imports
+
+The core entry `@talex-touch/tuffex/device-mockup` bundles only `iphone-17-pro` and `responsive`, with zero static imports of the full preset catalog, curated scenes, or export engine. Import only the single preset, family pack, or subpath your page needs.
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  // 1. Single-preset zero-bloat import (0 bytes of other presets, scenes, or export)
+  import { TxDeviceMockup } from '@talex-touch/tuffex/device-mockup'
+  import { iphone17Pro } from '@talex-touch/tuffex/device-mockup/presets/ios'
+  // <TxDeviceMockup :device="iphone17Pro" />
+
+  // 2. Register one family for synchronous string-ID lookups
+  import { registerDeviceMockupPresets } from '@talex-touch/tuffex/device-mockup'
+  import { IOS_DEVICE_PRESETS } from '@talex-touch/tuffex/device-mockup/presets/ios'
+  registerDeviceMockupPresets(IOS_DEVICE_PRESETS)
+
+  // 3. Optional curated scenes and client-side export subpaths
+  import { DEVICE_MOCKUP_SCENES } from '@talex-touch/tuffex/device-mockup/scenes'
+  import { downloadDeviceMockupBlob, renderDeviceMockupSvg } from '@talex-touch/tuffex/device-mockup/export'
+---
+:::
+
+### Best Practices
+
+- Import individual preset objects from `@talex-touch/tuffex/device-mockup/presets/<family>` and pass them to `:device` when showcasing fixed models so unused presets stay out of your bundle.
+- Keep `fit="contain"` with an explicit container height or `max-height` so spring morphs across phones, foldables, watches, and monitors never trigger horizontal overflow.
+- In 3D perspectives, pair the solid hardware chassis (`frame-style="default"`) with `shadow="grounded"` and `screen-glare` for realistic metallic wall depth and studio contact shadows.
+- Inside the default slot, read `preset.safeArea.top` to reserve top padding beneath the mobile status bar and Dynamic Island / cutout.
+- Pass same-origin URLs or Base64 Data URLs to `src` when using client-side SVG/PNG/WebP export so downloaded assets remain self-contained and taint-free.
+
+## API Reference
+
+### Props
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `device` | `DeviceMockupPreset \| DeviceMockupPresetId \| string` | `'iphone-17-pro'` | Preset object or ID across 75+ models; unregistered string IDs lazy-load only their family chunk. |
+| `orientation` | `'portrait' \| 'landscape'` | `'portrait'` | Screen orientation; swaps width and height with a tactile spring settle on orientable devices. |
+| `scene` | `DeviceMockupSceneId \| DeviceMockupScene` | `—` | Curated Shots.so pairing supplying backdrop, frame, shadow, perspective, framing, and glare defaults; explicit props win. |
+| `frameStyle` | `'default' \| 'glass-light' \| 'glass-dark' \| 'liquid-glass' \| 'inset' \| 'outline' \| 'border' \| 'frameless'` | `'default'` | Shell bezel material and visual style. |
+| `finish` | `'obsidian' \| 'silver' \| 'titanium' \| 'graphite'` | `'obsidian'` | Hardware shell finish and extruded 3D side-wall material. |
+| `bezelColor` | `string` | `—` | Custom CSS color overriding the shell bezel fill. |
+| `bezelWidth` | `number` | `—` | Custom bezel thickness in px; overrides the preset default. |
+| `radius` | `number` | `—` | Custom inner screen corner radius in px; outer corners stay concentric. |
+| `width` | `number` | `—` | Custom logical viewport width in px, primarily for `responsive`. |
+| `height` | `number` | `—` | Custom logical viewport height in px, primarily for `responsive`. |
+| `fit` | `'contain' \| 'width' \| 'none'` | `'contain'` | Responsive scaling mode inside the host box. |
+| `scale` | `number` | `—` | Explicit scale multiplier; overrides automatic fitting. |
+| `maxWidth` | `number \| string` | `—` | Maximum rendered width of the mockup container. |
+| `maxHeight` | `number \| string` | `—` | Maximum rendered height of the mockup container. |
+| `perspective` | `'flat' \| 'tilt-left' \| 'tilt-right' \| 'isometric' \| 'floating' \| 'angled-low'` | `'flat'` | Preset true-3D camera angle. |
+| `interactiveTilt` | `boolean` | `false` | Enables live pointer-driven 3D parallax tilt on hover. |
+| `tiltMaxAngle` | `number` | `10` | Maximum pointer tilt angle in degrees. |
+| `shadow` | `boolean \| 'none' \| 'soft' \| 'crisp' \| 'grounded' \| 'elevated' \| 'dramatic' \| 'ambient'` | `'elevated'` | Hardware drop/floor shadow preset; `false` maps to `'none'`. |
+| `framing` | `'center' \| 'bleed-bottom' \| 'bleed-top' \| 'bleed-left' \| 'bleed-right' \| 'float'` | `'center'` | Stage composition alignment and edge-bleed framing mode. |
+| `screenGlare` | `boolean` | `false` | Overlays a subtle diagonal studio glass reflection across the screen. |
+| `animated` | `boolean` | `true` | Enables spring morph transitions on device, orientation, scene, frame, finish, or framing changes (off under reduced motion). |
+| `showShell` | `boolean` | `true` | Draws the hardware bezel, buttons, and stand geometry. |
+| `showCutout` | `boolean` | `true` | Draws the Dynamic Island, notch, pill, camera punch, or lid notch. |
+| `showStatusBar` | `boolean` | `true` | Displays the mobile or watch status bar chrome. |
+| `statusBarTheme` | `'auto' \| 'light' \| 'dark'` | `'auto'` | Ink contrast mode for the status bar. |
+| `statusBarTime` | `string` | `'9:41'` | Clock label rendered inside the status bar. |
+| `showHomeIndicator` | `boolean` | `true` | Displays the bottom home indicator bar on modern phones and tablets. |
+| `showHardwareButtons` | `boolean` | `true` | Draws side power, volume, or Digital Crown hardware buttons. |
+| `browserUrl` | `string` | `'https://tuff.tagzxia.com'` | Address bar URL for browser presets. |
+| `browserTitle` | `string` | `''` | Window title for browser and desktop window presets. |
+| `browserTheme` | `'auto' \| 'light' \| 'dark'` | `'auto'` | Browser and desktop window toolbar chrome theme. |
+| `backdrop` | `'none' \| 'solid' \| 'gradient' \| 'mesh' \| 'studio' \| 'obsidian' \| 'slate' \| 'transparent'` | `'none'` | Outer studio stage background mode. |
+| `gradientPreset` | `'aurora' \| 'sunset' \| 'ocean' \| 'graphite' \| 'emerald' \| 'lavender' \| 'peach' \| 'midnight' \| 'sand' \| 'cobalt' \| 'rose' \| 'silver-mist'` | `'aurora'` | One of 12 built-in palettes used by `gradient` and `mesh` backdrops. |
+| `backdropValue` | `string` | `—` | Custom CSS color or background value for the stage. |
+| `backdropNoise` | `boolean` | `false` | Adds a fine film-grain texture over stage backdrops. |
+| `stageRatio` | `'auto' \| '16:9' \| '4:3' \| '1:1' \| '9:16'` | `'auto'` | Aspect ratio locked onto the outer stage. |
+| `stagePadding` | `number` | `32` | Padding around the hardware frame inside the stage in px. |
+| `src` | `string` | `—` | Screenshot URL or Data URL; renders as an underlay when paired with the default slot. |
+| `alt` | `string` | `''` | Alternative text for the screenshot and figure semantics. |
+| `objectFit` | `'cover' \| 'contain' \| 'fill'` | `'cover'` | Object-fit mode applied to the `src` image. |
+| `title` | `string` | `—` | Optional caption title rendered below the mockup. |
+| `watermark` | `string` | `—` | Corner watermark string rendered on the stage and exported assets. |
+| `labels` | `Partial<DeviceMockupLabels>` | English defaults | Localized accessibility label map. |
+
+### Events
+
+| Event | Payload | Description |
+|------|---------|-------------|
+| `metrics-change` | `(metrics: DeviceMockupMetrics)` | Fires whenever preset, orientation, or host resize recalculates viewport dimensions and scale. |
+
+### Slots
+
+| Slot | Props | Description |
+|------|-------|-------------|
+| `default` | `{ preset, width, height, orientation, scale }` | Live screen content rendered inside the viewport; layers above `src` when both are provided. |
+| `status-bar` | `—` | Replaces the default mobile status bar chrome. |
+| `browser-bar` | `—` | Replaces the default browser or window toolbar and URL bar. |
+| `caption` | `—` | Replaces the default `title` caption node below the frame. |
+| `watermark` | `—` | Replaces the default stage corner `watermark` node. |
+| `overlay` | `—` | Layer rendered above the screen viewport for annotations or custom glares. |
+
+### Exposed Methods
+
+| Name | Signature | Description |
+|------|-----------|-------------|
+| `getMetrics` | `() => DeviceMockupMetrics` | Returns current logical viewport size, outer shell bounds, radii, bezel width, and active fit scale. |
+| `exportSvg` | `(options?: DeviceMockupExportOptions) => Promise<string>` | Lazy-loads the export engine and serializes the current frame, backdrop, and media into a standalone XML-safe SVG string. |
+| `exportImage` | `(options?: DeviceMockupExportOptions) => Promise<Blob \| null>` | Lazy-loads the export engine and rasterizes the mockup into a `png`, `webp`, or `svg` `Blob` at 1x, 2x, or 3x scale. |
+
+### CSS Variables
+
+| Variable | Description |
+|----------|-------------|
+| `--tx-device-shell-bg` | Hardware shell bezel surface fill (`#141417` default, overridden by `finish` or `bezelColor`). |
+| `--tx-device-shell-ring` | Outer hardware rim inset ring stroke. |
+| `--tx-device-shell-rim-highlight` | Top-left metallic bezel specular highlight. |
+| `--tx-device-slab-wall` / `--tx-device-slab-edge` / `--tx-device-slab-back` | Side wall, chamfered edge, and rear plate fills for the extruded 3D chassis. |
+| `--tx-device-cutout-bg` | Fill color for the Dynamic Island, notch, punch, pill, or lid notch. |
+| `--tx-device-screen-bg` | Default background behind screen slot or image content (`var(--tx-bg-color, #ffffff)`). |
+| `--tx-device-status-ink` / `--tx-device-status-ink-dark` | Status bar and home indicator ink colors on light and dark screens. |
+| `--tx-device-browser-bg` / `--tx-device-browser-border` / `--tx-device-browser-ink` | Browser and desktop window chrome fill, border, and text tokens (plus matching `-dark` variants). |
+| `--tx-device-backdrop-studio` / `--tx-device-backdrop-obsidian` / `--tx-device-backdrop-slate` | Built-in solid studio backdrop colors. |
+| `--tx-device-shadow-soft` / `--tx-device-shadow-crisp` / `--tx-device-shadow-elevated` / `--tx-device-shadow-dramatic` / `--tx-device-floor-color` | Drop-shadow and decoupled 3D floor-shadow tint levels. |
+| `--tx-device-glare-a` / `--tx-device-glare-b` / `--tx-device-grain-tint` | Studio screen-glare gradient stops and stage film-grain tint. |
+| `--tx-device-caption-ink-light` / `--tx-device-caption-ink-dark` | Caption ink tokens on light and dark stage backdrops (plus matching `--tx-device-watermark-ink-*`). |
+
+### Types
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  // Lean core entry (zero static preset catalog / scenes / export imports)
+  import type {
+    DeviceMockupBackdrop,
+    DeviceMockupCategory,
+    DeviceMockupExportConfig,
+    DeviceMockupExportFormat,
+    DeviceMockupExportOptions,
+    DeviceMockupExportScale,
+    DeviceMockupFinish,
+    DeviceMockupFit,
+    DeviceMockupFrameStyle,
+    DeviceMockupFraming,
+    DeviceMockupGradientPreset,
+    DeviceMockupLabels,
+    DeviceMockupMetrics,
+    DeviceMockupOrientation,
+    DeviceMockupPerspective,
+    DeviceMockupPreset,
+    DeviceMockupPresetId,
+    DeviceMockupProps,
+    DeviceMockupScene,
+    DeviceMockupSceneId,
+    DeviceMockupShadow,
+    DeviceMockupShape,
+    DeviceMockupStageRatio,
+    TxDeviceMockupInstance,
+  } from '@talex-touch/tuffex/device-mockup'
+
+  import {
+    DEFAULT_DEVICE_MOCKUP_PRESET,
+    DEVICE_MOCKUP_CATEGORIES,
+    DEVICE_MOCKUP_DEFAULT_LABELS,
+    DEVICE_MOCKUP_GRADIENTS,
+    RESPONSIVE_DEVICE_MOCKUP_PRESET,
+    computeDeviceMockupFitScale,
+    defineDeviceMockupPreset,
+    findDeviceMockupPreset,
+    getDeviceMockupPreset,
+    registerDeviceMockupPresets,
+    resolveDeviceMockupDimensions,
+    searchDeviceMockupPresets,
+  } from '@talex-touch/tuffex/device-mockup'
+
+  // Optional tree-shakeable subpaths
+  // '@talex-touch/tuffex/device-mockup/presets'
+  // '@talex-touch/tuffex/device-mockup/presets/ios'
+  // '@talex-touch/tuffex/device-mockup/presets/android'
+  // '@talex-touch/tuffex/device-mockup/presets/tablet'
+  // '@talex-touch/tuffex/device-mockup/presets/desktop'
+  // '@talex-touch/tuffex/device-mockup/presets/watch'
+  // '@talex-touch/tuffex/device-mockup/presets/browser'
+  // '@talex-touch/tuffex/device-mockup/scenes'
+  // '@talex-touch/tuffex/device-mockup/export'
+---
+:::
+
+## Overview
+
+- `TxDeviceMockup` observes border-box stage dimensions via `ResizeObserver` and scales its logical viewport cleanly according to `fit` without transition lag on resize, disconnecting observers and timers on unmount.
+- 3D perspective modes render a physical multi-layer Z-extruded chassis with a decoupled grounded floor shadow instead of rotating a flat drop-shadow behind translucent bezels.
+- Changing `device`, `orientation`, `scene`, `frameStyle`, `finish`, or `framing` triggers a brief spring morph (with a tactile rotation settle on orientation flips); `prefers-reduced-motion: reduce` disables all transitions and interactive tilt.
+- The core runtime never statically imports the full preset catalog, curated scenes, or export module: preset objects render synchronously with zero extra weight, and unregistered string IDs lazy-load only their matching family chunk.
+- The root exposes `role="figure"` with accessible labels from `alt`, `title`, and `labels`, and automatically flips caption/watermark ink contrast across dark and pale stage backdrops.
+
+## Technologies
+
+- Multi-subpath tree-shakeable architecture separating lean core rendering (`TxDeviceMockup.vue`, `layout.ts`), 75+ family-sharded device presets (`presets/{ios,android,tablet,desktop,watch,browser}`), Shots.so scene pairings (`scenes/`), and lazy SVG/Canvas export (`export/`).
+- Source: `packages/tuffex/packages/components/src/device-mockup/`.
+
+<TuffDocSourceLink />
+
+## Use cases
+
+- Product landing pages and App Store hero graphics pairing real interactive UI with extruded 3D frames, bleed framing, and curated studio backdrops.
+- Cross-device responsive inspectors morphing smoothly across 75+ iOS, Android, foldable, tablet, desktop, circular watch, and browser viewports.
+- Browser-based mockup studios exporting self-contained 1x–3x PNG, WebP, or vector SVG assets locally.
+
+## Related components
+
+| Component | For |
+|-----------|-----|
+| [ImagePreview](/en/image-preview) | Full-viewport image zoom, pan, and gallery lightbox |
+| [GlassSurface](/en/glass-surface) | Standalone glassmorphic and liquid lens surfaces |
+| [FoldPage](/en/fold-page) | 3D multi-panel brochures and corner-peel cards |
+| [AgentScreen](/en/agent-screen) | Remote desktop viewport for autonomous agents |

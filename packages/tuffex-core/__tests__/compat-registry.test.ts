@@ -3,11 +3,14 @@ import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import {
+  BASE_READY_IDS,
   COMPAT_MAP,
   COMPAT_REGISTRY,
+  getCompatByCategory,
   getCompatEntry,
   getCompatSummary,
   PHASE_1_READY_IDS,
+  READY_COMPONENT_IDS,
 } from '../src/compat-registry'
 
 const here = dirname(fileURLToPath(import.meta.url))
@@ -19,52 +22,22 @@ function extractExportedModules(filePath: string, prefix: string): string[] {
   return Array.from(source.matchAll(re), m => m[1]!)
 }
 
-const EXPECTED_PHASE_1_TIER_A = [
-  'button',
-  'badge',
-  'tag',
-  'avatar',
-  'spinner',
-  'divider',
-  'alert',
-  'card',
-  'kbd',
-  'progress',
-  'progress-bar',
-  'skeleton',
-  'switch',
-  'status-badge',
-  'status-hint',
-  'dot-indicator',
-  'empty',
-  'stat-card',
+const BASE_TIER_D_IDS = [
+  'data-table',
+  'form',
+  'modal-form',
+  'drawer-form',
+  'steps-form',
+  'tree',
+  'tree-select',
+  'cascader',
+  'transfer',
+  'sortable-list',
+  'context-menu',
+  'dropdown-menu',
+  'flat-dropdown',
+  'selection-actions',
 ] as const
-
-const EXPECTED_PHASE_1_TIER_B = [
-  'input',
-  'textarea',
-  'checkbox',
-  'radio',
-  'slider',
-  'tabs',
-  'collapse',
-  'tooltip',
-  'popover',
-  'dialog',
-  'drawer',
-  'select',
-] as const
-
-const EXPECTED_PHASE_1_TIER_C = [
-  'stream-text',
-  'markdown-view',
-] as const
-
-const EXPECTED_PHASE_1 = [
-  ...EXPECTED_PHASE_1_TIER_A,
-  ...EXPECTED_PHASE_1_TIER_B,
-  ...EXPECTED_PHASE_1_TIER_C,
-]
 
 describe('compat-registry Single Source of Truth', () => {
   const componentIds = extractExportedModules(resolve(tuffexSrcRoot, 'components.ts'), './')
@@ -73,7 +46,7 @@ describe('compat-registry Single Source of Truth', () => {
   const aiIds = new Set(extractExportedModules(resolve(tuffexSrcRoot, 'ai/index.ts'), '../'))
 
   it('covers every single module exported by packages/tuffex/packages/components/src/components.ts with zero drift', () => {
-    expect(componentIds).toHaveLength(194)
+    expect(componentIds).toHaveLength(195)
     expect(COMPAT_REGISTRY).toHaveLength(componentIds.length)
     expect(COMPAT_MAP.size).toBe(componentIds.length)
 
@@ -86,6 +59,10 @@ describe('compat-registry Single Source of Truth', () => {
   })
 
   it('matches TuffEx base/pro/ai suite taxonomy exactly', () => {
+    expect(baseIds.size).toBe(99)
+    expect(proIds.size).toBe(59)
+    expect(aiIds.size).toBe(37)
+
     for (const entry of COMPAT_REGISTRY) {
       const expectedCategory = baseIds.has(entry.id)
         ? 'base'
@@ -100,55 +77,68 @@ describe('compat-registry Single Source of Truth', () => {
     }
   })
 
-  it('marks the exact 32 Phase-1 modules as react:ready and wc:ready with correct tiers and metadata', () => {
-    expect(EXPECTED_PHASE_1).toHaveLength(32)
-    expect(PHASE_1_READY_IDS).toHaveLength(32)
-    expect([...PHASE_1_READY_IDS].sort()).toEqual([...EXPECTED_PHASE_1].sort())
+  it('marks all 99/99 Basics Suite modules plus stream-text (100/195 total) as react:ready and wc:ready', () => {
+    const baseEntries = getCompatByCategory('base')
+    expect(baseEntries).toHaveLength(99)
+    expect(BASE_READY_IDS).toHaveLength(99)
+    expect(READY_COMPONENT_IDS).toHaveLength(100)
+    expect(PHASE_1_READY_IDS).toHaveLength(100)
 
-    for (const id of EXPECTED_PHASE_1_TIER_A) {
-      const entry = getCompatEntry(id)
-      expect(entry?.tier, `tier A for ${id}`).toBe('A')
-      expect(entry?.react).toBe('ready')
-      expect(entry?.wc).toBe('ready')
-      expect(entry?.wcTag).toBe(`tx-${id}`)
-      expect(entry?.reactExports?.length).toBeGreaterThan(0)
-    }
+    const expectedReady = [...baseIds, 'stream-text'].sort()
+    expect([...READY_COMPONENT_IDS].sort()).toEqual(expectedReady)
 
-    for (const id of EXPECTED_PHASE_1_TIER_B) {
-      const entry = getCompatEntry(id)
-      expect(entry?.tier, `tier B for ${id}`).toBe('B')
-      expect(entry?.react).toBe('ready')
-      expect(entry?.wc).toBe('ready')
-      expect(entry?.wcTag).toBe(`tx-${id}`)
-      expect(entry?.reactExports?.length).toBeGreaterThan(0)
-    }
-
-    for (const id of EXPECTED_PHASE_1_TIER_C) {
-      const entry = getCompatEntry(id)
-      expect(entry?.tier, `tier C for ${id}`).toBe('C')
-      expect(entry?.react).toBe('ready')
-      expect(entry?.wc).toBe('ready')
-      expect(entry?.wcTag).toBe(`tx-${id}`)
-      expect(entry?.reactExports?.length).toBeGreaterThan(0)
+    for (const entry of baseEntries) {
+      expect(entry.react, `react ready for ${entry.id}`).toBe('ready')
+      expect(entry.wc, `wc ready for ${entry.id}`).toBe('ready')
+      expect(entry.wcTag, `wcTag for ${entry.id}`).toBe(`tx-${entry.id}`)
+      expect(entry.reactExports?.length, `reactExports for ${entry.id}`).toBeGreaterThan(0)
+      for (const sym of entry.reactExports ?? [])
+        expect(sym, `symbol format for ${entry.id}`).toMatch(/^Tx[A-Z]/)
     }
 
     expect(getCompatEntry('stream-text')?.reactExports).toEqual(['TxStreamText', 'TxStreamCaret'])
+    expect(getCompatEntry('container')?.reactExports).toEqual(['TxContainer', 'TxHeader', 'TxAside', 'TxMain', 'TxFooter'])
+    expect(getCompatEntry('form')?.reactExports).toEqual(['TxForm', 'TxFormItem', 'TxFormRow', 'TxFormErrorSummary'])
+    expect(getCompatEntry('group-block')?.reactExports).toEqual(['TxGroupBlock', 'TxBlockLine', 'TxBlockSlot', 'TxBlockSwitch'])
+    expect(getCompatEntry('data-table')?.reactExports).toEqual(['TxDataTable'])
   })
 
-  it('marks Tier D scoped-slot/provide-inject modules as react:planned and wc:unsupported with reasons', () => {
-    const requiredTierD = [
-      'data-table',
+  it('documents JSON/property + Light DOM slot notes on all 14 Base Tier D modules and keeps Pro/AI modules unchanged', () => {
+    expect(BASE_TIER_D_IDS).toHaveLength(14)
+    for (const id of BASE_TIER_D_IDS) {
+      const entry = getCompatEntry(id)
+      expect(entry, `missing base Tier D entry ${id}`).toBeDefined()
+      expect(entry?.category).toBe('base')
+      expect(entry?.tier).toBe('D')
+      expect(entry?.react).toBe('ready')
+      expect(entry?.wc).toBe('ready')
+      expect(entry?.wcTag).toBe(`tx-${id}`)
+      expect(entry?.notes).toContain('JSON/property-driven')
+      expect(entry?.notes).toContain('Light DOM slots')
+    }
+
+    const proEntries = getCompatByCategory('pro')
+    expect(proEntries).toHaveLength(59)
+    for (const entry of proEntries) {
+      expect(entry.react).toBe('planned')
+      expect(entry.wc).not.toBe('ready')
+    }
+
+    const aiNonStream = getCompatByCategory('ai').filter(entry => entry.id !== 'stream-text')
+    expect(aiNonStream).toHaveLength(36)
+    for (const entry of aiNonStream) {
+      expect(entry.react).toBe('planned')
+      expect(entry.wc).not.toBe('ready')
+    }
+
+    const remainingTierDUnsupported = [
       'virtual-list',
-      'form',
-      'tree',
-      'cascader',
       'command-palette',
       'conversation-stream',
       'motion-form',
     ]
-    for (const id of requiredTierD) {
+    for (const id of remainingTierDUnsupported) {
       const entry = getCompatEntry(id)
-      expect(entry, `missing Tier D entry ${id}`).toBeDefined()
       expect(entry?.tier).toBe('D')
       expect(entry?.react).toBe('planned')
       expect(entry?.wc).toBe('unsupported')
@@ -156,10 +146,11 @@ describe('compat-registry Single Source of Truth', () => {
     }
 
     const summary = getCompatSummary()
-    expect(summary.total).toBe(194)
-    expect(summary.vueReady).toBe(194)
-    expect(summary.reactReady).toBe(32)
-    expect(summary.wcReady).toBe(32)
-    expect(summary.wcUnsupported).toBe(summary.byTier.D)
+    expect(summary.total).toBe(195)
+    expect(summary.byCategory).toEqual({ base: 99, pro: 59, ai: 37 })
+    expect(summary.vueReady).toBe(195)
+    expect(summary.reactReady).toBe(100)
+    expect(summary.wcReady).toBe(100)
+    expect(summary.wcUnsupported).toBe(summary.byTier.D - BASE_TIER_D_IDS.length)
   })
 })

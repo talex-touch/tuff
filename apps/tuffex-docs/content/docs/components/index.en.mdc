@@ -32,7 +32,7 @@ Tuffex (`@talex-touch/tuffex`) is the Vue 3 component library behind CoreBox, pl
 | [Concepts](/en) | Installation, design rules, concepts manual, helpers | 27 | Documentation only |
 | [Templates](/en/template-shell) | App shells / Content / AI apps / Data & flow | 25 | Compositions of existing entries |
 | [Basics Suite](/en/base-suite) | General / Form / Layout / Navigation / Data Display / Feedback / Status & Empty | 100 | `@talex-touch/tuffex/base` |
-| [Pro Suite](/en/pro-suite) | Interaction / Effects / Primitives | 42 | `@talex-touch/tuffex/pro` |
+| [Pro Suite](/en/pro-suite) | Interaction / Effects / Primitives | 43 | `@talex-touch/tuffex/pro` |
 | [AI Suite](/en/ai-suite) | Chat / Agents / Reasoning / Context & Insight | 36 | `@talex-touch/tuffex/ai` |
 | [Data Suite](/en/data-suite) | Charts / Visualization | 12 | `@talex-touch/tuffex/pro` + `/charts` |
 | [Flow Suite](/en/flow-suite) | Flow | 1 | `@talex-touch/tuffex/ai` |
@@ -246,6 +246,7 @@ A template is a full-page composition of existing components, shown in a shared 
 - [CodeEditor](/en/code-editor)
 - [Terminal](/en/terminal)
 - [VirtualList](/en/virtual-list)
+- [DeviceMockup](/en/device-mockup)
 - [VersionCapsule](/en/version-capsule)
 - [MotionForm](/en/motion-form)
 - [MotionControl](/en/motion-control)

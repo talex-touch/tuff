@@ -13,6 +13,7 @@ const props = defineProps<{
 }>()
 
 const galleryAmicroSpecimen = shallowRef<Component | null>(null)
+const GalleryDeviceMockup = defineAsyncComponent(() => import('../GalleryDeviceMockup.vue'))
 const GalleryEdgeMarquee = defineAsyncComponent(() => import('../GalleryEdgeMarquee.vue'))
 const GalleryFusion = defineAsyncComponent(() => import('../GalleryFusion.vue'))
 const GalleryFusionSurface = defineAsyncComponent(() => import('../GalleryFusionSurface.vue'))
@@ -409,6 +410,20 @@ const logoModes = computed(() => [
       <div class="docs-gallery__stage not-prose" style="--docs-gallery-specimen: 160px">
         <ClientOnly>
           <GalleryVirtualList :title="copy.virtualTitle" :count-label="copy.virtualCount" :names="text.plugins" />
+          <template #fallback>
+            <div class="docs-gallery__ph" />
+          </template>
+        </ClientOnly>
+      </div>
+    </section>
+
+    <section class="docs-gallery__cell">
+      <NuxtLink class="docs-gallery__label" :to="docPath('device-mockup')">
+        {{ cellLabel('DeviceMockup', '设备样机') }}
+      </NuxtLink>
+      <div class="docs-gallery__stage not-prose" style="--docs-gallery-specimen: 168px">
+        <ClientOnly>
+          <GalleryDeviceMockup />
           <template #fallback>
             <div class="docs-gallery__ph" />
           </template>

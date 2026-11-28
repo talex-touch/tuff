@@ -78,9 +78,9 @@ function compileAndValidateSfc(sfc: string, filename: string) {
 }
 
 describe('mdc-sfc-compiler', () => {
-  it('compiles ALL 532 real content/docs/*.mdc files with 0 @vue/compiler-sfc parse/template errors', async () => {
+  it('compiles ALL 534 real content/docs/*.mdc files with 0 @vue/compiler-sfc parse/template errors', async () => {
     const files = walkMdcFiles(contentDocsDir)
-    expect(files.length).toBe(532)
+    expect(files.length).toBe(534)
 
     const failures: Array<{ file: string, error: string }> = []
     let staticVNodeCount = 0

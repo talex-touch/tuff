@@ -51,15 +51,17 @@ export interface FrameworkCoverageSummary {
   vue: FrameworkCoverageBucket
   react: FrameworkCoverageBucket
   wc: FrameworkCoverageBucket
+  byCategory: Record<ComponentCategory, { total: number, reactReady: number, wcReady: number }>
   byTier: Record<ComponentTier, { total: number, reactReady: number, wcReady: number }>
 }
 
 /**
- * Locked Phase-1 32 component IDs adapted across Vue, React, and Web Components.
+ * All 100 component IDs currently adapted across Vue, React, and Web Components
+ * (all 99 Basics Suite modules + `stream-text`).
  * Derived directly from `@talex-touch/tuffex-core/compat` (Single Source of Truth).
  */
-export type Phase1ReadyComponentId
-  // Tier A (18)
+export type ReadyComponentId
+  // Phase-1 Tier A (18)
   = | 'button'
     | 'badge'
     | 'tag'
@@ -78,7 +80,7 @@ export type Phase1ReadyComponentId
     | 'dot-indicator'
     | 'empty'
     | 'stat-card'
-    // Tier B (12)
+    // Phase-1 Tier B (12)
     | 'input'
     | 'textarea'
     | 'checkbox'
@@ -91,38 +93,119 @@ export type Phase1ReadyComponentId
     | 'dialog'
     | 'drawer'
     | 'select'
-    // Tier C (2)
+    // Phase-1 Tier C (2)
     | 'stream-text'
     | 'markdown-view'
+    // Basics Pack A (35)
+    | 'container'
+    | 'flex'
+    | 'grid'
+    | 'grid-layout'
+    | 'stack'
+    | 'splitter'
+    | 'scroll'
+    | 'group-block'
+    | 'card-item'
+    | 'layout-skeleton'
+    | 'text'
+    | 'icon'
+    | 'icon-chip'
+    | 'cell-link'
+    | 'blank-slate'
+    | 'empty-state'
+    | 'error-state'
+    | 'guide-state'
+    | 'loading-state'
+    | 'no-data'
+    | 'no-selection'
+    | 'offline-state'
+    | 'permission-state'
+    | 'search-empty'
+    | 'breadcrumb'
+    | 'nav-bar'
+    | 'sidebar-nav'
+    | 'tab-bar'
+    | 'pagination'
+    | 'steps'
+    | 'loading-overlay'
+    | 'modal'
+    | 'toast'
+    | 'toast-panel'
+    | 'timeline'
+    // Basics Pack B (33)
+    | 'number-input'
+    | 'search-input'
+    | 'sensitive-input'
+    | 'tag-input'
+    | 'scrub-field'
+    | 'segmented-slider'
+    | 'rating'
+    | 'filter-chips'
+    | 'flat-radio'
+    | 'flat-select'
+    | 'search-select'
+    | 'cascader'
+    | 'tree'
+    | 'tree-select'
+    | 'date-picker'
+    | 'picker'
+    | 'form'
+    | 'modal-form'
+    | 'drawer-form'
+    | 'steps-form'
+    | 'context-menu'
+    | 'dropdown-menu'
+    | 'flat-dropdown'
+    | 'selection-actions'
+    | 'data-table'
+    | 'descriptions'
+    | 'sortable-list'
+    | 'transfer'
+    | 'file-uploader'
+    | 'image-uploader'
+    | 'image-gallery'
+    | 'image-preview'
+    | 'icon-picker'
 
-export const PHASE_1_TIER_A_IDS: readonly Phase1ReadyComponentId[] = Object.freeze(
+export type Phase1ReadyComponentId = ReadyComponentId
+
+export const PHASE_1_TIER_A_IDS: readonly ReadyComponentId[] = Object.freeze(
   COMPAT_REGISTRY
     .filter(entry => entry.react === 'ready' && entry.wc === 'ready' && entry.tier === 'A')
-    .map(entry => entry.id as Phase1ReadyComponentId),
+    .map(entry => entry.id as ReadyComponentId),
 )
 
-export const PHASE_1_TIER_B_IDS: readonly Phase1ReadyComponentId[] = Object.freeze(
+export const PHASE_1_TIER_B_IDS: readonly ReadyComponentId[] = Object.freeze(
   COMPAT_REGISTRY
     .filter(entry => entry.react === 'ready' && entry.wc === 'ready' && entry.tier === 'B')
-    .map(entry => entry.id as Phase1ReadyComponentId),
+    .map(entry => entry.id as ReadyComponentId),
 )
 
-export const PHASE_1_TIER_C_IDS: readonly Phase1ReadyComponentId[] = Object.freeze(
+export const PHASE_1_TIER_C_IDS: readonly ReadyComponentId[] = Object.freeze(
   COMPAT_REGISTRY
     .filter(entry => entry.react === 'ready' && entry.wc === 'ready' && entry.tier === 'C')
-    .map(entry => entry.id as Phase1ReadyComponentId),
+    .map(entry => entry.id as ReadyComponentId),
 )
 
-export const PHASE_1_READY_IDS: readonly Phase1ReadyComponentId[] = Object.freeze([
+export const PHASE_1_TIER_D_IDS: readonly ReadyComponentId[] = Object.freeze(
+  COMPAT_REGISTRY
+    .filter(entry => entry.react === 'ready' && entry.wc === 'ready' && entry.tier === 'D')
+    .map(entry => entry.id as ReadyComponentId),
+)
+
+export const READY_COMPONENT_IDS: readonly ReadyComponentId[] = Object.freeze([
   ...PHASE_1_TIER_A_IDS,
   ...PHASE_1_TIER_B_IDS,
   ...PHASE_1_TIER_C_IDS,
+  ...PHASE_1_TIER_D_IDS,
 ])
 
+export const PHASE_1_READY_IDS: readonly Phase1ReadyComponentId[] = READY_COMPONENT_IDS
+
 /**
- * Tier D components rely on deep scoped slots, heavy imperative runtimes,
- * Vue transition primitives, or provide/inject form contexts and are intentionally
- * scoped to Vue & React (derived from `@talex-touch/tuffex-core/compat`).
+ * Tier D components outside the Basics Suite that rely on deep scoped slots,
+ * heavy imperative runtimes, Vue transition primitives, or multi-slot AI state
+ * and remain intentionally Vue & React scoped (derived from `@talex-touch/tuffex-core/compat`).
  */
 export const TIER_D_UNSUPPORTED_WC_IDS: readonly string[] = Object.freeze(
   COMPAT_REGISTRY
@@ -146,6 +229,10 @@ const COMPOUND_EXPORTS_OVERRIDES: Record<string, {
     vueExports: ['TxAvatar', 'TxAvatarGroup', 'TxAvatarEditor'],
     wcTags: ['tx-avatar'],
   },
+  breadcrumb: {
+    vueExports: ['TxBreadcrumb'],
+    wcTags: ['tx-breadcrumb', 'tx-breadcrumb-item'],
+  },
   button: {
     vueExports: ['TxButton', 'TxIconButton', 'TxCopyButton', 'TxSplitButton'],
     wcTags: ['tx-button'],
@@ -154,9 +241,45 @@ const COMPOUND_EXPORTS_OVERRIDES: Record<string, {
     vueExports: ['TxCollapse', 'TxCollapseItem'],
     wcTags: ['tx-collapse', 'tx-collapse-item'],
   },
+  container: {
+    vueExports: ['TxContainer', 'TxRow', 'TxCol'],
+    wcTags: ['tx-container', 'tx-header', 'tx-aside', 'tx-main', 'tx-footer'],
+  },
+  'context-menu': {
+    vueExports: ['TxContextMenu', 'TxContextMenuItem'],
+    wcTags: ['tx-context-menu', 'tx-context-menu-item'],
+  },
+  descriptions: {
+    vueExports: ['TxDescriptions', 'TxDescriptionsItem'],
+    wcTags: ['tx-descriptions', 'tx-descriptions-item'],
+  },
   dialog: {
     vueExports: ['TxBlowDialog', 'TxPopperDialog', 'TxBottomDialog', 'TxTouchTip'],
     wcTags: ['tx-dialog'],
+  },
+  'dropdown-menu': {
+    vueExports: ['TxDropdownMenu', 'TxDropdownItem'],
+    wcTags: ['tx-dropdown-menu', 'tx-dropdown-item'],
+  },
+  'flat-radio': {
+    vueExports: ['TxFlatRadio', 'TxFlatRadioItem'],
+    wcTags: ['tx-flat-radio', 'tx-flat-radio-item'],
+  },
+  'flat-select': {
+    vueExports: ['TxFlatSelect', 'TxFlatSelectItem'],
+    wcTags: ['tx-flat-select', 'tx-flat-select-item'],
+  },
+  form: {
+    vueExports: ['TxForm', 'TxFormItem', 'TxFormRow', 'TxFormErrorSummary'],
+    wcTags: ['tx-form', 'tx-form-item', 'tx-form-row', 'tx-form-error-summary'],
+  },
+  grid: {
+    vueExports: ['TxGrid', 'TxGridItem'],
+    wcTags: ['tx-grid', 'tx-grid-item'],
+  },
+  'group-block': {
+    vueExports: ['TxGroupBlock', 'TxBlockLine', 'TxBlockSlot', 'TxBlockSwitch'],
+    wcTags: ['tx-group-block', 'tx-block-line', 'tx-block-slot', 'tx-block-switch'],
   },
   progress: {
     vueExports: ['TuffProgress'],
@@ -170,6 +293,10 @@ const COMPOUND_EXPORTS_OVERRIDES: Record<string, {
     vueExports: ['TxSelect', 'TxSelectItem'],
     wcTags: ['tx-select', 'tx-select-item'],
   },
+  steps: {
+    vueExports: ['TxSteps', 'TxStep'],
+    wcTags: ['tx-steps', 'tx-step'],
+  },
   'stream-text': {
     vueExports: ['TxStreamText', 'TxStreamCaret'],
     wcTags: ['tx-stream-text'],
@@ -177,6 +304,14 @@ const COMPOUND_EXPORTS_OVERRIDES: Record<string, {
   tabs: {
     vueExports: ['TxTabs', 'TxTabItem'],
     wcTags: ['tx-tabs', 'tx-tab-item'],
+  },
+  timeline: {
+    vueExports: ['TxTimeline', 'TxTimelineItem'],
+    wcTags: ['tx-timeline', 'tx-timeline-item'],
+  },
+  toast: {
+    vueExports: ['TxToastHost'],
+    wcTags: ['tx-toast'],
   },
 }
 
@@ -188,6 +323,8 @@ const TIER_D_NOTES = {
 function resolveTierDNotesZh(notesEn?: string): string {
   if (!notesEn)
     return TIER_D_NOTES.zh
+  if (notesEn.includes('JSON/property-driven'))
+    return 'Web Components 版本采用 JSON / 属性配置与 Light DOM 插槽模式（不支持 Vue 作用域插槽）。'
   if (notesEn.includes('editor/terminal/chart'))
     return '重度命令式编辑器 / 终端 / 图表运行时，仅面向 Vue 与 React 原生绑定适配（暂不适配 Web Components）。'
   if (notesEn.includes('transition/slot orchestration'))
@@ -237,7 +374,9 @@ function buildEntryFromCompat(coreEntry: CompatEntry): FrameworkCompatEntry {
     ...(isWcUnsupported || coreEntry.notes
       ? {
           notes: coreEntry.notes ?? TIER_D_NOTES.en,
-          ...(isWcUnsupported ? { notesZh: resolveTierDNotesZh(coreEntry.notes) } : {}),
+          ...(isWcUnsupported || coreEntry.notes?.includes('JSON/property-driven')
+            ? { notesZh: resolveTierDNotesZh(coreEntry.notes) }
+            : {}),
         }
       : {}),
   }
@@ -320,6 +459,11 @@ function summarizeBucket(
 }
 
 export function getFrameworkCoverageSummary(): FrameworkCoverageSummary {
+  const byCategory: FrameworkCoverageSummary['byCategory'] = {
+    base: { total: 0, reactReady: 0, wcReady: 0 },
+    pro: { total: 0, reactReady: 0, wcReady: 0 },
+    ai: { total: 0, reactReady: 0, wcReady: 0 },
+  }
   const byTier: FrameworkCoverageSummary['byTier'] = {
     A: { total: 0, reactReady: 0, wcReady: 0 },
     B: { total: 0, reactReady: 0, wcReady: 0 },
@@ -328,12 +472,19 @@ export function getFrameworkCoverageSummary(): FrameworkCoverageSummary {
   }
 
   for (const entry of TUFFEX_FRAMEWORK_MATRIX) {
-    const bucket = byTier[entry.tier]
-    bucket.total += 1
+    const catBucket = byCategory[entry.category]
+    catBucket.total += 1
     if (entry.react === 'ready')
-      bucket.reactReady += 1
+      catBucket.reactReady += 1
     if (entry.wc === 'ready')
-      bucket.wcReady += 1
+      catBucket.wcReady += 1
+
+    const tierBucket = byTier[entry.tier]
+    tierBucket.total += 1
+    if (entry.react === 'ready')
+      tierBucket.reactReady += 1
+    if (entry.wc === 'ready')
+      tierBucket.wcReady += 1
   }
 
   return {
@@ -341,6 +492,7 @@ export function getFrameworkCoverageSummary(): FrameworkCoverageSummary {
     vue: summarizeBucket(TUFFEX_FRAMEWORK_MATRIX, 'vue'),
     react: summarizeBucket(TUFFEX_FRAMEWORK_MATRIX, 'react'),
     wc: summarizeBucket(TUFFEX_FRAMEWORK_MATRIX, 'wc'),
+    byCategory,
     byTier,
   }
 }
