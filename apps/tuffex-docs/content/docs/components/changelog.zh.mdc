@@ -13,11 +13,23 @@ verified: false
 
 | 项目 | 值 |
 |------|----|
-| 源码版本 | **0.9.6** |
-| 发布版本 | **0.9.6**（最近一次 npm 发布） |
-| 组件模块 | **198**：基础 99 · 进阶 62 · AI 37 |
+| 源码版本 | **0.9.7** |
+| 发布版本 | **0.9.7**（最近一次 npm 发布） |
+| 组件模块 | **197**：基础 99 · 进阶 61 · AI 37 |
 
 ## 版本更新历程
+
+### 0.9.7 版本（2026-11-28）
+
+AI 套件全面收敛至原生 `Tx*` 原语与同心圆角，优化流式 Markdown 与代码围栏体验，修复 `TxAutoSizer` / `TxVersionCapsule` 高度切换，并收敛 Motion 套件与安全边界。
+
+- **新增组件**：无（移除重复组件 `motion-toggle`，统一由 `TxMotionButton` 承接）
+- **主要更新组件**：agent-screen、agent-trace、agents、ai-elements、approval-card、attachment-tray、auto-sizer、avatar、button、card-spread、carousel-3d、cell-link、chain-of-thought、chat、choice-card、code-editor、code-stream、command-palette、context-cards、fine-tune-card、icon、icon-chip、insight-cards、markdown-editor、markdown-view、message-actions、motion-button、motion-transition、prompt-bar、reasoning-disclosure、recommendation-card、search-panel、sidebar-nav、sources、stream-markdown、suggestion-chips、task-rows、tool-call-card、tool-chips、tool-confirmation、version-capsule、working-indicator
+- **关键特性与修复**：
+  - **AI 套件原语收敛与同心圆角**：`TxChainOfThought`、`TxToolCallCard`、`TxAgentTrace`、`TxToolConfirmation`、`TxFineTuneCard`、`TxContextCards`、`TxChoiceCard`、`TxChatMessage`、`TxAttachmentChip` 全面统一至 `TxCard` / `TxAvatar` / `TxIconChip` / `TxSpinner` / `TxIcon` / `TxButton` / `TxTag` / `TxFlatSelect` / `TxFlatRadio`，并扩展 `TxDiffChips` 预览浮层、`TxSidebarNav` 折叠分组、`TxAgentScreen` 展开模态与 `TxCodeStream` Code/Diff 切换。
+  - **流式 Markdown 与代码围栏**：`TxStreamMarkdown` 修复增量文本匹配与列表行尾光标滑移，`TxCodeBlock` 消除双层 `<pre>` 边框并对齐同心圆角。
+  - **自动高度与浮层修复**：修复 `useAutoResize`（`TxAutoSizer`）首次挂载断开 `ResizeObserver` 与 WAAPI `fill: 'forwards'` 锁死高度的问题，`TxVersionCapsule` 切换下载/历史面板与筛选标签时高度自动平滑适配；同步修复 `TxPromptBar` 菜单锚定与 `TxSources` 列表间距。
+  - **Motion 套件与安全加固**：`TxMotionButton` 新增 `count` 与 `burst`，优化 `TxCardSpread` / `TxCarousel3D` / `TxMotionTransition` 视觉细节，并加固 `TxCodeBlock` 预览 CSP、`TxStreamMarkdown` SSR 净化与编辑器/搜索面板安全边界。
 
 ### 0.9.6 版本（2026-11-28）
 

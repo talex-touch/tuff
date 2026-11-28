@@ -13,11 +13,23 @@ verified: false
 
 | Item | Value |
 |------|-------|
-| Source version | **0.9.6** |
-| Release version | **0.9.6** (latest npm release) |
-| Component modules | **198**: Base 99 · Pro 62 · AI 37 |
+| Source version | **0.9.7** |
+| Release version | **0.9.7** (latest npm release) |
+| Component modules | **197**: Base 99 · Pro 61 · AI 37 |
 
 ## Release History
+
+### Version 0.9.7 (2026-11-28)
+
+Unify AI suite components onto native `Tx*` primitives and concentric geometry, smooth out streaming Markdown and code fences, fix `TxAutoSizer` / `TxVersionCapsule` automatic height transitions, and converge Motion suite polish and security hardening.
+
+- **New components**: none (removed redundant `motion-toggle`; consolidated into `TxMotionButton`)
+- **Main updated components**: agent-screen, agent-trace, agents, ai-elements, approval-card, attachment-tray, auto-sizer, avatar, button, card-spread, carousel-3d, cell-link, chain-of-thought, chat, choice-card, code-editor, code-stream, command-palette, context-cards, fine-tune-card, icon, icon-chip, insight-cards, markdown-editor, markdown-view, message-actions, motion-button, motion-transition, prompt-bar, reasoning-disclosure, recommendation-card, search-panel, sidebar-nav, sources, stream-markdown, suggestion-chips, task-rows, tool-call-card, tool-chips, tool-confirmation, version-capsule, working-indicator
+- **Key features & fixes**:
+  - **AI suite primitive convergence**: rebuilt `TxChainOfThought`, `TxToolCallCard`, `TxAgentTrace`, `TxToolConfirmation`, `TxFineTuneCard`, `TxContextCards`, `TxChoiceCard`, `TxChatMessage`, and `TxAttachmentChip` on native `TxCard` / `TxAvatar` / `TxIconChip` / `TxSpinner` / `TxIcon` / `TxButton` / `TxTag` / `TxFlatSelect` / `TxFlatRadio` primitives with concentric corner radii; added `TxDiffChips` diff preview popover, collapsible `TxSidebarNav` groups, expanded `TxAgentScreen` modal, and `TxCodeStream` Code/Diff view switching.
+  - **Streaming Markdown & code blocks**: improved `TxStreamMarkdown` incremental list item fade-in, inline list caret tracking, and syntax pacing; scoped raw `<pre>` rules so `TxCodeBlock` renders a single clean concentric frame.
+  - **Auto-height & overlay fixes**: fixed `useAutoResize` (`TxAutoSizer`) disconnecting `ResizeObserver` on initial mount, leaking WAAPI `fill: 'forwards'` locks after finish, and misreading scaled bounds during popover open animations so `TxVersionCapsule` smoothly adapts height across panel and filter switches; fixed `TxPromptBar` model menu anchoring and `TxSources` list spacing.
+  - **Motion suite & security hardening**: added `count` and `burst` to `TxMotionButton`, refined `TxCardSpread`, `TxCarousel3D`, and `TxMotionTransition`, and hardened `TxCodeBlock` preview CSP, `TxStreamMarkdown` SSR sanitization, and editor/search component boundaries.
 
 ### Version 0.9.6 (2026-11-28)
 
