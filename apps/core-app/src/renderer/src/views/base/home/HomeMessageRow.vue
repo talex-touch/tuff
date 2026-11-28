@@ -3,6 +3,7 @@ import { TxAiAssistantTurn, formatTokenCount } from '@talex-touch/intelligence-u
 import type { TxAiSpeakState } from '@talex-touch/intelligence-uikit'
 import type { CodeRunPayload, StreamMarkdownCodePreview } from '@talex-touch/tuffex/stream-markdown'
 import { TxAttachmentTray } from '@talex-touch/tuffex/attachment-tray'
+import { TxContextChunk, type ContextChunk } from '@talex-touch/tuffex/context-cards'
 import { TxMessageActions } from '@talex-touch/tuffex/message-actions'
 import { TxVoiceClip } from '@talex-touch/tuffex/voice-clip'
 import { computed, inject, unref } from 'vue'
@@ -13,6 +14,7 @@ import { describeTurnReasoning, shortTurnReasoning } from '~/modules/conversatio
 import { isAwaitingFirstToken } from './composer/send-state'
 import { homeMessageContextKey } from './composables/home-message-context'
 import { useTurnError } from './composables/useTurnError'
+import { parseQuotedUserMessage } from './user-message-quote'
 
 /**
  * One message of the thread: the user's bubble with its recording and attachments, or the
@@ -116,6 +118,32 @@ const turnFooter = computed(() =>
     : undefined
 )
 
+const parsedUserQuote = computed(() =>
+  props.message.role === 'user' ? parseQuotedUserMessage(props.message.content) : null
+)
+
+const userQuoteChunk = computed<ContextChunk | null>(() => {
+  const parsed = parsedUserQuote.value
+  if (!parsed) return null
+  const isZh = String(locale?.value ?? '')
+    .toLowerCase()
+    .startsWith('zh')
+  return {
+    id: `user-quote-${props.message.id}`,
+    title: t('home.quote'),
+    body: parsed.quoteText,
+    chars: isZh ? `${parsed.charCount} 字` : `${parsed.charCount} chars`,
+    ...(parsed.sourceName
+      ? {
+          source: {
+            name: parsed.sourcePath || parsed.sourceName,
+            ...(parsed.badge ? { badge: parsed.badge, tone: 'neutral' as const } : {})
+          }
+        }
+      : {})
+  }
+})
+
 function copyReply(text: string): void {
   void navigator.clipboard.writeText(text).catch(() => {})
 }
@@ -157,8 +185,20 @@ function copyReply(text: string): void {
         :open-label-formatter="attachOpenLabel"
         :preview-props="attachPreviewProps"
       />
-      <div class="HomePage-UserBubble">
-        {{ message.content }}
+      <div class="HomePage-UserBubble" :class="{ 'is-quoted': Boolean(userQuoteChunk) }">
+        <template v-if="userQuoteChunk && parsedUserQuote">
+          <TxContextChunk
+            class="HomePage-UserQuoteChunk"
+            :chunk="userQuoteChunk"
+            :appear="false"
+            :chip-delay="0"
+            data-testid="home-user-quote-chunk"
+          />
+          <div v-if="parsedUserQuote.prompt" class="HomePage-UserBubblePrompt">
+            {{ parsedUserQuote.prompt }}
+          </div>
+        </template>
+        <template v-else>{{ message.content }}</template>
       </div>
       <div class="HomePage-MsgActionsSlot">
         <div class="HomePage-MsgActionsSlotInner">
@@ -181,11 +221,14 @@ function copyReply(text: string): void {
         :element-props="{
           class: 'HomePage-Reply',
           locale,
+          reveal: 'blur',
+          wordMs: 26,
+          drainMs: 420,
           copyLabel: t('home.copy'),
           copiedLabel: t('home.copied'),
           runnable: true,
           onCodeRun: (payload: CodeRunPayload) => emit('code-run', payload),
-          markdownProps: codePreviewLabels,
+          markdownProps: { ...codePreviewLabels, reveal: 'blur' },
           ...codePartProps
         }"
         :tool-call-props="{ class: 'HomePage-Tool', ...toolCallLabels }"
@@ -228,6 +271,56 @@ function copyReply(text: string): void {
   padding: 10px 14px;
   border-radius: var(--shell-radius-lg);
   background: var(--shell-surface-2);
+  color: var(--shell-text-primary);
+  font-size: var(--shell-fs-md);
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+
+  &.is-quoted {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-width: min(320px, 100%);
+    padding: 10px 11px 11px;
+    white-space: normal;
+  }
+}
+
+.HomePage-UserQuoteChunk {
+  --tx-bui-surface: color-mix(in srgb, var(--shell-bg) 72%, var(--shell-surface));
+  --tx-bui-inset: color-mix(in srgb, var(--shell-surface-2) 86%, var(--shell-bg));
+  --tx-bui-hover: var(--shell-surface-2);
+  --tx-bui-line: color-mix(in srgb, var(--shell-border) 88%, transparent);
+  --tx-bui-ink: var(--shell-text-primary);
+  --tx-bui-ink-2: var(--shell-text-secondary);
+  --tx-bui-ink-3: var(--shell-text-muted);
+  --tx-bui-radius-card: 10px;
+  --tx-bui-shadow-card: 0 0 0 1px color-mix(in srgb, var(--shell-border) 92%, transparent);
+  --tx-bui-shadow-btn: 0 0 0 1px color-mix(in srgb, var(--shell-border) 92%, transparent);
+  width: 100%;
+
+  .tx-bui-context-chunk__bar {
+    padding: 7px 11px;
+  }
+
+  .tx-bui-context-chunk__body {
+    margin: 8px 11px 9px;
+    padding: 0;
+    white-space: pre-line;
+    display: -webkit-box;
+    -webkit-line-clamp: 6;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .tx-bui-context-chunk__footer {
+    padding: 0 11px 10px;
+  }
+}
+
+.HomePage-UserBubblePrompt {
+  padding: 0 3px;
   color: var(--shell-text-primary);
   font-size: var(--shell-fs-md);
   line-height: 1.6;
