@@ -21,7 +21,7 @@ function close() {
 }
 
 function handleKeydown(event: KeyboardEvent) {
-  if (event.key === 'Escape') {
+  if (event.key === 'Escape' && !event.defaultPrevented) {
     event.preventDefault()
     close()
   }
@@ -38,6 +38,7 @@ watch(
     else
       window.removeEventListener('keydown', handleKeydown)
   },
+  { immediate: true },
 )
 
 onBeforeUnmount(() => {
@@ -79,7 +80,9 @@ onBeforeUnmount(() => {
 .docs-drawer-overlay {
   position: fixed;
   inset: 0;
-  z-index: 2100;
+  /* Stay above sticky chrome (header 30, back-to-top 40) and below TuffEx's 2000+ floating layer
+     so dropdowns/popovers opened inside the drawer (e.g. suite switcher) render on top. */
+  z-index: 100;
   display: flex;
   background: rgba(10, 12, 16, 0.45);
 }

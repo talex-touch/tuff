@@ -97,8 +97,9 @@ code: |
 | `id` | `string` | 必填 | 消息的稳定 key。 |
 | `role` | `'user' \| 'assistant' \| 'system'` | 必填 | 消息角色，决定行的对齐。 |
 | `content` | `string` | 必填 | Markdown 或纯文本正文。 |
+| `name` | `string` | - | 发送者名称，显示在气泡上方头部并作为 `TxAvatar` 首字母回退。 |
 | `createdAt` | `number` | - | epoch 时间戳，挂载后渲染为 `HH:mm`。 |
-| `avatarUrl` | `string` | - | 头像图片地址。 |
+| `avatarUrl` | `string` | - | 头像图片地址，透传给 `TxAvatar`。 |
 | `attachments` | `ChatMessageAttachment[]` | - | 以缩略图渲染的图片附件。 |
 
 #### ChatMessageAttachment
@@ -117,6 +118,7 @@ code: |
 
 ## 技术实现
 
+- 头像基于 `TxAvatar`、消息气泡基于 `TxCard`（`clean` 与助手侧 `hybrid` 退化为无边框纯平面），发送者名称与时间戳独立排布在气泡上方。
 - 源码：`packages/tuffex/packages/components/src/chat/`（`TxChatList.vue`、`TxChatMessage.vue`、`types.ts`）。
 
 <TuffDocSourceLink />

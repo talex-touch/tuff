@@ -24,7 +24,7 @@ import TxStreamCaret from '../../stream-text/src/TxStreamCaret.vue'
 import { useStreamPacer } from '../../stream-text/src/use-stream-pacer'
 import TxCodeBlock from './TxCodeBlock.vue'
 import TxMermaidBlock from './TxMermaidBlock.vue'
-import { completeInlineMarkup, completeTable } from './complete-inline-markup'
+import { completeInlineMarkup, completeTable, trimIncompleteBlockMarker } from './complete-inline-markup'
 import { hardenHtmlExtension } from './harden-html'
 import { tableToCsv } from './table-csv'
 import {
@@ -83,16 +83,33 @@ const markedInstance = new Marked({ gfm: true, breaks: true })
 const reduced = useReducedMotion()
 const isPacing = computed(() => props.paced && !reduced.value)
 
+const MD_SYNTAX_PREFIX_RE = /^[\s#>*+\-`_~[\]|()]+$/
+
 const pacedUnitEnds = computed<number[]>(() => {
   if (!isPacing.value || !props.content)
     return []
   const units = segmentWords(props.content, props.locale)
   const ends: number[] = []
   let offset = 0
-  for (const unit of units) {
+  let heldSyntax = false
+  for (let index = 0; index < units.length; index++) {
+    const unit = units[index]!
+    const prevEnd = offset
     offset += unit.text.length + unit.ws.length
+    const isLineStart = prevEnd === 0 || props.content[prevEnd - 1] === '\n'
+    const isOrderedMarker = isLineStart && /^\d+[.)]$/.test(unit.text)
+    const isPureSyntax = MD_SYNTAX_PREFIX_RE.test(unit.text) || isOrderedMarker
+    // Coalesce leading markdown syntax (`### `, `- `, `1. `, `**`, `` ` ``)
+    // onto the following word so paced streaming never pauses on bare markers.
+    if (isPureSyntax && index < units.length - 1 && (heldSyntax || isLineStart || /[*_~`[\]]/.test(unit.text))) {
+      heldSyntax = true
+      continue
+    }
+    heldSyntax = false
     ends.push(offset)
   }
+  if (ends.length === 0 && offset > 0)
+    ends.push(offset)
   return ends
 })
 
@@ -146,10 +163,14 @@ const effectiveStreaming = computed(
  * its own. Dropping the cache and re-feeding the content is what turns a
  * placeholder into an image.
  */
+function prepareStreamingContent(content: string): string {
+  return completeInlineMarkup(completeTable(trimIncompleteBlockMarker(content)))
+}
+
 watch(remoteImagePolicyVersion, () => {
   stream.reset()
   blocks.value = stream.update(
-    effectiveStreaming.value ? completeInlineMarkup(completeTable(renderedContent.value)) : renderedContent.value,
+    effectiveStreaming.value ? prepareStreamingContent(renderedContent.value) : renderedContent.value,
   )
 })
 
@@ -299,7 +320,7 @@ watch(
     // speculatively costs nothing once the real closer lands, and is only ever
     // applied while streaming: settled text says exactly what it says.
     blocks.value = stream.update(
-      streaming ? completeInlineMarkup(completeTable(content)) : content
+      streaming ? prepareStreamingContent(content) : content,
     )
   },
   { immediate: true },
@@ -373,7 +394,23 @@ function isBlockClosed(block: StreamBlock, index: number): boolean {
   return block.fenceClosed || index < blocks.value.length - 1 || !effectiveStreaming.value
 }
 
-const tailBlock = computed(() => blocks.value.at(-1) ?? null)
+/**
+ * A bare fence with nothing in it renders as an empty framed box — all chrome,
+ * no content. Models emit these mid-stream (a ``` just arrived) and in
+ * fence-about-fences answers; both look broken, neither carries information.
+ */
+function isSuppressedFence(block: StreamBlock): boolean {
+  return block.type === 'code' && !block.lang && !block.code.trim()
+}
+
+const tailBlock = computed(() => {
+  for (let index = blocks.value.length - 1; index >= 0; index--) {
+    const block = blocks.value[index]!
+    if (!isSuppressedFence(block))
+      return block
+  }
+  return null
+})
 
 // ---------------------------------------------------------------------------
 // Fresh-text materialisation: characters appended to the growing tail enter
@@ -424,13 +461,13 @@ watch(
 )
 
 /**
- * The cursor rides inline (::after) only when the tail block ends in an
- * element whose last line is text; lists, tables and fences get a standalone
- * block cursor instead of a stray glyph inside their markup.
+ * The cursor rides inline when the tail block ends in text-bearing flow markup
+ * (paragraphs, headings, blockquotes and lists); tables and fences get a
+ * standalone block cursor line instead.
  */
-const INLINE_CURSOR_RE = /<\/(?:p|h[1-6]|blockquote)>\s*$/
+const INLINE_CURSOR_RE = /<\/(?:p|h[1-6]|blockquote|ul|ol)>\s*$/
 /** The elements `INLINE_CURSOR_RE` lets the caret ride inside. */
-const INLINE_BLOCK = /^(?:P|H[1-6]|BLOCKQUOTE)$/
+const INLINE_BLOCK = /^(?:P|H[1-6]|BLOCKQUOTE|UL|OL)$/
 
 const inlineCursor = computed(() => {
   const tail = tailBlock.value
@@ -438,15 +475,15 @@ const inlineCursor = computed(() => {
 })
 
 const showBlockCursor = computed(
-  () => effectiveStreaming.value && blocks.value.length > 0 && !inlineCursor.value,
+  () => effectiveStreaming.value && tailBlock.value !== null && !inlineCursor.value,
 )
 
 // ---------------------------------------------------------------------------
 // The caret: one TxStreamCaret, absolutely placed at the write head. For a
-// tail that ends in a line of text it sits after that text's last character;
-// for a list, table or fence it sits on the block cursor line below the tail.
-// It takes no room, so nothing reflows around it, and it never remounts as the
-// write head moves between elements.
+// tail that ends in a line of text (including the active list item) it sits
+// after that text's last character; for a table or fence it sits on the block
+// cursor line below the tail. It takes no room, so nothing reflows around it,
+// and it never remounts as the write head moves between elements.
 //
 // Its position is the `translate` property, not `transform`: the individual
 // transform properties compose translate → rotate → scale → transform, so the
@@ -454,10 +491,27 @@ const showBlockCursor = computed(
 // would multiply the offset too and the caret would fly in from the corner.
 // ---------------------------------------------------------------------------
 
-const showCaret = computed(() => props.caret && effectiveStreaming.value && blocks.value.length > 0)
+const showCaret = computed(() => props.caret && effectiveStreaming.value && tailBlock.value !== null)
 const caretRef = ref<HTMLElement | null>(null)
+const caretPlaced = ref(false)
 let caretFrame = 0
+let caretPlacedFrame = 0
 let caretObserver: ResizeObserver | null = null
+
+/** Deepest trailing `<li>` inside a list block, so an empty newly-opened item anchors at its own line. */
+function deepestLastListItem(container: HTMLElement): HTMLElement | null {
+  let current: HTMLElement | null = container
+  let lastLi: HTMLElement | null = null
+  while (current) {
+    const child = [...current.children].reverse().find(el => el.tagName === 'LI' || el.tagName === 'UL' || el.tagName === 'OL') as HTMLElement | undefined
+    if (!child)
+      break
+    if (child.tagName === 'LI')
+      lastLi = child
+    current = child
+  }
+  return lastLi
+}
 
 /** The last visible character of `el`'s text, as a rect; null when it holds no text. */
 function lastCharacterRect(el: HTMLElement): DOMRect | null {
@@ -484,15 +538,17 @@ function caretAnchor(root: HTMLElement): { x: number, y: number } | null {
   if (inlineCursor.value) {
     const tail = root.querySelector<HTMLElement>('.tx-stream-md__markup--tail')
     if (tail) {
-      const end = lastCharacterRect(tail)
+      const lastBlock = [...tail.children].reverse().find(child => INLINE_BLOCK.test(child.tagName)) as HTMLElement | undefined ?? tail
+      const activeContainer = (lastBlock.tagName === 'UL' || lastBlock.tagName === 'OL')
+        ? (deepestLastListItem(lastBlock) ?? lastBlock)
+        : tail
+      const end = lastCharacterRect(activeContainer)
       if (end)
         return { x: end.right, y: end.top + end.height / 2 }
-      // Opened but still empty (`## ` before its words): the start of its line.
-      // The last paragraph, heading or quote, not the last child: a fresh
-      // chunk can wrap the newline after it.
-      const block = [...tail.children].reverse().find(child => INLINE_BLOCK.test(child.tagName)) as HTMLElement | undefined ?? tail
-      const rect = block.getBoundingClientRect()
-      const lineHeight = Number.parseFloat(getComputedStyle(block).lineHeight) || 0
+      // Opened but still empty (`## ` or `- ` before its words): start of its line.
+      const target = activeContainer === tail ? lastBlock : activeContainer
+      const rect = target.getBoundingClientRect()
+      const lineHeight = Number.parseFloat(getComputedStyle(target).lineHeight) || 0
       return { x: rect.left, y: rect.top + lineHeight / 2 }
     }
   }
@@ -516,6 +572,13 @@ function placeCaret(): void {
     return
   const origin = root.getBoundingClientRect()
   caret.style.translate = `${(anchor.x - origin.left).toFixed(1)}px ${(anchor.y - origin.top).toFixed(1)}px`
+  if (!caretPlaced.value && !caretPlacedFrame && typeof requestAnimationFrame !== 'undefined') {
+    caretPlacedFrame = requestAnimationFrame(() => {
+      caretPlacedFrame = 0
+      if (showCaret.value)
+        caretPlaced.value = true
+    })
+  }
 }
 
 /** Measures once per frame however many patches land in it. */
@@ -532,7 +595,15 @@ watch([blocks, showCaret, inlineCursor], schedulePlaceCaret, { flush: 'post', im
 watch(showCaret, (visible) => {
   caretObserver?.disconnect()
   caretObserver = null
-  if (visible && rootRef.value && typeof ResizeObserver !== 'undefined') {
+  if (!visible) {
+    caretPlaced.value = false
+    if (caretPlacedFrame) {
+      cancelAnimationFrame(caretPlacedFrame)
+      caretPlacedFrame = 0
+    }
+    return
+  }
+  if (rootRef.value && typeof ResizeObserver !== 'undefined') {
     caretObserver = new ResizeObserver(schedulePlaceCaret)
     caretObserver.observe(rootRef.value)
   }
@@ -542,16 +613,9 @@ onBeforeUnmount(() => {
   caretObserver?.disconnect()
   if (caretFrame)
     cancelAnimationFrame(caretFrame)
+  if (caretPlacedFrame)
+    cancelAnimationFrame(caretPlacedFrame)
 })
-
-/**
- * A bare fence with nothing in it renders as an empty framed box — all chrome,
- * no content. Models emit these mid-stream (a ``` just arrived) and in
- * fence-about-fences answers; both look broken, neither carries information.
- */
-function isSuppressedFence(block: StreamBlock): boolean {
-  return !block.lang && !block.code.trim()
-}
 </script>
 
 <template>
@@ -570,7 +634,7 @@ function isSuppressedFence(block: StreamBlock): boolean {
             v-if="!isSuppressedFence(block)"
             v-bind="rendererCopy(block.lang)"
             class="tx-stream-md__block tx-stream-md__fence"
-            :class="{ 'tx-stream-md__block--last': index === blocks.length - 1 }"
+            :class="{ 'tx-stream-md__block--last': tailBlock?.id === block.id }"
             :lang="block.lang"
             :code="block.code"
             :closed="isBlockClosed(block, index)"
@@ -582,8 +646,8 @@ function isSuppressedFence(block: StreamBlock): boolean {
           v-else
           class="tx-stream-md__block tx-stream-md__markup"
           :class="{
-            'tx-stream-md__markup--tail': effectiveStreaming && inlineCursor && index === blocks.length - 1,
-            'tx-stream-md__block--last': index === blocks.length - 1,
+            'tx-stream-md__markup--tail': effectiveStreaming && inlineCursor && tailBlock?.id === block.id,
+            'tx-stream-md__block--last': tailBlock?.id === block.id,
           }"
           :data-stream-block="block.id"
           v-html="block.html"
@@ -595,7 +659,13 @@ function isSuppressedFence(block: StreamBlock): boolean {
 
     <!-- Switched off by the host, the caret goes at once; only a stream that ends retracts it. -->
     <Transition name="tx-stream-md-caret" :css="caret">
-      <span v-if="showCaret" ref="caretRef" class="tx-stream-md__caret" aria-hidden="true">
+      <span
+        v-if="showCaret"
+        ref="caretRef"
+        class="tx-stream-md__caret"
+        :class="{ 'is-placed': caretPlaced }"
+        aria-hidden="true"
+      >
         <TxStreamCaret state="streaming" />
       </span>
     </Transition>
@@ -649,6 +719,16 @@ function isSuppressedFence(block: StreamBlock): boolean {
     // never replay this; the growing tail patches in place, so it doesn't either.
     &.is-streaming:not(.is-reveal-none) .tx-stream-md__block {
       animation: tx-stream-fade-blur var(--tx-stream-reveal-duration, 520ms) cubic-bezier(0.22, 1, 0.36, 1) both;
+    }
+
+    // Newly appended list items and table rows inside a growing tail enter
+    // with a stateless fade (negative delay set by use-fresh-chunks).
+    &.is-streaming:not(.is-reveal-none) .tx-stream-md__fresh-item {
+      animation: tx-stream-fade var(--tx-stream-reveal-duration, 520ms) cubic-bezier(0.22, 1, 0.36, 1) both;
+    }
+
+    .tx-stream-md__caret.is-placed {
+      transition: translate 95ms cubic-bezier(0.22, 1, 0.36, 1);
     }
 
     .tx-stream-md__block {
@@ -787,7 +867,7 @@ function isSuppressedFence(block: StreamBlock): boolean {
       }
     }
 
-    pre {
+    .tx-stream-md__markup pre {
       margin: 0 0 1em;
       padding: 14px 16px;
       overflow-x: auto;
@@ -988,7 +1068,7 @@ function isSuppressedFence(block: StreamBlock): boolean {
   }
 
   &.dark .markdown-body {
-    pre {
+    .tx-stream-md__markup pre {
       background-color: var(--tx-fill-color-darker, #1a1a1a);
       border-color: var(--tx-border-color, #414243);
     }

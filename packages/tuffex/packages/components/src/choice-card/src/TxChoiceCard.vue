@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { PropType } from 'vue'
+import type { ComponentPublicInstance, PropType } from 'vue'
 import type { TxIconSource } from '../../icon/src/types'
 import type {
   ChoiceCardColumns,
@@ -10,6 +10,9 @@ import type {
   ChoiceStepLabelFormatter,
 } from './types'
 import { computed, nextTick, ref, useId, watch } from 'vue'
+import TxAutoSizer from '../../auto-sizer/src/TxAutoSizer.vue'
+import TxButton from '../../button/src/button.vue'
+import TxCard from '../../card/src/TxCard.vue'
 import TxIcon from '../../icon/src/TxIcon.vue'
 import TxSkeleton from '../../skeleton/src/TxSkeleton.vue'
 
@@ -59,8 +62,23 @@ const MAX_SKELETON_ROWS = 24
 const MAX_STAGGER_INDEX = 8
 
 const listRef = ref<HTMLElement | null>(null)
-const prevRef = ref<HTMLButtonElement | null>(null)
-const nextRef = ref<HTMLButtonElement | null>(null)
+const autoSizerRef = ref<InstanceType<typeof TxAutoSizer> | null>(null)
+let prevButtonEl: HTMLButtonElement | null = null
+let nextButtonEl: HTMLButtonElement | null = null
+
+function bindNavButton(which: 'prev' | 'next', target: Element | ComponentPublicInstance | null): void {
+  let el: HTMLButtonElement | null = null
+  if (target) {
+    if (typeof HTMLButtonElement !== 'undefined' && target instanceof HTMLButtonElement)
+      el = target
+    else if ('$el' in target && typeof HTMLButtonElement !== 'undefined' && target.$el instanceof HTMLButtonElement)
+      el = target.$el
+  }
+  if (which === 'prev')
+    prevButtonEl = el
+  else
+    nextButtonEl = el
+}
 
 /* ─── pages ─── */
 
@@ -103,12 +121,35 @@ function goTo(index: number): void {
 
 /* ─── entrance ─── */
 
-// `appear`: rows rise in one after another. `step`: the new page blur-fades in as one.
-// Both are CSS animations on freshly mounted nodes, so the options are ready and clickable
-// from their first frame, and reduced motion drops only the motion.
+// `appear`: rows rise in one after another on mount / after loading.
+// `step`: outgoing page slides out while the incoming page slides in seamlessly.
 type Entrance = 'appear' | 'step' | 'none'
+type SlideDirection = 'none' | 'next' | 'prev'
 
 const entrance = ref<Entrance>(props.appear ? 'appear' : 'none')
+const slideDirection = ref<SlideDirection>('none')
+const slideTransitionName = computed(() => {
+  if (slideDirection.value === 'next')
+    return 'tx-choice-card-slide-next'
+  if (slideDirection.value === 'prev')
+    return 'tx-choice-card-slide-prev'
+  return ''
+})
+
+let lastStepIndex = stepIndex.value
+
+// Sync flush so `<Transition :name="slideTransitionName">` already carries the new
+// direction on the exact render that swaps `pageKey`.
+watch(pageKey, (nextKey, prevKey) => {
+  if (!prevKey || !nextKey || prevKey === nextKey)
+    slideDirection.value = 'none'
+  else if (stepIndex.value < lastStepIndex)
+    slideDirection.value = 'prev'
+  else
+    slideDirection.value = 'next'
+
+  lastStepIndex = stepIndex.value
+}, { flush: 'sync' })
 
 /* ─── selection and roving focus ─── */
 
@@ -250,9 +291,13 @@ watch(pageKey, async (key, previous) => {
   if (!previous || !key || typeof document === 'undefined')
     return
 
+  void autoSizerRef.value?.refresh()
+
   const focused = document.activeElement
+  const prevEl = prevButtonEl
+  const nextEl = nextButtonEl
   const fromList = focused !== null && Boolean(listRef.value?.contains(focused))
-  const fromPager = focused !== null && (focused === prevRef.value || focused === nextRef.value)
+  const fromPager = focused !== null && (focused === prevEl || focused === nextEl)
     ? focused as HTMLButtonElement
     : null
   if (!fromList && !fromPager)
@@ -269,7 +314,7 @@ watch(pageKey, async (key, previous) => {
 
   // An arrow that just became disabled cannot keep focus; hand it to the other one.
   if (fromPager?.disabled) {
-    const other = fromPager === prevRef.value ? nextRef.value : prevRef.value
+    const other = fromPager === prevEl ? nextButtonEl : prevButtonEl
     if (other && !other.disabled)
       other.focus()
     else
@@ -280,8 +325,10 @@ watch(pageKey, async (key, previous) => {
 // Declared after the page watcher so that, when a page and its options arrive together,
 // the options' first appearance wins.
 watch(() => props.loading, (loading, was) => {
-  if (was && !loading)
+  if (was && !loading) {
+    slideDirection.value = 'none'
     entrance.value = props.appear ? 'appear' : 'none'
+  }
 })
 </script>
 
@@ -293,142 +340,158 @@ watch(() => props.loading, (loading, was) => {
     :aria-labelledby="headingId"
     :aria-busy="loading || undefined"
   >
-    <header class="tx-choice-card__head">
-      <div v-if="total > 1" class="tx-choice-card__pager">
-        <button
-          ref="prevRef"
-          type="button"
-          class="tx-choice-card__nav"
-          :aria-label="prevLabel"
-          :disabled="!hasPrev"
-          @click="goTo(stepIndex - 1)"
-        >
-          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M15 18l-6-6 6-6" />
-          </svg>
-        </button>
-        <span class="tx-choice-card__count" role="status">{{ counter }}</span>
-        <button
-          ref="nextRef"
-          type="button"
-          class="tx-choice-card__nav"
-          :aria-label="nextLabel"
-          :disabled="!hasNext"
-          @click="goTo(stepIndex + 1)"
-        >
-          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M9 6l6 6-6 6" />
-          </svg>
-        </button>
-      </div>
+    <TxCard
+      class="tx-choice-card__card"
+      variant="solid"
+      background="refraction"
+      shadow="soft"
+      :padding="12"
+      :radius="24"
+      :refraction-strength="34"
+      refraction-tone="mist"
+    >
+      <header class="tx-choice-card__head">
+        <div :id="headingId" class="tx-choice-card__heading-viewport">
+          <Transition :name="slideTransitionName">
+            <div
+              :key="pageKey || 'placeholder'"
+              class="tx-choice-card__heading"
+              :class="{ 'is-stepping': entrance === 'step' }"
+            >
+              <slot v-if="current" name="header" :step="current" :step-index="stepIndex" :total="total">
+                <h3 class="tx-choice-card__title">
+                  {{ current.title }}
+                </h3>
+              </slot>
+              <div v-else class="tx-choice-card__title tx-choice-card__bar is-placeholder" aria-hidden="true">
+                <TxSkeleton width="56%" :height="12" :radius="4" />
+              </div>
+            </div>
+          </Transition>
+        </div>
 
+        <div v-if="total > 1" class="tx-choice-card__pager">
+          <TxButton
+            :ref="(el) => bindNavButton('prev', el)"
+            variant="bare"
+            :border="false"
+            class="tx-choice-card__nav"
+            :aria-label="prevLabel"
+            :disabled="!hasPrev"
+            @click="goTo(stepIndex - 1)"
+          >
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M15 18l-6-6 6-6" />
+            </svg>
+          </TxButton>
+          <span class="tx-choice-card__count" role="status">{{ counter }}</span>
+          <TxButton
+            :ref="(el) => bindNavButton('next', el)"
+            variant="bare"
+            :border="false"
+            class="tx-choice-card__nav"
+            :aria-label="nextLabel"
+            :disabled="!hasNext"
+            @click="goTo(stepIndex + 1)"
+          >
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M9 6l6 6-6 6" />
+            </svg>
+          </TxButton>
+        </div>
+      </header>
+
+      <!-- The skeleton is built from the loaded row's own boxes, so nothing moves when the
+           options land; only the bars inside are placeholders. -->
       <div
-        :id="headingId"
-        :key="pageKey || 'placeholder'"
-        class="tx-choice-card__heading"
-        :class="{ 'is-stepping': entrance === 'step' }"
+        v-if="loading"
+        class="tx-choice-card__options is-placeholder"
+        aria-hidden="true"
       >
-        <slot v-if="current" name="header" :step="current" :step-index="stepIndex" :total="total">
-          <h3 class="tx-choice-card__title">
-            {{ current.title }}
-          </h3>
-        </slot>
-        <div v-else class="tx-choice-card__title tx-choice-card__bar is-placeholder" aria-hidden="true">
-          <TxSkeleton width="56%" :height="12" :radius="4" />
+        <div v-for="(row, index) in skeletonRows" :key="index" class="tx-choice-card__item">
+          <div class="tx-choice-card__option is-placeholder">
+            <span class="tx-choice-card__icon">
+              <TxSkeleton variant="rect" :width="16" :height="16" :radius="5" />
+            </span>
+            <span class="tx-choice-card__text">
+              <span class="tx-choice-card__label tx-choice-card__bar">
+                <TxSkeleton :width="row.label" :height="10" :radius="4" />
+              </span>
+              <span class="tx-choice-card__desc tx-choice-card__bar">
+                <TxSkeleton :width="row.desc" :height="8" :radius="4" />
+              </span>
+            </span>
+          </div>
         </div>
       </div>
-    </header>
 
-    <!-- The skeleton is built from the loaded row's own boxes, so nothing moves when the
-         options land; only the bars inside are placeholders. -->
-    <div
-      v-if="loading"
-      class="tx-choice-card__options is-placeholder"
-      aria-hidden="true"
-    >
-      <div v-for="(row, index) in skeletonRows" :key="index" class="tx-choice-card__item">
-        <div class="tx-choice-card__option is-placeholder">
-          <span class="tx-choice-card__icon">
-            <TxSkeleton variant="rect" :width="16" :height="16" :radius="5" />
-          </span>
-          <span class="tx-choice-card__text">
-            <span class="tx-choice-card__label tx-choice-card__bar">
-              <TxSkeleton :width="row.label" :height="10" :radius="4" />
-            </span>
-            <span class="tx-choice-card__desc tx-choice-card__bar">
-              <TxSkeleton :width="row.desc" :height="8" :radius="4" />
-            </span>
-          </span>
-        </div>
-      </div>
-    </div>
-
-    <ul
-      v-else
-      ref="listRef"
-      :key="pageKey"
-      class="tx-choice-card__options"
-      :class="{ 'is-appearing': entrance === 'appear', 'is-stepping': entrance === 'step' }"
-      role="list"
-      :aria-labelledby="headingId"
-    >
-      <li
-        v-for="(option, index) in options"
-        :key="option.id"
-        class="tx-choice-card__item"
-        :style="{ '--tx-choice-card-index': Math.min(index, MAX_STAGGER_INDEX) }"
+      <TxAutoSizer
+        v-else
+        ref="autoSizerRef"
+        :width="false"
+        :height="true"
+        :duration-ms="280"
+        easing="cubic-bezier(0.22, 1, 0.36, 1)"
+        outer-class="tx-choice-card__viewport"
       >
-        <button
-          type="button"
-          class="tx-choice-card__option"
-          :class="{ 'is-selected': isSelected(option) }"
-          :disabled="option.disabled"
-          :tabindex="index === rovingIndex ? 0 : -1"
-          :aria-current="isSelected(option) ? 'true' : undefined"
-          :aria-labelledby="`${baseId}-o${index}`"
-          :aria-describedby="option.description ? `${baseId}-o${index}-desc` : undefined"
-          @click="choose(option, index)"
-          @focus="activeIndex = index"
-          @keydown="onKeydown($event, index)"
-        >
-          <span v-if="hasIcons" class="tx-choice-card__icon" aria-hidden="true">
-            <TxIcon v-if="option.icon" :icon="iconSource(option.icon)" />
-          </span>
-          <span class="tx-choice-card__text">
-            <span :id="`${baseId}-o${index}`" class="tx-choice-card__label">{{ option.label }}</span>
-            <span
-              v-if="option.description"
-              :id="`${baseId}-o${index}-desc`"
-              class="tx-choice-card__desc"
-            >{{ option.description }}</span>
-          </span>
-          <span v-if="isSelected(option)" class="tx-choice-card__check" aria-hidden="true">
-            <TxIcon name="check" />
-          </span>
-        </button>
-      </li>
-    </ul>
+        <Transition :name="slideTransitionName">
+          <ul
+            ref="listRef"
+            :key="pageKey"
+            class="tx-choice-card__options"
+            :class="{ 'is-appearing': entrance === 'appear', 'is-stepping': entrance === 'step' }"
+            role="list"
+            :aria-labelledby="headingId"
+          >
+            <li
+              v-for="(option, index) in options"
+              :key="option.id"
+              class="tx-choice-card__item"
+              :style="{ '--tx-choice-card-index': Math.min(index, MAX_STAGGER_INDEX) }"
+            >
+              <TxButton
+                variant="bare"
+                :border="false"
+                class="tx-choice-card__option"
+                :class="{ 'is-selected': isSelected(option) }"
+                :disabled="option.disabled"
+                :tabindex="index === rovingIndex ? 0 : -1"
+                :aria-current="isSelected(option) ? 'true' : undefined"
+                :aria-labelledby="`${baseId}-o${index}`"
+                :aria-describedby="option.description ? `${baseId}-o${index}-desc` : undefined"
+                @click="choose(option, index)"
+                @focus="activeIndex = index"
+                @keydown="onKeydown($event, index)"
+              >
+                <span v-if="hasIcons" class="tx-choice-card__icon" aria-hidden="true">
+                  <TxIcon v-if="option.icon" :icon="iconSource(option.icon)" />
+                </span>
+                <span class="tx-choice-card__text">
+                  <span :id="`${baseId}-o${index}`" class="tx-choice-card__label">{{ option.label }}</span>
+                  <span
+                    v-if="option.description"
+                    :id="`${baseId}-o${index}-desc`"
+                    class="tx-choice-card__desc"
+                  >{{ option.description }}</span>
+                </span>
+                <span v-if="isSelected(option)" class="tx-choice-card__check" aria-hidden="true">
+                  <TxIcon name="check" />
+                </span>
+                <span v-else class="tx-choice-card__arrow" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M9 6l6 6-6 6" />
+                  </svg>
+                </span>
+              </TxButton>
+            </li>
+          </ul>
+        </Transition>
+      </TxAutoSizer>
+    </TxCard>
   </section>
 </template>
 
 <style lang="scss">
-// Ink on fill, WCAG 2 contrast, measured 2026-09-26 across the four theme blocks of
-// style/variables.scss (:root / .dark / html.contrast / html.dark.contrast). Each cell is the
-// worst of the four option fills: resting (--tx-fill-color-light), hover (--tx-fill-color),
-// selected (--tx-color-primary-light-9) and selected hover (primary 20% over --tx-bg-color).
-//
-//   label, text-color-primary        10.78   10.93   13.04   14.05
-//   description + icon, regular       5.06    8.80   10.79   12.76   (12px: needs 4.5)
-//   check, primary 50% over primary   4.82    7.39    7.96   10.38   (glyph: needs 3)
-//
-// The worst description cell is the selected hover in :root; at rest it is 5.69. The check
-// is TxModeChip's `info` ink on the same two fills. --tx-text-color-secondary was not used for
-// the description: it measures 2.87:1 on the resting fill.
-//
-// Size: this sheet is held to 4 KiB compiled (the on-demand CSS gate has no slack), so ink
-// is inherited wherever the parent already carries it, shared resets are grouped, and the
-// motion only exists under `no-preference` instead of being declared and then cancelled.
-
 @keyframes tx-choice-card-rise {
   from {
     opacity: 0;
@@ -436,88 +499,86 @@ watch(() => props.loading, (loading, was) => {
   }
 }
 
-@keyframes tx-choice-card-blur-in {
-  from {
-    opacity: 0;
-    filter: blur(4px);
-  }
-}
-
 .tx-choice-card {
   // Sizes are read, never set, here: a host overrides them on the card or any ancestor.
-  //   --tx-choice-card-pad            inset between the card edge and the options (8px)
-  //   --tx-choice-card-option-radius  option corner radius (10px)
-  //   --tx-choice-card-option-pad-x   option horizontal inset, and the title's (12px)
-  //   --tx-choice-card-label-line     label line height, and the icon box's height (20px)
+  //   --tx-choice-card-pad            inset between the TxCard edge and the options (12px)
+  //   --tx-choice-card-option-radius  option & pager corner radius, matching TxButton (12px)
+  //   --tx-choice-card-option-pad-x   option horizontal inset (12px)
+  //   --tx-choice-card-label-line     label line height (20px)
   //   --tx-choice-card-desc-line      description line height (18px)
   container: tx-choice-card / inline-size;
   box-sizing: border-box;
   width: 100%;
-  padding: var(--tx-choice-card-pad, 8px);
-  // Concentric with the options: outer radius = inner radius + the inset between them.
-  border-radius: calc(var(--tx-choice-card-option-radius, 10px) + var(--tx-choice-card-pad, 8px));
-  // Opaque, so the card hides whatever it is laid over.
-  background: var(--tx-bg-color, #fff);
-  // A ring, not a border: it stays out of layout, and a border beside a drop shadow reads
-  // doubled at the corners.
-  box-shadow:
-    0 0 0 1px var(--tx-border-color-lighter, #ebeef5),
-    var(--tx-elevation-1, 1px 2px 4px rgba(0, 0, 0, 0.04));
-  // The title, the rows and their labels all inherit this ink.
   color: var(--tx-text-color-primary, #303133);
   font-size: 14px;
   text-align: start;
 }
 
-// A column flexbox, so the heading stays a flex item (its own formatting context) and a
-// `header` slot's margins stay inside it.
+.tx-choice-card__card.tx-card {
+  // Concentric with the options and pager: outer radius = inner radius + card inset.
+  // Set padding and radius directly too so host overrides of --tx-choice-card-*
+  // win over TxCard's inline prop variables.
+  --tx-card-radius: calc(var(--tx-choice-card-option-radius, 12px) + var(--tx-choice-card-pad, 12px));
+  --tx-card-padding: var(--tx-choice-card-pad, 12px);
+  padding: var(--tx-choice-card-pad, 12px);
+  border-radius: calc(var(--tx-choice-card-option-radius, 12px) + var(--tx-choice-card-pad, 12px));
+}
+
 .tx-choice-card__head {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
-  // The title lines up with the options' content, one option inset in from their edge.
-  padding: 6px var(--tx-choice-card-option-pad-x, 12px) 10px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0 0 12px 4px;
+}
+
+.tx-choice-card__heading-viewport {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.tx-choice-card__heading {
+  width: 100%;
+  min-width: 0;
 }
 
 .tx-choice-card__pager {
-  display: flex;
+  display: inline-flex;
   align-items: center;
+  flex: none;
   gap: 2px;
-  // The chevron sits 5px inside its 24px button; pulling the pager out by as much lines
-  // the glyph up with the title under it.
-  margin-inline-start: -5px;
-  // The arrows and the counter inherit it.
+  padding: 3px;
+  border-radius: var(--tx-choice-card-option-radius, 12px);
+  background: var(--tx-fill-color-light, #f5f7fa);
+  box-shadow: inset 0 0 0 1px var(--tx-border-color-lighter, #ebeef5);
   color: var(--tx-text-color-regular, #606266);
 }
 
-// Both buttons start from the same reset. Colour is inherited: the arrows take the pager's
-// regular ink, the options the card's primary ink.
-.tx-choice-card__nav,
-.tx-choice-card__option {
-  margin: 0;
-  border: 0;
-  color: inherit;
-  font: inherit;
-  cursor: pointer;
-  appearance: none;
-}
+.tx-choice-card__nav.tx-button {
+  --tx-button-bare-padding: 0;
+  --tx-button-bare-radius: calc(var(--tx-choice-card-option-radius, 12px) - 3px);
+  --tx-button-bare-bg: transparent;
+  --tx-button-bare-hover: var(--tx-fill-color, #f0f2f5);
+  --tx-button-height: 22px;
 
-.tx-choice-card__nav {
-  display: grid;
+  display: inline-grid;
   flex: none;
   place-items: center;
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
+  min-width: 22px;
+  min-height: 22px;
   padding: 0;
-  border-radius: 6px;
-  background: none;
-  // Read only while the focus ring below draws.
+  border-radius: calc(var(--tx-choice-card-option-radius, 12px) - 3px);
+  justify-content: center;
+  color: inherit;
+  cursor: pointer;
   outline-offset: 1px;
 
-  // Immediate: nothing on the card transitions colour. `:enabled` is `:not(:disabled)`
-  // for a button, and never matches the skeleton's plain boxes.
   &:enabled:hover {
-    background-color: var(--tx-fill-color-light, #f5f7fa);
+    background-color: var(--tx-fill-color, #f0f2f5);
     color: var(--tx-text-color-primary, #303133);
   }
 
@@ -533,8 +594,10 @@ watch(() => props.loading, (loading, was) => {
 }
 
 .tx-choice-card__count {
-  min-width: 36px;
-  font-size: 12px;
+  min-width: 34px;
+  padding: 0 2px;
+  font-size: 11.5px;
+  font-weight: var(--tx-font-weight-medium, 500);
   line-height: 16px;
   font-variant-numeric: tabular-nums;
   text-align: center;
@@ -547,10 +610,16 @@ watch(() => props.loading, (loading, was) => {
   line-height: 20px;
   overflow-wrap: anywhere;
 
-  // On the card surface the skeleton's own default, the lightest fill, is too faint.
   &.is-placeholder {
     --tx-skeleton-base-color: var(--tx-fill-color, #f0f2f5);
   }
+}
+
+.tx-choice-card__viewport {
+  position: relative;
+  margin: -6px calc(var(--tx-choice-card-pad, 12px) * -1);
+  padding: 6px var(--tx-choice-card-pad, 12px);
+  overflow: hidden;
 }
 
 .tx-choice-card__options {
@@ -562,7 +631,6 @@ watch(() => props.loading, (loading, was) => {
   list-style: none;
 }
 
-// No `min-width: 0` needed: the tracks' minimum is a fixed 0, so a row never grows past it.
 .tx-choice-card__item {
   display: flex;
   margin: 0;
@@ -570,21 +638,39 @@ watch(() => props.loading, (loading, was) => {
 }
 
 .tx-choice-card__option {
+  --tx-button-bare-padding: 10px var(--tx-choice-card-option-pad-x, 12px);
+  --tx-button-bare-radius: var(--tx-choice-card-option-radius, 12px);
+  --tx-button-bare-bg: var(--tx-fill-color-light, #f5f7fa);
+  --tx-button-bare-hover: var(--tx-fill-color, #f0f2f5);
+  --tx-button-height: auto;
+
   display: flex;
   flex: auto;
-  align-items: start;
-  gap: 10px;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
   min-width: 0;
-  // Two lines of text, so the block inset sits near the inline one; the inline inset clears
-  // the corner radius.
+  min-height: 0;
+  height: auto;
   padding: 10px var(--tx-choice-card-option-pad-x, 12px);
-  border-radius: var(--tx-choice-card-option-radius, 10px);
+  border-radius: var(--tx-choice-card-option-radius, 12px);
   background: var(--tx-fill-color-light, #f5f7fa);
+  box-shadow: inset 0 0 0 1px var(--tx-border-color-lighter, #ebeef5);
+  color: inherit;
+  font: inherit;
   text-align: start;
+  white-space: normal;
+  cursor: pointer;
   outline-offset: 2px;
 
   &:enabled:hover {
     background-color: var(--tx-fill-color, #f0f2f5);
+    box-shadow: inset 0 0 0 1px var(--tx-border-color, #dcdfe6);
+
+    .tx-choice-card__arrow {
+      color: var(--tx-text-color-primary, #303133);
+      opacity: 0.9;
+    }
   }
 
   &:disabled {
@@ -592,18 +678,23 @@ watch(() => props.loading, (loading, was) => {
     opacity: 0.5;
   }
 
-  // Colour is not the only mark: the chosen row also carries a check and aria-current.
+  // Colour is not the only mark: the chosen row also carries a check badge and aria-current.
   &.is-selected {
-    background: var(--tx-color-primary-light-9, #ecf5ff);
-    box-shadow: inset 0 0 0 1px var(--tx-color-primary-light-5, #a0cfff);
+    background: color-mix(in srgb, var(--tx-color-primary, #409eff) 10%, var(--tx-fill-color-light, #f5f7fa));
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tx-color-primary, #409eff) 46%, transparent);
 
     &:enabled:hover {
-      background-color: color-mix(in srgb, var(--tx-color-primary, #409eff) 20%, var(--tx-bg-color, #fff));
+      background-color: color-mix(in srgb, var(--tx-color-primary, #409eff) 16%, var(--tx-fill-color-light, #f5f7fa));
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tx-color-primary, #409eff) 58%, transparent);
+    }
+
+    .tx-choice-card__icon {
+      background: color-mix(in srgb, var(--tx-color-primary, #409eff) 16%, var(--tx-bg-color-overlay, #ffffff));
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tx-color-primary, #409eff) 32%, transparent);
+      color: var(--tx-color-primary, #409eff);
     }
   }
 
-  // Same boxes as a loaded row; the bars read on the row fill, where the skeleton's own
-  // default (the lightest fill) would vanish.
   &.is-placeholder {
     --tx-skeleton-base-color: var(--tx-fill-color-darker, #ebeef5);
 
@@ -611,33 +702,49 @@ watch(() => props.loading, (loading, was) => {
   }
 }
 
-// A skeleton bar's box: exactly one line of the text it stands in for (`1lh` is the
-// element's own line height), with the bar centred in it, so nothing moves when the text
-// lands.
 .tx-choice-card__bar {
   display: grid;
   align-items: center;
   height: 1lh;
 }
 
-// One label line tall, so the glyph centres on the first line whatever the description does.
-.tx-choice-card__icon,
+.tx-choice-card__icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  background: var(--tx-bg-color-overlay, #ffffff);
+  box-shadow: inset 0 0 0 1px var(--tx-border-color-lighter, #ebeef5);
+  color: var(--tx-text-color-regular, #606266);
+  font-size: 16px;
+}
+
 .tx-choice-card__check {
   display: grid;
   flex: none;
   place-items: center;
-  width: 20px;
-  height: var(--tx-choice-card-label-line, 20px);
-  font-size: 16px;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--tx-color-primary, #409eff) 15%, transparent);
+  color: color-mix(in srgb, var(--tx-color-primary, #409eff) 62%, var(--tx-text-color-primary, #303133));
+  font-size: 13px;
 }
 
-.tx-choice-card__icon,
+.tx-choice-card__arrow {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  color: var(--tx-text-color-regular, #606266);
+  opacity: 0.45;
+}
+
 .tx-choice-card__desc {
   color: var(--tx-text-color-regular, #606266);
-}
-
-.tx-choice-card__check {
-  color: color-mix(in srgb, var(--tx-color-primary, #409eff) 50%, var(--tx-text-color-primary, #303133));
 }
 
 .tx-choice-card__text {
@@ -667,20 +774,57 @@ watch(() => props.loading, (loading, was) => {
   }
 }
 
-// Motion is opt-in, as in TxStatCard: under `prefers-reduced-motion: reduce` neither
-// animation exists, and every resting style is already their end frame, so the content is
-// simply in place.
+// Motion is opt-in: under `prefers-reduced-motion: reduce` neither animation exists,
+// and every resting style is already its end frame, so the content is simply in place.
 @media (prefers-reduced-motion: no-preference) {
-  // Rows rise in one after another; the index is capped in the template.
   .is-appearing > .tx-choice-card__item {
     animation: tx-choice-card-rise 320ms var(--tx-ease-out-strong, cubic-bezier(0.23, 1, 0.32, 1))
       calc(var(--tx-choice-card-index, 0) * 45ms) both;
   }
 
-  // A new page arrives as one: heading and options blur-fade in together.
-  .tx-choice-card__options.is-stepping,
-  .tx-choice-card__heading.is-stepping {
-    animation: tx-choice-card-blur-in 160ms var(--tx-ease-out-strong, cubic-bezier(0.23, 1, 0.32, 1)) both;
+  .tx-choice-card-slide-next-enter-active,
+  .tx-choice-card-slide-next-leave-active,
+  .tx-choice-card-slide-prev-enter-active,
+  .tx-choice-card-slide-prev-leave-active {
+    transition:
+      transform 280ms var(--tx-ease-out-strong, cubic-bezier(0.22, 1, 0.36, 1)),
+      opacity 220ms ease;
+    will-change: transform, opacity;
+  }
+
+  .tx-choice-card__heading.tx-choice-card-slide-next-leave-active,
+  .tx-choice-card__heading.tx-choice-card-slide-prev-leave-active {
+    position: absolute;
+    inset: 0 0 auto;
+    width: 100%;
+    pointer-events: none;
+  }
+
+  .tx-choice-card__options.tx-choice-card-slide-next-leave-active,
+  .tx-choice-card__options.tx-choice-card-slide-prev-leave-active {
+    position: absolute;
+    inset: 6px var(--tx-choice-card-pad, 12px) auto;
+    pointer-events: none;
+  }
+
+  .tx-choice-card-slide-next-enter-from,
+  .tx-choice-card-slide-prev-leave-to {
+    transform: translateX(calc(100% + var(--tx-choice-card-pad, 12px)));
+    opacity: 0;
+  }
+
+  .tx-choice-card-slide-next-leave-to,
+  .tx-choice-card-slide-prev-enter-from {
+    transform: translateX(calc(-100% - var(--tx-choice-card-pad, 12px)));
+    opacity: 0;
+  }
+
+  .tx-choice-card__arrow {
+    transition: transform 150ms var(--tx-ease-out-strong, cubic-bezier(0.23, 1, 0.32, 1));
+  }
+
+  .tx-choice-card__option:enabled:hover .tx-choice-card__arrow {
+    transform: translateX(2px);
   }
 }
 </style>

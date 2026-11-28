@@ -121,4 +121,29 @@ describe('txAgentScreen', () => {
     // The overlay annotates the capture; without one it has nothing to annotate.
     expect(wrapper.find('.ov').exists()).toBe(false)
   })
+
+  it('opens an expanded modal viewer with a teach recording toggle when enabled', async () => {
+    const wrapper = mount(TxAgentScreen, {
+      props: { src: '/f.png', label: 'Agent', expandable: true, teachable: true },
+      attachTo: document.body,
+    })
+
+    await wrapper.find('.tx-bui-agent-screen__expand-btn').trigger('click')
+    expect(wrapper.emitted('expand')).toHaveLength(1)
+    const modal = document.body.querySelector('.tx-bui-agent-screen__modal')
+    expect(modal).not.toBeNull()
+
+    const teachBtn = modal!.querySelector<HTMLButtonElement>('.tx-bui-agent-screen__teach-btn')!
+    expect(teachBtn.textContent).toContain('Teach a task')
+    teachBtn.click()
+    await wrapper.vm.$nextTick()
+    expect(wrapper.emitted('update:teaching')?.[0]).toEqual([true])
+    expect(teachBtn.classList.contains('is-recording')).toBe(true)
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    await wrapper.vm.$nextTick()
+    expect(wrapper.emitted('close')).toHaveLength(1)
+    expect(document.body.querySelector('.tx-bui-agent-screen__modal')).toBeNull()
+    wrapper.unmount()
+  })
 })

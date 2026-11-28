@@ -97,8 +97,9 @@ code: |
 | `id` | `string` | required | Stable message key. |
 | `role` | `'user' \| 'assistant' \| 'system'` | required | Message role; sets the row alignment. |
 | `content` | `string` | required | Markdown or plain-text body. |
+| `name` | `string` | - | Optional sender name shown above the bubble and forwarded to `TxAvatar` initials. |
 | `createdAt` | `number` | - | Epoch timestamp, rendered as `HH:mm` after mount. |
-| `avatarUrl` | `string` | - | Avatar image URL. |
+| `avatarUrl` | `string` | - | Avatar image URL forwarded to `TxAvatar`. |
 | `attachments` | `ChatMessageAttachment[]` | - | Image attachments, rendered as thumbnails. |
 
 #### ChatMessageAttachment
@@ -117,6 +118,7 @@ code: |
 
 ## Technologies
 
+- Avatars are rendered with `TxAvatar` and message bubbles with `TxCard` (`clean` and assistant `hybrid` rows use plain borderless surfaces), with author/timestamp metadata placed cleanly above the card.
 - Source: `packages/tuffex/packages/components/src/chat/` (`TxChatList.vue`, `TxChatMessage.vue`, `types.ts`).
 
 <TuffDocSourceLink />

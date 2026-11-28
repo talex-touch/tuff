@@ -103,12 +103,14 @@ defineSlots<{
 }>()
 
 const rootRef = ref<HTMLElement | null>(null)
+const bodyRef = ref<HTMLElement | null>(null)
 const composerRef = ref<HTMLElement | null>(null)
 const inputRef = ref<HTMLTextAreaElement | null>(null)
 const measureRef = ref<HTMLElement | null>(null)
 const controlsRef = ref<HTMLElement | null>(null)
 const leadRef = ref<HTMLElement | null>(null)
 const trailRef = ref<HTMLElement | null>(null)
+const modelBtnRef = ref<HTMLButtonElement | null>(null)
 const sendRef = ref<HTMLButtonElement | null>(null)
 
 const uid = useId()
@@ -152,6 +154,32 @@ const plusOpen = ref(false)
 const modelOpen = ref(false)
 /** Explicit model highlight; `null` falls back to the selected row. */
 const modelActive = ref<number | null>(null)
+const modelMenuAnchorStyle = ref<Record<string, string>>({})
+
+watch(
+  [modelOpen, () => props.menuPlacement],
+  ([open, placement]) => {
+    if (!open) {
+      modelMenuAnchorStyle.value = {}
+      return
+    }
+    const body = bodyRef.value
+    const btn = modelBtnRef.value
+    if (!body || !btn)
+      return
+    const bodyRect = body.getBoundingClientRect()
+    const btnRect = btn.getBoundingClientRect()
+    if (bodyRect.width <= 0 || btnRect.width <= 0) {
+      modelMenuAnchorStyle.value = {}
+      return
+    }
+    const right = Math.max(0, Math.round(bodyRect.right - btnRect.right))
+    modelMenuAnchorStyle.value = placement === 'bottom'
+      ? { right: `${right}px`, top: `${Math.max(0, Math.round(btnRect.bottom - bodyRect.top))}px` }
+      : { right: `${right}px`, bottom: `${Math.max(0, Math.round(bodyRect.bottom - btnRect.top))}px` }
+  },
+  { flush: 'post' },
+)
 const composing = ref(false)
 const dragDepth = ref(0)
 const isDragover = computed(() => dragDepth.value > 0)
@@ -740,71 +768,6 @@ defineExpose({
     ]"
     tabindex="-1"
   >
-    <TxPromptBarMenu
-      v-if="menuOpen"
-      :id="tokenListboxId"
-      :rows="rows"
-      :active-index="activeIndex"
-      :engaged="engaged"
-      :selected-index="activeIndex"
-      :option-id="tokenOptionId"
-      :placement="menuPlacement"
-      :row-height="36"
-      :empty-text="menuEmptyText"
-      :footer-text="menuFooterText"
-      :label="menu === 'slash' ? commandsHintText : sourcesHintText"
-      @pick="pickRow"
-      @hover="tokenMenu.engage"
-      @leave="disengage"
-    >
-      <template #row="{ row }">
-        <span
-          v-if="menu === 'at' && $slots['source-icon']"
-          class="tx-bui-prompt-bar__row-icon"
-          aria-hidden="true"
-        >
-          <slot name="source-icon" :source="(row as PromptBarSource)" />
-        </span>
-        <span class="tx-bui-prompt-bar__row-name">{{ row.name }}</span>
-        <span class="tx-bui-prompt-bar__row-desc">{{ row.desc }}</span>
-        <span
-          v-if="menu === 'at' && (row as PromptBarSource).connectable"
-          class="tx-bui-prompt-bar__row-connect"
-          :class="{ 'is-connected': (row as PromptBarSource).connected }"
-        >
-          {{ (row as PromptBarSource).connected ? connectedText : connectText }}
-        </span>
-      </template>
-    </TxPromptBarMenu>
-
-    <TxPromptBarMenu
-      v-if="modelOpen"
-      :id="modelListboxId"
-      :rows="models"
-      :active-index="modelHighlightIndex"
-      :engaged="modelActive !== null"
-      :selected-index="selectedModelIndex"
-      :option-id="modelOptionId"
-      :placement="menuPlacement"
-      :row-height="30"
-      :width="176"
-      align="end"
-      :label="modelLabel"
-      @pick="selectModel"
-      @hover="modelActive = $event"
-      @leave="modelActive = null"
-    >
-      <template #row="{ row, selected }">
-        <span class="tx-bui-prompt-bar__row-name is-grow">{{ row.name }}</span>
-        <span v-if="row.tag" class="tx-bui-prompt-bar__row-tag">{{ row.tag }}</span>
-        <span class="tx-bui-prompt-bar__row-check" :class="{ 'is-on': selected }" aria-hidden="true">
-          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M20 6L9 17l-5-5" />
-          </svg>
-        </span>
-      </template>
-    </TxPromptBarMenu>
-
     <div
       v-if="slots.status || runStatus || contextUsage"
       class="tx-bui-prompt-bar__dock"
@@ -825,9 +788,76 @@ defineExpose({
       </slot>
     </div>
 
-    <div
-      ref="composerRef"
-      class="tx-bui-prompt-bar__composer"
+    <div ref="bodyRef" class="tx-bui-prompt-bar__body">
+      <TxPromptBarMenu
+        v-if="menuOpen"
+        :id="tokenListboxId"
+        :rows="rows"
+        :active-index="activeIndex"
+        :engaged="engaged"
+        :selected-index="activeIndex"
+        :option-id="tokenOptionId"
+        :placement="menuPlacement"
+        :row-height="36"
+        :empty-text="menuEmptyText"
+        :footer-text="menuFooterText"
+        :label="menu === 'slash' ? commandsHintText : sourcesHintText"
+        @pick="pickRow"
+        @hover="tokenMenu.engage"
+        @leave="disengage"
+      >
+        <template #row="{ row }">
+          <span
+            v-if="menu === 'at' && $slots['source-icon']"
+            class="tx-bui-prompt-bar__row-icon"
+            aria-hidden="true"
+          >
+            <slot name="source-icon" :source="(row as PromptBarSource)" />
+          </span>
+          <span class="tx-bui-prompt-bar__row-name">{{ row.name }}</span>
+          <span class="tx-bui-prompt-bar__row-desc">{{ row.desc }}</span>
+          <span
+            v-if="menu === 'at' && (row as PromptBarSource).connectable"
+            class="tx-bui-prompt-bar__row-connect"
+            :class="{ 'is-connected': (row as PromptBarSource).connected }"
+          >
+            {{ (row as PromptBarSource).connected ? connectedText : connectText }}
+          </span>
+        </template>
+      </TxPromptBarMenu>
+
+      <TxPromptBarMenu
+        v-if="modelOpen"
+        :id="modelListboxId"
+        :rows="models"
+        :active-index="modelHighlightIndex"
+        :engaged="modelActive !== null"
+        :selected-index="selectedModelIndex"
+        :option-id="modelOptionId"
+        :placement="menuPlacement"
+        :row-height="30"
+        :width="176"
+        :style="modelMenuAnchorStyle"
+        align="end"
+        :label="modelLabel"
+        @pick="selectModel"
+        @hover="modelActive = $event"
+        @leave="modelActive = null"
+      >
+        <template #row="{ row, selected }">
+          <span class="tx-bui-prompt-bar__row-name is-grow">{{ row.name }}</span>
+          <span v-if="row.tag" class="tx-bui-prompt-bar__row-tag">{{ row.tag }}</span>
+          <span class="tx-bui-prompt-bar__row-check" :class="{ 'is-on': selected }" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M20 6L9 17l-5-5" />
+            </svg>
+          </span>
+        </template>
+      </TxPromptBarMenu>
+
+      <div
+        ref="composerRef"
+        class="tx-bui-prompt-bar__composer"
       :class="{ 'is-relaxed': attachments.length > 0 || expanded || Boolean(slots.tray) }"
       @dragenter="onDragEnter"
       @dragover="onDragOver"
@@ -953,6 +983,7 @@ defineExpose({
           <slot name="model" :model="selectedModel" :open="modelOpen" :toggle="toggleModelMenu">
             <button
               v-if="models.length > 0"
+              ref="modelBtnRef"
               type="button"
               class="tx-bui-prompt-bar__model"
               :aria-label="modelLabel"
@@ -1042,6 +1073,7 @@ defineExpose({
       >
         <slot name="tray" />
       </div>
+      </div>
     </div>
   </div>
 </template>
@@ -1061,6 +1093,10 @@ defineExpose({
   // focused control (a click on bare chrome lands here too, not on <body>). It
   // is never a tab stop and draws no ring of its own.
   outline: none;
+
+  .tx-bui-prompt-bar__body {
+    position: relative;
+  }
 
   .tx-bui-prompt-bar__composer {
     // The card edge is a spread ring, not a border: it costs no layout, and

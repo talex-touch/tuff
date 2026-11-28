@@ -414,10 +414,18 @@ const allocationKey = ref('stable')
           <NuxtLink class="docs-gallery__label" :to="docPath('diff-table')">
             {{ cellLabel('DiffTable', '差异表') }}
           </NuxtLink>
-          <div class="docs-gallery__stage not-prose" style="--docs-gallery-specimen: 119px">
+          <div class="docs-gallery__stage not-prose" style="--docs-gallery-specimen: 224px">
             <ClientOnly>
               <div class="docs-gallery__block">
-                <TxDiffTable :columns="text.diffColumns" :rows="text.diffRows" play="auto" />
+                <TxDiffTable
+                  :title="localeKey === 'zh' ? '插件通道调整建议' : 'Proposed channel cleanup'"
+                  :hint="localeKey === 'zh' ? '点击变更行切换' : 'Click changed rows to toggle'"
+                  :columns="text.diffColumns"
+                  :rows="text.diffRows"
+                  play="settled"
+                  selectable
+                  footer
+                />
               </div>
               <template #fallback>
                 <div class="docs-gallery__ph" />

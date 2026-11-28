@@ -146,6 +146,10 @@ code: |
 | `lang` | `string` | `''` | Shiki language id; empty skips highlighting and never loads Shiki. |
 | `filename` | `string` | — | Header filename, in the mono face. |
 | `langLabel` | `string` | — | Language label beside the filename, e.g. `TypeScript`. |
+| `diff` | `CodeDiffRow[]` | — | Unified diff rows; pair with `diffToggle` to switch views in place. |
+| `diffToggle` | `boolean` | `false` | Shows a `Code / Diff` toggle in the header when both `code` and `diff` are provided. |
+| `defaultView` | `'code' \| 'diff'` | `'diff'` | Initial view when `diffToggle` is enabled. |
+| `diffLabel` | `string` | `'Diff'` | Label for the diff toggle button. |
 | `revealedLines` | `number` | — | Lines revealed, clamped to range; omit or pass `-1` for all. |
 | `streaming` | `boolean` | — | Streaming mode: the source is live; `false` shows the code at once and allows `replay()`. |
 | `reveal` | `'aurora' \| 'hue' \| 'blur' \| 'languid' \| 'none'` | `'aurora'` | Streaming mode: how a word enters. Code keeps its syntax color: `aurora` equals `blur`, `hue` is a fade. |

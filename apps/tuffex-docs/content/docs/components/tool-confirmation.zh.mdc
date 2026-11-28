@@ -12,7 +12,7 @@ verified: true
 ## 用法
 
 ### 基础
-`risk` 为 `write` 或 `execute` 时，卡片与允许按钮改用危险色。
+`risk` 为 `write` 时采用琥珀色警示色调与描边，`execute` 时改用危险色调；「本次会话内记住」采用与 TuffEx 一致的勾选框视觉。
 ::::TuffDemoWrapper{demo="ToolConfirmationToolConfirmationDemo" code-lang="vue"}
 ---
 code: |

@@ -22,12 +22,20 @@ export interface ToolChipRow {
   detail?: ToolChipDetailLine[]
 }
 
+export interface ToolChipDiffLine {
+  text: string
+  /** `add` renders green `+`, `del` renders red `−`; omit or `'context'` for context lines. */
+  kind?: 'context' | 'add' | 'del'
+}
+
 export interface ToolChipDiff {
   file: string
   /** Added line count, rendered `+N`. */
   add: number
   /** Removed line count, rendered `−N` (U+2212). Zero hides the counter. */
   del: number
+  /** Optional hunk lines shown in a floating diff preview popover on hover/click. */
+  lines?: ToolChipDiffLine[]
 }
 
 export interface ToolChipsProps {
@@ -69,6 +77,8 @@ export interface DiffChipsProps {
   moreLabelFormatter?: (count: number) => string
   /** Entrance stagger between chips, in ms. @default 80 */
   staggerStep?: number
+  /** Enables floating diff preview popover for diffs carrying `lines`. @default true */
+  preview?: boolean
 }
 
 export interface DiffChipsEmits {

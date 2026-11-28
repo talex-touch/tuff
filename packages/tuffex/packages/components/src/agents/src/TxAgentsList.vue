@@ -97,7 +97,7 @@ const groups = computed<AgentsListGroup<AgentItemProps>[]>(() => {
   </div>
 </template>
 
-<style scoped lang="scss">
+<style lang="scss">
 .tx-agents-list {
   width: 100%;
   height: 100%;

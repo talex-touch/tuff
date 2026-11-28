@@ -349,4 +349,171 @@ describe('txAutoSizer', () => {
 
     wrapper.unmount()
   })
+
+  it('keeps ResizeObserver alive after mount and releases WAAPI fill on finish across consecutive resizes', async () => {
+    const { useAutoResize } = await vi.importActual<
+      typeof import('../../../../utils/animation/auto-resize')
+    >('../../../../utils/animation/auto-resize')
+
+    type ObserverRecord = {
+      callback: () => void
+      observed: Element[]
+      disconnected: boolean
+    }
+    const observers: ObserverRecord[] = []
+    const origRO = globalThis.ResizeObserver
+    class MockResizeObserver {
+      private record: ObserverRecord
+      constructor(cb: () => void) {
+        this.record = { callback: cb, observed: [], disconnected: false }
+        observers.push(this.record)
+      }
+      observe(el: Element) {
+        this.record.observed.push(el)
+      }
+      unobserve() {}
+      disconnect() {
+        this.record.disconnected = true
+      }
+    }
+    globalThis.ResizeObserver = MockResizeObserver as unknown as typeof ResizeObserver
+
+    try {
+      let currentHeight = 160
+      const animations: Array<{
+        frames: Keyframe[]
+        cancelled: boolean
+        finish: () => void
+      }> = []
+
+      let api: any = null
+      const Host = defineComponent({
+        setup() {
+          const outer = ref<HTMLElement | null>(null)
+          const inner = ref<HTMLElement | null>(null)
+          api = useAutoResize(outer, inner, {
+            width: false,
+            height: true,
+            applyMode: 'waapi',
+            immediate: true,
+            rafBatch: false,
+            durationMs: 240,
+            clearStyleOnFinish: true,
+          })
+          return () => h('div', { ref: outer, class: 'outer' }, [h('div', { ref: inner, class: 'inner' })])
+        },
+      })
+
+      const wrapper = mount(Host)
+      const outerEl = wrapper.find('.outer').element as HTMLElement
+      const innerEl = wrapper.find('.inner').element as HTMLElement
+
+      Object.defineProperty(innerEl, 'getBoundingClientRect', {
+        configurable: true,
+        value: () => ({ width: 300, height: currentHeight, top: 0, left: 0, right: 300, bottom: currentHeight, x: 0, y: 0, toJSON() {} }),
+      })
+      ;(outerEl as any).animate = vi.fn((frames: Keyframe[]) => {
+        const listeners: Record<string, Array<() => void>> = {}
+        const rec = {
+          frames,
+          cancelled: false,
+          finish() {
+            for (const fn of [...(listeners.finish ?? [])])
+              fn()
+          },
+        }
+        animations.push(rec)
+        return {
+          addEventListener: (type: string, fn: () => void) => {
+            ;(listeners[type] ??= []).push(fn)
+          },
+          removeEventListener: (type: string, fn: () => void) => {
+            listeners[type] = (listeners[type] ?? []).filter(f => f !== fn)
+          },
+          cancel: vi.fn(() => {
+            rec.cancelled = true
+          }),
+        }
+      })
+
+      // Flush initial onMounted measureAndSync(false)
+      await wrapper.vm.$nextTick()
+      await wrapper.vm.$nextTick()
+
+      // Observer created on mount MUST still be connected (not killed by prev===null early return)
+      expect(observers).toHaveLength(1)
+      expect(observers[0]!.disconnected).toBe(false)
+      expect(api.size.value).toEqual({ width: 300, height: 160 })
+
+      // First resize: 160 -> 340 via ResizeObserver
+      currentHeight = 340
+      observers[0]!.callback()
+      await wrapper.vm.$nextTick()
+      await wrapper.vm.$nextTick()
+
+      expect(animations).toHaveLength(1)
+      expect(animations[0]!.frames).toEqual([{ height: '160px' }, { height: '340px' }])
+      expect(observers[0]!.disconnected).toBe(true)
+
+      // Finishing animation must clear inline height AND cancel WAAPI forwards fill AND resume a fresh observer
+      animations[0]!.finish()
+      expect(outerEl.style.height).toBe('')
+      expect(animations[0]!.cancelled).toBe(true)
+      expect(observers).toHaveLength(2)
+      expect(observers[1]!.disconnected).toBe(false)
+
+      // Second resize: 340 -> 190 via resumed ResizeObserver
+      currentHeight = 190
+      observers[1]!.callback()
+      await wrapper.vm.$nextTick()
+      await wrapper.vm.$nextTick()
+
+      expect(animations).toHaveLength(2)
+      expect(animations[1]!.frames).toEqual([{ height: '340px' }, { height: '190px' }])
+
+      // Unmounting mid-animation must NOT recreate ResizeObserver
+      wrapper.unmount()
+      expect(animations[1]!.cancelled).toBe(true)
+      expect(observers).toHaveLength(2)
+      expect(observers[1]!.disconnected).toBe(true)
+    }
+    finally {
+      globalThis.ResizeObserver = origRO
+    }
+  })
+
+  it('uses untransformed offsetHeight when ancestor scale transforms getBoundingClientRect', async () => {
+    const { useAutoResize } = await vi.importActual<
+      typeof import('../../../../utils/animation/auto-resize')
+    >('../../../../utils/animation/auto-resize')
+
+    let api: any = null
+    const Host = defineComponent({
+      setup() {
+        const outer = ref<HTMLElement | null>(null)
+        const inner = ref<HTMLElement | null>(null)
+        api = useAutoResize(outer, inner, {
+          width: false,
+          height: true,
+          styleTarget: 'inner',
+          immediate: false,
+          rafBatch: false,
+          applyStyle: false,
+        })
+        return () => h('div', { ref: outer }, [h('div', { ref: inner, class: 'scaled' })])
+      },
+    })
+
+    const wrapper = mount(Host)
+    const innerEl = wrapper.find('.scaled').element as HTMLElement
+    Object.defineProperty(innerEl, 'offsetWidth', { configurable: true, value: 300 })
+    Object.defineProperty(innerEl, 'offsetHeight', { configurable: true, value: 200 })
+    Object.defineProperty(innerEl, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({ width: 264, height: 176, top: 0, left: 0, right: 264, bottom: 176, x: 0, y: 0, toJSON() {} }),
+    })
+
+    expect(await api.measure()).toEqual({ width: 300, height: 200 })
+    wrapper.unmount()
+  })
 })

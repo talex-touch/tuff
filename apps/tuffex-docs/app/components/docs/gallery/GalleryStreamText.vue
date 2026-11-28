@@ -1,54 +1,130 @@
 <script setup lang="ts">
-import { onBeforeUnmount, ref } from 'vue'
-import { useGalleryLoop } from './use-gallery-loop'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   text: string
-}>()
+  locale?: string
+}>(), {
+  locale: 'zh',
+})
 
-// The resting state is the finished sentence, which is also all a reader who
-// asks for reduced motion sees.
+const zh = computed(() => props.locale.startsWith('zh'))
 const content = ref(props.text)
 const streaming = ref(false)
 let timer: ReturnType<typeof setTimeout> | undefined
 
-// Uneven bursts, as a model sends them; the component turns them into a steady
-// word-by-word flow.
-function play() {
+watch(
+  () => props.text,
+  (next) => {
+    clearTimeout(timer)
+    streaming.value = false
+    content.value = next
+  },
+)
+
+function replay() {
   clearTimeout(timer)
   const source = props.text
-  let index = 0
-  content.value = ''
+  if (!source)
+    return
+  let index = Math.min(source.length, 4)
+  content.value = source.slice(0, index)
   streaming.value = true
   const tick = () => {
-    index = Math.min(source.length, index + 2 + Math.floor(Math.random() * 5))
+    index = Math.min(source.length, index + 3 + Math.floor(Math.random() * 4))
     content.value = source.slice(0, index)
     if (index >= source.length) {
       streaming.value = false
       return
     }
-    timer = setTimeout(tick, 40 + Math.random() * 60)
+    timer = setTimeout(tick, 32 + Math.random() * 38)
   }
-  timer = setTimeout(tick, 120)
+  timer = setTimeout(tick, 50)
 }
 
-useGalleryLoop(play, 6500, 500)
 onBeforeUnmount(() => clearTimeout(timer))
 </script>
 
 <template>
-  <p class="docs-gallery__stream-text">
-    <TxStreamText :content="content" :streaming="streaming" />
-  </p>
+  <div class="docs-gallery__stream-card docs-gallery__stream-text-card">
+    <div class="docs-gallery__stream-head">
+      <span class="docs-gallery__stream-status" :class="{ 'is-live': streaming }">
+        <TxStreamCaret state="streaming" />
+        <span>{{ streaming ? (zh ? '逐词流出' : 'Streaming') : (zh ? '含流式光标' : 'With caret') }}</span>
+      </span>
+      <button type="button" class="docs-gallery__stream-btn" @click="replay">
+        <span class="i-carbon-reset" aria-hidden="true" />
+        <span>{{ zh ? '重播' : 'Replay' }}</span>
+      </button>
+    </div>
+    <p class="docs-gallery__stream-text">
+      <TxStreamText :content="content" :streaming="streaming" :locale="locale" />
+    </p>
+  </div>
 </template>
 
 <style scoped>
+.docs-gallery__stream-card {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 21rem;
+  border-radius: 14px;
+  background: var(--tx-bg-color, #fff);
+  box-shadow: inset 0 0 0 1px var(--docs-gallery-line);
+  overflow: hidden;
+}
+
+.docs-gallery__stream-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px 6px 12px;
+  border-bottom: 1px solid var(--docs-gallery-line);
+  background: color-mix(in srgb, var(--docs-inline-code-bg) 56%, transparent);
+}
+
+.docs-gallery__stream-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--docs-muted);
+}
+
+.docs-gallery__stream-status.is-live {
+  color: var(--tx-color-primary);
+}
+
+.docs-gallery__stream-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid var(--docs-gallery-line);
+  border-radius: 7px;
+  background: var(--tx-bg-color, transparent);
+  color: var(--docs-muted);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 0.16s ease, border-color 0.16s ease;
+}
+
+.docs-gallery__stream-btn:hover {
+  border-color: color-mix(in srgb, var(--docs-accent) 45%, transparent);
+  color: var(--docs-accent);
+}
+
 .docs-gallery__stream-text {
-  max-width: 17rem;
-  min-height: 5.1em;
+  min-height: 4.8em;
   margin: 0;
+  padding: 12px 13px 13px;
   font-size: 13px;
-  line-height: 1.7;
+  line-height: 1.68;
   color: var(--tx-text-color-primary);
 }
 </style>

@@ -1,6 +1,10 @@
 # TouchX UI 更新日志
 
-## [Unreleased]
+## [0.9.7] - 2026-11-28
+
+### 📦 组件变动 (Components)
+
+- **更新组件**: `agent-screen`, `agent-trace`, `agents`, `ai-elements`, `approval-card`, `attachment-tray`, `auto-sizer`, `avatar`, `button`, `card-spread`, `carousel-3d`, `cell-link`, `chain-of-thought`, `chat`, `choice-card`, `code-editor`, `code-stream`, `command-palette`, `context-cards`, `fine-tune-card`, `icon`, `icon-chip`, `insight-cards`, `markdown-editor`, `markdown-view`, `message-actions`, `motion-button`, `motion-transition`, `prompt-bar`, `reasoning-disclosure`, `recommendation-card`, `search-panel`, `sidebar-nav`, `sources`, `stream-markdown`, `suggestion-chips`, `task-rows`, `tool-call-card`, `tool-chips`, `tool-confirmation`, `version-capsule`, `working-indicator`
 
 ### ⚠️ 破坏性变更 (Breaking Changes)
 
@@ -8,9 +12,16 @@
 
 ### ✨ 组件增强
 
-- `TxMotionButton` 新增 `count`（经 `TxTextMorph` 数字位平滑滚动）与 `burst`（选中激活径向微粒子爆发）属性，并优化选中态色温层次与边框细腻度。
-- `TxCardSpread` 与 `TxCarousel3D` 优化选中态高光与层级阴影，替换刺眼纯蓝粗框与裸按钮样式；`TxCarousel3D` Time Machine 时间轴滑块升级为 `TxSlider`。
-- 修复 `TxMotionTransition` 在 `mode="card"` 下子层背景遮挡父层内边框的问题，并增强门板与帘幕在浅色主题下的对比度。
+- **AI 套件与原语收敛**：统一 `TxChainOfThought`、`TxToolCallCard`、`TxAgentTrace`、`TxToolConfirmation`、`TxFineTuneCard`、`TxContextCards`、`TxChoiceCard`、`TxChatMessage`、`TxAttachmentChip` 等 AI 组件到底层 `TxCard` / `TxAvatar` / `TxIconChip` / `TxSpinner` / `TxIcon` / `TxButton` / `TxTag` / `TxFlatSelect` / `TxFlatRadio` 原语，并严格对齐三层同心圆角。
+- **AI 交互扩展**：`TxDiffChips` 新增差异预览浮层、`TxSidebarNav` 支持折叠导航轨与分组、`TxAgentScreen` 支持展开模态框与示教开关、`TxCodeStream` 支持 Code / Diff 视图切换、`TxIcon` 内置 `lightbulb` / `wrench` / `clock` / `refresh` 图标。
+- **流式 Markdown 体验**：`TxStreamMarkdown` 优化列表项增量淡入与行尾光标跟随（修复 `marked` 尾随换行破坏前缀增量匹配、保留未完成块/行内语法缓冲并支持平滑光标滑移），收敛 `TxCodeBlock` 单层边框与圆角内切。
+- **Motion 套件收敛**：`TxMotionButton` 新增 `count`（经 `TxTextMorph` 数字位平滑滚动）与 `burst`（选中激活径向微粒子爆发）属性；`TxCardSpread` 与 `TxCarousel3D` 优化选中态高光与层级阴影，`TxCarousel3D` 时间轴滑块升级为 `TxSlider`。
+
+### 🐛 组件修复
+
+- **自动尺寸与版本胶囊高度切换**：修复 `useAutoResize`（`TxAutoSizer`）在首次 `immediate` 测量时误断开且未置空 `ResizeObserver` 句柄、WAAPI `fill: 'forwards'` 完成后未调用 `cancel()` 导致高度永久锁死、以及浮层打开缩放动画期间 `getBoundingClientRect()` 读数失真的问题；`TxVersionCapsule` 切换下载/历史面板与筛选标签时高度自动平滑适配。
+- **浮层与列表排版**：修复 `TxPromptBar` 模型选择菜单锚定与定位问题；修复 `TxSources` 列表在宿主重置 `li` 外边距时行距塌陷与图标对齐问题；修复 `TxMotionTransition` 在 `mode="card"` 下子层背景遮挡父层内边框的问题。
+- **安全加固**：增强 `TxCodeBlock` 沙箱预览 CSP 隔离、`TxStreamMarkdown` SSR DOMPurify 守卫，以及 `TxAvatar` SVG 编解码、`TxCodeEditor`、`TxCommandPalette`、`TxMarkdownView` 与 `TxSearchPanel` 的安全边界。
 
 ## [0.9.6] - 2026-11-27
 

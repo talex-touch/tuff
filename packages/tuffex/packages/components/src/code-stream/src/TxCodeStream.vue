@@ -20,7 +20,11 @@ import { codeWordEnds } from './units'
 
 defineOptions({ name: 'TxCodeStream' })
 
-const props = withDefaults(defineProps<CodeStreamProps>(), {
+const props = withDefaults(defineProps<CodeStreamProps & {
+  diffToggle?: boolean
+  defaultView?: 'code' | 'diff'
+  diffLabel?: string
+}>(), {
   lang: '',
   caret: true,
   lineNumbers: true,
@@ -35,6 +39,9 @@ const props = withDefaults(defineProps<CodeStreamProps>(), {
   revealedLines: undefined,
   minHeight: undefined,
   diff: undefined,
+  diffToggle: false,
+  defaultView: 'diff',
+  diffLabel: 'Diff',
   // Vue casts an absent boolean prop to `false`; whether `streaming` is set at
   // all is what selects streaming mode.
   streaming: undefined,
@@ -77,10 +84,17 @@ const resolvedTheme = useAutoTheme(() => props.theme)
 
 /**
  * Diff mode is entered by supplying rows, not by a flag: an empty `diff` array
- * is a diff with nothing in it, which is a listing.
+ * is a diff with nothing in it, which is a listing. When `diffToggle` is also
+ * set, the reader can flip between full code and the unified diff in place.
  */
 const diffRows = computed(() => props.diff ?? [])
-const isDiff = computed(() => diffRows.value.length > 0)
+const hasDiffData = computed(() => diffRows.value.length > 0)
+const viewMode = ref<'code' | 'diff'>(props.defaultView)
+watch(() => props.defaultView, (next) => {
+  viewMode.value = next
+})
+const canToggleDiff = computed(() => props.diffToggle && hasDiffData.value && !!props.code.trim())
+const isDiff = computed(() => hasDiffData.value && (!canToggleDiff.value || viewMode.value === 'diff'))
 
 /**
  * Streaming mode: `streaming` is set (either value) and nothing else owns the
@@ -644,7 +658,7 @@ function handleRun(): void {
 }
 
 const hasHeader = computed(
-  () => !!(props.filename || props.langLabel || props.copyable || isDiff.value || canPreview.value || canRun.value || slots.header || slots.actions),
+  () => !!(props.filename || props.langLabel || props.copyable || isDiff.value || canToggleDiff.value || canPreview.value || canRun.value || slots.header || slots.actions),
 )
 
 /**
@@ -688,6 +702,26 @@ const rootStyle = computed(() => (live.value ? { '--tx-stream-reveal-duration': 
         <span v-if="isDiff" class="tx-bui-code-stream__tally">
           <span v-if="diffTally.added" class="tx-bui-code-stream__added">+{{ diffTally.added }}</span>
           <span v-if="diffTally.removed" class="tx-bui-code-stream__removed">−{{ diffTally.removed }}</span>
+        </span>
+        <span v-if="canToggleDiff" class="tx-bui-code-stream__mode-switch" role="group">
+          <button
+            type="button"
+            class="tx-bui-code-stream__mode-btn"
+            :class="{ 'is-active': viewMode === 'code' }"
+            :aria-pressed="viewMode === 'code'"
+            @click="viewMode = 'code'"
+          >
+            {{ codeLabel }}
+          </button>
+          <button
+            type="button"
+            class="tx-bui-code-stream__mode-btn"
+            :class="{ 'is-active': viewMode === 'diff' }"
+            :aria-pressed="viewMode === 'diff'"
+            @click="viewMode = 'diff'"
+          >
+            {{ diffLabel }}
+          </button>
         </span>
         <slot name="actions" />
         <button
@@ -1064,6 +1098,37 @@ const rootStyle = computed(() => (live.value ? { '--tx-stream-reveal-duration': 
     stroke-width: 2;
     stroke-linecap: round;
     stroke-linejoin: round;
+  }
+
+  .tx-bui-code-stream__mode-switch {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px;
+    border-radius: var(--tx-bui-radius-chip, 6px);
+    background: var(--tx-bui-inset, #f7f8f9);
+    box-shadow: var(--tx-bui-shadow-hairline, 0 0 0 1px #ecedef);
+  }
+
+  .tx-bui-code-stream__mode-btn {
+    height: 20px;
+    padding: 0 7px;
+    border: 0;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--tx-bui-ink-3, #9a9da3);
+    font-size: 11px;
+    font-weight: var(--tx-font-weight-medium, 500);
+    cursor: pointer;
+
+    &:hover {
+      color: var(--tx-bui-ink, #1f2124);
+    }
+
+    &.is-active {
+      background: var(--tx-bui-surface, #fff);
+      box-shadow: var(--tx-bui-shadow-hairline, 0 0 0 1px #ecedef);
+      color: var(--tx-bui-ink, #1f2124);
+    }
   }
 
   // The copy control is TxCopyButton — clipboard write, execCommand fallback

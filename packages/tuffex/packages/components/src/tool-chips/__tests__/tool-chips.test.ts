@@ -190,4 +190,32 @@ describe('txDiffChips', () => {
     expect(wrapper.attributes('style')).toContain('--tx-bui-diff-chips-step: 120ms')
     expect(wrapper.findAll('.tx-bui-diff-chips__chip')[1]!.attributes('style')).toContain('--tx-bui-diff-chips-index: 1')
   })
+
+  it('opens and closes a diff preview popover when a chip carries lines', async () => {
+    const withLines: ToolChipDiff[] = [
+      {
+        file: 'flavors.css',
+        add: 2,
+        del: 1,
+        lines: [
+          { text: '.scoop-card {' },
+          { kind: 'del', text: '  gap: 14px;' },
+          { kind: 'add', text: '  gap: 12px;' },
+        ],
+      },
+    ]
+    const wrapper = mount(TxDiffChips, { props: { diffs: withLines }, attachTo: document.body })
+
+    await wrapper.find('.tx-bui-diff-chips__chip').trigger('click')
+    const popover = document.body.querySelector('.tx-bui-diff-chips__popover')
+    expect(popover).not.toBeNull()
+    expect(popover?.textContent).toContain('flavors.css')
+    expect(popover?.querySelector('.is-del')?.textContent).toContain('gap: 14px;')
+    expect(popover?.querySelector('.is-add')?.textContent).toContain('gap: 12px;')
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    await wrapper.vm.$nextTick()
+    expect(document.body.querySelector('.tx-bui-diff-chips__popover')).toBeNull()
+    wrapper.unmount()
+  })
 })

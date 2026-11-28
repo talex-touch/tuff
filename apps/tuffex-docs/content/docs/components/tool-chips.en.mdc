@@ -130,6 +130,7 @@ const diffs = [
 | `moreCount` | `number` | `0` | Diffs not listed; above zero, renders `+N more`. |
 | `moreLabelFormatter` | `(count: number) => string` | `` n => `+${n} more` `` | Text of the overflow control. |
 | `staggerStep` | `number` | `80` | Entrance stagger between chips, in ms. |
+| `preview` | `boolean` | `true` | Enables floating diff preview popover for chips carrying `lines`. |
 
 #### Events
 
@@ -165,6 +166,7 @@ const diffs = [
 | `file` | `string` | File name. |
 | `add` | `number` | Added lines, shown as `+N`. |
 | `del` | `number` | Removed lines, shown as `−N` with a U+2212 minus; hidden when zero. |
+| `lines` | `ToolChipDiffLine[]` | Optional hunk lines displayed in a floating diff preview popover on hover or click. |
 
 ## Overview
 

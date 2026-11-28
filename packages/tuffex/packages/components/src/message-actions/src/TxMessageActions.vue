@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { nextTick, onMounted, onUpdated, ref } from 'vue'
+import { nextTick, onBeforeUnmount, onMounted, onUpdated, ref } from 'vue'
 import { useMorphWindow } from '../../../../utils/use-morph-window'
 
 defineOptions({ name: 'TxMessageActions' })
@@ -130,8 +130,28 @@ async function copy(): Promise<void> {
   }, 1200)
 }
 
-// Copied and speaking ease the button's ink; a hover repaints at once.
-const morphing = useMorphWindow(() => [copied.value, props.speakState], 150)
+const regenerating = ref(false)
+const regenerateSpinKey = ref(0)
+let regenerateTimer: ReturnType<typeof setTimeout> | undefined
+
+function triggerRegenerate(): void {
+  emit('regenerate')
+  regenerateSpinKey.value += 1
+  regenerating.value = true
+  clearTimeout(regenerateTimer)
+  regenerateTimer = setTimeout(() => {
+    regenerating.value = false
+    regenerateTimer = undefined
+  }, 520)
+}
+
+onBeforeUnmount(() => {
+  clearTimeout(copiedTimer)
+  clearTimeout(regenerateTimer)
+})
+
+// Copied, speaking, and regenerating ease the button's ink; a hover repaints at once.
+const morphing = useMorphWindow(() => [copied.value, props.speakState, regenerating.value], 150)
 </script>
 
 <template>
@@ -187,11 +207,21 @@ const morphing = useMorphWindow(() => [copied.value, props.speakState], 150)
       v-if="regenerable"
       type="button"
       class="tx-message-actions__btn"
+      :class="{ 'is-regenerating': regenerating }"
       :title="regenerateLabel"
       :aria-label="regenerateLabel"
-      @click="emit('regenerate')"
+      @click="triggerRegenerate"
     >
-      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+      <svg
+        :key="regenerateSpinKey"
+        :class="{ 'tx-message-actions__regen-spin': regenerating }"
+        viewBox="0 0 24 24"
+        width="14"
+        height="14"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+      >
         <path d="M20 11a8 8 0 1 0-2.3 6.3" />
         <path d="M20 5v6h-6" />
       </svg>
@@ -223,10 +253,12 @@ const morphing = useMorphWindow(() => [copied.value, props.speakState], 150)
     border-radius: 7px;
     background: transparent;
     color: var(--tx-text-color-secondary, #6b7280);
+    outline: none;
     cursor: pointer;
 
-    &:hover {
-      background: color-mix(in srgb, var(--tx-text-color-secondary, #6b7280) 10%, transparent);
+    &:hover,
+    &:focus-visible {
+      background: color-mix(in srgb, var(--tx-text-color-secondary, #6b7280) 12%, transparent);
       color: var(--tx-text-color-primary, #111827);
     }
 
@@ -236,6 +268,10 @@ const morphing = useMorphWindow(() => [copied.value, props.speakState], 150)
 
     &.is-speaking {
       color: var(--tx-color-primary, #409eff);
+    }
+
+    &.is-regenerating {
+      color: var(--tx-text-color-primary, #111827);
     }
   }
 
@@ -251,6 +287,10 @@ const morphing = useMorphWindow(() => [copied.value, props.speakState], 150)
 
   .tx-message-actions__spin {
     animation: tx-message-actions-spin 0.9s linear infinite;
+  }
+
+  .tx-message-actions__regen-spin {
+    animation: tx-message-actions-spin 0.5s cubic-bezier(0.22, 1, 0.36, 1) 1;
   }
 }
 
@@ -279,7 +319,8 @@ const morphing = useMorphWindow(() => [copied.value, props.speakState], 150)
     animation: none;
   }
 
-  .tx-message-actions .tx-message-actions__spin {
+  .tx-message-actions .tx-message-actions__spin,
+  .tx-message-actions .tx-message-actions__regen-spin {
     animation: none;
   }
 }

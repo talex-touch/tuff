@@ -44,11 +44,21 @@ describe('txMessageActions', () => {
     expect(wrapper.emitted('copy')).toEqual([['hi']])
   })
 
-  it('emits regenerate', async () => {
+  it('emits regenerate and plays a one-turn spin feedback state', async () => {
+    vi.useFakeTimers()
     stubClipboard()
     const wrapper = mount(TxMessageActions, { props: { regenerable: true } })
-    await wrapper.find('button').trigger('click')
+    const btn = wrapper.find('button')
+
+    await btn.trigger('click')
     expect(wrapper.emitted('regenerate')).toHaveLength(1)
+    expect(btn.classes()).toContain('is-regenerating')
+    expect(wrapper.find('.tx-message-actions__regen-spin').exists()).toBe(true)
+
+    vi.advanceTimersByTime(600)
+    await nextTick()
+    expect(btn.classes()).not.toContain('is-regenerating')
+    expect(wrapper.find('.tx-message-actions__regen-spin').exists()).toBe(false)
   })
 
   it('reads aloud with toggle semantics across its three states', async () => {

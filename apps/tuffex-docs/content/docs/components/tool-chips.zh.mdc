@@ -130,6 +130,7 @@ const diffs = [
 | `moreCount` | `number` | `0` | 未列出的数量；大于 0 时渲染 `+N more`。 |
 | `moreLabelFormatter` | `(count: number) => string` | `` n => `+${n} more` `` | 溢出控件的文案。 |
 | `staggerStep` | `number` | `80` | chip 入场的错峰间隔（ms）。 |
+| `preview` | `boolean` | `true` | 为包含 `lines` 的差分 chip 启用悬停/点击代码预览浮层。 |
 
 #### 事件
 
@@ -165,6 +166,7 @@ const diffs = [
 | `file` | `string` | 文件名。 |
 | `add` | `number` | 新增行数，显示为 `+N`。 |
 | `del` | `number` | 删除行数，显示为 `−N`（U+2212 减号）；为 0 时不显示。 |
+| `lines` | `ToolChipDiffLine[]` | 可选代码片段行；悬停或点击 chip 时弹出增删对比浮层预览。 |
 
 ## 概述
 

@@ -117,9 +117,42 @@ const copy = computed(() => {
 })
 
 const DIFFS = [
-  { file: 'flavors.css', add: 13, del: 0 },
-  { file: 'ChurnSchedule.tsx', add: 74, del: 41 },
-  { file: 'menu.ts', add: 8, del: 2 },
+  {
+    file: 'flavors.css',
+    add: 13,
+    del: 0,
+    lines: [
+      { text: '.scoop-card {' },
+      { kind: 'del' as const, text: '  gap: 14px;' },
+      { kind: 'add' as const, text: '  gap: 12px;' },
+      { kind: 'add' as const, text: '  container-type: inline-size;' },
+      { text: '}' },
+    ],
+  },
+  {
+    file: 'ChurnSchedule.tsx',
+    add: 74,
+    del: 41,
+    lines: [
+      { text: 'export function pickWindow(slots: Slot[]) {' },
+      { kind: 'del' as const, text: '  return slots[0]' },
+      { kind: 'add' as const, text: '  const windows = slots.filter(s => s.temp <= -12)' },
+      { kind: 'add' as const, text: '  return schedule(windows, { hero: \'pistachio\' })' },
+      { text: '}' },
+    ],
+  },
+  {
+    file: 'menu.ts',
+    add: 8,
+    del: 2,
+    lines: [
+      { text: 'export const FEATURED = [' },
+      { kind: 'del' as const, text: '  \'mint-chip\',' },
+      { kind: 'add' as const, text: '  \'pistachio\',' },
+      { kind: 'add' as const, text: '  \'black-sesame\',' },
+      { text: ']' },
+    ],
+  },
 ]
 
 const step = ref(0)

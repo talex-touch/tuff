@@ -153,14 +153,14 @@ describe('txFineTuneCard', () => {
 
     expect(wrapper.find('.tx-flat-radio').classes()).toContain('is-disabled')
     expect(wrapper.findAll('.tx-bui-scrub-field')[0]!.classes()).toContain('is-disabled')
-    expect(wrapper.find('.tx-bui-chip-select__trigger').attributes('disabled')).toBeDefined()
+    expect(wrapper.find('.tx-flat-select__trigger').attributes('disabled')).toBeDefined()
   })
 
   it('picks a type through the footer select', async () => {
     const wrapper = mountCard()
 
-    await wrapper.find('.tx-bui-chip-select__trigger').trigger('click')
-    await wrapper.findAll('.tx-bui-chip-select__option')[1]!.trigger('click')
+    await wrapper.find('.tx-flat-select__trigger').trigger('click')
+    await wrapper.findAll('.tx-flat-select-item')[1]!.trigger('click')
 
     expect(wrapper.emitted('update:values')?.[0]).toEqual([{ ...DEFAULTS, type: 'classic' }])
   })

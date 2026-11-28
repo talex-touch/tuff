@@ -363,9 +363,9 @@ function handleRun(): void {
 
 <style lang="scss">
 .tx-code-block {
-  margin: 16px 0;
+  margin: 12px 0;
   border: 1px solid var(--tx-border-color-light, #e4e7ed);
-  border-radius: 8px;
+  border-radius: 12px;
   background: var(--tx-fill-color-darker, #f6f8fa);
   overflow: hidden;
 
@@ -373,7 +373,7 @@ function handleRun(): void {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 4px 8px 4px 14px;
+    padding: 4px 4px 4px 12px;
     border-bottom: 1px solid var(--tx-border-color-light, #e4e7ed);
   }
 
@@ -504,7 +504,7 @@ function handleRun(): void {
 
   .tx-code-block__body pre,
   pre.tx-code-block__plain {
-    padding: 14px 16px;
+    padding: 12px 14px;
     overflow-x: auto;
 
     code {
@@ -512,7 +512,7 @@ function handleRun(): void {
       padding: 0;
       border-radius: 0;
       background: transparent;
-      font-size: 13px;
+      font-size: 12.5px;
       line-height: 1.6;
       white-space: pre;
     }

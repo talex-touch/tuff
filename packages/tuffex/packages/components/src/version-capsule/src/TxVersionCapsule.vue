@@ -30,6 +30,7 @@ const emit = defineEmits<{
 
 const downloadRef = ref<HTMLButtonElement | null>(null)
 const historyRef = ref<HTMLButtonElement | null>(null)
+const autoSizerRef = ref<InstanceType<typeof TxAutoSizer> | null>(null)
 const internalPanel = ref<TxVersionCapsulePanel>(null)
 const slideDirection = ref<'none' | 'forward' | 'backward'>('none')
 
@@ -129,6 +130,11 @@ watch(activePanel, (next, prev) => {
     slideDirection.value = 'backward'
   else
     slideDirection.value = 'none'
+
+  // Re-trigger auto-sizing when switching panels while the popover stays open so
+  // rapid toggles mid-animation immediately reverse from the live height.
+  if (prev && next && prev !== next)
+    void autoSizerRef.value?.refresh()
 })
 
 defineExpose({ close, openDownload, openHistory, downloadRef, historyRef })
@@ -232,6 +238,7 @@ defineExpose({ close, openDownload, openHistory, downloadRef, historyRef })
         :class="{ 'has-drilldown': hasBothSlots }"
       >
         <TxAutoSizer
+          ref="autoSizerRef"
           :width="false"
           :height="true"
           :duration-ms="240"

@@ -39,6 +39,30 @@ describe('txAttachmentTray', () => {
     expect(chip.exists()).toBe(true)
     expect(chip.text()).toContain('notes.pdf')
     expect(chip.text()).toContain('120.0 KB')
+    const badge = chip.find('.tx-bui-icon-chip')
+    expect(badge.exists()).toBe(true)
+    expect(badge.text()).toBe('PDF')
+    expect(badge.classes()).toContain('is-red')
+  })
+
+  it('maps file formats onto TxIconChip tones and falls back to a file glyph without an extension', () => {
+    const wrapper = mount(TxAttachmentTray, {
+      props: {
+        attachments: [
+          { kind: 'file', id: 'f-csv', name: 'metrics.csv', size: 512 },
+          { kind: 'file', id: 'f-zip', name: 'bundle.zip', size: 2048 },
+          { kind: 'file', id: 'f-raw', name: 'README', size: 256 },
+        ],
+      },
+    })
+
+    const chips = wrapper.findAll('.tx-attachment-chip')
+    expect(chips[0]!.find('.tx-bui-icon-chip').text()).toBe('CSV')
+    expect(chips[0]!.find('.tx-bui-icon-chip').classes()).toContain('is-green')
+    expect(chips[1]!.find('.tx-bui-icon-chip').text()).toBe('ZIP')
+    expect(chips[1]!.find('.tx-bui-icon-chip').classes()).toContain('is-orange')
+    expect(chips[2]!.find('.tx-bui-icon-chip').exists()).toBe(false)
+    expect(chips[2]!.find('.tx-attachment-chip__icon svg').exists()).toBe(true)
   })
 
   it('shows remove affordances only in removable mode', async () => {

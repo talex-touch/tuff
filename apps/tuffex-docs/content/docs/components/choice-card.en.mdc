@@ -23,7 +23,9 @@ code: |
 code: |
   import { TxChoiceCard } from '@talex-touch/tuffex/choice-card'
   import '@talex-touch/tuffex/choice-card/style.css'
-  // It renders TxIcon and TxSkeleton, whose sheets are separate
+  // Outer surface uses TxCard and inner actions use TxButton alongside TxIcon and TxSkeleton
+  import '@talex-touch/tuffex/card/style.css'
+  import '@talex-touch/tuffex/button/style.css'
   import '@talex-touch/tuffex/icon/style.css'
   import '@talex-touch/tuffex/skeleton/style.css'
   import '@talex-touch/tuffex/base.css' // tokens + resets, once per app
@@ -227,8 +229,8 @@ code: |
 
 | Variable | Description |
 |----------|-------------|
-| `--tx-choice-card-pad` | Inset between the card edge and the rows, default `8px`; the card radius grows with it. |
-| `--tx-choice-card-option-radius` | Row corner radius, default `10px`; the card radius adds the inset, keeping corners concentric. |
+| `--tx-choice-card-pad` | Inset between the card edge and the rows, default `12px` (matching `TxCard`'s default padding); the card radius grows with it. |
+| `--tx-choice-card-option-radius` | Row corner radius, default `12px`; the card radius adds the inset, keeping corners concentric. |
 | `--tx-choice-card-option-pad-x` | Horizontal inset of the rows and the title, default `12px`. |
 | `--tx-choice-card-label-line` | Label line height and icon box height, default `20px`. |
 | `--tx-choice-card-desc-line` | Description line height, default `18px`. |

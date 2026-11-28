@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { AiSourceItem } from '../../ai-elements/src/types'
 import { computed, ref, useId } from 'vue'
+import { TxIcon } from '../../icon'
 
 defineOptions({ name: 'TxSources' })
 
@@ -94,9 +95,7 @@ function onOpen(event: MouseEvent, source: AiSourceItem): void {
       </span>
       <span class="tx-sources__label">{{ headerLabel }}</span>
       <span class="tx-sources__chevron" :class="{ 'is-open': open }" aria-hidden="true">
-        <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="m6 9 6 6 6-6" />
-        </svg>
+        <TxIcon name="chevron-down" :size="12" />
       </span>
     </button>
 
@@ -107,27 +106,29 @@ function onOpen(event: MouseEvent, source: AiSourceItem): void {
       :class="{ 'is-open': open }"
       :inert="open ? undefined : true"
     >
-      <ol class="tx-sources__list">
-        <li v-for="(source, index) in sources" :key="source.id" class="tx-sources__item">
-          <a
-            class="tx-sources__link"
-            :href="source.url"
-            @click="onOpen($event, source)"
-          >
-            <span class="tx-sources__ordinal">{{ index + 1 }}</span>
-            <img
-              v-if="source.favicon && !failedIcons.has(source.id)"
-              class="tx-sources__favicon"
-              :src="source.favicon"
-              alt=""
-              aria-hidden="true"
-              @error="markFailed(source.id)"
+      <div class="tx-sources__collapse-inner">
+        <ol class="tx-sources__list">
+          <li v-for="(source, index) in sources" :key="source.id" class="tx-sources__item">
+            <a
+              class="tx-sources__link"
+              :href="source.url"
+              @click="onOpen($event, source)"
             >
-            <span class="tx-sources__title">{{ source.title || domainOf(source) }}</span>
-            <span class="tx-sources__domain">{{ domainOf(source) }}</span>
-          </a>
-        </li>
-      </ol>
+              <span class="tx-sources__ordinal">{{ index + 1 }}</span>
+              <img
+                v-if="source.favicon && !failedIcons.has(source.id)"
+                class="tx-sources__favicon"
+                :src="source.favicon"
+                alt=""
+                aria-hidden="true"
+                @error="markFailed(source.id)"
+              >
+              <span class="tx-sources__title">{{ source.title || domainOf(source) }}</span>
+              <span class="tx-sources__domain">{{ domainOf(source) }}</span>
+            </a>
+          </li>
+        </ol>
+      </div>
     </div>
   </div>
 </template>
@@ -140,12 +141,19 @@ function onOpen(event: MouseEvent, source: AiSourceItem): void {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    padding: 3px 0;
+    padding: 3px 6px;
+    margin-left: -6px;
     border: none;
+    border-radius: 7px;
     background: transparent;
-    color: var(--tx-text-color-secondary, #6b7280);
+    color: var(--tx-text-color-regular, #606266);
     font: inherit;
     cursor: pointer;
+
+    &:hover {
+      background: var(--tx-fill-color-light, #f5f7fa);
+      color: var(--tx-text-color-primary, #303133);
+    }
   }
 
   .tx-sources__icon {
@@ -154,12 +162,15 @@ function onOpen(event: MouseEvent, source: AiSourceItem): void {
 
   .tx-sources__stack {
     display: inline-flex;
+    align-items: center;
   }
 
   .tx-sources__stack-icon {
-    width: 14px;
-    height: 14px;
+    display: block;
+    width: 16px;
+    height: 16px;
     border-radius: 999px;
+    object-fit: cover;
     background: var(--tx-fill-color-blank, #fff);
     // Ringed in the colour behind the row so overlapping heads stay separate
     // discs instead of merging into a blob. Point the variable at the real
@@ -190,16 +201,25 @@ function onOpen(event: MouseEvent, source: AiSourceItem): void {
     }
   }
 
-  .tx-sources__list {
+  .tx-sources__collapse-inner {
     min-height: 0;
     overflow: hidden;
+  }
+
+  // Flex gap + wrapper padding rather than `li { margin-top }` so host list
+  // resets (`li { margin: 0 }`) never collapse the spacing between source cards.
+  .tx-sources__list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
     margin: 0;
-    padding: 0;
+    padding: 8px 1px 1px;
     list-style: none;
   }
 
   .tx-sources__item {
-    margin-top: 6px;
+    margin: 0;
+    padding: 0;
   }
 
   .tx-sources__link {
@@ -207,11 +227,14 @@ function onOpen(event: MouseEvent, source: AiSourceItem): void {
     align-items: center;
     gap: 8px;
     min-width: 0;
-    padding: 6px 10px;
+    padding: 8px 12px;
     border: 1px solid var(--tx-border-color-lighter, #e5e7eb);
     border-radius: 10px;
     color: var(--tx-text-color-primary, #111827);
     text-decoration: none;
+    transition:
+      border-color 0.16s ease,
+      background-color 0.16s ease;
 
     &:hover {
       border-color: var(--tx-color-primary, #409eff);
@@ -221,7 +244,7 @@ function onOpen(event: MouseEvent, source: AiSourceItem): void {
 
   .tx-sources__ordinal {
     flex: none;
-    min-width: 18px;
+    min-width: 16px;
     color: var(--tx-text-color-secondary, #6b7280);
     font-variant-numeric: tabular-nums;
     text-align: center;
@@ -229,9 +252,11 @@ function onOpen(event: MouseEvent, source: AiSourceItem): void {
 
   .tx-sources__favicon {
     flex: none;
-    width: 14px;
-    height: 14px;
-    border-radius: 3px;
+    display: block;
+    width: 16px;
+    height: 16px;
+    border-radius: 4px;
+    object-fit: cover;
   }
 
   .tx-sources__title {
@@ -251,7 +276,8 @@ function onOpen(event: MouseEvent, source: AiSourceItem): void {
 
 @media (prefers-reduced-motion: reduce) {
   .tx-sources .tx-sources__collapse,
-  .tx-sources .tx-sources__chevron {
+  .tx-sources .tx-sources__chevron,
+  .tx-sources .tx-sources__link {
     transition: none;
   }
 }

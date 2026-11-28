@@ -235,6 +235,35 @@ describe('txSidebarNav', () => {
     expect(after.classes()).toContain('is-revealed')
     expect(after.attributes('style')).toContain('--tx-bui-sidebar-nav-indicator-duration: 220ms')
   })
+
+  it('collapses to a rail and toggles collapsible groups with group actions', async () => {
+    const collapsibleGroups: SidebarNavGroup[] = [
+      { key: 'workspace', label: 'Workspace', collapsible: true, action: { label: 'Search chats' } },
+      { key: 'objects', label: 'Objects' },
+    ]
+    const wrapper = mountNav({
+      groups: collapsibleGroups,
+      workspace: { name: 'Creamery Ops' },
+      collapsible: true,
+      items: [
+        { value: 'activity', label: 'Home', group: 'workspace', meta: '3/10', loading: true },
+        { value: 'spaces', label: 'Suppliers', group: 'objects' },
+      ],
+    })
+
+    expect(wrapper.find('.tx-bui-sidebar-nav__meta').text()).toBe('3/10')
+    expect(wrapper.find('.tx-bui-sidebar-nav__loading').exists()).toBe(true)
+
+    await wrapper.find('.tx-bui-sidebar-nav__group-action').trigger('click')
+    expect(wrapper.emitted('groupAction')?.[0]?.[0]).toMatchObject({ key: 'workspace' })
+
+    await wrapper.find('.tx-bui-sidebar-nav__group-toggle').trigger('click')
+    expect(wrapper.findAll('.tx-bui-sidebar-nav__item')).toHaveLength(1)
+
+    await wrapper.find('.tx-bui-sidebar-nav__collapse-btn').trigger('click')
+    expect(wrapper.emitted('update:collapsed')?.[0]).toEqual([true])
+    expect(wrapper.classes()).toContain('is-collapsed')
+  })
 })
 
 /** jsdom lays nothing out: pin a rect on `el`, the full 240px width of the list. */

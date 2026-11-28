@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import type { AttachmentChipProps } from './types'
 import { computed } from 'vue'
+import TxIconChip from '../../icon-chip/src/TxIconChip.vue'
+import { resolveAttachmentFileBadge } from './file-badge'
 import { formatSize } from './format-size'
 
 defineOptions({ name: 'TxAttachmentChip' })
@@ -29,6 +31,8 @@ const progressText = computed(() =>
   props.attachment.progress === undefined ? '' : `${percent.value}%`,
 )
 
+const fileBadge = computed(() => resolveAttachmentFileBadge(props.attachment.name, props.attachment.mime))
+
 // One button for both, so focus on it survives an upload finishing in removable mode.
 function onAction(): void {
   if (props.attachment.uploading)
@@ -51,14 +55,24 @@ function onAction(): void {
       @click="emit('open', attachment)"
     >
       <span class="tx-attachment-chip__icon" aria-hidden="true">
-        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+        <TxIconChip
+          v-if="fileBadge"
+          :size="30"
+          :radius="7"
+          :font-size="10"
+          :tone="fileBadge.tone"
+          :label="fileBadge.label"
+        />
+        <svg v-else viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
           <path d="M14 3v5h5" />
         </svg>
       </span>
-      <span class="tx-attachment-chip__name">{{ attachment.name }}</span>
-      <span v-if="attachment.uploading" class="tx-attachment-chip__meta">{{ progressText }}</span>
-      <span v-else-if="sizeText" class="tx-attachment-chip__meta">{{ sizeText }}</span>
+      <span class="tx-attachment-chip__info">
+        <span class="tx-attachment-chip__name">{{ attachment.name }}</span>
+        <span v-if="attachment.uploading" class="tx-attachment-chip__meta">{{ progressText }}</span>
+        <span v-else-if="sizeText" class="tx-attachment-chip__meta">{{ sizeText }}</span>
+      </span>
       <span
         v-if="attachment.uploading"
         class="tx-attachment-chip__progress"
@@ -88,10 +102,14 @@ function onAction(): void {
   gap: 2px;
   max-width: 100%;
   border: 1px solid var(--tx-border-color-lighter, #e5e7eb);
-  border-radius: 999px;
-  background: var(--tx-fill-color-blank, #fff);
-  font-size: 12px;
-  line-height: 1;
+  border-radius: var(--tx-button-radius, 12px);
+  background: var(--tx-fill-color-light, #f5f7fa);
+  font-size: 12.5px;
+  line-height: 1.25;
+
+  &:hover {
+    border-color: var(--tx-border-color, #dcdfe6);
+  }
 
   &.is-uploading {
     border-style: dashed;
@@ -102,45 +120,60 @@ function onAction(): void {
   position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 9px;
   min-width: 0;
-  padding: 6px 4px 6px 10px;
+  padding: 5px 8px 5px 5px;
   border: none;
-  border-radius: 999px;
+  border-radius: var(--tx-button-radius, 12px);
   background: transparent;
   color: var(--tx-text-color-primary, #111827);
   font: inherit;
+  text-align: left;
   cursor: pointer;
 }
 
 .tx-attachment-chip__icon {
   display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
   color: var(--tx-text-color-secondary, #6b7280);
 }
 
+.tx-attachment-chip__info {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
 .tx-attachment-chip__name {
-  max-width: 220px;
+  max-width: 180px;
   overflow: hidden;
+  font-weight: var(--tx-font-weight-medium, 500);
+  line-height: 16px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .tx-attachment-chip__meta {
   color: var(--tx-text-color-secondary, #6b7280);
+  font-size: 11px;
+  line-height: 14px;
   font-variant-numeric: tabular-nums;
 }
 
-// Concentric with the pill's round end: 3px clear of it on every side.
+// Concentric with the chip corner (12px radius - 5px inset = 7px).
 .tx-attachment-chip__action {
   display: grid;
   flex: none;
   place-items: center;
-  width: 20px;
-  height: 20px;
-  margin-right: 3px;
+  width: 22px;
+  height: 22px;
+  margin-right: 5px;
   padding: 0;
   border: none;
-  border-radius: 50%;
+  border-radius: 7px;
   background: transparent;
   color: var(--tx-text-color-secondary, #6b7280);
   cursor: pointer;
@@ -156,12 +189,13 @@ function onAction(): void {
   outline-offset: -2px;
 }
 
-// A hairline under the label, inset from the pill's round ends. The fill is a gradient
+// A hairline under the card content, inset from the rounded corners. The fill is a gradient
 // layer whose width the template sets.
 .tx-attachment-chip__progress {
   position: absolute;
-  inset: auto 4px 2px 10px;
+  inset: auto 8px 2px 8px;
   height: 2px;
+  border-radius: 999px;
   background: linear-gradient(var(--tx-color-primary, #409eff) 0 0) no-repeat
     color-mix(in srgb, var(--tx-color-primary, #409eff) 18%, transparent);
 }

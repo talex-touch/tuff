@@ -3,6 +3,8 @@
 import type { AgentTraceProps, AgentTraceRow, AgentTraceVariant } from './types'
 import { computed, ref, useId } from 'vue'
 import { useMorphWindow } from '../../../../utils/use-morph-window'
+import { TxIcon } from '../../icon'
+import { TxSpinner } from '../../spinner'
 
 defineOptions({ name: 'TxAgentTrace' })
 
@@ -160,12 +162,7 @@ function stepGlyph(row: AgentTraceRow, index: number): StepGlyph {
         :class="{ 'is-open': open }"
         aria-hidden="true"
       >
-        <svg
-          width="14" height="14" viewBox="0 0 24 24" fill="none"
-          stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"
-        >
-          <path d="M6 9l6 6 6-6" />
-        </svg>
+        <TxIcon name="chevron-down" :size="14" />
       </span>
     </button>
 
@@ -181,14 +178,7 @@ function stepGlyph(row: AgentTraceRow, index: number): StepGlyph {
         <div class="tx-bui-agent-trace__trace">
           <div class="tx-bui-agent-trace__body">
             <div v-if="query" class="tx-bui-agent-trace__query">
-              <svg
-                width="14" height="14" viewBox="0 0 24 24" fill="none"
-                stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                aria-hidden="true"
-              >
-                <circle cx="11" cy="11" r="7" />
-                <path d="M21 21l-4.3-4.3" />
-              </svg>
+              <TxIcon class="tx-bui-agent-trace__query-icon" name="search" :size="14" />
               <span>{{ query }}</span>
             </div>
 
@@ -222,29 +212,24 @@ function stepGlyph(row: AgentTraceRow, index: number): StepGlyph {
                     </span>
 
                     <template v-if="variant === 'steps'">
-                      <span
+                      <TxSpinner
                         v-if="stepGlyph(row, index) === 'spinner'"
                         class="tx-bui-agent-trace__spinner"
-                        aria-hidden="true"
+                        :size="12"
+                        :stroke-width="1.5"
                       />
-                      <svg
+                      <TxIcon
                         v-else-if="stepGlyph(row, index) === 'error'"
                         class="tx-bui-agent-trace__glyph is-error"
-                        width="14" height="14" viewBox="0 0 24 24" fill="none"
-                        stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
-                        aria-hidden="true"
-                      >
-                        <path d="M18 6L6 18M6 6l12 12" />
-                      </svg>
-                      <svg
+                        name="close"
+                        :size="14"
+                      />
+                      <TxIcon
                         v-else
                         class="tx-bui-agent-trace__glyph"
-                        width="14" height="14" viewBox="0 0 24 24" fill="none"
-                        stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"
-                        aria-hidden="true"
-                      >
-                        <path d="M20 6L9 17l-5-5" />
-                      </svg>
+                        name="check"
+                        :size="14"
+                      />
                     </template>
 
                     <span class="tx-bui-agent-trace__primary">{{ row.primary }}</span>
@@ -286,7 +271,6 @@ function stepGlyph(row: AgentTraceRow, index: number): StepGlyph {
 @include bui-keyframes-shimmer-text;
 @include bui-keyframes-fade-up;
 @include bui-keyframes-fade-in;
-@include bui-keyframes-spin;
 
 .tx-bui-agent-trace {
   @include bui-scope;
@@ -454,16 +438,9 @@ function stepGlyph(row: AgentTraceRow, index: number): StepGlyph {
     }
   }
 
-  // A bordered circle rather than an SVG arc — one border-top colour is the
-  // whole spinner.
   .tx-bui-agent-trace__spinner {
     flex: none;
-    width: 12px;
-    height: 12px;
-    border: 1.5px solid var(--tx-bui-line-strong, #e0e2e5);
-    border-top-color: var(--tx-bui-ink-2, #62656b);
-    border-radius: 999px;
-    animation: tx-bui-spin 700ms linear infinite;
+    color: var(--tx-bui-ink-2, #62656b);
   }
 
   .tx-bui-agent-trace__primary {
@@ -552,7 +529,7 @@ function stepGlyph(row: AgentTraceRow, index: number): StepGlyph {
     color: var(--tx-bui-ink-2, #62656b);
     font-size: 12.5px;
 
-    svg {
+    .tx-bui-agent-trace__query-icon {
       flex: none;
       color: var(--tx-bui-ink-3, #9a9da3);
     }
@@ -568,7 +545,6 @@ function stepGlyph(row: AgentTraceRow, index: number): StepGlyph {
     transition: none;
   }
 
-  .tx-bui-agent-trace .tx-bui-agent-trace__spinner,
   .tx-bui-agent-trace .tx-bui-agent-trace__more,
   .tx-bui-agent-trace .tx-bui-agent-trace__label:not(.is-working) {
     animation: none;

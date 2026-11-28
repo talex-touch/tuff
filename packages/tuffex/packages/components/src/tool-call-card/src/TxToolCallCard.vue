@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import type { AiToolCallPart } from '../../ai-elements/src/types'
 import { computed, getCurrentInstance, nextTick, onBeforeUnmount, onMounted, onUpdated, ref, useId, watch } from 'vue'
+import { TxButton } from '../../button'
 import TxEdgeFadeMask from '../../edge-fade-mask/src/TxEdgeFadeMask.vue'
+import { TxIcon } from '../../icon'
+import { TxSpinner } from '../../spinner'
 import TxTextMorph from '../../text-morph/src/TxTextMorph.vue'
 
 defineOptions({ name: 'TxToolCallCard' })
@@ -449,21 +452,15 @@ onBeforeUnmount(() => {
     >
       <span class="tx-tool-call-card__icon" aria-hidden="true">
         <slot name="icon" :status="toolCall.status">
-          <svg v-if="toolCall.status === 'pending'" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="9" />
-            <path d="M12 7v5l3 3" />
-          </svg>
-          <svg v-else-if="toolCall.status === 'running'" class="tx-tool-call-card__spin" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 12a9 9 0 1 1-9-9" />
-          </svg>
-          <svg v-else-if="toolCall.status === 'done'" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="m4.5 12.5 5 5 10-11" />
-          </svg>
-          <svg v-else viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="9" />
-            <path d="M12 7.5v5.5" />
-            <circle cx="12" cy="16.4" r="0.6" fill="currentColor" stroke="none" />
-          </svg>
+          <TxIcon v-if="toolCall.status === 'pending'" name="clock" :size="14" />
+          <TxSpinner
+            v-else-if="toolCall.status === 'running'"
+            class="tx-tool-call-card__spin"
+            :size="14"
+            :stroke-width="1.5"
+          />
+          <TxIcon v-else-if="toolCall.status === 'done'" name="check-circle" :size="14" />
+          <TxIcon v-else name="x-circle" :size="14" />
         </slot>
       </span>
 
@@ -477,9 +474,7 @@ onBeforeUnmount(() => {
       <span v-if="durationText" class="tx-tool-call-card__time"><TxTextMorph :text="durationText" :duration-ms="360" /></span>
 
       <span class="tx-tool-call-card__chevron" :class="{ 'is-open': expanded }" aria-hidden="true">
-        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="m6 9 6 6 6-6" />
-        </svg>
+        <TxIcon name="chevron-down" :size="13" />
       </span>
     </button>
 
@@ -519,19 +514,12 @@ onBeforeUnmount(() => {
                 @click="inputExpanded = !inputExpanded"
               >
                 <span>{{ linesToggleLabel }}</span>
-                <svg
+                <TxIcon
                   class="tx-tool-call-card__lines-chevron"
                   :class="{ 'is-open': inputExpanded }"
-                  viewBox="0 0 24 24"
-                  width="11"
-                  height="11"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  aria-hidden="true"
-                >
-                  <path d="m6 9 6 6 6-6" />
-                </svg>
+                  name="chevron-down"
+                  :size="11"
+                />
               </button>
             </div>
 
@@ -558,42 +546,25 @@ onBeforeUnmount(() => {
 
             <div v-if="toolCall.status === 'error'" class="tx-tool-call-card__error" role="alert">
               <span class="tx-tool-call-card__error-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
-                  <circle cx="12" cy="12" r="9" />
-                  <path d="M12 8v4M12 16h.01" />
-                </svg>
+                <TxIcon name="x-circle" :size="13" />
               </span>
               <span class="tx-tool-call-card__error-text">{{ toolCall.error || errorLabel }}</span>
-              <button
+              <TxButton
                 v-if="canRetry"
-                type="button"
                 class="tx-tool-call-card__retry"
+                size="sm"
+                variant="danger"
+                plain
                 @click="emit('retry', toolCall.id)"
               >
-                <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-                  <path d="M3 3v5h5" />
-                  <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
-                  <path d="M16 21h5v-5" />
-                </svg>
+                <TxIcon name="refresh" :size="11" />
                 <span>{{ retryLabel }}</span>
-              </button>
+              </TxButton>
             </div>
 
             <div class="tx-tool-call-card__footer">
               <span class="tx-tool-call-card__status">
-                <svg
-                  v-if="toolCall.status === 'done'"
-                  viewBox="0 0 24 24"
-                  width="12"
-                  height="12"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2.4"
-                  aria-hidden="true"
-                >
-                  <path d="m4.5 12.5 5 5 10-11" />
-                </svg>
+                <TxIcon v-if="toolCall.status === 'done'" name="check" :size="12" />
                 {{ statusLabel }}
               </span>
             </div>
@@ -623,9 +594,15 @@ onBeforeUnmount(() => {
 
   .tx-tool-call-card__icon {
     display: inline-flex;
+    align-items: center;
+    justify-content: center;
     flex: none;
     color: var(--tx-text-color-secondary, #6b7280);
     transition: color 0.15s ease;
+
+    .tx-spinner {
+      color: inherit;
+    }
   }
 
   &[data-status='running'] .tx-tool-call-card__icon {
@@ -638,10 +615,6 @@ onBeforeUnmount(() => {
 
   &[data-status='error'] .tx-tool-call-card__icon {
     color: var(--tx-color-danger, #f56c6c);
-  }
-
-  .tx-tool-call-card__spin {
-    animation: tx-tool-call-card-spin 0.9s linear infinite;
   }
 
   .tx-tool-call-card__clock {
@@ -834,23 +807,6 @@ onBeforeUnmount(() => {
 
   .tx-tool-call-card__retry {
     flex: none;
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    padding: 3px 10px;
-    border: 1px solid color-mix(in srgb, var(--tx-color-danger, #f56c6c) 35%, transparent);
-    border-radius: 6px;
-    background: color-mix(in srgb, var(--tx-color-danger, #f56c6c) 10%, transparent);
-    color: var(--tx-color-danger, #f56c6c);
-    font-size: 11.5px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: background-color 0.15s ease, border-color 0.15s ease;
-
-    &:hover {
-      background: color-mix(in srgb, var(--tx-color-danger, #f56c6c) 20%, transparent);
-      border-color: var(--tx-color-danger, #f56c6c);
-    }
   }
 
   .tx-tool-call-card__footer {
@@ -912,17 +868,10 @@ onBeforeUnmount(() => {
   }
 }
 
-@keyframes tx-tool-call-card-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .tx-tool-call-card .tx-tool-call-card__collapse,
   .tx-tool-call-card .tx-tool-call-card__chevron,
-  .tx-tool-call-card .tx-tool-call-card__lines-chevron,
-  .tx-tool-call-card .tx-tool-call-card__spin {
+  .tx-tool-call-card .tx-tool-call-card__lines-chevron {
     transition: none;
     animation: none;
   }

@@ -142,4 +142,29 @@ describe('createFreshChunks', () => {
     expect(spans()).toHaveLength(1)
     expect(spans()[0]!.textContent).toBe('，之后才到')
   })
+
+  it('keeps animating appended deltas across marked trailing newlines and growing lists', () => {
+    const { el, fresh, patch, spans, advance } = harness()
+    patch('<ul>\n<li>第一项</li>\n</ul>\n')
+    fresh.update(el, 1)
+    advance(500)
+
+    patch('<ul>\n<li>第一项继续</li>\n</ul>\n')
+    fresh.update(el, 1)
+    expect(spans()).toHaveLength(1)
+    expect(spans()[0]!.textContent).toBe('继续')
+
+    advance(120)
+    patch('<ul>\n<li>第一项继续</li>\n<li>第二项</li>\n</ul>\n')
+    fresh.update(el, 1)
+    expect(spans().map(span => span.textContent)).toEqual(['继续', '第二项'])
+    // Never inject wrapper spans directly under <ul> for inter-item newlines.
+    expect(el.querySelectorAll('ul > .tx-stream-md__fresh')).toHaveLength(0)
+    const items = el.querySelectorAll('li')
+    expect(items[0]!.classList.contains('tx-stream-md__fresh-item')).toBe(false)
+    expect(items[1]!.classList.contains('tx-stream-md__fresh-item')).toBe(true)
+
+    fresh.finish(el)
+    expect(el.querySelectorAll('.tx-stream-md__fresh-item')).toHaveLength(0)
+  })
 })

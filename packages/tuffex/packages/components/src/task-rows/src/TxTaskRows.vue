@@ -2,6 +2,7 @@
 <script setup lang="ts">
 import type { TaskRowDetail, TaskRowItem, TaskRowsProps } from './types'
 import { computed, ref, useId } from 'vue'
+import TxTag from '../../tag/src/TxTag.vue'
 
 defineOptions({ name: 'TxTaskRows' })
 
@@ -155,10 +156,14 @@ function pillText(row: TaskRowItem): string | undefined {
 
           <span v-if="row.amount" class="tx-bui-task-rows__amount">{{ row.amount }}</span>
 
-          <span
+          <TxTag
             v-if="pillText(row)"
             :key="row.status"
             class="tx-bui-task-rows__pill"
+            size="sm"
+            :variant="row.status === 'done' || row.status === 'error' ? 'soft' : 'plain'"
+            :color="row.status === 'done' ? 'var(--tx-color-success)' : row.status === 'error' ? 'var(--tx-color-danger)' : undefined"
+            pill
           >
             {{ pillText(row) }}
             <!-- The turning arrow reports that a retry is under way. It is not
@@ -176,7 +181,7 @@ function pillText(row: TaskRowItem): string | undefined {
                 <path d="M21 12a9 9 0 1 1-2.64-6.36M21 3v6h-6" />
               </svg>
             </span>
-          </span>
+          </TxTag>
 
           <span class="tx-bui-task-rows__chevron" :class="{ 'is-open': isOpen(row.id) }" aria-hidden="true">
             <svg
@@ -379,29 +384,15 @@ function pillText(row: TaskRowItem): string | undefined {
     font-size: 12.5px;
   }
 
-  .tx-bui-task-rows__pill {
-    display: inline-flex;
+  .tx-bui-task-rows__pill.tx-tag {
     flex: none;
-    align-items: center;
-    gap: 6px;
-    height: 22px;
-    padding: 0 8px;
-    border-radius: 999px;
-    background: var(--tx-bui-field, #f2f2f3);
-    color: var(--tx-bui-ink-2, #62656b);
-    font-size: 11.5px;
-    font-weight: var(--tx-font-weight-medium, 500);
     animation: tx-bui-fade-in 200ms ease-out both;
-  }
 
-  .tx-bui-task-rows__row[data-status='done'] .tx-bui-task-rows__pill {
-    background: var(--tx-bui-green-tint, #e8f5ed);
-    color: var(--tx-bui-green, #189a4d);
-  }
-
-  .tx-bui-task-rows__row[data-status='error'] .tx-bui-task-rows__pill {
-    background: var(--tx-bui-red-tint, #fcecec);
-    color: var(--tx-bui-red, #e3474c);
+    .tx-tag__content {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
   }
 
   .tx-bui-task-rows__retry {

@@ -70,7 +70,7 @@ code: |
 ## Overview
 
 - An empty-string `copyText` still renders the copy button, but clicking does nothing; omit the prop to hide it.
-- Copying writes through `navigator.clipboard`; the button then shows its copied state for 1200ms and ignores repeat clicks.
+- Copying writes through `navigator.clipboard`; the button then shows its copied state for 1200ms and ignores repeat clicks. Clicking regenerate spins the refresh glyph one full turn as immediate feedback (disabled under reduced motion).
 - The read-aloud button is a toggle: every click emits `speak`, even while `loading`, and the host starts or stops playback; `aria-pressed` is true while `speaking`.
 - The bar is a `role="toolbar"`: one Tab stop, arrow keys cycle through the controls, and Home / End jump to the ends.
 - The arrow-key order is read live from the DOM (`button:not([disabled])`, `[href]`, any non-`-1` `tabindex`), so disabled buttons are excluded.

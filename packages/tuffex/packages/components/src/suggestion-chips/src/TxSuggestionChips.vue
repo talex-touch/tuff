@@ -72,72 +72,119 @@ const emit = defineEmits<{
 
 .tx-suggestion-chips {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
-  overflow-x: auto;
   padding: 2px;
-  // Fade both edges so overflow reads as scrollable, not clipped.
-  -webkit-mask-image: linear-gradient(to right, transparent, #000 12px, #000 calc(100% - 12px), transparent);
-  mask-image: linear-gradient(to right, transparent, #000 12px, #000 calc(100% - 12px), transparent);
-  scrollbar-width: none;
-
-  &::-webkit-scrollbar {
-    display: none;
-  }
 
   .tx-suggestion-chips__chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
     flex: none;
-    padding: 6px 13px;
-    border: 1px solid var(--tx-border-color-lighter, #e5e7eb);
-    border-radius: 999px;
-    background: var(--tx-fill-color-blank, #fff);
-    color: var(--tx-text-color-primary, #111827);
+    max-width: 100%;
+    padding: 6px 12px;
+    border: 0;
+    border-radius: var(--tx-button-radius, 10px);
+    background: var(--tx-fill-color-light, #f5f7fa);
+    box-shadow:
+      inset 0 0 0 1px var(--tx-border-color-lighter, #ebeef5),
+      var(--tx-elevation-1, 0 1px 2px rgba(0, 0, 0, 0.04));
+    color: var(--tx-text-color-primary, #303133);
     font: inherit;
     font-size: 12.5px;
+    font-weight: var(--tx-font-weight-medium, 500);
+    line-height: 18px;
     white-space: nowrap;
     cursor: pointer;
 
     &:hover {
-      border-color: var(--tx-color-primary, #409eff);
-      background: color-mix(in srgb, var(--tx-color-primary, #409eff) 5%, transparent);
+      background: color-mix(in srgb, var(--tx-color-primary, #409eff) 10%, var(--tx-fill-color-light, #f5f7fa));
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tx-color-primary, #409eff) 44%, transparent);
+      color: var(--tx-color-primary, #409eff);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--tx-color-primary, #409eff);
+      outline-offset: 2px;
     }
   }
 
-  // Stacked follow-ups: rules instead of outlines, and each row arrives a beat
-  // after the one above it.
+  // Stacked follow-ups: crisp hairline separators with badged return glyph so
+  // interactive prompt actions share TuffEx's accent grammar without resembling inline links.
   &.is-list {
     flex-direction: column;
-    gap: 0;
+    flex-wrap: nowrap;
+    gap: 2px;
     padding: 0;
-    overflow-x: visible;
-    -webkit-mask-image: none;
-    mask-image: none;
 
     .tx-suggestion-chips__chip {
+      position: relative;
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 9px;
       flex: initial;
-      padding: 6px;
-      border: 0;
-      border-bottom: 1px solid var(--tx-border-color-lighter, #e5e7eb);
-      border-radius: 7px;
+      padding: 7px 9px;
+      border-radius: var(--tx-button-radius, 10px);
       background: transparent;
+      box-shadow: none;
       font-size: 12.5px;
+      font-weight: var(--tx-font-weight-medium, 500);
+      line-height: 18px;
       text-align: left;
       white-space: normal;
       animation: tx-bui-fade-up 350ms var(--tx-ease-out-strong, cubic-bezier(0.23, 1, 0.32, 1))
         calc(var(--tx-suggestion-chips-index, 0) * 90ms) both;
 
+      & + .tx-suggestion-chips__chip::before {
+        content: '';
+        position: absolute;
+        top: -1px;
+        left: 9px;
+        right: 9px;
+        height: 1px;
+        background: var(--tx-border-color-lighter, #ebeef5);
+        pointer-events: none;
+      }
+
       &:hover {
-        border-color: var(--tx-border-color-lighter, #e5e7eb);
-        background: var(--tx-fill-color-light, #f5f7fa);
+        background: color-mix(in srgb, var(--tx-color-primary, #409eff) 9%, var(--tx-fill-color-light, #f5f7fa));
+        box-shadow: none;
+        color: var(--tx-text-color-primary, #303133);
+
+        &::before,
+        & + .tx-suggestion-chips__chip::before {
+          opacity: 0;
+        }
+
+        .tx-suggestion-chips__glyph {
+          background: color-mix(in srgb, var(--tx-color-primary, #409eff) 16%, transparent);
+          box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tx-color-primary, #409eff) 32%, transparent);
+          color: var(--tx-color-primary, #409eff);
+        }
       }
     }
 
     .tx-suggestion-chips__glyph {
-      display: flex;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
       flex: none;
-      color: var(--tx-text-color-secondary, #6b7280);
+      width: 20px;
+      height: 20px;
+      border-radius: 6px;
+      background: var(--tx-fill-color-light, #f5f7fa);
+      box-shadow: inset 0 0 0 1px var(--tx-border-color-lighter, #ebeef5);
+      color: var(--tx-text-color-regular, #606266);
+    }
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .tx-suggestion-chips .tx-suggestion-chips__chip {
+    transition: transform 140ms var(--tx-ease-out-strong, cubic-bezier(0.23, 1, 0.32, 1));
+
+    &:active {
+      transform: scale(0.985);
     }
   }
 }

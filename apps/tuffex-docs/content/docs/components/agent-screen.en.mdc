@@ -55,6 +55,13 @@ code: |
 | `ratio` | `string` | `'2964 / 1856'` | CSS `aspect-ratio` of the frame; defaults to the upstream capture's ratio. |
 | `ariaLabel` | `string` | `'Agent screen'` | Accessible name of the whole region. |
 | `loadingLabel` | `string` | `'Waiting for the agent’s screen'` | Announced while loading. |
+| `expandable` | `boolean` | `false` | Opens an expanded modal viewer when the frame or expand trigger is clicked. |
+| `teachable` | `boolean` | `false` | Displays a "Teach a task" recording toggle inside the expanded modal header. |
+| `teaching` | `boolean` | `undefined` | Controlled recording state (`v-model:teaching`). |
+| `expandLabel` | `string` | `'Expand screen'` | Accessible name of the expand control. |
+| `closeLabel` | `string` | `'Close'` | Accessible name of the modal close button. |
+| `teachLabel` | `string` | `'Teach a task'` | Label when idle in the expanded modal. |
+| `stopTeachLabel` | `string` | `'Stop recording'` | Label while recording in the expanded modal. |
 
 ### Slots
 

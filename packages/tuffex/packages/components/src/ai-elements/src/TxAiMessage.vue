@@ -189,7 +189,7 @@ const statusLabel = computed(() => {
   </article>
 </template>
 
-<style scoped lang="scss">
+<style lang="scss">
 .tx-ai-message {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -248,9 +248,11 @@ const statusLabel = computed(() => {
   width: 100%;
   min-width: 0;
   padding: 10px 12px;
-  border: 1px solid var(--tx-border-color-lighter, #e5e7eb);
   border-radius: 14px;
   background: var(--tx-fill-color-blank, #fff);
+  box-shadow:
+    inset 0 0 0 1px var(--tx-border-color-lighter, #ebeef5),
+    var(--tx-elevation-1, 1px 2px 4px rgba(0, 0, 0, 0.04));
 }
 
 .tx-ai-message__header {
@@ -261,9 +263,9 @@ const statusLabel = computed(() => {
 }
 
 .tx-ai-message__role {
-  color: var(--tx-text-color-secondary, #6b7280);
-  font-size: 11px;
-  font-weight: var(--tx-font-weight-bold, 700);
+  color: var(--tx-text-color-regular, #606266);
+  font-size: 11.5px;
+  font-weight: var(--tx-font-weight-semibold, 600);
   letter-spacing: 0.02em;
   text-transform: uppercase;
 }
@@ -379,6 +381,13 @@ const statusLabel = computed(() => {
   .tx-ai-message__body {
     padding: 8px 10px;
     border-radius: 12px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tx-ai-message__typing span,
+  .tx-ai-message__response.is-streaming {
+    animation: none;
   }
 }
 </style>

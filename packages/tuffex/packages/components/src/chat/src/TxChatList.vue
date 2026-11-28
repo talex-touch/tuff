@@ -325,7 +325,7 @@ defineExpose({
   </div>
 </template>
 
-<style scoped lang="scss">
+<style lang="scss">
 .tx-chat-list {
   width: 100%;
 

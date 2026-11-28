@@ -70,13 +70,15 @@ function navButtons(wrapper: VueWrapper): { prev: HTMLButtonElement, next: HTMLB
 }
 
 describe('txChoiceCard', () => {
-  it('renders the question and one native button per option', () => {
+  it('renders the question inside TxCard and one TxButton per option', () => {
     const wrapper = mountCard({ steps: [start] })
 
+    expect(wrapper.find('.tx-choice-card__card.tx-card').exists()).toBe(true)
     expect(wrapper.find('h3.tx-choice-card__title').text()).toBe('Where do we start?')
     const buttons = optionButtons(wrapper)
     expect(buttons).toHaveLength(4)
     expect(buttons.every(button => button.getAttribute('type') === 'button')).toBe(true)
+    expect(buttons.every(button => button.classList.contains('tx-button'))).toBe(true)
     expect(buttons[0]!.querySelector('.tx-choice-card__label')!.textContent).toBe('Write a weekly report')
     expect(buttons[0]!.querySelector('.tx-choice-card__desc')!.textContent).toBe('Sum up what shipped this week')
     // A real list around the buttons: a `listitem` role on the button itself would strip
@@ -536,5 +538,21 @@ describe('txChoiceCard entrance', () => {
 
     expect(list.element).not.toBe(before)
     expect(list.classes()).toContain('is-stepping')
+  })
+
+  it('slides forward on next step and reverses on previous step', async () => {
+    const wrapper = mountCard({ steps: [start, report], step: 0 })
+
+    await wrapper.setProps({ step: 1 })
+    const headNext = wrapper.find('.tx-choice-card__heading-viewport > transition-stub')
+    const listNext = wrapper.find('.tx-choice-card__viewport > div > transition-stub')
+    expect(headNext.attributes('name')).toBe('tx-choice-card-slide-next')
+    expect(listNext.attributes('name')).toBe('tx-choice-card-slide-next')
+
+    await wrapper.setProps({ step: 0 })
+    const headPrev = wrapper.find('.tx-choice-card__heading-viewport > transition-stub')
+    const listPrev = wrapper.find('.tx-choice-card__viewport > div > transition-stub')
+    expect(headPrev.attributes('name')).toBe('tx-choice-card-slide-prev')
+    expect(listPrev.attributes('name')).toBe('tx-choice-card-slide-prev')
   })
 })
