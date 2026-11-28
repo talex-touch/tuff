@@ -334,14 +334,33 @@ impl ArenaState {
         self.cold_slab.get_str(meta.py_full_off, meta.py_full_len)
     }
 
-    pub fn reserve_for_records(&mut self, expected: usize) {
-        self.records.reserve(expected);
-        self.name_slab.reserve(expected * 24);
-        let needed_buckets = (expected * 2).next_power_of_two().max(16);
+    pub fn try_reserve_for_records(&mut self, expected: usize) -> Result<(), String> {
+        self.records
+            .try_reserve(expected)
+            .map_err(|e| format!("Arena records allocation failed: {e}"))?;
+        let name_est = expected
+            .checked_mul(24)
+            .ok_or_else(|| "Arena name_slab reservation overflow".to_string())?;
+        self.name_slab.try_reserve(name_est)?;
+        let doubled = expected
+            .checked_mul(2)
+            .ok_or_else(|| "Arena record_buckets capacity overflow".to_string())?;
+        let needed_buckets = doubled
+            .checked_next_power_of_two()
+            .ok_or_else(|| "Arena record_buckets power-of-two overflow".to_string())?
+            .max(16);
         if needed_buckets > self.record_buckets.len() {
+            self.record_buckets
+                .try_reserve(needed_buckets - self.record_buckets.len())
+                .map_err(|e| format!("Arena record_buckets allocation failed: {e}"))?;
             self.record_buckets.resize(needed_buckets, EMPTY_BUCKET);
             self.rehash_record_buckets();
         }
+        Ok(())
+    }
+
+    pub fn reserve_for_records(&mut self, expected: usize) {
+        let _ = self.try_reserve_for_records(expected);
     }
 
     pub fn replace_all(&mut self, entries: Vec<RawScannedEntry>, scan_ms: f64) {
@@ -365,7 +384,9 @@ impl ArenaState {
             if group.entries.is_empty() {
                 continue;
             }
-            let dir_id = self.dirs.intern_dir(&group.dir);
+            let Ok(dir_id) = self.dirs.try_intern_dir(&group.dir) else {
+                continue;
+            };
             for entry in group.entries {
                 self.upsert_with_dir_id(dir_id, &entry.name, entry.is_dir, entry.mtime_sec);
             }
@@ -376,7 +397,9 @@ impl ArenaState {
         if name.is_empty() || name.len() > u16::MAX as usize {
             return;
         }
-        let dir_id = self.dirs.intern_dir(dir);
+        let Ok(dir_id) = self.dirs.try_intern_dir(dir) else {
+            return;
+        };
         self.upsert_with_dir_id(dir_id, name, is_dir, mtime_sec);
     }
 

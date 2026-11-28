@@ -12,6 +12,12 @@ pub const SNAPSHOT_MAGIC: &[u8; 8] = b"TUFFIDX3";
 const SNAPSHOT_VERSION_FLAGS: u32 = 1;
 const SNAPSHOT_HEADER_LEN: usize = 40;
 const WIRE_FLAG_SAME_DIR: u8 = 0x80;
+const MAX_SNAPSHOT_FILE_BYTES: u64 = 1024 * 1024 * 1024;
+const MAX_SNAPSHOT_DIR_NODES: usize = 10_000_000;
+const MAX_SNAPSHOT_RECORDS: usize = 20_000_000;
+const MAX_SNAPSHOT_SLAB_BYTES: usize = 512 * 1024 * 1024;
+const MIN_BYTES_PER_DIR_NODE: usize = 3;
+const MIN_BYTES_PER_RECORD: usize = 6;
 
 #[inline]
 fn write_varint_u32(out: &mut Vec<u8>, mut val: u32) {
@@ -179,6 +185,17 @@ pub fn save_snapshot(arena: &ArenaState, snapshot_path: &Path) -> Result<usize, 
 }
 
 pub fn load_snapshot(arena: &mut ArenaState, snapshot_path: &Path) -> Result<usize, String> {
+    let meta = fs::metadata(snapshot_path).map_err(|e| e.to_string())?;
+    if !meta.is_file() {
+        return Err("Snapshot path is not a regular file".to_string());
+    }
+    if meta.len() > MAX_SNAPSHOT_FILE_BYTES {
+        return Err(format!(
+            "Snapshot file exceeds maximum size: {} > {MAX_SNAPSHOT_FILE_BYTES}",
+            meta.len()
+        ));
+    }
+
     let raw = fs::read(snapshot_path).map_err(|e| e.to_string())?;
     if raw.len() < SNAPSHOT_HEADER_LEN || &raw[0..8] != SNAPSHOT_MAGIC {
         return Err("Invalid or unsupported snapshot header (expected TUFFIDX3)".to_string());
@@ -198,15 +215,49 @@ pub fn load_snapshot(arena: &mut ArenaState, snapshot_path: &Path) -> Result<usi
     let name_slab_len = read_u32_le(&raw, &mut cursor)? as usize;
     let cold_slab_len = read_u32_le(&raw, &mut cursor)? as usize;
 
+    if dir_node_count > MAX_SNAPSHOT_DIR_NODES || record_count > MAX_SNAPSHOT_RECORDS {
+        return Err("Snapshot header counts exceed safe limits".to_string());
+    }
+    if dir_slab_len > MAX_SNAPSHOT_SLAB_BYTES
+        || name_slab_len > MAX_SNAPSHOT_SLAB_BYTES
+        || cold_slab_len > MAX_SNAPSHOT_SLAB_BYTES
+    {
+        return Err("Snapshot slab lengths exceed safe limits".to_string());
+    }
+
+    let remaining = raw.len().saturating_sub(cursor);
+    let min_dir_bytes = dir_node_count
+        .checked_mul(MIN_BYTES_PER_DIR_NODE)
+        .ok_or_else(|| "Snapshot directory node size overflow".to_string())?;
+    let min_rec_bytes = record_count
+        .checked_mul(MIN_BYTES_PER_RECORD)
+        .ok_or_else(|| "Snapshot record size overflow".to_string())?;
+    let min_payload_bytes = dir_slab_len
+        .checked_add(min_dir_bytes)
+        .and_then(|v| v.checked_add(min_rec_bytes))
+        .ok_or_else(|| "Snapshot payload size overflow".to_string())?;
+    if min_payload_bytes > remaining {
+        return Err("Snapshot header counts exceed remaining file size".to_string());
+    }
+    let total_inline_slab_bytes = name_slab_len
+        .checked_add(cold_slab_len)
+        .ok_or_else(|| "Snapshot inline slab size overflow".to_string())?;
+    if total_inline_slab_bytes > remaining {
+        return Err("Snapshot slab lengths exceed remaining file size".to_string());
+    }
+
     let dir_slab_bytes = read_slice(&raw, &mut cursor, dir_slab_len)?;
     std::str::from_utf8(dir_slab_bytes).map_err(|e| e.to_string())?;
 
     let mut next = ArenaState::new();
     next.last_scan_ms = last_scan_ms;
-    next.dirs.slab.reserve(dir_slab_len);
+    next.dirs.slab.try_reserve(dir_slab_len)?;
     next.dirs.slab.extend_raw_validated(dir_slab_bytes);
-    next.dirs.nodes.reserve(dir_node_count);
-    next.dirs.reserve_buckets_for(dir_node_count);
+    next.dirs
+        .nodes
+        .try_reserve(dir_node_count)
+        .map_err(|e| format!("Snapshot DirNode allocation failed: {e}"))?;
+    next.dirs.try_reserve_buckets_for(dir_node_count)?;
 
     let mut seg_off = 0usize;
     for i in 0..dir_node_count {
@@ -220,21 +271,25 @@ pub fn load_snapshot(arena: &mut ArenaState, snapshot_path: &Path) -> Result<usi
             return Err("DirNode segment length exceeds u16::MAX".to_string());
         }
         let seg_len = seg_len_u32 as usize;
-        if seg_off + seg_len > dir_slab_len {
+        let seg_end = seg_off
+            .checked_add(seg_len)
+            .ok_or_else(|| "DirNode segment offset overflow".to_string())?;
+        if seg_end > dir_slab_len {
             return Err("DirNode segment out of dir_slab bounds".to_string());
         }
         let sep = read_u8(&raw, &mut cursor)?;
         next.dirs
             .push_snapshot_node(parent, seg_off as u32, seg_len as u16, sep)?;
-        seg_off += seg_len;
+        seg_off = seg_end;
     }
 
-    next.reserve_for_records(record_count);
+    next.try_reserve_for_records(record_count)?;
     if name_slab_len > next.name_slab.capacity() {
-        next.name_slab.reserve(name_slab_len);
+        next.name_slab
+            .try_reserve(name_slab_len.saturating_sub(next.name_slab.len()))?;
     }
     if cold_slab_len > 0 {
-        next.cold_slab.reserve(cold_slab_len);
+        next.cold_slab.try_reserve(cold_slab_len)?;
     }
 
     let mut prev_dir_id = u32::MAX;
@@ -408,5 +463,39 @@ mod tests {
 
         let _ = fs::remove_file(&tmp);
         let _ = fs::remove_file(&legacy);
+    }
+
+    #[test]
+    fn rejects_corrupt_snapshot_with_inflated_header_counts_without_allocating() {
+        let corrupt = std::env::temp_dir().join(format!(
+            "tuffidx3-corrupt-header-{}.bin",
+            std::process::id()
+        ));
+        let mut header = vec![0u8; SNAPSHOT_HEADER_LEN];
+        header[0..8].copy_from_slice(SNAPSHOT_MAGIC);
+        header[8..12].copy_from_slice(&SNAPSHOT_VERSION_FLAGS.to_le_bytes());
+        // Inflate dir_node_count, record_count, name_slab_len, cold_slab_len to u32::MAX
+        header[20..24].copy_from_slice(&u32::MAX.to_le_bytes());
+        header[24..28].copy_from_slice(&0u32.to_le_bytes());
+        header[28..32].copy_from_slice(&u32::MAX.to_le_bytes());
+        header[32..36].copy_from_slice(&u32::MAX.to_le_bytes());
+        header[36..40].copy_from_slice(&u32::MAX.to_le_bytes());
+        fs::write(&corrupt, &header).unwrap();
+
+        let mut arena = ArenaState::new();
+        let err = arena.load_snapshot(&corrupt).unwrap_err();
+        assert!(err.contains("exceed"));
+
+        // Also reject smaller counts that still exceed the remaining file size.
+        header[20..24].copy_from_slice(&1000u32.to_le_bytes());
+        header[28..32].copy_from_slice(&1000u32.to_le_bytes());
+        header[32..36].copy_from_slice(&1000u32.to_le_bytes());
+        header[36..40].copy_from_slice(&1000u32.to_le_bytes());
+        fs::write(&corrupt, &header).unwrap();
+
+        let err2 = arena.load_snapshot(&corrupt).unwrap_err();
+        assert!(err2.contains("remaining file size"));
+
+        let _ = fs::remove_file(&corrupt);
     }
 }

@@ -596,7 +596,93 @@ describe('tuff-voice provider protocol contracts', () => {
       hotwords: ['SGLang'],
     })
     const plainParams = (runWithoutVocab.payload as { parameters: Record<string, unknown> }).parameters
+    expect(plainParams).not.toBeUndefined()
     expect('vocabulary_id' in plainParams).toBe(false)
     expect('hotwords' in plainParams).toBe(false)
+  })
+
+  it('strips DashScope auth headers on Bailian transcription_url fetch and rejects SSRF targets', async () => {
+    const recordedRequests: Array<{ method: string, url: string, headers: Record<string, string> }> = []
+    const httpClient: VoiceHttpClient = {
+      request: async (req) => {
+        recordedRequests.push({ method: req.method, url: req.url, headers: { ...req.headers } })
+        if (recordedRequests.length === 1) {
+          return { status: 200, headers: {}, body: { output: { task_id: 'task-auth-strip' } } }
+        }
+        if (recordedRequests.length === 2) {
+          return {
+            status: 200,
+            headers: {},
+            body: {
+              output: {
+                task_status: 'SUCCEEDED',
+                results: [{ transcription_url: 'https://oss-presigned.example.com/result.json' }],
+              },
+            },
+          }
+        }
+        return {
+          status: 200,
+          headers: {},
+          body: { output: { results: [{ transcript: 'stripped', duration: 1 }] } },
+        }
+      },
+    }
+
+    const bailian = new BailianParaformerVoiceProvider({
+      credentials: { apiKey: 'secret-dashscope-key', workspaceId: 'ws-secret' },
+      socketFactory: fakeSocketFactory(new FakeSocket()),
+      httpClient,
+      pollIntervalMs: 1,
+    })
+
+    const result = await bailian.transcribeUpload({
+      model: 'paraformer-v2',
+      source: { kind: 'url', url: 'https://cdn.example.com/audio.wav' },
+      requestId: 'req-strip',
+    })
+    expect(result.text).toBe('stripped')
+
+    const transcriptionGet = recordedRequests[2]
+    expect(transcriptionGet.method).toBe('GET')
+    expect(transcriptionGet.url).toBe('https://oss-presigned.example.com/result.json')
+    expect(transcriptionGet.headers.Authorization).toBeUndefined()
+    expect(transcriptionGet.headers['X-DashScope-WorkSpace']).toBeUndefined()
+
+    // Reject SSRF transcription_url pointing to metadata/loopback IP
+    const ssrfHttp = fakeHttp([
+      { status: 200, headers: {}, body: { output: { task_id: 'task-ssrf' } } },
+      {
+        status: 200,
+        headers: {},
+        body: {
+          output: {
+            task_status: 'SUCCEEDED',
+            results: [{ transcription_url: 'https://169.254.169.254/latest/meta-data' }],
+          },
+        },
+      },
+    ])
+    const ssrfBailian = new BailianParaformerVoiceProvider({
+      credentials: { apiKey: 'secret-dashscope-key', workspaceId: 'ws-secret' },
+      socketFactory: fakeSocketFactory(new FakeSocket()),
+      httpClient: ssrfHttp,
+      pollIntervalMs: 1,
+    })
+    await expect(
+      ssrfBailian.transcribeUpload({
+        model: 'paraformer-v2',
+        source: { kind: 'url', url: 'https://cdn.example.com/audio.wav' },
+        requestId: 'req-ssrf-bailian',
+      }),
+    ).rejects.toMatchObject({ code: 'VOICE_PROVIDER_URL_INVALID' })
+  })
+
+  it('rejects Doubao gzip-compressed frames that expand beyond the decompression limit', () => {
+    const oversizedPayload = Buffer.alloc(3 * 1024 * 1024, 0x41)
+    const bombFrame = doubaoServerFrame(oversizedPayload, { gzip: true })
+    expect(() => decodeDoubaoFrame(bombFrame)).toThrowError(
+      expect.objectContaining({ code: 'DOUBAO_FRAME_INVALID' }),
+    )
   })
 })

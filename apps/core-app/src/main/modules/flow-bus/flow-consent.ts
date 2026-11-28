@@ -1,4 +1,5 @@
 import type { FlowTargetInfo } from '@talex-touch/utils/types/flow'
+import { randomBytes } from 'node:crypto'
 import { StorageList } from '@talex-touch/utils/common/storage/constants'
 import { getMainConfig, saveMainConfig } from '../storage'
 
@@ -38,7 +39,7 @@ class FlowConsentStore {
 
   grantOnce(senderId: string, targetId: string): string {
     this.ensureLoaded()
-    const token = `${Date.now()}-${Math.random().toString(36).slice(2)}`
+    const token = randomBytes(24).toString('hex')
     const key = this.buildKey(senderId, targetId)
     this.onceTokens.set(key, {
       token,
@@ -69,7 +70,7 @@ class FlowConsentStore {
 
   grantConfirmationOnce(senderId: string, targetId: string): string {
     this.ensureLoaded()
-    const token = `${Date.now()}-${Math.random().toString(36).slice(2)}`
+    const token = randomBytes(24).toString('hex')
     const key = this.buildKey(senderId, targetId)
     this.confirmationTokens.set(key, {
       token,

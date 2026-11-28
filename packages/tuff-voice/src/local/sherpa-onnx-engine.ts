@@ -63,12 +63,20 @@ export interface SherpaOnnxEngineOptions {
  * host that has its own build.
  */
 export async function findSherpaBinary(explicit?: string): Promise<string | undefined> {
-  const found = await findExecutable(
-    executableCandidates(SHERPA_BINARY, explicit, process.env.TUFF_SHERPA_BIN?.trim()),
+  const overrideCandidates = [explicit, process.env.TUFF_SHERPA_BIN?.trim()].filter(
+    (candidate): candidate is string => Boolean(candidate),
   )
-  if (found)
-    return found
-  return resolveInstalledRuntimeSync('sherpa-onnx', SHERPA_BINARY) ?? undefined
+  if (overrideCandidates.length > 0) {
+    const override = await findExecutable(overrideCandidates)
+    if (override)
+      return override
+  }
+
+  const provisioned = resolveInstalledRuntimeSync('sherpa-onnx', SHERPA_BINARY)
+  if (provisioned)
+    return provisioned
+
+  return await findExecutable(executableCandidates(SHERPA_BINARY))
 }
 
 /** Language to hand the recognizer, narrowed to the values it accepts. */

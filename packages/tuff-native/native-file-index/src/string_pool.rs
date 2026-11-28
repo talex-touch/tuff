@@ -108,6 +108,13 @@ impl Utf8Slab {
     }
 
     #[inline]
+    pub fn try_reserve(&mut self, additional: usize) -> Result<(), String> {
+        self.buf
+            .try_reserve(additional)
+            .map_err(|e| format!("Utf8Slab allocation failed: {e}"))
+    }
+
+    #[inline]
     pub fn get_bytes(&self, off: u32, len: u16) -> &[u8] {
         let start = off as usize;
         let end = start + len as usize;
@@ -262,39 +269,99 @@ impl DirTable {
         }
     }
 
-    pub fn intern_dir(&mut self, dir: &str) -> u32 {
+    pub fn try_intern_dir(&mut self, dir: &str) -> Result<u32, String> {
         let hash = fnv1a_bytes(dir.as_bytes());
         if let Some(existing) = self.lookup_with_hash(dir, hash) {
-            return existing;
+            return Ok(existing);
         }
 
-        let (parent, sep, seg) = match split_dir_segment(dir) {
-            Some((parent_str, sep, seg)) => (self.intern_dir(parent_str), sep, seg),
-            None => (NO_PARENT, 0, dir),
-        };
+        // Iterative walk from leaf to nearest already-interned ancestor (or root)
+        // to avoid call-stack overflow on deeply nested paths.
+        let mut pending: Vec<(&str, u64, u8, &str)> = Vec::new();
+        let mut cur_dir = dir;
+        let mut cur_hash = hash;
+        let mut resolved_parent = NO_PARENT;
 
-        let (seg_off, seg_len) = self
+        loop {
+            match split_dir_segment(cur_dir) {
+                Some((parent_str, sep, seg)) => {
+                    pending.push((cur_dir, cur_hash, sep, seg));
+                    let parent_hash = fnv1a_bytes(parent_str.as_bytes());
+                    if let Some(existing_parent) = self.lookup_with_hash(parent_str, parent_hash) {
+                        resolved_parent = existing_parent;
+                        break;
+                    }
+                    cur_dir = parent_str;
+                    cur_hash = parent_hash;
+                }
+                None => {
+                    pending.push((cur_dir, cur_hash, 0, cur_dir));
+                    break;
+                }
+            }
+        }
+
+        // Pre-validate all segments and slab/node bounds before mutating so failures are atomic.
+        let mut required_slab_bytes = 0usize;
+        for &(full_dir, _, _, seg) in &pending {
+            if seg.len() > u16::MAX as usize {
+                return Err("Directory segment exceeds u16::MAX bytes".to_string());
+            }
+            if full_dir.len() > u32::MAX as usize {
+                return Err("Directory path exceeds u32::MAX bytes".to_string());
+            }
+            required_slab_bytes = required_slab_bytes
+                .checked_add(seg.len())
+                .ok_or_else(|| "Directory slab size overflow".to_string())?;
+        }
+        if self
             .slab
-            .append_str(seg)
-            .expect("directory segment exceeds slab capacity");
+            .len()
+            .checked_add(required_slab_bytes)
+            .is_none_or(|total| total > u32::MAX as usize)
+        {
+            return Err("Directory segment exceeds slab capacity".to_string());
+        }
+        if self
+            .nodes
+            .len()
+            .checked_add(pending.len())
+            .is_none_or(|total| total > u32::MAX as usize)
+        {
+            return Err("Directory table node count exceeds u32::MAX".to_string());
+        }
 
-        let tail_seg = seg.rsplit(['/', '\\']).next().unwrap_or("");
-        let tail_mask = compute_tail_mask(tail_seg);
-        let full_len = dir.len() as u32;
-        let id = self.nodes.len() as u32;
+        let mut parent = resolved_parent;
+        for (full_dir, full_hash, sep, seg) in pending.into_iter().rev() {
+            let (seg_off, seg_len) = self
+                .slab
+                .append_str(seg)
+                .ok_or_else(|| "Directory segment exceeds slab capacity".to_string())?;
 
-        self.nodes.push(DirNode {
-            parent,
-            seg_off,
-            full_len,
-            seg_len,
-            sep,
-            _pad: 0,
-            full_hash: hash,
-            tail_mask,
-        });
-        self.insert_bucket(id, hash);
-        id
+            let tail_seg = seg.rsplit(['/', '\\']).next().unwrap_or("");
+            let tail_mask = compute_tail_mask(tail_seg);
+            let full_len = full_dir.len() as u32;
+            let id = self.nodes.len() as u32;
+
+            self.nodes.push(DirNode {
+                parent,
+                seg_off,
+                full_len,
+                seg_len,
+                sep,
+                _pad: 0,
+                full_hash,
+                tail_mask,
+            });
+            self.insert_bucket(id, full_hash);
+            parent = id;
+        }
+        Ok(parent)
+    }
+
+    pub fn intern_dir(&mut self, dir: &str) -> u32 {
+        self.try_intern_dir(dir)
+            .expect("directory segment exceeds slab capacity")
     }
 
     /// Reconstructs a directory string into `out` (cleared first) without extra allocations.
@@ -443,12 +510,26 @@ impl DirTable {
         Ok(id)
     }
 
-    pub fn reserve_buckets_for(&mut self, expected_nodes: usize) {
-        let needed = (expected_nodes * 2).next_power_of_two().max(16);
+    pub fn try_reserve_buckets_for(&mut self, expected_nodes: usize) -> Result<(), String> {
+        let doubled = expected_nodes
+            .checked_mul(2)
+            .ok_or_else(|| "DirTable bucket capacity overflow".to_string())?;
+        let needed = doubled
+            .checked_next_power_of_two()
+            .ok_or_else(|| "DirTable bucket power-of-two overflow".to_string())?
+            .max(16);
         if needed > self.buckets.len() {
+            self.buckets
+                .try_reserve(needed - self.buckets.len())
+                .map_err(|e| format!("DirTable bucket allocation failed: {e}"))?;
             self.buckets.resize(needed, EMPTY_BUCKET);
             self.rehash_buckets();
         }
+        Ok(())
+    }
+
+    pub fn reserve_buckets_for(&mut self, expected_nodes: usize) {
+        let _ = self.try_reserve_buckets_for(expected_nodes);
     }
 
     fn lookup_with_hash(&self, dir: &str, hash: u64) -> Option<u32> {
@@ -561,5 +642,20 @@ mod tests {
         );
         assert_eq!(dirs.build_full_path(root_id, "etc"), "/etc");
         assert_eq!(dirs.build_full_path(empty_id, "foo.txt"), "foo.txt");
+    }
+
+    #[test]
+    fn try_intern_dir_handles_deep_paths_iteratively_and_rejects_oversized_segment() {
+        let mut dirs = DirTable::with_capacity(16);
+        let deep = format!("/{}", vec!["a"; 4096].join("/"));
+        let deep_id = dirs.try_intern_dir(&deep).expect("deep path should intern");
+        let mut out = String::new();
+        dirs.write_dir_to(deep_id, &mut out);
+        assert_eq!(out, deep);
+
+        let before_nodes = dirs.len();
+        let oversized = format!("/ok/{}", "x".repeat((u16::MAX as usize) + 1));
+        assert!(dirs.try_intern_dir(&oversized).is_err());
+        assert_eq!(dirs.len(), before_nodes);
     }
 }

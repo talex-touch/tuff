@@ -231,6 +231,7 @@ export class ClipboardService {
 
     try {
       const rawModule = await (this.options.importWatcherModule?.() ?? loadClipboardWatcherModule())
+      if (this.options.isDestroyed()) return
       const watcherModule = resolveClipboardWatcherModule(rawModule)
       if (!watcherModule || typeof watcherModule.startWatch !== 'function') {
         const exportKeys =
@@ -244,6 +245,7 @@ export class ClipboardService {
         return
       }
 
+      if (this.options.isDestroyed()) return
       const watcher = watcherModule.startWatch(() => {
         if (this.options.isDestroyed()) return
         this.nativeChangeCount += 1
@@ -251,6 +253,15 @@ export class ClipboardService {
           this.options.scheduleMonitor({ bypassCooldown: true, source: 'native-watch' })
         })
       })
+
+      if (this.options.isDestroyed()) {
+        try {
+          watcher.stop()
+        } catch {
+          // ignore cleanup errors on destroy race
+        }
+        return
+      }
 
       this.watcher = watcher
       // Retain the resolved module so captures can read off its native thread

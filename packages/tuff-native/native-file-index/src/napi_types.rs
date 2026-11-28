@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 use napi::bindgen_prelude::Function;
@@ -263,10 +264,27 @@ pub fn to_js_checkpoint(ck: FsEventsVolumeCheckpoint) -> JsFsEventsCheckpoint {
 }
 
 pub fn start_fsevents_watcher(
-    handle: &Mutex<Option<NativeStreamHandle>>,
+    env: Env,
+    handle: &Arc<Mutex<Option<NativeStreamHandle>>>,
+    cleanup_registered: &AtomicBool,
     options: JsFsEventsStartOptions,
     on_events: Function<'_, Vec<JsFsEventItem>, ()>,
 ) -> Result<JsFsEventsStartResult> {
+    if cleanup_registered
+        .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+        .is_ok()
+    {
+        let weak_handle = Arc::downgrade(handle);
+        if let Err(err) = env.add_env_cleanup_hook(weak_handle, |weak| {
+            if let Some(strong) = weak.upgrade() {
+                let _ = stop_fsevents_watcher(&strong);
+            }
+        }) {
+            cleanup_registered.store(false, Ordering::Release);
+            return Err(err);
+        }
+    }
+
     let mut guard = handle
         .lock()
         .map_err(|_| Error::new(Status::GenericFailure, "Watcher lock poisoned"))?;
@@ -276,6 +294,7 @@ pub fn start_fsevents_watcher(
 
     let tsfn = on_events
         .build_threadsafe_function::<Vec<JsFsEventItem>>()
+        .weak::<true>()
         .max_queue_size::<256>()
         .build_callback(|ctx: ThreadsafeCallContext<Vec<JsFsEventItem>>| Ok(ctx.value))?;
 
@@ -311,9 +330,7 @@ pub fn start_fsevents_watcher(
 }
 
 pub fn stop_fsevents_watcher(handle: &Mutex<Option<NativeStreamHandle>>) -> Result<()> {
-    let mut guard = handle
-        .lock()
-        .map_err(|_| Error::new(Status::GenericFailure, "Watcher lock poisoned"))?;
+    let mut guard = handle.lock().unwrap_or_else(|e| e.into_inner());
     if let Some(prev) = guard.take() {
         prev.stop();
     }

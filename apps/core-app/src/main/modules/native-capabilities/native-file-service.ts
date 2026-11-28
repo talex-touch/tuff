@@ -12,7 +12,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { resolveLocalFilePath, toTfileUrl } from '@talex-touch/utils/network'
-import { nativeImage, shell } from 'electron'
+import { dialog, nativeImage, shell } from 'electron'
 import {
   IMAGE_THUMBNAIL_EXTENSIONS,
   VIDEO_THUMBNAIL_EXTENSIONS,
@@ -29,6 +29,118 @@ type CodedError = Error & { code?: string }
 const IMAGE_EXTENSIONS = new Set([...IMAGE_THUMBNAIL_EXTENSIONS, 'svg', 'ico'])
 const AUDIO_EXTENSIONS = new Set(['mp3', 'wav', 'flac', 'aac', 'm4a', 'ogg', 'opus'])
 const VIDEO_EXTENSIONS = new Set([...VIDEO_THUMBNAIL_EXTENSIONS])
+
+/**
+ * Executable, script, installer, shortcut, and macOS bundle extensions that plugin callers
+ * must never launch via `shell.openPath()`.
+ */
+const BLOCKED_PLUGIN_OPEN_EXTENSIONS = new Set([
+  'action',
+  'app',
+  'appex',
+  'appimage',
+  'applescript',
+  'bash',
+  'bat',
+  'bin',
+  'cmd',
+  'com',
+  'command',
+  'cpl',
+  'csh',
+  'desktop',
+  'dll',
+  'dmg',
+  'dylib',
+  'exe',
+  'fish',
+  'hta',
+  'inetloc',
+  'inf',
+  'jar',
+  'js',
+  'jse',
+  'ksh',
+  'lnk',
+  'mpkg',
+  'msc',
+  'msi',
+  'msp',
+  'osa',
+  'out',
+  'pif',
+  'pkg',
+  'prefpane',
+  'ps1',
+  'psd1',
+  'psm1',
+  'reg',
+  'run',
+  'scpt',
+  'scptd',
+  'scr',
+  'sh',
+  'so',
+  'terminal',
+  'tool',
+  'url',
+  'vbe',
+  'vbs',
+  'webloc',
+  'workflow',
+  'wsf',
+  'wsh',
+  'zsh'
+])
+
+export interface NativeFileOpenCallerOptions {
+  isPluginCaller?: boolean
+  pluginName?: string
+  confirmPluginOpen?: (targetPath: string, pluginName?: string) => Promise<boolean>
+}
+
+async function isBlockedPluginOpenTarget(
+  filePath: string,
+  stats: Awaited<ReturnType<typeof fs.stat>>
+): Promise<boolean> {
+  if (BLOCKED_PLUGIN_OPEN_EXTENSIONS.has(getExtension(filePath))) {
+    return true
+  }
+  try {
+    const resolved = typeof fs.realpath === 'function' ? await fs.realpath(filePath) : filePath
+    if (BLOCKED_PLUGIN_OPEN_EXTENSIONS.has(getExtension(resolved))) {
+      return true
+    }
+  } catch {
+    // Keep extension check on the requested path if realpath is unavailable.
+  }
+  if (
+    process.platform !== 'win32' &&
+    stats.isFile() &&
+    typeof stats.mode === 'number' &&
+    (stats.mode & 0o111) !== 0
+  ) {
+    return true
+  }
+  return false
+}
+
+async function confirmPluginFileOpen(targetPath: string, pluginName?: string): Promise<boolean> {
+  if (!dialog || typeof dialog.showMessageBox !== 'function') {
+    return false
+  }
+  const callerLabel = pluginName ? `Plugin "${pluginName}"` : 'A plugin'
+  const result = await dialog.showMessageBox({
+    type: 'warning',
+    buttons: ['Open', 'Cancel'],
+    defaultId: 1,
+    cancelId: 1,
+    title: 'Confirm File Open',
+    message: `${callerLabel} wants to open "${path.basename(targetPath)}".`,
+    detail: targetPath
+  })
+  return result.response === 0
+}
 
 function createCodedError(message: string, code: string): CodedError {
   const error = new Error(message) as CodedError
@@ -265,9 +377,28 @@ export class NativeFileService {
     return { path: filePath, success: true }
   }
 
-  async open(request: NativeFilePathRequest): Promise<NativeFileActionResult> {
+  async open(
+    request: NativeFilePathRequest,
+    callerOptions?: NativeFileOpenCallerOptions
+  ): Promise<NativeFileActionResult> {
     const filePath = normalizePathRequest(request)
-    await getFileStats(filePath)
+    const stats = await getFileStats(filePath)
+    if (callerOptions?.isPluginCaller) {
+      if (await isBlockedPluginOpenTarget(filePath, stats)) {
+        throw createCodedError(
+          'Opening executable, script, or application package files is blocked for plugin callers',
+          'ERR_NATIVE_FILE_OPEN_BLOCKED'
+        )
+      }
+      const confirmFn = callerOptions.confirmPluginOpen ?? confirmPluginFileOpen
+      const approved = await confirmFn(filePath, callerOptions.pluginName)
+      if (!approved) {
+        throw createCodedError(
+          'Opening file was declined by the user',
+          'ERR_NATIVE_FILE_OPEN_DECLINED'
+        )
+      }
+    }
     const message = await shell.openPath(filePath)
     return {
       path: filePath,

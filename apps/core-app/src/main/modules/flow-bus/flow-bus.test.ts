@@ -96,6 +96,24 @@ vi.mock('./flow-audit-logger', () => ({
   }
 }))
 
+const permissionMocks = vi.hoisted(() => ({
+  enforcePermission: vi.fn()
+}))
+
+vi.mock('../permission', () => ({
+  getPermissionModule: vi.fn(() => ({
+    enforcePermission: permissionMocks.enforcePermission
+  }))
+}))
+
+vi.mock('../plugin/plugin-module', () => ({
+  pluginModule: {
+    pluginManager: {
+      plugins: new Map()
+    }
+  }
+}))
+
 import { FlowErrorCode } from '@talex-touch/utils/types/flow'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { flowBus } from './flow-bus'
@@ -284,6 +302,55 @@ describe('FlowBus delivery', () => {
       expect(second.state).toBe('FAILED')
       expect(second.error?.message).toBe('Flow target confirmation required')
       expect(flowConsentMock.store.consumeConfirmationOnce).toHaveBeenCalledTimes(2)
+    } finally {
+      dispose()
+    }
+  })
+
+  it('rejects unserializable payloads instead of estimating size as 0', async () => {
+    const circular: Record<string, unknown> = {}
+    circular.self = circular
+    const result = await flowBus.dispatch('sender', {
+      type: 'json',
+      data: circular
+    })
+
+    expect(result.state).toBe('FAILED')
+    expect(result.error?.code).toBe(FlowErrorCode.PAYLOAD_INVALID)
+  })
+
+  it('requires clipboard:write permission before plugin fallback copy mutates clipboard', async () => {
+    flowTargetRegistry.registerTarget(
+      'notes',
+      {
+        id: 'capture',
+        name: 'Capture',
+        supportedTypes: ['text']
+      },
+      { isEnabled: true, hasFlowHandler: true }
+    )
+    const dispose = flowBus.registerDeliveryHandler('notes', async () => {
+      throw new Error('delivery failed')
+    })
+
+    try {
+      permissionMocks.enforcePermission.mockImplementationOnce(() => {
+        throw new Error('Permission denied: clipboard:write')
+      })
+
+      const result = await flowBus.dispatch(
+        'plugin-sender',
+        { type: 'text', data: 'copy me' },
+        { preferredTarget: 'notes.capture', fallbackAction: 'copy' }
+      )
+
+      expect(result.state).toBe('FAILED')
+      expect(permissionMocks.enforcePermission).toHaveBeenCalledWith(
+        'plugin-sender',
+        'clipboard:write',
+        undefined
+      )
+      expect(electronMock.clipboard.writeText).not.toHaveBeenCalled()
     } finally {
       dispose()
     }

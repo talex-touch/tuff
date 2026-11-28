@@ -109,8 +109,10 @@ export class LocalOfflineVoiceProvider implements VoiceProviderAdapter {
     let partialMarkBytes = 0
     let lastPartialText = ''
     let partialInFlight = false
-    /** The in-flight partial decode, so stopping can cancel work whose answer is already moot. */
+    /** The in-flight partial decode, so stopping or aborting can cancel work whose answer is already moot. */
     let partialAbort: AbortController | null = null
+    /** Cancels an in-flight final decode if abort() arrives during settle(). */
+    const sessionAbort = new AbortController()
     let closed = false
 
     const decodeCaptured = async (extraSignal?: AbortSignal): Promise<LocalTranscribeResult> =>
@@ -142,7 +144,7 @@ export class LocalOfflineVoiceProvider implements VoiceProviderAdapter {
       try {
         const result = capturedBytes === 0
           ? { text: '' }
-          : await decodeCaptured()
+          : await decodeCaptured(sessionAbort.signal)
         events.push({
           type: 'final',
           text: result.text,
@@ -205,6 +207,9 @@ export class LocalOfflineVoiceProvider implements VoiceProviderAdapter {
         await settle()
       },
       abort: async (reason?: string) => {
+        partialAbort?.abort()
+        partialAbort = null
+        sessionAbort.abort()
         if (closed)
           return
         closed = true

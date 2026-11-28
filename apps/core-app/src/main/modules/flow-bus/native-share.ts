@@ -12,6 +12,7 @@ import type {
   NativeShareTarget,
   NativeShareResult
 } from '@talex-touch/utils'
+import { randomBytes } from 'node:crypto'
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
@@ -19,8 +20,27 @@ import { shell } from 'electron'
 import { execFileSafe } from '@talex-touch/utils/common/utils/safe-shell'
 import { openValidatedExternalUrl } from '../../utils/external-url-policy'
 import { t } from '../../utils/i18n-helper'
+import { getPermissionModule } from '../permission'
 import { flowBusShareLog } from './logger'
 import { shareNotificationService } from './share-notification'
+
+const MAX_SHARE_IMAGE_BYTES = 5 * 1024 * 1024
+const SHARE_TEMP_FILE_TTL_MS = 60_000
+const ALLOWED_SHARE_IMAGE_EXTENSIONS: Readonly<Record<string, string>> = {
+  'image/png': 'png',
+  'image/jpeg': 'jpg',
+  'image/jpg': 'jpg',
+  'image/webp': 'webp',
+  'image/gif': 'gif',
+  'image/bmp': 'bmp',
+  'image/tiff': 'tiff',
+  'image/heic': 'heic'
+}
+
+export interface NativeShareCallerContext {
+  callerPluginId?: string
+  callerSdkApi?: number
+}
 
 // osascript ends its error with AppleScript's number in parentheses. -1743 is macOS refusing to let
 // Tuff send Apple events to the app it shares through, until the user allows it under Automation.
@@ -82,8 +102,39 @@ export const NATIVE_SHARE_TARGETS = {
  */
 export class NativeShareService {
   private static instance: NativeShareService | null = null
+  private readonly trackedTempFiles = new Map<string, NodeJS.Timeout>()
 
   private constructor() {}
+
+  async cleanupTempFiles(): Promise<void> {
+    const paths = Array.from(this.trackedTempFiles.keys())
+    for (const [filePath, timer] of this.trackedTempFiles.entries()) {
+      clearTimeout(timer)
+      this.trackedTempFiles.delete(filePath)
+    }
+    await Promise.all(paths.map((filePath) => this.deleteTempFile(filePath)))
+  }
+
+  private async deleteTempFile(filePath: string): Promise<void> {
+    const timer = this.trackedTempFiles.get(filePath)
+    if (timer) {
+      clearTimeout(timer)
+      this.trackedTempFiles.delete(filePath)
+    }
+    try {
+      await fs.unlink?.(filePath)
+    } catch {
+      // ignore best-effort cleanup errors
+    }
+  }
+
+  private scheduleTempFileCleanup(filePath: string): void {
+    const timer = setTimeout(() => {
+      void this.deleteTempFile(filePath)
+    }, SHARE_TEMP_FILE_TTL_MS)
+    timer.unref?.()
+    this.trackedTempFiles.set(filePath, timer)
+  }
 
   static getInstance(): NativeShareService {
     if (!NativeShareService.instance) {
@@ -198,14 +249,20 @@ export class NativeShareService {
   /**
    * Shares content using native system share
    */
-  async share(options: NativeShareOptions): Promise<NativeShareResult> {
+  async share(
+    options: NativeShareOptions,
+    callerContext?: NativeShareCallerContext
+  ): Promise<NativeShareResult> {
     let result: NativeShareResult
+    let createdTempFile: string | null = null
 
     try {
-      const normalizedOptions = await this.materializeImageDataUrl(options)
+      const materialized = await this.materializeImageDataUrl(options)
+      createdTempFile = materialized.tempFilePath
+      const normalizedOptions = materialized.options
 
       if (process.platform === 'darwin') {
-        result = await this.shareMacOS(normalizedOptions)
+        result = await this.shareMacOS(normalizedOptions, callerContext)
       } else if (process.platform === 'win32') {
         result = await this.shareWindows(normalizedOptions)
       } else {
@@ -213,6 +270,14 @@ export class NativeShareService {
       }
     } catch (error) {
       result = { success: false, error: describeShareFailure(error) }
+    } finally {
+      if (createdTempFile) {
+        if (!result?.success) {
+          await this.deleteTempFile(createdTempFile)
+        } else {
+          this.scheduleTempFileCleanup(createdTempFile)
+        }
+      }
     }
 
     // Show notification for share result
@@ -224,7 +289,10 @@ export class NativeShareService {
   /**
    * Shares using macOS Share Sheet via AppleScript
    */
-  private async shareMacOS(options: NativeShareOptions): Promise<NativeShareResult> {
+  private async shareMacOS(
+    options: NativeShareOptions,
+    callerContext?: NativeShareCallerContext
+  ): Promise<NativeShareResult> {
     const target = this.normalizeTarget(options.target)
     const { text, url, files } = options
     const shareBody = buildShareBody(text, url)
@@ -238,17 +306,20 @@ export class NativeShareService {
     }
 
     if (target === 'messages' && shareBody) {
-      return await this.shareMessages(shareBody)
+      return await this.shareMessages(shareBody, callerContext)
     }
 
     if (!target || target === 'system') {
-      return await this.shareMacSystem(options)
+      return await this.shareMacSystem(options, callerContext)
     }
 
     return { success: false, error: t('nativeShare.errors.noContent') }
   }
 
-  private async shareMacSystem(options: NativeShareOptions): Promise<NativeShareResult> {
+  private async shareMacSystem(
+    options: NativeShareOptions,
+    callerContext?: NativeShareCallerContext
+  ): Promise<NativeShareResult> {
     // The picker answers with the label it showed, so the labels are both what the user reads and
     // how the choice is matched back to a target.
     const availableTargets: Array<{ label: string; target: NativeShareTarget }> = []
@@ -271,7 +342,7 @@ export class NativeShareService {
     }
 
     if (dedupedTargets.length === 1) {
-      return await this.shareMacTarget(dedupedTargets[0].target, options)
+      return await this.shareMacTarget(dedupedTargets[0].target, options, callerContext)
     }
 
     const choices = dedupedTargets
@@ -291,12 +362,13 @@ return item 1 of shareChoice
       return { success: false, error: t('nativeShare.errors.cancelled') }
     }
 
-    return await this.shareMacTarget(choice.target, options)
+    return await this.shareMacTarget(choice.target, options, callerContext)
   }
 
   private async shareMacTarget(
     target: NativeShareTarget,
-    options: NativeShareOptions
+    options: NativeShareOptions,
+    callerContext?: NativeShareCallerContext
   ): Promise<NativeShareResult> {
     if (target === 'airdrop' && options.files?.length) {
       return await this.shareAirDrop(options.files)
@@ -306,7 +378,7 @@ return item 1 of shareChoice
     }
     const shareBody = buildShareBody(options.text, options.url)
     if (target === 'messages' && shareBody) {
-      return await this.shareMessages(shareBody)
+      return await this.shareMessages(shareBody, callerContext)
     }
     return { success: false, error: t('nativeShare.errors.targetUnsupported') }
   }
@@ -400,9 +472,23 @@ return item 1 of shareChoice
   /**
    * Shares via Messages (iMessage)
    */
-  private async shareMessages(text: string): Promise<NativeShareResult> {
+  private async shareMessages(
+    text: string,
+    callerContext?: NativeShareCallerContext
+  ): Promise<NativeShareResult> {
     if (process.platform !== 'darwin') {
       return { success: false, error: t('nativeShare.errors.messagesMacOnly') }
+    }
+
+    if (callerContext?.callerPluginId) {
+      const perm = getPermissionModule()
+      if (perm) {
+        perm.enforcePermission(
+          callerContext.callerPluginId,
+          'clipboard:write',
+          callerContext.callerSdkApi
+        )
+      }
     }
 
     const script = `
@@ -451,38 +537,62 @@ return item 1 of shareChoice
     }
   }
 
-  private async materializeImageDataUrl(options: NativeShareOptions): Promise<NativeShareOptions> {
+  private async materializeImageDataUrl(
+    options: NativeShareOptions
+  ): Promise<{ options: NativeShareOptions; tempFilePath: string | null }> {
     const rawText = typeof options.text === 'string' ? options.text.trim() : ''
     if (options.files?.length || !rawText.startsWith('data:image/')) {
       return {
-        ...options,
-        target: this.normalizeTarget(options.target)
+        options: {
+          ...options,
+          target: this.normalizeTarget(options.target)
+        },
+        tempFilePath: null
       }
     }
 
     const match = rawText.match(/^data:(image\/[a-z0-9.+-]+);base64,(.+)$/i)
     if (!match) {
       return {
-        ...options,
-        target: this.normalizeTarget(options.target)
+        options: {
+          ...options,
+          target: this.normalizeTarget(options.target)
+        },
+        tempFilePath: null
       }
     }
 
     const mimeType = match[1].toLowerCase()
-    const base64Payload = match[2]
-    const extension = mimeType.split('/')[1]?.replace(/[^a-z0-9]+/gi, '') || 'png'
+    const extension = ALLOWED_SHARE_IMAGE_EXTENSIONS[mimeType]
+    if (!extension) {
+      throw new Error(`Unsupported image MIME type for native share: ${mimeType}`)
+    }
+
+    const base64Payload = match[2].replace(/\s+/g, '')
+    const maxEncodedChars = Math.ceil((MAX_SHARE_IMAGE_BYTES * 4) / 3) + 4
+    if (base64Payload.length > maxEncodedChars) {
+      throw new Error(`Native share image exceeds maximum size (${MAX_SHARE_IMAGE_BYTES} bytes)`)
+    }
+    const decoded = Buffer.from(base64Payload, 'base64')
+    if (decoded.byteLength === 0 || decoded.byteLength > MAX_SHARE_IMAGE_BYTES) {
+      throw new Error(`Native share image exceeds maximum size (${MAX_SHARE_IMAGE_BYTES} bytes)`)
+    }
+
     const tempFilePath = path.join(
       os.tmpdir(),
-      `tuff-native-share-${Date.now()}-${Math.random().toString(16).slice(2)}.${extension}`
+      `tuff-native-share-${Date.now()}-${randomBytes(12).toString('hex')}.${extension}`
     )
 
-    await fs.writeFile(tempFilePath, Buffer.from(base64Payload, 'base64'))
+    await fs.writeFile(tempFilePath, decoded, { flag: 'wx', mode: 0o600 })
 
     return {
-      ...options,
-      text: undefined,
-      files: [tempFilePath],
-      target: this.normalizeTarget(options.target)
+      options: {
+        ...options,
+        text: undefined,
+        files: [tempFilePath],
+        target: this.normalizeTarget(options.target)
+      },
+      tempFilePath
     }
   }
 

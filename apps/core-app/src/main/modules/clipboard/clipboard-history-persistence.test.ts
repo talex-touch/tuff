@@ -205,4 +205,45 @@ describe('clipboard-history-persistence', () => {
 
     expect(onChange).not.toHaveBeenCalled()
   })
+
+  it('filters queryHistoryByMeta using the caller-provided source rather than hardcoded custom', async () => {
+    const seenWhereArgs: unknown[] = []
+    const db = {
+      select: () => ({
+        from: () => ({
+          where: (cond: unknown) => {
+            seenWhereArgs.push(cond)
+            return {
+              orderBy: () => ({
+                limit: async () => []
+              })
+            }
+          }
+        })
+      })
+    }
+    const history = new ClipboardHistoryPersistence()
+    history.setDatabase(db as never)
+
+    await history.queryHistoryByMeta({ source: 'ocr-pipeline' })
+    const collectedParams: unknown[] = []
+    const visit = (node: unknown, seen = new Set<unknown>()): void => {
+      if (!node || typeof node !== 'object' || seen.has(node)) return
+      seen.add(node)
+      if (Array.isArray(node)) {
+        for (const entry of node) visit(entry, seen)
+        return
+      }
+      const record = node as Record<string, unknown>
+      if ('value' in record && typeof record.value === 'string') {
+        collectedParams.push(record.value)
+      }
+      if ('queryChunks' in record) {
+        visit(record.queryChunks, seen)
+      }
+    }
+    visit(seenWhereArgs)
+    expect(collectedParams).toContain(JSON.stringify('ocr-pipeline'))
+    expect(collectedParams).not.toContain(JSON.stringify('custom'))
+  })
 })

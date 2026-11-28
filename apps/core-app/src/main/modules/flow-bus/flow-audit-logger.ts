@@ -45,6 +45,30 @@ export interface FlowAuditEntry {
   metadata?: Record<string, unknown>
 }
 
+const MAX_AUDIT_LOG_LIMIT = 1000
+
+function safeParseAuditMetadata(raw: string | null): Record<string, unknown> | undefined {
+  if (!raw) {
+    return undefined
+  }
+  try {
+    const parsed: unknown = JSON.parse(raw)
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>
+    }
+    return undefined
+  } catch {
+    return undefined
+  }
+}
+
+function clampAuditLimit(limit: number): number {
+  if (!Number.isFinite(limit)) {
+    return 100
+  }
+  return Math.min(Math.max(1, Math.floor(limit)), MAX_AUDIT_LOG_LIMIT)
+}
+
 /**
  * FlowAuditLogger
  *
@@ -183,7 +207,7 @@ export class FlowAuditLogger {
       errorCode: row.errorCode as FlowErrorCode | undefined,
       errorMessage: row.errorMessage ?? undefined,
       latency: row.latency ?? undefined,
-      metadata: row.metadata ? JSON.parse(row.metadata) : undefined
+      metadata: safeParseAuditMetadata(row.metadata)
     }))
   }
 
@@ -193,12 +217,13 @@ export class FlowAuditLogger {
   async getRecentLogs(limit: number = 100): Promise<FlowAuditEntry[]> {
     const { desc } = await import('drizzle-orm')
     const db = databaseModule.getDb()
+    const safeLimit = clampAuditLimit(limit)
 
     const rows = await db
       .select()
       .from(flowAuditLogs)
       .orderBy(desc(flowAuditLogs.timestamp))
-      .limit(limit)
+      .limit(safeLimit)
 
     return rows.map((row) => ({
       sessionId: row.sessionId,
@@ -214,7 +239,7 @@ export class FlowAuditLogger {
       errorCode: row.errorCode as FlowErrorCode | undefined,
       errorMessage: row.errorMessage ?? undefined,
       latency: row.latency ?? undefined,
-      metadata: row.metadata ? JSON.parse(row.metadata) : undefined
+      metadata: safeParseAuditMetadata(row.metadata)
     }))
   }
 }

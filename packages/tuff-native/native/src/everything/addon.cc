@@ -127,6 +127,57 @@ std::wstring ReadEnvVar(const wchar_t* key) {
   return value;
 }
 
+bool IsAbsoluteLocalWindowsPath(const std::wstring& path) {
+  if (path.size() < 3) {
+    return false;
+  }
+  const wchar_t drive = path[0];
+  const bool isAsciiDrive =
+      (drive >= L'A' && drive <= L'Z') || (drive >= L'a' && drive <= L'z');
+  if (!isAsciiDrive || path[1] != L':') {
+    return false;
+  }
+  return path[2] == L'\\' || path[2] == L'/';
+}
+
+std::wstring GetDirectoryName(const std::wstring& fullPath) {
+  const auto sep = fullPath.find_last_of(L"\\/");
+  if (sep == std::wstring::npos || sep == 0) {
+    return L"";
+  }
+  return fullPath.substr(0, sep);
+}
+
+std::wstring GetModuleDirectory(HMODULE module) {
+  std::vector<wchar_t> buffer(MAX_PATH, L'\0');
+  while (true) {
+    const DWORD written = ::GetModuleFileNameW(
+        module, buffer.data(), static_cast<DWORD>(buffer.size()));
+    if (written == 0) {
+      return L"";
+    }
+    if (written < buffer.size()) {
+      return GetDirectoryName(std::wstring(buffer.data(), written));
+    }
+    if (buffer.size() >= 32768) {
+      return L"";
+    }
+    buffer.resize(buffer.size() * 2, L'\0');
+  }
+}
+
+std::wstring GetAddonDirectory() {
+  HMODULE selfModule = nullptr;
+  if (!::GetModuleHandleExW(
+          GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+              GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+          reinterpret_cast<LPCWSTR>(&GetAddonDirectory),
+          &selfModule)) {
+    return L"";
+  }
+  return GetModuleDirectory(selfModule);
+}
+
 std::wstring JoinPath(const std::wstring& base, const std::wstring& file) {
   if (base.empty()) {
     return file;
@@ -311,7 +362,15 @@ class EverythingApi {
   }
 
   bool LoadFromPath(const std::wstring& candidate, std::string& errorMessage) {
-    module_ = ::LoadLibraryW(candidate.c_str());
+    if (!IsAbsoluteLocalWindowsPath(candidate)) {
+      errorMessage = "Refusing to load Everything SDK DLL from non-absolute or remote path";
+      return false;
+    }
+
+    module_ = ::LoadLibraryExW(
+        candidate.c_str(),
+        nullptr,
+        LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_DEFAULT_DIRS);
     if (module_ == nullptr) {
       const DWORD winErr = ::GetLastError();
       errorMessage = "Unable to load Everything SDK DLL from candidate (winerr=" +
@@ -358,29 +417,43 @@ class EverythingApi {
 
   std::vector<std::wstring> BuildCandidatePaths() const {
     std::vector<std::wstring> candidates;
+    auto pushIfAbsolute = [&candidates](const std::wstring& path) {
+      if (IsAbsoluteLocalWindowsPath(path)) {
+        candidates.push_back(path);
+      }
+    };
+    auto pushDirCandidates = [&pushIfAbsolute](const std::wstring& dir) {
+      if (!IsAbsoluteLocalWindowsPath(dir)) {
+        return;
+      }
+#if defined(_WIN64)
+      pushIfAbsolute(JoinPath(dir, L"Everything64.dll"));
+#else
+      pushIfAbsolute(JoinPath(dir, L"Everything32.dll"));
+#endif
+      pushIfAbsolute(JoinPath(dir, L"Everything.dll"));
+    };
 
     const auto customDllPath = ReadEnvVar(L"TALEX_EVERYTHING_DLL_PATH");
     if (!customDllPath.empty()) {
-      candidates.push_back(customDllPath);
+      pushIfAbsolute(customDllPath);
     }
 
-#if defined(_WIN64)
-    candidates.push_back(L"Everything64.dll");
-#else
-    candidates.push_back(L"Everything32.dll");
-#endif
-    candidates.push_back(L"Everything.dll");
+    // Never resolve bare relative DLL names against CWD or PATH.
+    // Restrict search to the addon/application directory and standard Program Files paths.
+    pushDirCandidates(GetAddonDirectory());
+    pushDirCandidates(GetModuleDirectory(nullptr));
 
     const auto programFiles = ReadEnvVar(L"PROGRAMFILES");
     const auto programFilesX86 = ReadEnvVar(L"PROGRAMFILES(X86)");
     if (!programFiles.empty()) {
-      candidates.push_back(JoinPath(programFiles, L"Everything\\Everything64.dll"));
-      candidates.push_back(JoinPath(programFiles, L"Everything\\Everything.dll"));
-      candidates.push_back(JoinPath(programFiles, L"Everything\\Everything32.dll"));
+      pushIfAbsolute(JoinPath(programFiles, L"Everything\\Everything64.dll"));
+      pushIfAbsolute(JoinPath(programFiles, L"Everything\\Everything.dll"));
+      pushIfAbsolute(JoinPath(programFiles, L"Everything\\Everything32.dll"));
     }
     if (!programFilesX86.empty()) {
-      candidates.push_back(JoinPath(programFilesX86, L"Everything\\Everything32.dll"));
-      candidates.push_back(JoinPath(programFilesX86, L"Everything\\Everything.dll"));
+      pushIfAbsolute(JoinPath(programFilesX86, L"Everything\\Everything32.dll"));
+      pushIfAbsolute(JoinPath(programFilesX86, L"Everything\\Everything.dll"));
     }
 
     return candidates;
@@ -481,7 +554,7 @@ Napi::Value SearchWindows(const Napi::CallbackInfo& info) {
   }
 
   const DWORD total = api.getNumResults();
-  auto resultArray = Napi::Array::New(env, total);
+  auto resultArray = Napi::Array::New(env);
 
   uint32_t jsIndex = 0;
   for (DWORD i = 0; i < total; ++i) {

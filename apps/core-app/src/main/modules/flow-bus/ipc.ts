@@ -9,6 +9,7 @@ import {
   type HandlerContext,
   type ITuffTransportMain
 } from '@talex-touch/utils/transport/main'
+import { isAuthoritativePluginContext } from '@talex-touch/utils/transport/security/plugin-identity'
 import { getPermissionModule } from '../permission'
 import { pluginModule } from '../plugin/plugin-module'
 import { flowBus } from './flow-bus'
@@ -16,6 +17,16 @@ import { flowConsentStore, requiresFlowConsent } from './flow-consent'
 import { flowBusIpcLog } from './logger'
 import { flowSessionManager } from './session-manager'
 import { flowTargetRegistry } from './target-registry'
+
+function createFlowSecurityError(code: string, message: string): Error & { code: string } {
+  const err = new Error(message) as Error & { code: string }
+  err.code = code
+  return err
+}
+
+function isPluginRecipient(id?: string): id is string {
+  return Boolean(id && id !== 'corebox' && id !== 'native' && id !== 'system')
+}
 
 /**
  * FlowBusIPC
@@ -80,14 +91,49 @@ export class FlowBusIPC {
       return typeof sourcePluginId === 'string' ? sourcePluginId : undefined
     }
 
+    const resolveVerifiedSdkapi = (
+      pluginId: string,
+      payloadRecord: Record<string, unknown> | null
+    ): number | undefined => {
+      const payloadSdkapi =
+        typeof payloadRecord?._sdkapi === 'number' ? payloadRecord._sdkapi : undefined
+      const declaredSdkapi = resolvePluginSdkapi(pluginId)
+      if (
+        typeof declaredSdkapi === 'number' &&
+        typeof payloadSdkapi === 'number' &&
+        payloadSdkapi !== declaredSdkapi
+      ) {
+        throw createFlowSecurityError(
+          'SDKAPI_MISMATCH',
+          `Plugin sdkapi mismatch: payload=${payloadSdkapi}, declared=${declaredSdkapi}`
+        )
+      }
+      return declaredSdkapi ?? payloadSdkapi
+    }
+
+    const getAuthoritativePluginOrThrow = (context: HandlerContext) => {
+      if (!context?.plugin) {
+        return undefined
+      }
+      if (!isAuthoritativePluginContext(context.plugin)) {
+        throw createFlowSecurityError(
+          'PERMISSION_DENIED',
+          'Flow operations require an authoritative plugin caller.'
+        )
+      }
+      return context.plugin
+    }
+
     const resolveActor = (context: HandlerContext, payload: unknown) => {
       const payloadRecord = toPayloadRecord(payload)
-      const contextPluginId = context?.plugin?.name
-      if (contextPluginId) {
-        const payloadSdkapi = payloadRecord?._sdkapi
-        const sdkapi =
-          typeof payloadSdkapi === 'number' ? payloadSdkapi : resolvePluginSdkapi(contextPluginId)
-        return { pluginId: contextPluginId, sdkapi }
+      const authoritativePlugin = getAuthoritativePluginOrThrow(context)
+      if (authoritativePlugin) {
+        const pluginId = authoritativePlugin.name
+        return {
+          pluginId,
+          sdkapi: resolveVerifiedSdkapi(pluginId, payloadRecord),
+          isPluginCaller: true as const
+        }
       }
 
       const payloadSenderId = payloadRecord?.senderId
@@ -101,26 +147,27 @@ export class FlowBusIPC {
           : undefined)
 
       if (!actorPluginId || actorPluginId === 'corebox') {
-        return {}
+        return { isPluginCaller: false as const }
       }
 
-      const payloadSdkapi = payloadRecord?._sdkapi
-      const sdkapi =
-        typeof payloadSdkapi === 'number' ? payloadSdkapi : resolvePluginSdkapi(actorPluginId)
-
-      return { pluginId: actorPluginId, sdkapi }
+      return {
+        pluginId: actorPluginId,
+        sdkapi: resolveVerifiedSdkapi(actorPluginId, payloadRecord),
+        isPluginCaller: false as const
+      }
     }
 
     const enforce = (context: HandlerContext, eventName: string, payload?: unknown) => {
-      const { pluginId, sdkapi } = resolveActor(context, payload)
-      if (!pluginId) {
-        return
+      const actor = resolveActor(context, payload)
+      if (!actor.pluginId) {
+        return actor
       }
       const perm = getPermissionModule()
       if (!perm) {
-        return
+        return actor
       }
-      perm.enforcePermission(pluginId, eventName, sdkapi)
+      perm.enforcePermission(actor.pluginId, eventName, actor.sdkapi)
+      return actor
     }
 
     const toFlowError = (
@@ -156,8 +203,19 @@ export class FlowBusIPC {
     this.transportDisposers.push(
       transport.on(FlowEvents.dispatch, async (payload, context) => {
         try {
-          enforce(context, 'flow:bus:dispatch', payload)
-          const senderId = payload.senderId ?? context?.plugin?.name
+          const actor = enforce(context, 'flow:bus:dispatch', payload)
+          let senderId: string | undefined
+          if (actor.isPluginCaller) {
+            if (payload.senderId && payload.senderId !== actor.pluginId) {
+              throw createFlowSecurityError(
+                'PERMISSION_DENIED',
+                'Flow senderId does not match the calling plugin.'
+              )
+            }
+            senderId = actor.pluginId
+          } else {
+            senderId = payload.senderId
+          }
           if (!senderId) {
             return { success: false, error: { message: 'senderId is required' } }
           }
@@ -185,83 +243,157 @@ export class FlowBusIPC {
 
     this.transportDisposers.push(
       transport.on(FlowEvents.getTargets, async (payload, context) => {
-        enforce(context, 'flow:bus:get-targets', payload)
-        const targets = flowBus.getAvailableTargets(payload?.payloadType)
-        return { success: true, data: targets }
+        try {
+          enforce(context, 'flow:bus:get-targets', payload)
+          const targets = flowBus.getAvailableTargets(payload?.payloadType)
+          return { success: true, data: targets }
+        } catch (error) {
+          return { success: false, error: toFlowError(error) }
+        }
       })
     )
 
     this.transportDisposers.push(
       transport.on(FlowEvents.cancel, async (payload, context) => {
-        enforce(context, 'flow:bus:cancel', payload)
-        const success = flowBus.cancel(payload.sessionId)
-        return { success, data: { cancelled: success } }
+        try {
+          const actor = enforce(context, 'flow:bus:cancel', payload)
+          const session = flowBus.getSession(payload.sessionId)
+          if (actor.isPluginCaller) {
+            if (
+              !session ||
+              (session.senderId !== actor.pluginId && session.targetPluginId !== actor.pluginId)
+            ) {
+              throw createFlowSecurityError(
+                'PERMISSION_DENIED',
+                'Only Flow session participants can cancel a session.'
+              )
+            }
+          }
+          const success = flowBus.cancel(payload.sessionId)
+          return { success, data: { cancelled: success } }
+        } catch (error) {
+          return { success: false, error: toFlowError(error) }
+        }
       })
     )
 
     this.transportDisposers.push(
       transport.on(FlowEvents.acknowledge, async (payload, context) => {
-        enforce(context, 'flow:bus:acknowledge', payload)
-        const success = flowBus.acknowledge(payload.sessionId, payload.ackPayload)
-        return { success, data: { acknowledged: success } }
+        try {
+          const actor = enforce(context, 'flow:bus:acknowledge', payload)
+          const session = flowBus.getSession(payload.sessionId)
+          if (actor.isPluginCaller) {
+            if (!session || session.targetPluginId !== actor.pluginId) {
+              throw createFlowSecurityError(
+                'PERMISSION_DENIED',
+                'Only the target plugin can acknowledge a Flow session.'
+              )
+            }
+          }
+          const success = flowBus.acknowledge(payload.sessionId, payload.ackPayload)
+          return { success, data: { acknowledged: success } }
+        } catch (error) {
+          return { success: false, error: toFlowError(error) }
+        }
       })
     )
 
     this.transportDisposers.push(
       transport.on(FlowEvents.reportError, async (payload, context) => {
-        enforce(context, 'flow:bus:report-error', payload)
-        const success = flowBus.reportError(payload.sessionId, payload.message || 'Unknown error')
-        return { success, data: { reported: success } }
+        try {
+          const actor = enforce(context, 'flow:bus:report-error', payload)
+          const session = flowBus.getSession(payload.sessionId)
+          if (actor.isPluginCaller) {
+            if (!session || session.targetPluginId !== actor.pluginId) {
+              throw createFlowSecurityError(
+                'PERMISSION_DENIED',
+                'Only the target plugin can report an error for a Flow session.'
+              )
+            }
+          }
+          const success = flowBus.reportError(payload.sessionId, payload.message || 'Unknown error')
+          return { success, data: { reported: success } }
+        } catch (error) {
+          return { success: false, error: toFlowError(error) }
+        }
       })
     )
 
     this.transportDisposers.push(
       transport.on(FlowEvents.selectTarget, async (payload, context) => {
-        enforce(context, 'flow:bus:select-target', payload)
-        const { sessionId, targetId } = payload
-
-        if (!sessionId) {
-          return {
-            success: false,
-            error: { message: 'sessionId is required' }
+        try {
+          if (context?.plugin) {
+            throw createFlowSecurityError(
+              'PERMISSION_DENIED',
+              'Flow target selection can only be resolved by app UI.'
+            )
           }
-        }
+          enforce(context, 'flow:bus:select-target', payload)
+          const { sessionId, targetId } = payload
 
-        flowBus.resolveTargetSelection(sessionId, targetId)
-        return {
-          success: true,
-          data: { resolved: true }
+          if (!sessionId) {
+            return {
+              success: false,
+              error: { message: 'sessionId is required' }
+            }
+          }
+
+          flowBus.resolveTargetSelection(sessionId, targetId)
+          return {
+            success: true,
+            data: { resolved: true }
+          }
+        } catch (error) {
+          return { success: false, error: toFlowError(error) }
         }
       })
     )
 
     this.transportDisposers.push(
-      transport.on(FlowEvents.checkConsent, async (payload) => {
-        const { senderId, targetId } = payload || {}
-        if (!senderId || !targetId) {
-          return { success: false, error: { message: 'senderId and targetId are required' } }
-        }
-        const target = flowTargetRegistry.getTarget(targetId)
-        if (!requiresFlowConsent(senderId, target)) {
+      transport.on(FlowEvents.checkConsent, async (payload, context) => {
+        try {
+          const authoritativePlugin = getAuthoritativePluginOrThrow(context)
+          const { targetId } = payload || {}
+          let senderId = payload?.senderId
+          if (authoritativePlugin) {
+            if (senderId && senderId !== authoritativePlugin.name) {
+              throw createFlowSecurityError(
+                'PERMISSION_DENIED',
+                'Plugins can only query their own Flow consent state.'
+              )
+            }
+            senderId = authoritativePlugin.name
+          }
+          if (!senderId || !targetId) {
+            return { success: false, error: { message: 'senderId and targetId are required' } }
+          }
+          const target = flowTargetRegistry.getTarget(targetId)
+          if (!requiresFlowConsent(senderId, target)) {
+            return {
+              success: true,
+              data: { allowed: true, requiresConfirmation: target?.requireConfirm === true }
+            }
+          }
+          const allowed = flowConsentStore.hasConsent(senderId, targetId)
           return {
             success: true,
-            data: { allowed: true, requiresConfirmation: target?.requireConfirm === true }
+            data: { allowed, requiresConfirmation: target?.requireConfirm === true }
           }
-        }
-        const allowed = flowConsentStore.hasConsent(senderId, targetId)
-        return {
-          success: true,
-          data: { allowed, requiresConfirmation: target?.requireConfirm === true }
+        } catch (error) {
+          return { success: false, error: toFlowError(error) }
         }
       })
     )
 
     this.transportDisposers.push(
       transport.on(FlowEvents.grantConsent, async (payload, context) => {
-        if (context?.plugin?.name) {
+        if (context?.plugin) {
           return {
             success: false,
-            error: { message: 'Flow consent can only be granted by app UI' }
+            error: {
+              code: 'PERMISSION_DENIED',
+              message: 'Flow consent can only be granted by app UI'
+            }
           }
         }
         const { senderId, targetId, mode } = payload || {}
@@ -323,40 +455,50 @@ export class FlowBusIPC {
   }
 
   /**
-   * Broadcasts session update to all windows
+   * Broadcasts session update to host UI windows and participant plugins only
    */
   private broadcastSessionUpdate(update: import('@talex-touch/utils').FlowSessionUpdate): void {
-    if (this.transport) {
+    if (!this.transport) {
+      return
+    }
+
+    const session = flowBus.getSession(update.sessionId)
+    const senderId = session?.senderId
+    const targetPluginId = session?.targetPluginId
+
+    // Host UI only needs updates for sessions it initiated or target selection states
+    if (
+      !senderId ||
+      senderId === 'corebox' ||
+      senderId === 'system' ||
+      update.currentState === 'TARGET_SELECTING'
+    ) {
       try {
         this.transport.broadcast(FlowEvents.sessionUpdate, update)
       } catch {
         // ignore
       }
+    }
 
-      const session = flowBus.getSession(update.sessionId)
-      const senderId = session?.senderId
-      const targetPluginId = session?.targetPluginId
-
-      if (senderId) {
-        void this.transport
-          .sendToPlugin(senderId, FlowEvents.sessionUpdate, update)
-          .catch((error) => {
-            flowBusIpcLog.debug('Failed to send Flow session update to sender plugin', {
-              meta: { sessionId: update.sessionId, pluginId: senderId },
-              error
-            })
+    if (isPluginRecipient(senderId)) {
+      void this.transport
+        .sendToPlugin(senderId, FlowEvents.sessionUpdate, update)
+        .catch((error) => {
+          flowBusIpcLog.debug('Failed to send Flow session update to sender plugin', {
+            meta: { sessionId: update.sessionId, pluginId: senderId },
+            error
           })
-      }
-      if (targetPluginId) {
-        void this.transport
-          .sendToPlugin(targetPluginId, FlowEvents.sessionUpdate, update)
-          .catch((error) => {
-            flowBusIpcLog.debug('Failed to send Flow session update to target plugin', {
-              meta: { sessionId: update.sessionId, pluginId: targetPluginId },
-              error
-            })
+        })
+    }
+    if (isPluginRecipient(targetPluginId) && targetPluginId !== senderId) {
+      void this.transport
+        .sendToPlugin(targetPluginId, FlowEvents.sessionUpdate, update)
+        .catch((error) => {
+          flowBusIpcLog.debug('Failed to send Flow session update to target plugin', {
+            meta: { sessionId: update.sessionId, pluginId: targetPluginId },
+            error
           })
-      }
+        })
     }
   }
 }

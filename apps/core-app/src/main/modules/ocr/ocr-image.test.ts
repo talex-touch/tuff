@@ -55,4 +55,36 @@ describe('prepareOcrImage', () => {
       expect(await sharp(image).metadata()).toMatchObject({ width, height })
     }
   )
+
+  it('applies EXIF orientation rotation before resizing and computes oriented scales', async () => {
+    // Raw 4000x2000 JPEG with EXIF Orientation=6 (90deg CW) -> oriented 2000x4000 -> resized 1000x2000
+    const rotatedLarge = await sharp({
+      create: { width: 4000, height: 2000, channels: 3, background: '#336699' }
+    })
+      .withMetadata({ orientation: 6 })
+      .jpeg()
+      .toBuffer()
+
+    const preparedLarge = await prepareOcrImage(rotatedLarge)
+    const metaLarge = await sharp(preparedLarge.image).metadata()
+    expect(metaLarge.width).toBe(1000)
+    expect(metaLarge.height).toBe(2000)
+    expect(preparedLarge.scaleX).toBe(2)
+    expect(preparedLarge.scaleY).toBe(2)
+
+    // Small EXIF-rotated image (raw 600x400, orientation 6 -> oriented 400x600) must also be rotated
+    const rotatedSmall = await sharp({
+      create: { width: 600, height: 400, channels: 3, background: '#336699' }
+    })
+      .withMetadata({ orientation: 6 })
+      .jpeg()
+      .toBuffer()
+
+    const preparedSmall = await prepareOcrImage(rotatedSmall)
+    const metaSmall = await sharp(preparedSmall.image).metadata()
+    expect(metaSmall.width).toBe(400)
+    expect(metaSmall.height).toBe(600)
+    expect(preparedSmall.scaleX).toBe(1)
+    expect(preparedSmall.scaleY).toBe(1)
+  })
 })

@@ -226,10 +226,12 @@ export class BailianParaformerVoiceProvider implements VoiceProviderAdapter {
       const firstResult = asRecord(results[0])
       const transcriptionUrl = readString(firstResult?.transcription_url)
       if (transcriptionUrl) {
+        // Pre-signed result URLs carry their own authorization; never forward DashScope API keys
+        // or workspace headers to third-party/OSS hosts, and reject non-public SSRF targets.
         const resultResponse = await this.options.httpClient.request({
           method: 'GET',
           url: assertProviderOptionUrl(transcriptionUrl, 'Bailian transcription result URL'),
-          headers: buildBailianHeaders(this.options.credentials, this.options.userAgent),
+          headers: { 'user-agent': this.options.userAgent ?? 'tuff-voice' },
           signal: request.signal,
         })
         return toVoiceResult(normalizeBailianUploadResult(assertHttpSuccess(resultResponse, 'bailian')), taskId)

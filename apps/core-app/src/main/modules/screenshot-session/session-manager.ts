@@ -403,14 +403,16 @@ export class ScreenshotSessionManager {
       session.displays = displays.map((display) => ({ ...display }))
       for (const display of session.displays) {
         this.assertActive(session)
-        session.frozenResources.set(
-          display.id,
-          await this.service.capture({
-            target: 'display',
-            displayId: display.id,
-            writeClipboard: false
-          })
-        )
+        const frozen = await this.service.capture({
+          target: 'display',
+          displayId: display.id,
+          writeClipboard: false
+        })
+        if (this.active !== session || session.terminal) {
+          void this.service.releaseTempArtifact(frozen.tfileUrl).catch(() => false)
+          this.assertActive(session)
+        }
+        session.frozenResources.set(display.id, frozen)
       }
       for (const display of session.displays) {
         this.assertActive(session)
@@ -783,7 +785,7 @@ export class ScreenshotSessionManager {
       session.phase = 'editing'
       return { accepted: true }
     } catch {
-      if (source) this.discard(session, source)
+      if (source) this.discardOrRelease(session, source)
       if (this.active === session && !session.terminal) session.phase = 'selecting'
       return { accepted: false, reason: 'capture-failed' }
     }
@@ -846,6 +848,13 @@ export class ScreenshotSessionManager {
     const resolution = await this.resolveOutput(session, revision)
     if ('reason' in resolution) return { accepted: false, reason: resolution.reason }
     const resource = resolution.resource
+    if (this.active !== session || session.terminal) {
+      return { accepted: false, reason: 'session-busy' }
+    }
+    const previousPhase = session.phase
+    if (action === 'save' || action === 'copy') {
+      session.phase = 'confirming'
+    }
     try {
       if (action === 'copy') {
         return (await this.service.writeCaptureResourceToClipboard(resource.tfileUrl))
@@ -861,6 +870,15 @@ export class ScreenshotSessionManager {
       return { accepted: true }
     } catch {
       return { accepted: false, reason: `${action}-failed` }
+    } finally {
+      if (
+        (action === 'save' || action === 'copy') &&
+        this.active === session &&
+        !session.terminal &&
+        session.phase === 'confirming'
+      ) {
+        session.phase = previousPhase
+      }
     }
   }
 
@@ -879,14 +897,18 @@ export class ScreenshotSessionManager {
       }
       if (edit.output) return { resource: edit.output }
       session.phase = 'confirming'
+      let output: NativeScreenshotCaptureResult | null = null
       try {
-        const output = await this.service.applyEffects(edit.edited, this.effects(session))
-        this.assertActive(session)
+        output = await this.service.applyEffects(edit.edited, this.effects(session))
         if (output !== edit.edited) session.artifacts.add(output.tfileUrl)
+        this.assertActive(session)
         edit.output = output
         session.phase = 'editing'
         return { resource: output }
       } catch {
+        if (output && output !== edit.edited) {
+          this.discardOrRelease(session, output)
+        }
         if (this.active === session && !session.terminal) session.phase = 'editing'
         return { reason: 'capture-failed' }
       }
@@ -895,13 +917,17 @@ export class ScreenshotSessionManager {
     if (session.output) return { resource: session.output }
     if (!session.selection && !session.hover) return { reason: 'selection-required' }
     session.phase = 'confirming'
+    let output: NativeScreenshotCaptureResult | null = null
     try {
-      const output = await this.materialize(session, true)
+      output = await this.materialize(session, true)
       this.assertActive(session)
       session.output = output
       session.phase = 'selecting'
       return { resource: output }
     } catch {
+      if (output) {
+        this.discardOrRelease(session, output)
+      }
       if (this.active === session && !session.terminal) session.phase = 'selecting'
       return { reason: 'capture-failed' }
     }
@@ -991,6 +1017,14 @@ export class ScreenshotSessionManager {
     void this.service.releaseTempArtifact(resource.tfileUrl).catch(() => false)
   }
 
+  private discardOrRelease(session: ActiveSession, resource: NativeScreenshotCaptureResult): void {
+    // If cleanupSession already ran while an async capture/effects call was in flight,
+    // session.artifacts has already been cleared, so release the late artifact directly.
+    if (session.artifacts.delete(resource.tfileUrl) || session.terminal) {
+      void this.service.releaseTempArtifact(resource.tfileUrl).catch(() => false)
+    }
+  }
+
   private complete(session: ActiveSession, resource: NativeScreenshotCaptureResult): void {
     session.artifacts.delete(resource.tfileUrl)
     this.finishSession(session, {
@@ -1078,6 +1112,10 @@ export class ScreenshotSessionManager {
       void this.service.releaseTempArtifact(tfileUrl).catch(() => false)
     }
     session.artifacts.clear()
+    for (const frozen of session.frozenResources.values()) {
+      void this.service.releaseTempArtifact(frozen.tfileUrl).catch(() => false)
+    }
+    session.frozenResources.clear()
   }
 
   private rememberCompleted(ownerKey: string, result: ScreenshotSessionResult): void {

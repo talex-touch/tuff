@@ -25,8 +25,8 @@
 
 import type { Buffer } from 'node:buffer'
 import { createHash } from 'node:crypto'
-import { createWriteStream } from 'node:fs'
-import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
+import { createReadStream, createWriteStream } from 'node:fs'
+import { mkdir, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { join, resolve, sep } from 'node:path'
 import { Readable } from 'node:stream'
 
@@ -154,8 +154,10 @@ export function assertSpeechBundleSpec(spec: SpeechBundleSpec): void {
 
 async function sha256File(path: string): Promise<string> {
   const hash = createHash('sha256')
-  const contents = await readFile(path)
-  hash.update(contents)
+  const stream = createReadStream(path)
+  for await (const chunk of stream) {
+    hash.update(chunk as Buffer)
+  }
   return hash.digest('hex')
 }
 
@@ -182,9 +184,12 @@ async function downloadVerified(
   const partial = `${destination}.part`
   await rm(partial, { force: true })
 
+  const downloadAbort = new AbortController()
+  const activeSignal = signal ? AbortSignal.any([signal, downloadAbort.signal]) : downloadAbort.signal
+
   let response: Response
   try {
-    response = await fetchImpl(spec.url, { redirect: 'follow', ...(signal ? { signal } : {}) })
+    response = await fetchImpl(spec.url, { redirect: 'follow', signal: activeSignal })
   }
   catch (error) {
     throw new SpeechBundleInstallError(
@@ -204,15 +209,35 @@ async function downloadVerified(
       `${spec.file}: the response carried no body`,
     )
   }
+  const declaredLengthHeader = response.headers.get('content-length')
+  if (declaredLengthHeader) {
+    const declaredLength = Number(declaredLengthHeader)
+    if (Number.isFinite(declaredLength) && declaredLength > spec.bytes) {
+      downloadAbort.abort()
+      throw new SpeechBundleInstallError(
+        'SPEECH_BUNDLE_DIGEST_MISMATCH',
+        `${spec.file}: response Content-Length (${declaredLength}) exceeds declared size (${spec.bytes} bytes).`,
+      )
+    }
+  }
 
   const hash = createHash('sha256')
   let received = 0
   const sink = createWriteStream(partial)
   const writeFailure = new Promise<never>((_finished, failed) => sink.once('error', failed))
+  const bodyStream = Readable.fromWeb(response.body as never)
   try {
-    for await (const chunk of Readable.fromWeb(response.body as never)) {
+    for await (const chunk of bodyStream) {
       const buffer = chunk as Buffer
       received += buffer.byteLength
+      if (received > spec.bytes) {
+        downloadAbort.abort()
+        bodyStream.destroy()
+        throw new SpeechBundleInstallError(
+          'SPEECH_BUNDLE_DIGEST_MISMATCH',
+          `${spec.file}: stream exceeded declared size (${spec.bytes} bytes); aborted at ${received} bytes.`,
+        )
+      }
       hash.update(buffer)
       if (!sink.write(buffer))
         await Promise.race([new Promise<void>(done => sink.once('drain', () => done())), writeFailure])
@@ -225,8 +250,12 @@ async function downloadVerified(
     })
   }
   catch (error) {
+    downloadAbort.abort()
+    bodyStream.destroy()
     sink.destroy()
     await rm(partial, { force: true })
+    if (error instanceof SpeechBundleInstallError)
+      throw error
     throw new SpeechBundleInstallError(
       'SPEECH_BUNDLE_WRITE_FAILED',
       `${spec.file}: ${error instanceof Error ? error.message : String(error)}`,

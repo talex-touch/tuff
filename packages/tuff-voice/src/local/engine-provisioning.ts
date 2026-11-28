@@ -27,7 +27,7 @@ import type { SpeechRuntimeEntryV1 } from './model-catalog'
 import { execFile } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { accessSync, constants, createWriteStream, readdirSync, readFileSync } from 'node:fs'
-import { access, mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
+import { access, lstat, mkdir, readdir, readFile, realpath, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { isAbsolute, join, resolve, sep } from 'node:path'
 import process from 'node:process'
@@ -35,6 +35,7 @@ import { Readable } from 'node:stream'
 import { promisify } from 'node:util'
 
 const run = promisify(execFile)
+const ARCHIVE_EXTRACT_TIMEOUT_MS = 120_000
 
 export const ENGINE_MANIFEST_FILE = 'runtime.json'
 
@@ -215,8 +216,11 @@ export async function installSpeechRuntime(
   const archive = join(directory, `.runtime.${entry.archive}`)
   await rm(archive, { force: true })
 
+  const downloadAbort = new AbortController()
+  const activeSignal = options.signal ? AbortSignal.any([options.signal, downloadAbort.signal]) : downloadAbort.signal
+
   const fetchImpl = options.fetchImpl ?? fetch
-  const response = await fetchImpl(entry.url, { redirect: 'follow', ...(options.signal ? { signal: options.signal } : {}) })
+  const response = await fetchImpl(entry.url, { redirect: 'follow', signal: activeSignal })
   if (!response.ok) {
     throw new SpeechRuntimeInstallError(
       'SPEECH_RUNTIME_DOWNLOAD_FAILED',
@@ -229,15 +233,35 @@ export async function installSpeechRuntime(
       `${entry.id}@${entry.version}: the response carried no body`,
     )
   }
+  const declaredLengthHeader = response.headers.get('content-length')
+  if (declaredLengthHeader && entry.bytes > 0) {
+    const declaredLength = Number(declaredLengthHeader)
+    if (Number.isFinite(declaredLength) && declaredLength > entry.bytes) {
+      downloadAbort.abort()
+      throw new SpeechRuntimeInstallError(
+        'SPEECH_RUNTIME_DIGEST_MISMATCH',
+        `${entry.id}@${entry.version}: response Content-Length (${declaredLength}) exceeds declared size (${entry.bytes} bytes).`,
+      )
+    }
+  }
 
   const hash = createHash('sha256')
   let received = 0
   const sink = createWriteStream(archive)
   const writeFailure = new Promise<never>((_finished, failed) => sink.once('error', failed))
+  const bodyStream = Readable.fromWeb(response.body as never)
   try {
-    for await (const chunk of Readable.fromWeb(response.body as never)) {
+    for await (const chunk of bodyStream) {
       const buffer = chunk as Buffer
       received += buffer.byteLength
+      if (entry.bytes > 0 && received > entry.bytes) {
+        downloadAbort.abort()
+        bodyStream.destroy()
+        throw new SpeechRuntimeInstallError(
+          'SPEECH_RUNTIME_DIGEST_MISMATCH',
+          `${entry.id}@${entry.version}: download exceeded declared size (${entry.bytes} bytes); aborted at ${received} bytes.`,
+        )
+      }
       hash.update(buffer)
       if (!sink.write(buffer))
         await Promise.race([new Promise<void>(done => sink.once('drain', () => done())), writeFailure])
@@ -250,8 +274,12 @@ export async function installSpeechRuntime(
     })
   }
   catch (error) {
+    downloadAbort.abort()
+    bodyStream.destroy()
     sink.destroy()
     await rm(archive, { force: true })
+    if (error instanceof SpeechRuntimeInstallError)
+      throw error
     throw new SpeechRuntimeInstallError(
       'SPEECH_RUNTIME_WRITE_FAILED',
       `${entry.id}@${entry.version}: ${error instanceof Error ? error.message : String(error)}`,
@@ -259,7 +287,7 @@ export async function installSpeechRuntime(
   }
 
   const digest = hash.digest('hex')
-  if (digest !== entry.sha256 || (received && entry.bytes && received !== entry.bytes)) {
+  if (digest !== entry.sha256 || (entry.bytes > 0 && received !== entry.bytes)) {
     await rm(archive, { force: true })
     throw new SpeechRuntimeInstallError(
       'SPEECH_RUNTIME_DIGEST_MISMATCH',
@@ -272,16 +300,15 @@ export async function installSpeechRuntime(
   const staging = join(directory, '.extract')
   await rm(staging, { recursive: true, force: true })
   await mkdir(staging, { recursive: true })
-  const tarFlag = entry.archive === 'zip' ? '-xf' : entry.archive === 'tar.gz' ? '-xzf' : '-xjf'
   try {
-    await run('tar', [tarFlag, archive, '-C', staging])
+    await extractRuntimeArchive(entry.archive, archive, staging, options.signal)
   }
   catch (error) {
     await rm(staging, { recursive: true, force: true })
     await rm(archive, { force: true })
     throw new SpeechRuntimeInstallError(
       'SPEECH_RUNTIME_EXTRACT_FAILED',
-      `${entry.id}@${entry.version}: tar failed — ${error instanceof Error ? error.message : String(error)}`,
+      `${entry.id}@${entry.version}: archive extraction failed — ${error instanceof Error ? error.message : String(error)}`,
     )
   }
 
@@ -289,11 +316,28 @@ export async function installSpeechRuntime(
   const payload = extracted.length === 1 ? join(staging, extracted[0] as string) : staging
   const stagedBinary = resolveInside(payload, entry.binary)
   try {
-    await stat(stagedBinary)
+    await assertExtractedTreeContained(staging)
+    const stagingReal = await realpath(staging)
+    const stagedBinaryReal = await realpath(stagedBinary)
+    if (!stagedBinaryReal.startsWith(stagingReal + sep)) {
+      throw new SpeechRuntimeInstallError(
+        'SPEECH_RUNTIME_INVALID',
+        `${entry.id}@${entry.version}: extracted binary symlink escapes staging directory`,
+      )
+    }
+    const binaryStat = await stat(stagedBinaryReal)
+    if (!binaryStat.isFile()) {
+      throw new SpeechRuntimeInstallError(
+        'SPEECH_RUNTIME_INVALID',
+        `${entry.id}@${entry.version}: extracted binary is not a regular file`,
+      )
+    }
   }
-  catch {
+  catch (error) {
     await rm(staging, { recursive: true, force: true })
     await rm(archive, { force: true })
+    if (error instanceof SpeechRuntimeInstallError)
+      throw error
     throw new SpeechRuntimeInstallError(
       'SPEECH_RUNTIME_INVALID',
       `${entry.id}@${entry.version}: the archive has no ${entry.binary} where the catalog says it is`,
@@ -318,10 +362,12 @@ export async function installSpeechRuntime(
   const nested = extracted.length === 1 ? (extracted[0] as string) : ''
   const relativeBinary = nested ? `${nested}/${entry.binary}` : entry.binary
   const installedBinary = resolveInside(directory, relativeBinary)
-  if (!(await isExecutable(installedBinary))) {
+  const directoryReal = await realpath(directory)
+  const installedBinaryReal = await realpath(installedBinary)
+  if (!installedBinaryReal.startsWith(directoryReal + sep) || !(await isExecutable(installedBinaryReal))) {
     throw new SpeechRuntimeInstallError(
       'SPEECH_RUNTIME_INVALID',
-      `${entry.id}@${entry.version}: ${entry.binary} was extracted but is not executable`,
+      `${entry.id}@${entry.version}: ${entry.binary} was extracted but is not executable inside its runtime directory`,
     )
   }
 
@@ -331,4 +377,54 @@ export async function installSpeechRuntime(
     'utf8',
   )
   return { binaryPath: installedBinary, directory, downloaded: true }
+}
+
+async function extractRuntimeArchive(
+  archiveType: SpeechRuntimeEntryV1['archive'],
+  archivePath: string,
+  stagingDir: string,
+  signal?: AbortSignal,
+): Promise<void> {
+  const execOptions = {
+    timeout: ARCHIVE_EXTRACT_TIMEOUT_MS,
+    windowsHide: true,
+    ...(signal ? { signal } : {}),
+  }
+  if (archiveType === 'zip') {
+    if (process.platform === 'win32') {
+      // Built-in Windows bsdtar supports .zip archives natively.
+      await run('tar', ['-xf', archivePath, '-C', stagingDir], execOptions)
+      return
+    }
+    // GNU tar on Linux does not read .zip; use unzip on POSIX hosts.
+    await run('unzip', ['-o', '-q', archivePath, '-d', stagingDir], execOptions)
+    return
+  }
+  const tarFlag = archiveType === 'tar.gz' ? '-xzf' : '-xjf'
+  await run('tar', [tarFlag, archivePath, '-C', stagingDir], execOptions)
+}
+
+async function assertExtractedTreeContained(rootDir: string): Promise<void> {
+  const rootReal = await realpath(rootDir)
+  const queue = [rootDir]
+  while (queue.length > 0) {
+    const current = queue.pop()!
+    const entries = await readdir(current)
+    for (const entryName of entries) {
+      const fullPath = join(current, entryName)
+      const info = await lstat(fullPath)
+      if (info.isSymbolicLink()) {
+        const targetReal = await realpath(fullPath)
+        if (targetReal !== rootReal && !targetReal.startsWith(rootReal + sep)) {
+          throw new SpeechRuntimeInstallError(
+            'SPEECH_RUNTIME_INVALID',
+            `Archive symlink "${entryName}" escapes extraction root.`,
+          )
+        }
+      }
+      else if (info.isDirectory()) {
+        queue.push(fullPath)
+      }
+    }
+  }
 }

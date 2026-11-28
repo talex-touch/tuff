@@ -28,11 +28,12 @@ vi.mock('@talex-touch/tuff-voice', () => ({
   resolveModelStoreRoot: () => '/models'
 }))
 import type { ParsedSpeechModelCatalog } from '@talex-touch/tuff-voice'
-import { parseSpeechModelCatalog } from '@talex-touch/tuff-voice'
+import { installSpeechBundle, parseSpeechModelCatalog } from '@talex-touch/tuff-voice'
 import { registerVoicePorts } from './voice-ports'
 import {
   clearSpeechCatalogCache,
   fetchSpeechCatalog,
+  installSpeechModel,
   projectSpeechCatalogApiError
 } from './speech-model-service'
 
@@ -267,5 +268,73 @@ describe('speech catalog failure projection', () => {
     const second = await fetchSpeechCatalog()
     expect(second).toBe(first)
     expect(auth.performNexusRequestWithAuth).toHaveBeenCalledTimes(1)
+  })
+
+  it('strictly serializes 3+ concurrent installSpeechModel calls in FIFO order', async () => {
+    const fakeCatalog: ParsedSpeechModelCatalog = {
+      catalog: { schemaVersion: 1, generatedAt: '2026-10-14T00:00:00Z', models: [], runtimes: [] },
+      items: [
+        {
+          entry: {
+            id: 'model-a',
+            version: '1.0.0',
+            name: 'Model A',
+            engine: 'whisper-cpp',
+            bytes: 100,
+            languages: ['zh'],
+            defaultLanguage: 'zh',
+            recommended: false
+          } as never,
+          spec: {
+            id: 'model-a',
+            version: '1.0.0',
+            engine: 'whisper-cpp',
+            files: [],
+            descriptor: {}
+          },
+          descriptor: {} as never
+        }
+      ],
+      runtimes: [],
+      recommended: null
+    }
+    vi.mocked(parseSpeechModelCatalog).mockReturnValueOnce(fakeCatalog)
+    auth.performNexusRequestWithAuth.mockResolvedValueOnce(
+      nexusResponse({
+        headers: { 'x-content-sha256': VALID_CATALOG_DIGEST },
+        body: VALID_CATALOG_BODY
+      })
+    )
+
+    let active = 0
+    let peakActive = 0
+    const order: number[] = []
+    let seq = 0
+
+    vi.mocked(installSpeechBundle).mockImplementation(async () => {
+      const mySeq = ++seq
+      active += 1
+      peakActive = Math.max(peakActive, active)
+      order.push(mySeq)
+      await new Promise((resolve) => setTimeout(resolve, 15))
+      active -= 1
+      return {
+        id: 'model-a',
+        version: '1.0.0',
+        directory: '/models/model-a/1.0.0',
+        downloaded: [{ file: 'weights.bin', bytes: 100 }],
+        reused: []
+      }
+    })
+
+    const results = await Promise.all([
+      installSpeechModel('model-a', '1.0.0'),
+      installSpeechModel('model-a', '1.0.0'),
+      installSpeechModel('model-a', '1.0.0')
+    ])
+
+    expect(results).toHaveLength(3)
+    expect(peakActive).toBe(1)
+    expect(order).toEqual([1, 2, 3])
   })
 })

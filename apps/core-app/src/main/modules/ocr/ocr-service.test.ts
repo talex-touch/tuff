@@ -958,3 +958,64 @@ describe('OcrService serial background dispatch', () => {
     ])
   })
 })
+
+describe('OcrService security and reliability regressions', () => {
+  it('marks the job failed when normalizeSourceForAgent rejects instead of throwing unhandled', async () => {
+    const service = ocrService as unknown as OcrServiceTestAccess
+    vi.spyOn(service, 'updateClipboardMeta').mockResolvedValue(undefined)
+    vi.spyOn(service, 'normalizeSourceForAgent').mockRejectedValue(
+      new Error('Image file missing on disk')
+    )
+    const failSpy = vi.spyOn(service, 'failJob').mockResolvedValue(undefined)
+
+    await expect(
+      service.runAgentJob(99, {
+        clipboardId: 7,
+        attempts: 1,
+        meta: JSON.stringify({
+          clipboardId: 7,
+          source: { type: 'file', filePath: '/nonexistent/missing.png' },
+          options: {}
+        })
+      })
+    ).resolves.toBeUndefined()
+
+    expect(failSpy).toHaveBeenCalledWith(99, 'Image file missing on disk', expect.any(Error), 1)
+  })
+
+  it('rejects symbolic links in ensureImageFileWithinBudget via lstat', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'ocr-symlink-test-'))
+    const realFile = path.join(dir, 'real.png')
+    const linkFile = path.join(dir, 'link.png')
+    const { symlink } = await import('node:fs/promises')
+    await writeFile(realFile, Buffer.from('png'))
+    await symlink(realFile, linkFile)
+
+    try {
+      const service = ocrService as unknown as {
+        ensureImageFileWithinBudget: (filePath: string) => Promise<void>
+      }
+      await expect(service.ensureImageFileWithinBudget(linkFile)).rejects.toThrow(/regular file/i)
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('does not broadcast OCR metadata to an attached plugin without clipboard:read permission', async () => {
+    const { windowManager } = await import('../box-tool/core-box/window')
+    vi.mocked(windowManager.getAttachedPlugin).mockReturnValue({
+      name: 'unauthorized-plugin',
+      _uniqueChannelKey: 'ch-1'
+    } as never)
+
+    const sendToPlugin = vi.fn(async () => undefined)
+    const service = ocrService as unknown as {
+      transport: { sendToPlugin: typeof sendToPlugin } | null
+      broadcastMetaUpdate: (clipboardId: number, patch: Record<string, unknown>) => void
+    }
+    service.transport = { sendToPlugin }
+
+    service.broadcastMetaUpdate(12, { ocr_text: 'sensitive screenshot text' })
+    expect(sendToPlugin).not.toHaveBeenCalled()
+  })
+})

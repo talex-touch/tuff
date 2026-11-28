@@ -11,6 +11,7 @@ import type {
   FlowSessionState,
   FlowSessionUpdate
 } from '@talex-touch/utils'
+import { randomUUID } from 'node:crypto'
 import { flowBusSessionLog } from './logger'
 
 /**
@@ -52,12 +53,11 @@ export class FlowSessionManager {
   }
 
   /**
-   * Generates a unique session ID
+   * Generates a unique cryptographically random session ID
    */
   private generateSessionId(): string {
-    const timestamp = Date.now()
-    const counter = this.sessionIdCounter++
-    return `flow-${timestamp}-${counter}`
+    this.sessionIdCounter++
+    return `flow-${randomUUID()}`
   }
 
   /**

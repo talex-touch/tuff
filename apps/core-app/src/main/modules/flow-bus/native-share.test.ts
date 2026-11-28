@@ -4,14 +4,18 @@ const {
   clipboardWriteTextMock,
   execFileSafeMock,
   writeFileMock,
+  unlinkMock,
   openExternalMock,
-  showShareResultMock
+  showShareResultMock,
+  checkPermissionMock
 } = vi.hoisted(() => ({
   clipboardWriteTextMock: vi.fn(),
   execFileSafeMock: vi.fn(async () => ({ stdout: '', stderr: '' })),
   writeFileMock: vi.fn(async () => undefined),
+  unlinkMock: vi.fn(async () => undefined),
   openExternalMock: vi.fn(async () => undefined),
-  showShareResultMock: vi.fn()
+  showShareResultMock: vi.fn(),
+  checkPermissionMock: vi.fn(() => ({ allowed: true }))
 }))
 
 vi.mock('@talex-touch/utils/common/utils/safe-shell', () => ({
@@ -20,8 +24,15 @@ vi.mock('@talex-touch/utils/common/utils/safe-shell', () => ({
 
 vi.mock('node:fs/promises', () => ({
   default: {
-    writeFile: writeFileMock
+    writeFile: writeFileMock,
+    unlink: unlinkMock
   }
+}))
+
+vi.mock('../permission', () => ({
+  getPermissionModule: vi.fn(() => ({
+    checkPermission: checkPermissionMock
+  }))
 }))
 
 vi.mock('electron', () => ({
@@ -99,13 +110,57 @@ describe('native-share behavior', () => {
 
       expect(result).toEqual({ success: true, target: 'mail' })
       expect(writeFileMock).toHaveBeenCalledTimes(1)
-      const [tempPath] = (writeFileMock.mock.calls[0] ?? []) as unknown as [unknown, unknown]
+      const [tempPath, , writeOpts] = (writeFileMock.mock.calls[0] ?? []) as unknown as [
+        unknown,
+        unknown,
+        Record<string, unknown>
+      ]
       expect(String(tempPath)).toContain('tuff-native-share-')
+      expect(writeOpts).toEqual({ flag: 'wx', mode: 0o600 })
       expect(execFileSafeMock).toHaveBeenCalledWith(
         'osascript',
         expect.arrayContaining([expect.stringContaining('Mail')])
       )
       expect(showShareResultMock).toHaveBeenCalledWith({ success: true, target: 'mail' })
+
+      await nativeShareService.cleanupTempFiles()
+      expect(unlinkMock).toHaveBeenCalledWith(String(tempPath))
+    })
+  })
+
+  it('rejects oversized image data URLs and cleans up temp files on share failure', async () => {
+    await withPlatform('darwin', async () => {
+      const oversized = `data:image/png;base64,${'A'.repeat(7_500_000)}`
+      const oversizedResult = await nativeShareService.share({
+        target: 'mail',
+        text: oversized
+      })
+      expect(oversizedResult.success).toBe(false)
+      expect(writeFileMock).not.toHaveBeenCalled()
+
+      execFileSafeMock.mockRejectedValueOnce(new Error('Mail crashed'))
+      const failResult = await nativeShareService.share({
+        target: 'mail',
+        text: 'data:image/png;base64,aGVsbG8='
+      })
+      expect(failResult.success).toBe(false)
+      expect(writeFileMock).toHaveBeenCalledTimes(1)
+      expect(unlinkMock).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  it('enforces clipboard:write for plugin callers invoking macOS Messages share', async () => {
+    await withPlatform('darwin', async () => {
+      checkPermissionMock.mockReturnValueOnce({ allowed: false })
+      const result = await nativeShareService.share(
+        {
+          target: 'messages',
+          text: 'secret from plugin'
+        },
+        { callerPluginId: 'untrusted-plugin', callerSdkApi: 260101 }
+      )
+      expect(result.success).toBe(false)
+      expect(clipboardWriteTextMock).not.toHaveBeenCalled()
     })
   })
 

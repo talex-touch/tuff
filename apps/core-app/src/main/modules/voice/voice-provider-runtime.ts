@@ -35,8 +35,6 @@ import {
   createNodeVoiceSocketFactory,
   DashscopeQwenAsrRealtimeVoiceProvider,
   DoubaoVoiceProvider,
-  DoubaoImeVoiceProvider,
-  DynamicScriptVoiceProvider,
   loadInstalledModelSync,
   LocalOfflineVoiceProvider,
   resolveModelStoreRoot,
@@ -220,10 +218,13 @@ function capabilityStatus(
     return { ready: true, mode: 'realtime' }
   }
   if (capabilityType === 'asr' && metadata?.protocol === 'dynamic-script') {
-    if (!metadata.scriptContent) {
-      return { ready: false, reason: 'VOICE_ASR_PROVIDER_UNAVAILABLE' }
-    }
-    return { ready: true }
+    return { ready: false, reason: 'VOICE_ASR_PROVIDER_UNAVAILABLE' }
+  }
+  if (capabilityType === 'asr' && metadata?.protocol === 'doubao-ime') {
+    return { ready: false, reason: 'VOICE_ASR_PROVIDER_UNAVAILABLE' }
+  }
+  if (capabilityType === 'asr' && metadata?.protocol === 'doubao' && !metadata.resourceId) {
+    return { ready: false, reason: 'VOICE_ASR_PROVIDER_UNAVAILABLE' }
   }
   return { ready: true }
 }
@@ -638,24 +639,15 @@ export function getConfiguredAsrProvider(): ConfiguredAsrProvider {
       }
     }
     case 'doubao-ime':
-      return {
-        model: model || 'bigmodel',
-        location: 'cloud',
-        mode: 'realtime',
-        provider: new DoubaoImeVoiceProvider({
-          socketFactory: createNodeVoiceSocketFactory()
-        })
-      }
+      // Third-party IME protocol has no embedded credentials and must fail closed unless an
+      // explicit first-party authenticated adapter is provisioned.
+      throw new Error('VOICE_ASR_PROVIDER_UNAVAILABLE')
     case 'doubao':
-      if (!metadata.resourceId || !credential) {
-        return {
-          model: model || 'bigmodel',
-          location: 'cloud',
-          mode: 'realtime',
-          provider: new DoubaoImeVoiceProvider({
-            socketFactory: createNodeVoiceSocketFactory()
-          })
-        }
+      if (!metadata.resourceId) {
+        throw new Error('VOICE_ASR_PROVIDER_UNAVAILABLE')
+      }
+      if (!credential) {
+        throw new Error('VOICE_ASR_CREDENTIAL_UNAVAILABLE')
       }
       return {
         model,
@@ -669,34 +661,8 @@ export function getConfiguredAsrProvider(): ConfiguredAsrProvider {
         })
       }
     case 'dynamic-script': {
-      if (!metadata.scriptContent) {
-        const buffered = resolveNexusBufferedSttProvider(source)
-        if (buffered) return buffered
-        throw new Error('VOICE_ASR_PROVIDER_UNAVAILABLE')
-      }
-      try {
-        const dynamicProvider = new DynamicScriptVoiceProvider({
-          scriptContent: metadata.scriptContent,
-          providerId: route.provider.id,
-          contextConfig: {
-            apiKey: credential,
-            baseUrl: route.provider.baseUrl,
-            ...(route.provider.metadata ?? {})
-          },
-          httpClient: createFetchHttpClient(),
-          socketFactory: createNodeVoiceSocketFactory()
-        })
-        return {
-          model,
-          location: 'cloud',
-          mode: dynamicProvider.capabilities.stream ? 'realtime' : 'buffered',
-          provider: dynamicProvider
-        }
-      } catch {
-        const buffered = resolveNexusBufferedSttProvider(source)
-        if (buffered) return buffered
-        throw new Error('VOICE_ASR_PROVIDER_UNAVAILABLE')
-      }
+      // Arbitrary JavaScript evaluation in the Electron main process is disabled for security.
+      throw new Error('VOICE_ASR_PROVIDER_UNAVAILABLE')
     }
   }
 }

@@ -250,6 +250,22 @@ describe('clipboard-image-persistence', () => {
     expect(mocks.createFromPath).toHaveBeenCalledWith('/tmp/tuff/image.png')
   })
 
+  it('rejects local filesystem image paths when allowLocalFilePath is false (plugin boundary)', () => {
+    for (const localSource of [
+      '/etc/secret.png',
+      'file:///etc/secret.png',
+      'tfile:///tmp/secret.png'
+    ]) {
+      expect(() =>
+        createNativeImageFromClipboardSource(localSource, { allowLocalFilePath: false })
+      ).toThrowError(expect.objectContaining({ code: 'ERR_CLIPBOARD_LOCAL_IMAGE_PATH_DENIED' }))
+    }
+    expect(mocks.createFromPath).not.toHaveBeenCalled()
+
+    createNativeImageFromClipboardSource('data:image/png;base64,abc', { allowLocalFilePath: false })
+    expect(mocks.createFromDataURL).toHaveBeenCalledWith('data:image/png;base64,abc')
+  })
+
   it('advances deterministic orphan pages past referenced files', async () => {
     const db = createDb(['/tmp/tuff/clipboard/images/a.png', '/tmp/tuff/clipboard/images/b.png'])
     const persistence = createPersistence(db)

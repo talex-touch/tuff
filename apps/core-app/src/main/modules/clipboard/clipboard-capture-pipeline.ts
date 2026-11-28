@@ -28,6 +28,7 @@ import {
   CLIPBOARD_IMAGE_FORMATS,
   CLIPBOARD_TEXT_FORMATS,
   ClipboardHelper,
+  hasConcealedOrTransientClipboardFormat,
   includesAnyClipboardFormat
 } from './clipboard-capture-freshness'
 import {
@@ -95,6 +96,7 @@ export interface ClipboardCapturePipelineOptions {
   /** 剪贴板分类与保留的用户设置。由持有 storage 的模块注入——这两条路径都在热路径上，
    * 而 storage 那个桶会把整个 transport（连同 `ipcMain`）一起拖进来。 */
   getClassificationSettings?: () => ClipboardClassificationSettings
+  checkPluginPermission?: (pluginId: string, apiName: string, sdkapi?: number) => boolean
   logInfo: (message: string, data?: LogOptions) => void
   logWarn: (message: string, data?: LogOptions) => void
 }
@@ -188,6 +190,9 @@ export class ClipboardCapturePipeline {
       return clipboard.availableFormats()
     })
     if (formats.length === 0) {
+      return
+    }
+    if (hasConcealedOrTransientClipboardFormat(formats)) {
       return
     }
 
@@ -680,20 +685,27 @@ export class ClipboardCapturePipeline {
   }
 
   private forwardClipboardChangeToPlugin(persisted: IClipboardItem): void {
-    const coreBoxPort = getClipboardPorts().coreBox
+    const ports = getClipboardPorts()
+    const coreBoxPort = ports.coreBox
     const activePlugin = coreBoxPort.getAttachedPlugin()
     if (
-      activePlugin?._uniqueChannelKey &&
-      coreBoxPort.shouldForwardClipboardChange(persisted.type)
+      !activePlugin?._uniqueChannelKey ||
+      !coreBoxPort.shouldForwardClipboardChange(persisted.type)
     ) {
-      this.options
-        .getTransport()
-        ?.sendToPlugin(activePlugin.name, CoreBoxEvents.clipboard.change, { item: persisted })
-        .catch(() => {})
-        .catch((error) => {
-          this.options.logWarn('Failed to notify plugin UI view about clipboard change', { error })
-        })
+      return
     }
+
+    const sdkapi = ports.plugin.getPluginSdkApi(activePlugin.name)
+    if (!this.options.checkPluginPermission?.(activePlugin.name, 'clipboard:read', sdkapi)) {
+      return
+    }
+
+    this.options
+      .getTransport()
+      ?.sendToPlugin(activePlugin.name, CoreBoxEvents.clipboard.change, { item: persisted })
+      .catch((error) => {
+        this.options.logWarn('Failed to notify plugin UI view about clipboard change', { error })
+      })
   }
 
   private recordCompletionDiagnostics({

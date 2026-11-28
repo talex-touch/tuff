@@ -12,47 +12,13 @@ import type {
   VoiceStreamRequest,
   VoiceUploadRequest,
 } from '../contracts'
+import type { DnsLookupFn } from '../http'
 import { Buffer } from 'node:buffer'
-import vm from 'node:vm'
 import { AsyncEventQueue, createAbortError } from '../async'
 import { assertVoiceProviderRequestId, VoiceProviderError } from '../contracts'
+import { assertSafeRemoteUrlAsync, isSafeRemoteUrl, safeFetchWithRedirects } from '../http'
 
-const BLOCKED_HOST_PATTERNS = [
-  /^localhost$/i,
-  /^127\.\d+\.\d+\.\d+$/,
-  /^0\.0\.0\.0$/,
-  /^::1$/,
-  /^10\.\d+\.\d+\.\d+$/,
-  /^172\.(1[6-9]|2\d|3[01])\.\d+\.\d+$/,
-  /^192\.168\.\d+\.\d+$/,
-  /^169\.254\.\d+\.\d+$/,
-]
-
-export function isSafeRemoteUrl(rawUrl: string, allowedProtocols = ['https:', 'wss:']): boolean {
-  let parsed: URL
-  try {
-    parsed = new URL(rawUrl)
-  }
-  catch {
-    return false
-  }
-
-  if (!allowedProtocols.includes(parsed.protocol)) {
-    return false
-  }
-  if (parsed.username || parsed.password) {
-    return false
-  }
-
-  const hostname = parsed.hostname.toLowerCase()
-  for (const pattern of BLOCKED_HOST_PATTERNS) {
-    if (pattern.test(hostname)) {
-      return false
-    }
-  }
-
-  return true
-}
+export { isSafeRemoteUrl }
 
 export interface DynamicScriptSessionContext {
   request: VoiceStreamRequest
@@ -95,13 +61,22 @@ export interface DynamicVoiceScriptExports {
 }
 
 export interface DynamicScriptVoiceProviderOptions {
-  scriptContent: string
+  /**
+   * Deprecated untrusted JavaScript source string.
+   * Arbitrary string execution via `node:vm` is disabled in the main process for security;
+   * pass a trusted in-process `adapter` or use a declarative signed provider protocol instead.
+   */
+  scriptContent?: string
+  /** Trusted programmatic adapter exports (never evaluated from arbitrary script text). */
+  adapter?: DynamicVoiceScriptExports
   providerId?: string
   timeoutMs?: number
   contextConfig?: Record<string, unknown>
   httpClient?: VoiceHttpClient
+  fetchImpl?: typeof fetch
   socketFactory?: VoiceSocketFactory
   allowLocalhost?: boolean
+  lookup?: DnsLookupFn
 }
 
 export class DynamicScriptVoiceProvider implements VoiceProviderAdapter {
@@ -115,7 +90,7 @@ export class DynamicScriptVoiceProvider implements VoiceProviderAdapter {
 
   constructor(options: DynamicScriptVoiceProviderOptions) {
     this.options = options
-    this.scriptExports = this.evaluateSandbox(options.scriptContent)
+    this.scriptExports = this.resolveAdapter(options)
 
     this.id = options.providerId ?? this.scriptExports.name ?? 'dynamic-script'
     this.defaultStreamModel = this.scriptExports.defaultStreamModel
@@ -127,7 +102,7 @@ export class DynamicScriptVoiceProvider implements VoiceProviderAdapter {
     if (!stream && !upload) {
       throw new VoiceProviderError(
         'VOICE_SCRIPT_EXPORTS_INVALID',
-        'Dynamic script must export either createSession or transcribeUpload.',
+        'Dynamic adapter must export either createSession or transcribeUpload.',
       )
     }
 
@@ -135,60 +110,22 @@ export class DynamicScriptVoiceProvider implements VoiceProviderAdapter {
     this.capabilities = { stream, upload, formats }
   }
 
-  private evaluateSandbox(scriptContent: string): DynamicVoiceScriptExports {
-    const sandboxModule = { exports: {} as Record<string, unknown> }
-    const sandbox: Record<string, unknown> = {
-      Buffer,
-      Uint8Array,
-      ArrayBuffer,
-      DataView,
-      TextEncoder,
-      TextDecoder,
-      URL,
-      URLSearchParams,
-      JSON,
-      Math,
-      Date,
-      parseInt: Number.parseInt,
-      parseFloat: Number.parseFloat,
-      setTimeout,
-      clearTimeout,
-      module: sandboxModule,
-      exports: sandboxModule.exports,
-      console: {
-        log: () => {},
-        warn: () => {},
-        error: () => {},
-      },
-    }
-
-    const context = vm.createContext(sandbox, {
-      codeGeneration: { strings: false, wasm: false },
-    })
-
-    try {
-      vm.runInContext(scriptContent, context, {
-        filename: 'voice-script-adapter.js',
-        timeout: 1_000,
-      })
-    }
-    catch (error) {
+  private resolveAdapter(options: DynamicScriptVoiceProviderOptions): DynamicVoiceScriptExports {
+    if (!options.adapter) {
       throw new VoiceProviderError(
-        'VOICE_SCRIPT_EVALUATION_FAILED',
-        `Failed to evaluate dynamic voice script: ${error instanceof Error ? error.message : String(error)}`,
-        { cause: error },
+        'VOICE_SCRIPT_EXECUTION_DISABLED',
+        'Arbitrary dynamic script evaluation via node:vm is disabled in the main process for security. Use a declarative protocol or trusted programmatic adapter.',
       )
     }
 
-    const exported = sandboxModule.exports as unknown
-    if (!exported || typeof exported !== 'object' || Array.isArray(exported)) {
+    if (typeof options.adapter !== 'object' || Array.isArray(options.adapter)) {
       throw new VoiceProviderError(
         'VOICE_SCRIPT_EXPORTS_INVALID',
-        'Dynamic voice script must assign an object to module.exports.',
+        'Dynamic voice adapter must be a plain object.',
       )
     }
 
-    return exported as DynamicVoiceScriptExports
+    return options.adapter
   }
 
   private createSafeFetch(signal?: AbortSignal) {
@@ -201,15 +138,23 @@ export class DynamicScriptVoiceProvider implements VoiceProviderAdapter {
         signal?: AbortSignal
       } = {},
     ) => {
-      if (!this.options.allowLocalhost && !isSafeRemoteUrl(rawUrl, ['https:'])) {
-        throw new VoiceProviderError(
-          'VOICE_SCRIPT_URL_DENIED',
-          `URL is not an allowed remote HTTPS target: ${rawUrl}`,
-        )
-      }
-
+      const allowLocalhost = this.options.allowLocalhost === true
       const activeSignal = reqOptions.signal ?? signal
+
       if (this.options.httpClient) {
+        if (this.options.lookup) {
+          await assertSafeRemoteUrlAsync(rawUrl, {
+            allowedProtocols: ['https:'],
+            allowLocalhost,
+            lookup: this.options.lookup,
+          })
+        }
+        else if (!isSafeRemoteUrl(rawUrl, ['https:'], { allowLocalhost })) {
+          throw new VoiceProviderError(
+            'VOICE_SCRIPT_URL_DENIED',
+            `URL is not an allowed remote HTTPS target: ${rawUrl}`,
+          )
+        }
         const response: VoiceHttpResponse = await this.options.httpClient.request({
           method: reqOptions.method ?? 'GET',
           url: rawUrl,
@@ -231,12 +176,21 @@ export class DynamicScriptVoiceProvider implements VoiceProviderAdapter {
         }
       }
 
-      const fetchRes = await fetch(rawUrl, {
-        method: reqOptions.method ?? 'GET',
-        headers: reqOptions.headers,
-        body: reqOptions.body ? Buffer.from(reqOptions.body) : undefined,
-        signal: activeSignal,
-      })
+      const fetchRes = await safeFetchWithRedirects(
+        {
+          url: rawUrl,
+          method: reqOptions.method ?? 'GET',
+          headers: reqOptions.headers,
+          body: reqOptions.body ? Buffer.from(reqOptions.body) : undefined,
+          signal: activeSignal,
+        },
+        {
+          fetchImpl: this.options.fetchImpl ?? fetch,
+          allowedProtocols: ['https:'],
+          allowLocalhost,
+          lookup: this.options.lookup,
+        },
+      )
 
       const headers: Record<string, string | undefined> = {}
       fetchRes.headers.forEach((val, key) => {
@@ -254,7 +208,15 @@ export class DynamicScriptVoiceProvider implements VoiceProviderAdapter {
 
   private createSafeWebSocket(signal?: AbortSignal) {
     return async (rawUrl: string, headers: Record<string, string> = {}) => {
-      if (!this.options.allowLocalhost && !isSafeRemoteUrl(rawUrl, ['wss:'])) {
+      const allowLocalhost = this.options.allowLocalhost === true
+      if (this.options.lookup) {
+        await assertSafeRemoteUrlAsync(rawUrl, {
+          allowedProtocols: ['wss:'],
+          allowLocalhost,
+          lookup: this.options.lookup,
+        })
+      }
+      else if (!isSafeRemoteUrl(rawUrl, ['wss:'], { allowLocalhost })) {
         throw new VoiceProviderError(
           'VOICE_SCRIPT_URL_DENIED',
           `WebSocket URL is not an allowed remote WSS target: ${rawUrl}`,
@@ -263,7 +225,7 @@ export class DynamicScriptVoiceProvider implements VoiceProviderAdapter {
       if (!this.options.socketFactory) {
         throw new VoiceProviderError(
           'VOICE_SOCKET_FACTORY_MISSING',
-          'Socket factory is required for dynamic script WebSocket connections.',
+          'Socket factory is required for dynamic adapter WebSocket connections.',
         )
       }
 
@@ -288,6 +250,8 @@ export class DynamicScriptVoiceProvider implements VoiceProviderAdapter {
     const queue = new AsyncEventQueue<VoiceProviderEvent>()
     let sessionInstance: DynamicVoiceScriptSession | null = null
     let ended = false
+    let timedOut = false
+    let aborted = false
 
     const abortController = new AbortController()
     const signal = request.signal
@@ -298,7 +262,7 @@ export class DynamicScriptVoiceProvider implements VoiceProviderAdapter {
       request,
       config: this.options.contextConfig ?? {},
       emit: (event) => {
-        if (!ended) {
+        if (!ended && !timedOut && !aborted) {
           queue.push(event)
           if (event.type === 'end') {
             ended = true
@@ -320,19 +284,30 @@ export class DynamicScriptVoiceProvider implements VoiceProviderAdapter {
       rejectReady = reject
     })
     const timer = setTimeout(() => {
-      rejectReady(
-        new VoiceProviderError(
-          'VOICE_SCRIPT_TIMEOUT',
-          `Dynamic script session creation timed out after ${handshakeTimeoutMs}ms.`,
-          { retryable: true, requestId: request.requestId },
-        ),
+      if (ended || aborted || sessionInstance)
+        return
+      timedOut = true
+      ended = true
+      abortController.abort()
+      const err = new VoiceProviderError(
+        'VOICE_SCRIPT_TIMEOUT',
+        `Dynamic adapter session creation timed out after ${handshakeTimeoutMs}ms.`,
+        { retryable: true, requestId: request.requestId },
       )
+      queue.fail(err)
+      rejectReady(err)
     }, handshakeTimeoutMs)
 
     Promise.resolve()
       .then(() => this.scriptExports.createSession!(sessionContext))
       .then((session) => {
         clearTimeout(timer)
+        if (timedOut || aborted) {
+          if (session?.abort) {
+            void Promise.resolve(session.abort('Dynamic adapter session timed out or aborted')).catch(() => {})
+          }
+          return
+        }
         if (
           !session
           || typeof session.writePcm !== 'function'
@@ -348,14 +323,17 @@ export class DynamicScriptVoiceProvider implements VoiceProviderAdapter {
       })
       .catch((error) => {
         clearTimeout(timer)
+        if (timedOut || aborted)
+          return
         const err
           = error instanceof VoiceProviderError
             ? error
             : new VoiceProviderError(
                 'VOICE_SCRIPT_SESSION_FAILED',
-                `Dynamic script failed to create session: ${error instanceof Error ? error.message : String(error)}`,
+                `Dynamic adapter failed to create session: ${error instanceof Error ? error.message : String(error)}`,
                 { cause: error, requestId: request.requestId },
               )
+        ended = true
         queue.fail(err)
         rejectReady(err)
       })
@@ -365,7 +343,7 @@ export class DynamicScriptVoiceProvider implements VoiceProviderAdapter {
       events: queue,
       writePcm: async (chunk: Buffer | Uint8Array) => {
         await ready
-        if (!sessionInstance || ended)
+        if (!sessionInstance || ended || timedOut || aborted)
           return
         try {
           await sessionInstance.writePcm(chunk)
@@ -373,16 +351,17 @@ export class DynamicScriptVoiceProvider implements VoiceProviderAdapter {
         catch (error) {
           const err = new VoiceProviderError(
             'VOICE_SCRIPT_WRITE_FAILED',
-            `Script writePcm failed: ${error instanceof Error ? error.message : String(error)}`,
+            `Adapter writePcm failed: ${error instanceof Error ? error.message : String(error)}`,
             { cause: error, requestId: request.requestId },
           )
+          ended = true
           queue.fail(err)
           throw err
         }
       },
       end: async () => {
         await ready
-        if (!sessionInstance || ended)
+        if (!sessionInstance || ended || timedOut || aborted)
           return
         try {
           await sessionInstance.end()
@@ -390,19 +369,25 @@ export class DynamicScriptVoiceProvider implements VoiceProviderAdapter {
         catch (error) {
           const err = new VoiceProviderError(
             'VOICE_SCRIPT_END_FAILED',
-            `Script end failed: ${error instanceof Error ? error.message : String(error)}`,
+            `Adapter end failed: ${error instanceof Error ? error.message : String(error)}`,
             { cause: error, requestId: request.requestId },
           )
+          ended = true
           queue.fail(err)
           throw err
         }
       },
-      abort: async (reason = 'Dynamic script aborted') => {
+      abort: async (reason = 'Dynamic adapter aborted') => {
+        aborted = true
+        ended = true
+        clearTimeout(timer)
         abortController.abort()
         if (sessionInstance?.abort) {
           await Promise.resolve(sessionInstance.abort(reason)).catch(() => {})
         }
-        queue.fail(createAbortError(reason))
+        const abortErr = createAbortError(reason)
+        queue.fail(abortErr)
+        rejectReady(abortErr)
       },
     }
   }
@@ -439,7 +424,7 @@ export class DynamicScriptVoiceProvider implements VoiceProviderAdapter {
         ? error
         : new VoiceProviderError(
             'VOICE_SCRIPT_UPLOAD_FAILED',
-            `Dynamic script upload failed: ${error instanceof Error ? error.message : String(error)}`,
+            `Dynamic adapter upload failed: ${error instanceof Error ? error.message : String(error)}`,
             { cause: error, requestId: request.requestId },
           )
     }

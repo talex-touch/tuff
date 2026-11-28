@@ -45,7 +45,11 @@ async function protectedIds(client: Awaited<ReturnType<typeof createDb>>['client
   return rs.rows.map((row) => Number(row.id))
 }
 
-const settings = () => DEFAULT_CLIPBOARD_CLASSIFICATION_SETTINGS
+const optInSecretProtectionSettings = () => ({
+  ...DEFAULT_CLIPBOARD_CLASSIFICATION_SETTINGS,
+  protectSecrets: true
+})
+const settings = optInSecretProtectionSettings
 
 describe('clipboard retention backfill', () => {
   /**
@@ -160,6 +164,18 @@ describe('clipboard retention backfill', () => {
     })
     expect(second.completed).toBe(true)
     expect(await protectedIds(client)).toEqual([1, 3, 5, 7, 9])
+  })
+
+  it('does not retain plaintext secrets indefinitely under default opt-in settings', async () => {
+    const { client, db } = await createDb()
+    await seed(client, [OPENAI_KEY])
+
+    await backfillClipboardRetentionProtection({
+      db,
+      getClassificationSettings: () => DEFAULT_CLIPBOARD_CLASSIFICATION_SETTINGS
+    })
+
+    expect(await protectedIds(client)).toEqual([])
   })
 
   it('honours the setting that turns secret protection off', async () => {

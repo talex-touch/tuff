@@ -4,10 +4,13 @@ const mocks = vi.hoisted(() => ({
   stat: vi.fn(async () => ({
     isFile: () => true,
     isDirectory: () => false,
+    mode: 0o644,
     size: 1024,
     birthtime: new Date('2026-05-11T00:00:00.000Z'),
     mtime: new Date('2026-05-11T00:01:00.000Z')
   })),
+  realpath: vi.fn(async (p: string) => p),
+  showMessageBox: vi.fn(async () => ({ response: 1 })),
   showItemInFolder: vi.fn(),
   openPath: vi.fn(async () => ''),
   createThumbnailFromPath: vi.fn(async () => ({
@@ -43,13 +46,18 @@ const mocks = vi.hoisted(() => ({
 vi.mock('node:fs/promises', () => ({
   default: {
     stat: mocks.stat,
+    realpath: mocks.realpath,
     readFile: mocks.readFile
   },
   stat: mocks.stat,
+  realpath: mocks.realpath,
   readFile: mocks.readFile
 }))
 
 vi.mock('electron', () => ({
+  dialog: {
+    showMessageBox: mocks.showMessageBox
+  },
   shell: {
     showItemInFolder: mocks.showItemInFolder,
     openPath: mocks.openPath
@@ -114,6 +122,57 @@ describe('NativeFileService', () => {
 
     expect(mocks.openPath).toHaveBeenCalledWith('/tmp/a.png')
     expect(mocks.showItemInFolder).toHaveBeenCalledWith('/tmp/a.png')
+  })
+
+  it('blocks executable/script/bundle targets and requires user confirmation for plugin callers', async () => {
+    const service = await createNativeFileService()
+
+    for (const dangerousPath of [
+      '/tmp/evil.sh',
+      '/tmp/evil.command',
+      '/tmp/evil.app',
+      '/tmp/evil.exe',
+      '/tmp/evil.bat',
+      '/tmp/evil.ps1',
+      '/tmp/evil.dmg',
+      '/tmp/evil.pkg'
+    ]) {
+      await expect(
+        service.open({ path: dangerousPath }, { isPluginCaller: true, pluginName: 'demo.plugin' })
+      ).rejects.toMatchObject({ code: 'ERR_NATIVE_FILE_OPEN_BLOCKED' })
+    }
+
+    // POSIX executable bit on an innocent-looking extension must also be blocked on non-Windows.
+    if (process.platform !== 'win32') {
+      mocks.stat.mockResolvedValueOnce({
+        isFile: () => true,
+        isDirectory: () => false,
+        mode: 0o755,
+        size: 64,
+        birthtime: new Date(),
+        mtime: new Date()
+      })
+      await expect(
+        service.open(
+          { path: '/tmp/notes.txt' },
+          { isPluginCaller: true, pluginName: 'demo.plugin' }
+        )
+      ).rejects.toMatchObject({ code: 'ERR_NATIVE_FILE_OPEN_BLOCKED' })
+    }
+
+    // Benign file requires user confirmation: declined when response !== 0.
+    mocks.showMessageBox.mockResolvedValueOnce({ response: 1 })
+    await expect(
+      service.open({ path: '/tmp/report.pdf' }, { isPluginCaller: true, pluginName: 'demo.plugin' })
+    ).rejects.toMatchObject({ code: 'ERR_NATIVE_FILE_OPEN_DECLINED' })
+    expect(mocks.openPath).not.toHaveBeenCalled()
+
+    // Approved when user confirms (response === 0).
+    mocks.showMessageBox.mockResolvedValueOnce({ response: 0 })
+    await expect(
+      service.open({ path: '/tmp/report.pdf' }, { isPluginCaller: true, pluginName: 'demo.plugin' })
+    ).resolves.toMatchObject({ success: true })
+    expect(mocks.openPath).toHaveBeenCalledWith('/tmp/report.pdf')
   })
 
   it('stores generated thumbnails as native tfile refs by default', async () => {

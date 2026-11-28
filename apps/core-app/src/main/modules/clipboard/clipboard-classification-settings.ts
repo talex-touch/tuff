@@ -7,7 +7,8 @@ export interface ClipboardClassificationSettings {
 export const DEFAULT_CLIPBOARD_CLASSIFICATION_SETTINGS: ClipboardClassificationSettings =
   Object.freeze({
     verificationCodeRetentionMs: 60 * 60 * 1000,
-    protectSecrets: true,
+    // Do not retain plaintext secrets in SQLite indefinitely by default; require explicit opt-in.
+    protectSecrets: false,
     customKeyPrefixes: Object.freeze([]) as readonly string[]
   })
 
@@ -39,7 +40,7 @@ export function resolveClipboardClassificationSettings(
       typeof retentionMs === 'number' && Number.isFinite(retentionMs) && retentionMs > 0
         ? retentionMs
         : DEFAULT_CLIPBOARD_CLASSIFICATION_SETTINGS.verificationCodeRetentionMs,
-    protectSecrets: clipboard.protectSecrets !== false,
+    protectSecrets: clipboard.protectSecrets === true,
     customKeyPrefixes: Array.isArray(prefixes)
       ? prefixes.filter(
           (prefix): prefix is string => typeof prefix === 'string' && prefix.length > 0
