@@ -31,6 +31,7 @@ Each cell below renders its real component with caller-provided content or data.
 import {
   TxCardSpread,
   TxCarousel3D,
+  TxDistortionWave,
   TxFlipBook,
   TxMotion,
   TxMotionButton,
@@ -40,6 +41,8 @@ import {
   TxMotionToggle,
   TxMotionTransition,
   TxPhysicsMotion,
+  TxPixelField,
+  TxVoiceRing,
 } from '@talex-touch/tuffex/pro'
 import { TxDitherChart } from '@talex-touch/tuffex/charts'
 import '@talex-touch/tuffex/base.css'
@@ -51,7 +54,7 @@ The `suite="motion"` key above is a documentation grouping; there is no fourth i
 
 | Overview component | Prop | Value | Behavior |
 | --- | --- | --- | --- |
-| `DocsComponentsGallery` | `suite` | `motion` | Renders only the Motion band, with twelve live specimens and per-specimen reset controls. |
+| `DocsComponentsGallery` | `suite` | `motion` | Renders only the Motion band, with fifteen live specimens and per-specimen reset controls. |
 
 ### Related Suites
 
@@ -81,5 +84,8 @@ The `suite="motion"` key above is a documentation grouping; there is no fourth i
 - [Physics motion](./physics-motion.en.mdc): 61 grabbable physical scenes.
 - [Motion](./motion.en.mdc): entrances, hover, pointer and scroll-linked interactions.
 - [Motion dock](./motion-dock.en.mdc): magnifying, keyboard-reorderable caller items.
+- [PixelField](./pixel-field.en.mdc): interactive square-pixel particle stage with botanical presets and custom sampling.
+- [VoiceRing](./voice-ring.en.mdc): voice-reactive ring of light with emotion tint and directional lean.
 - [MotionToggle](./motion-toggle.en.mdc): controlled switch and action styles.
 - [MotionTransition](./motion-transition.en.mdc): door, liquid-wave, iris and curtain switching.
+- [DistortionWave](./distortion-wave.en.mdc): WebGL2 chromatic lens wave screen transition.

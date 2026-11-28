@@ -6,12 +6,15 @@
 
 ### 📦 组件变动 (Components)
 
-- **新增组件**: `matrix-loader`, `device-mockup`
+- **新增组件**: `matrix-loader`, `device-mockup`, `distortion-wave`, `pixel-field`, `voice-ring`
 
 ### ✨ 组件增强
 
 - 新增 `TxMatrixLoader`（`@talex-touch/tuffex/ai`）：基于球面凸透镜与半调梯度棋盘格的纯数学 Canvas 加载器，提供 8 种 AI 语义状态（`thinking`、`searching`、`exploring`、`deciding`、`generating`、`extracting`、`accelerating`、`defining`）、状态间平滑过渡、2D 梯度噪声扰动与 5 种电子屏幕显示时代（`oled`、`crt`、`vfd`、`dither`、`lcd`）。
 - 新增 `TxDeviceMockup`（`@talex-touch/tuffex/pro`）：高保真可 Tree-Shaking 设备样机与导出舞台组件，内置 75 款手机（iOS/Android/HarmonyOS）、平板、MacBook/iMac/显示器、圆形与圆角手表、Arc/Safari/Chrome/Firefox/Edge/macOS/Windows 11 窗口预设，提供实体挤出 3D 机身与落地阴影、Shots.so 7 种阴影 / 6 种构图 / 12 组渐变 / 8 套场景搭配、机型与横竖屏弹性形变动画，以及按需加载的客户端 SVG/PNG/WebP 导出。
+- 新增 `TxDistortionWave`（`@talex-touch/tuffex/pro`）：基于透明 WebGL2 色散折射层的视图转场组件，支持 `vertical` / `horizontal` / `center` 波前形态、5 套内置色板、`#overlay` 保活控件层、`scrub` 进度定格与 Vue `Ref` 触发源，不支持 WebGL2 或开启减少动态效果时自动降级为平滑交叉淡入淡出。
+- 新增 `TxVoiceRing`（`@talex-touch/tuffex/pro`）：支持 `ring` 玻璃光谱光环与 `mono` 双环形态的语音动效组件，响应 `MediaStream` / `AnalyserNode` / 自定义 `level` 采样、情绪色、声源方向 `direction` 倾斜与边界玻璃折射，并导出 `useVoiceRingMicrophone`。
+- 新增 `TxPixelField`（`@talex-touch/tuffex/pro`）：零外部依赖的 Canvas 2D 交互式方形像素粒子舞台，内置 4 组植物脉络与 2 组几何预设并支持自定义 `src` / `text` 等比轮廓采样、5 套荧光/矿物色板、`obsidian` / `adaptive` 双舞台、4 种指针力学模式、点击脉冲波与 `useMotionActivity` 离屏停帧门禁。
 
 ## [0.9.5] - 2026-11-23
 

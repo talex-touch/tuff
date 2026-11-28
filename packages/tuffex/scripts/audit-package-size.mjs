@@ -348,8 +348,9 @@ const LIMITS = {
     // 2026-08-18 and has failed tuffex CI on every commit since — which cost
     // every tuffex change its build signal, this file's own audits included.
     'border-beam/src/styles.js': 80 * 1024,
-    // 48.1 KiB measured in CI on 2026-11-04; 48.7 KiB after matrix-loader (194th) on 2026-11-26; 49.4 KiB after device-mockup (195th export module) on 2026-11-27.
-    'components.js': 49.8 * 1024,
+    // 48.1 KiB measured in CI on 2026-11-04; 48.7 KiB after matrix-loader (194th) on 2026-11-26;
+    // 49.4 KiB after device-mockup (195th) on 2026-11-27; 51.7 KiB after distortion-wave, pixel-field, and voice-ring (198th) on 2026-11-28.
+    'components.js': 52.2 * 1024,
   },
   emptyStateAliasCssBytes: 128,
 }
