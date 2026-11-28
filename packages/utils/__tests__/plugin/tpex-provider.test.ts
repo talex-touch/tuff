@@ -98,21 +98,27 @@ describe('TpexProvider URL/filename/temp hardening', () => {
 
     const provider = new TpexProvider('https://nexus.example.com')
     const result = await provider.install({ source: 'tpex:demo-plugin' })
-    const dir = path.dirname(result.filePath)
+    const filePath = result.filePath
+    if (!filePath)
+      throw new Error('Expected registry install result to include filePath')
+    const dir = path.dirname(filePath)
     createdDirs.push(dir)
 
     expect(path.basename(dir)).toMatch(/^tuff-tpex-/)
-    expect(path.basename(result.filePath)).toBe('demo-plugin-evil-1.0.0.tpex')
-    expect(await fs.readFile(result.filePath, 'utf8')).toBe('tpex-bytes')
+    expect(path.basename(filePath)).toBe('demo-plugin-evil-1.0.0.tpex')
+    expect(await fs.readFile(filePath, 'utf8')).toBe('tpex-bytes')
 
     // Also verify installFromFile uses mkdtemp rather than predictable /tmp/tpex-${Date.now()}.tpex
     vi.spyOn(networkClient, 'request').mockResolvedValueOnce(
       makeResponse({ method: 'GET', url: 'https://nexus.example.com/demo.tpex' }, new TextEncoder().encode('file-bytes').buffer),
     )
     const fileResult = await provider.install({ source: 'https://nexus.example.com/demo.tpex' })
-    const fileDir = path.dirname(fileResult.filePath)
+    const downloadedPath = fileResult.filePath
+    if (!downloadedPath)
+      throw new Error('Expected file install result to include filePath')
+    const fileDir = path.dirname(downloadedPath)
     createdDirs.push(fileDir)
     expect(path.basename(fileDir)).toMatch(/^tuff-tpex-/)
-    expect(await fs.readFile(fileResult.filePath, 'utf8')).toBe('file-bytes')
+    expect(await fs.readFile(downloadedPath, 'utf8')).toBe('file-bytes')
   })
 })
