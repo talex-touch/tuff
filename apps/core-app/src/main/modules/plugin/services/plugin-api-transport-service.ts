@@ -19,6 +19,7 @@ import { TouchPlugin } from '../plugin'
 import { mergePackagedManifestMetadata } from '../plugin-runtime-integrity'
 import { PRIVILEGED_PLUGIN_NAMES } from '../../../../shared/privileged-plugins'
 import { pluginRuntimeTracker } from '../runtime/plugin-runtime-tracker'
+import { getPluginDivisionBoxPort } from '../plugin-ports'
 import { widgetManager } from '../widget/widget-manager'
 import type { PluginInstallQueue } from '../install-queue'
 import type { DevServerHealthMonitor } from '../dev-server-monitor'
@@ -864,10 +865,8 @@ export function registerPluginApiTransportHandlers(
 
         let divisionBoxViewCount = 0
         try {
-          // Dynamic to avoid the DivisionBox ↔ plugin runtime initialization cycle.
-          const { DivisionBoxManager } = await import('../../division-box/manager')
-          const divisionBoxManager = DivisionBoxManager.getInstance()
-          const sessions = divisionBoxManager.getActiveSessions()
+          const divisionBoxPort = getPluginDivisionBoxPort()
+          const sessions = divisionBoxPort?.getActiveSessions() ?? []
           for (const session of sessions) {
             const attached = session.getAttachedPlugin()
             if (attached?.name !== name) continue

@@ -2,7 +2,7 @@ import type { AppSetting } from '@talex-touch/utils/common/storage/entity/app-se
 import { StorageList } from '@talex-touch/utils'
 import { enableVoiceInputForSignIn } from '@talex-touch/utils/common/storage/entity/app-settings'
 import { createLogger } from '../../utils/logger'
-import { getSanitizedAuthSessionState, subscribeAuthState } from '../auth'
+import { getVoiceAuthPort, subscribeVoiceAuthState } from './voice-ports'
 import { getMainConfig, saveMainConfig } from '../storage'
 
 const voiceLog = createLogger('Voice')
@@ -30,7 +30,7 @@ export function registerVoiceInputSignInDefault(): () => void {
     }
   }
 
-  const dispose = subscribeAuthState((state) => apply(state.isSignedIn))
-  apply(getSanitizedAuthSessionState().isSignedIn)
+  const dispose = subscribeVoiceAuthState((state) => apply(state.isSignedIn))
+  apply(getVoiceAuthPort().getSanitizedAuthSessionState().isSignedIn)
   return dispose
 }

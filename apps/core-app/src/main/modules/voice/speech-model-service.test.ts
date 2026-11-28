@@ -29,11 +29,27 @@ vi.mock('@talex-touch/tuff-voice', () => ({
 }))
 import type { ParsedSpeechModelCatalog } from '@talex-touch/tuff-voice'
 import { parseSpeechModelCatalog } from '@talex-touch/tuff-voice'
+import { registerVoicePorts } from './voice-ports'
 import {
   clearSpeechCatalogCache,
   fetchSpeechCatalog,
   projectSpeechCatalogApiError
 } from './speech-model-service'
+
+registerVoicePorts({
+  auth: {
+    getAuthToken: () => null,
+    getSanitizedAuthSessionState: () => ({ isLoaded: false, isSignedIn: false, user: null }),
+    subscribeAuthState: () => () => undefined,
+    performNexusRequestWithAuth: auth.performNexusRequestWithAuth
+  },
+  nexus: {
+    getRuntimeNexusBaseUrl: () => 'https://nexus.example.test',
+    transcribeNexusAudio: vi.fn(),
+    requestNexusVoiceToken: vi.fn(),
+    settleNexusVoiceUsage: vi.fn()
+  }
+})
 const VALID_CATALOG_BODY = '{"schemaVersion":1,"models":[],"runtimes":[]}'
 const MALFORMED_CATALOG_BODY = '{"schemaVersion":'
 // The digest verifyServedDigest recomputes for each body, so those cases clear the integrity

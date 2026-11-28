@@ -61,7 +61,7 @@ import {
 import { BaseModule } from '../abstract-base-module'
 import { withExecutableDirOnPath } from '../ai/providers/cli/cli-executable'
 import { shortcutModule } from '../global-shortcon'
-import { omniPanelModule } from '../omni-panel'
+import { getLocalAiCliSurfacePort } from './local-ai-cli-ports'
 import { getAutoPasteCapabilityPatch } from '../platform/capability-adapter'
 import { getProject, touchProject } from '../project/project-store'
 import { getMainConfig, saveMainConfig, subscribeMainConfig } from '../storage'
@@ -547,7 +547,7 @@ export class LocalAiCliModule extends BaseModule {
     this.syncQuickOpenShortcut(enabled)
     // The panel's 「交给本机代理」 follows the switch too; an open panel reads its actions again.
     if (this.lastMasterSwitch !== null && this.lastMasterSwitch !== enabled) {
-      omniPanelModule.requestFeatureRefresh('local-ai-cli')
+      getLocalAiCliSurfacePort().requestFeatureRefresh('local-ai-cli')
     }
     this.lastMasterSwitch = enabled
 
@@ -577,7 +577,7 @@ export class LocalAiCliModule extends BaseModule {
       LOCAL_AI_CLI_SHORTCUT_ID,
       'CommandOrControl+Shift+L',
       () => {
-        void omniPanelModule.showLocalAi()
+        void getLocalAiCliSurfacePort().showLocalAi()
       },
       { owner: LOCAL_AI_CLI_SHORTCUT_OWNER, enabled: true }
     )
@@ -750,7 +750,7 @@ export class LocalAiCliModule extends BaseModule {
     )
     if (!status.enabled || !runnable) return false
     this.pendingPanelReturnUntil = 0
-    await omniPanelModule.restoreLocalAi()
+    await getLocalAiCliSurfacePort().restoreLocalAi()
     return true
   }
 
@@ -2286,7 +2286,7 @@ export class LocalAiCliModule extends BaseModule {
       return { success: false, reason: 'capture-expired' }
     }
 
-    omniPanelModule.hideForPasteBack()
+    getLocalAiCliSurfacePort().hideForPasteBack()
     await new Promise((resolve) => setTimeout(resolve, 180))
     const active = await activeAppService.getActiveApp({
       includeIcon: false,

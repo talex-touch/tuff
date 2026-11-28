@@ -11,8 +11,12 @@
  */
 import type { IExecuteArgs, TuffItem, TuffQuery, TuffSearchResult } from '@talex-touch/utils'
 import { TuffInputType, TuffItemBuilder } from '@talex-touch/utils'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import zhCN from '../../../../../renderer/src/modules/lang/zh-CN.json'
+import {
+  registerBoxToolAiCapabilityPort,
+  resetBoxToolAiCapabilityPort
+} from '../../ports/ai-capability-port'
 import { ConversationProvider } from './conversation-provider'
 
 const mocks = vi.hoisted(() => ({
@@ -27,10 +31,6 @@ const mocks = vi.hoisted(() => ({
     error: vi.fn(),
     debug: vi.fn()
   }))
-}))
-
-vi.mock('../../../conversation/conversation-store', () => ({
-  searchConversations: mocks.searchConversations
 }))
 
 /**
@@ -93,9 +93,35 @@ function matchRanges(item: TuffItem): Array<{ start: number; end: number }> {
 describe('conversationProvider search', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    registerBoxToolAiCapabilityPort({
+      intelligence: {} as never,
+      normalizeIntelligenceError: (error, options) => ({
+        code: 'UNKNOWN',
+        message: String(error),
+        reason: String(error),
+        recovery: '',
+        capabilityId: options?.capabilityId
+      }),
+      resolveCapabilityStatus: (capabilityId) => ({
+        capabilityId,
+        available: false,
+        providerIds: []
+      }),
+      searchConversations: mocks.searchConversations,
+      isLocalEmbeddingReady: () => false,
+      isLocalEmbeddingImageReady: () => false,
+      getLocalEmbeddingModelKey: () => 'test-local-embedding-model',
+      runWithEmbeddingPriority: (_priority, run) => run(),
+      onUsageLimitsChanged: () => () => {},
+      readUsageLimitInfo: () => null
+    })
     mocks.getAppDestinationNavigationService.mockReturnValue({
       openConversation: mocks.openConversation
     })
+  })
+
+  afterEach(() => {
+    resetBoxToolAiCapabilityPort()
   })
 
   it('registers as the fast history provider the engine routes by', () => {

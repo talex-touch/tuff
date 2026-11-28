@@ -82,15 +82,16 @@ import { purgePluginTempNamespace } from './plugin-temp-namespace'
 import { openValidatedExternalUrl } from '../../utils/external-url-policy'
 import { getLocale, onLocaleChange, t } from '../../utils/i18n-helper'
 import { BaseModule } from '../abstract-base-module'
-import { intelligenceContextExecutionService } from '../ai/intelligence-context-execution'
-import { aiOrchestratorStore } from '../ai/ai-orchestrator-store'
-import { getAuthToken, getSanitizedAuthSessionState } from '../auth'
 import { flowBus } from '../flow-bus/flow-bus'
 import { getNetworkService } from '../network'
-import { getRuntimeNexusBaseUrl } from '../nexus/runtime-base'
 import { databaseModule } from '../database'
 import { getPermissionModule } from '../permission'
-import { voiceService } from '../voice/voice-service'
+import {
+  getPluginAiOrchestratorPort,
+  getPluginCloudAuthPort,
+  getPluginIntelligenceContextPort,
+  getPluginVoicePort
+} from './plugin-ports'
 import {
   clearPluginLocalizationEntries,
   getHostLocale,
@@ -2172,8 +2173,8 @@ export class PluginModule extends BaseModule {
     })
     const pluginModule = this
     const nexusService = createPluginHostNexusService({
-      getBaseUrl: () => getRuntimeNexusBaseUrl(),
-      getCredential: () => getAuthToken(),
+      getBaseUrl: () => getPluginCloudAuthPort().getRuntimeNexusBaseUrl(),
+      getCredential: () => getPluginCloudAuthPort().getAuthToken(),
       resolveAddresses: async (hostname) =>
         (await lookup(hostname, { all: true, verbatim: true })).map((entry) => entry.address),
       requestPinned: async (request) =>
@@ -2202,7 +2203,7 @@ export class PluginModule extends BaseModule {
         this.runtimeService?.resolve(activation)?.owner.hostGeneration,
       authorizeCapability: authorizePluginCapability,
       watchPermissionRevoked: watchPluginPermissionRevoked,
-      authState: () => getSanitizedAuthSessionState(),
+      authState: () => getPluginCloudAuthPort().getSanitizedAuthSessionState(),
       nexus: nexusService,
       quickOps: Object.freeze({
         invoke: async (operation, payload, signal) =>
@@ -2226,20 +2227,20 @@ export class PluginModule extends BaseModule {
       service: Object.freeze<PluginVoiceHostService>({
         dictate: async (payload, signal, caller) => {
           if (signal.aborted) throw new Error('PLUGIN_VOICE_CANCELLED')
-          const result = await voiceService.dictate(payload, undefined, signal, caller)
+          const result = await getPluginVoicePort().dictate(payload, undefined, signal, caller)
           if (signal.aborted) throw new Error('PLUGIN_VOICE_CANCELLED')
           return result
         },
         speak: async (payload, signal, caller) => {
           if (signal.aborted) throw new Error('PLUGIN_VOICE_CANCELLED')
-          const result = await voiceService.speak(payload, signal, caller)
+          const result = await getPluginVoicePort().speak(payload, signal, caller)
           if (signal.aborted) throw new Error('PLUGIN_VOICE_CANCELLED')
           return result
         },
         stream: (payload, signal, caller) => {
           if (signal.aborted) throw new Error('PLUGIN_VOICE_CANCELLED')
           return narrowVoiceStreamForPlugins(
-            voiceService.streamDictation(
+            getPluginVoicePort().streamDictation(
               {
                 ...(payload.language ? { language: payload.language } : {})
               },
@@ -2286,10 +2287,12 @@ export class PluginModule extends BaseModule {
         service: intelligenceHostService
       })
     const intelligenceContextHostService = createPluginIntelligenceContextHostService({
-      invoke: intelligenceContextExecutionService.invoke.bind(intelligenceContextExecutionService)
+      invoke: (request, actor, hostOptions) =>
+        getPluginIntelligenceContextPort().invoke(request, actor, hostOptions)
     })
     const intelligenceContextStreamHostService = createPluginIntelligenceContextStreamHostService({
-      stream: intelligenceContextExecutionService.stream.bind(intelligenceContextExecutionService)
+      stream: (request, actor, hostOptions) =>
+        getPluginIntelligenceContextPort().stream(request, actor, hostOptions)
     })
     const createIntelligenceContextCapability = (activation: PluginActivationIdentity) => {
       const invokeCapabilities = createPluginIntelligenceContextCapabilities({
@@ -3014,7 +3017,7 @@ export class PluginModule extends BaseModule {
       listMetadata: async (signal) => {
         if (signal.aborted) throw new Error('PLUGIN_HOST_CAPABILITY_CANCELLED')
         const [runs, localSnapshot] = await Promise.all([
-          aiOrchestratorStore.listOrchestratorRuns({ limit: 200 }),
+          getPluginAiOrchestratorPort().listOrchestratorRuns({ limit: 200 }),
           localAiSessionMetadata(signal)
         ])
         const bySession = new Map<string, PluginAiSessionSourceEntry>()

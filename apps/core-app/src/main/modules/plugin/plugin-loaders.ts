@@ -44,7 +44,7 @@ import {
 } from '@talex-touch/utils/search'
 import fse from 'fs-extra'
 import { TuffIconImpl } from '../../core/tuff-icon'
-import { parseManifestDivisionBoxConfig } from '../division-box/manifest-parser'
+import { parseManifestDivisionBoxConfig } from '../../shared/division-box-manifest-parser'
 import { getNetworkService } from '../network'
 import { getLocale } from '../../utils/i18n-helper'
 import { TouchPlugin } from './plugin'

@@ -5,7 +5,8 @@ import type {
   QuickOpsDeveloperPreviewSaveRequest
 } from '@talex-touch/utils/transport/events/types/quick-ops'
 import { QuickOpsEvents } from '@talex-touch/utils/transport/events'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { registerQuickOpsFlowBusPort, resetQuickOpsPorts } from './quick-ops-ports'
 
 const quickOpsCapabilityInfo: QuickOpsCapabilityInfo = {
   platform: 'darwin',
@@ -688,20 +689,6 @@ vi.mock('../../core/runtime-accessor', () => ({
   }))
 }))
 
-vi.mock('../flow-bus/target-registry', () => ({
-  flowTargetRegistry: {
-    registerTarget: flowRegisterTargetMock,
-    unregisterTarget: flowUnregisterTargetMock
-  }
-}))
-
-vi.mock('../flow-bus/flow-bus', () => ({
-  flowBus: {
-    acknowledge: flowAcknowledgeMock,
-    registerDeliveryHandler: flowRegisterDeliveryHandlerMock
-  }
-}))
-
 vi.mock('../notification', () => ({
   notificationModule: {
     showInternalSystemNotification: showInternalSystemNotificationMock
@@ -1120,6 +1107,12 @@ function createQuickOpsModuleContext(): ModuleInitContext<TalexEvents> & {
 describe('QuickOpsModule', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    registerQuickOpsFlowBusPort({
+      registerTarget: flowRegisterTargetMock,
+      unregisterTarget: flowUnregisterTargetMock,
+      registerDeliveryHandler: flowRegisterDeliveryHandlerMock,
+      acknowledge: flowAcknowledgeMock
+    })
     quickOpsBatteryStatusResultMock.mockResolvedValue(quickOpsBatteryStatusInfo)
     quickOpsDiskSpaceResultMock.mockResolvedValue(quickOpsDiskSpaceInfo)
     quickOpsDirectoryUsageResultMock.mockResolvedValue(quickOpsDirectoryUsageInfo)
@@ -1144,6 +1137,10 @@ describe('QuickOpsModule', () => {
     fsMkdirMock.mockResolvedValue(undefined)
     fsWriteFileMock.mockResolvedValue(undefined)
     fsUnlinkMock.mockResolvedValue(undefined)
+  })
+
+  afterEach(() => {
+    resetQuickOpsPorts()
   })
 
   it('exposes the shared QuickOps runtime without cleaning sessions on init', () => {

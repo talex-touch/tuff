@@ -42,6 +42,10 @@ vi.mock('../../utils/i18n-helper', () => ({
   onLocaleChange: mocks.onLocaleChange
 }))
 
+import {
+  registerPermissionPluginBridge,
+  resetPermissionPluginBridge
+} from '../permission/permission-ports'
 import { registerPluginLocalizationChannels } from './plugin-localization-channels'
 
 type RegisteredHandler = (payload: unknown, context: HandlerContext) => Promise<unknown> | unknown
@@ -164,10 +168,17 @@ describe('registerPluginLocalizationChannels', () => {
     vi.clearAllMocks()
     mocks.getPermissionModule.mockReturnValue({ checkPermission: mocks.checkPermission })
     mocks.getPluginByName.mockReturnValue({ sdkapi: SdkApi.V260713 })
+    registerPermissionPluginBridge({
+      resolvePluginDeclaredSdkApi: (pluginId) => {
+        const plugin = mocks.getPluginByName(pluginId) as { sdkapi?: number } | undefined
+        return typeof plugin?.sdkapi === 'number' ? plugin.sdkapi : undefined
+      }
+    })
     mocks.checkPermission.mockReturnValue({ allowed: true })
   })
 
   afterEach(() => {
+    resetPermissionPluginBridge()
     replaceOfficialDomainLexiconRegistryForHost(new DomainLexiconRegistry(UNIT_LEXICON_ENTRIES))
   })
 

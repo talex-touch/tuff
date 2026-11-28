@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { i18nMsg } from '@talex-touch/utils/i18n'
 
 const fxRateProviderMock = vi.hoisted(() => ({
@@ -31,8 +31,10 @@ vi.mock('../providers', () => ({
   fxRateProvider: fxRateProviderMock
 }))
 
-vi.mock('../../../../nexus/scene-client', () => sceneMocks)
-
+import {
+  registerBoxToolCloudScenePort,
+  resetBoxToolCloudScenePort
+} from '../../../ports/cloud-scene-port'
 import { CurrencyPreviewAbility } from './currency-ability'
 
 function context(text: string) {
@@ -46,7 +48,17 @@ function context(text: string) {
 }
 
 describe('CurrencyPreviewAbility', () => {
+  beforeEach(() => {
+    registerBoxToolCloudScenePort({
+      runScene: sceneMocks.runNexusScene,
+      extractTranslatedImage: vi.fn(() => null),
+      extractFxConvert: sceneMocks.extractFxConvertFromSceneRun,
+      extractFxRateSnapshot: sceneMocks.extractFxRateSnapshotFromSceneRun
+    })
+  })
+
   afterEach(() => {
+    resetBoxToolCloudScenePort()
     vi.clearAllMocks()
     fxRateProviderMock.getStatus.mockReturnValue({
       lastRefresh: Date.parse('2026-05-09T00:00:00.000Z'),

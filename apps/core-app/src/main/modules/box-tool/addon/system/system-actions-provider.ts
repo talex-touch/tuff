@@ -13,7 +13,6 @@ import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { performance } from 'node:perf_hooks'
-import { PluginProviderType } from '@talex-touch/utils/plugin/providers'
 import { shell } from 'electron'
 import {
   StorageList,
@@ -36,8 +35,11 @@ import {
   type DirectoryTerminal,
   type DirectoryTerminalInventory
 } from '../../../../utils/directory-terminal'
-import { installDevPluginFromPath } from '../../../plugin/dev-plugin-installer'
-import { pluginModule } from '../../../plugin/plugin-module'
+import {
+  canInstallBoxToolTpexPlugin,
+  installBoxToolDevPluginFromPath,
+  installBoxToolTpexPluginFromPath
+} from '../../ports/plugin-host-port'
 import { screenshotSessionModule } from '../../../screenshot-session'
 import { appProvider } from '../apps/app-provider'
 import { fileProvider } from '../files/file-provider'
@@ -609,7 +611,7 @@ export class SystemActionsProvider implements ISearchProvider<ProviderContext> {
     try {
       switch (meta.action) {
         case 'dev-plugin': {
-          const result = await installDevPluginFromPath(meta.path)
+          const result = await installBoxToolDevPluginFromPath(meta.path)
           const name = result.manifest?.name || resolvePluginNameFromPath(meta.path)
           if (result.status === 'exists') {
             systemActionsLog.info('Dev plugin already exists', {
@@ -628,17 +630,13 @@ export class SystemActionsProvider implements ISearchProvider<ProviderContext> {
           break
         }
         case 'tpex-plugin': {
-          const manager = pluginModule.pluginManager
-          if (!manager?.installFromSource) {
+          if (!canInstallBoxToolTpexPlugin()) {
             systemActionsLog.warn('Plugin manager not ready for tpex install')
             break
           }
           const fallbackName = resolvePluginNameFromPath(meta.path)
           try {
-            const summary = await manager.installFromSource({
-              source: meta.path,
-              hintType: PluginProviderType.TPEX
-            })
+            const summary = await installBoxToolTpexPluginFromPath(meta.path)
             const name = summary?.manifest?.name || fallbackName
             this.notifyPluginInstallResult(name, 'tpex', 'success')
             accepted = true

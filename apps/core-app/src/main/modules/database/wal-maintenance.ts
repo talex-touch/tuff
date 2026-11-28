@@ -5,8 +5,12 @@ import process from 'node:process'
 import { pollingService } from '@talex-touch/utils/common/utils/polling'
 import { dbWriteScheduler } from '../../db/db-write-scheduler'
 import { getSqliteBusyRetryCount } from '../../db/sqlite-retry'
-import { searchIndexWriter } from '../box-tool/search-engine/search-index-writer'
 import { operationalErrorService } from '../observability'
+import {
+  getDatabaseWalSearchIndexWriterPort,
+  type DatabaseWalSearchIndexWriterPort,
+  type DatabaseWalSearchIndexWriterStatus
+} from './database-ports'
 
 export const DB_WAL_PASSIVE_TASK_ID = 'database_wal_checkpoint_passive'
 export const DB_WAL_TRUNCATE_TASK_ID = 'database_wal_checkpoint_truncate'
@@ -147,12 +151,20 @@ export async function reclaimIncrementalVacuumPages(
   return pagesToReclaim
 }
 
+const DEFAULT_UNREGISTERED_WRITER_STATUS: DatabaseWalSearchIndexWriterStatus = {
+  readiness: 'pending',
+  admissionPaused: false,
+  activeAdmissions: 0,
+  pending: 0
+}
+
 export interface DatabaseWalMaintenanceDeps {
   getClient: () => Client | null
   getWalSizeBytes: () => Promise<number>
   getOpenFdCount: () => Promise<number | null>
   runWalCheckpoint: (mode: WalCheckpointMode) => Promise<void>
   reportDatabaseHealth: (source: 'periodic' | 'threshold') => Promise<void>
+  getSearchIndexWriter?: () => DatabaseWalSearchIndexWriterPort | null
   log: ReturnType<typeof getLogger>
 }
 
@@ -204,16 +216,22 @@ export class DatabaseWalMaintenance {
     })
   }
 
-  private isSearchIndexWriterPausedAndDrained(
-    status: ReturnType<typeof searchIndexWriter.getStatus>
-  ): boolean {
+  private getSearchIndexWriterPort(): DatabaseWalSearchIndexWriterPort | null {
+    return (this.deps.getSearchIndexWriter ?? getDatabaseWalSearchIndexWriterPort)()
+  }
+
+  private getSearchIndexWriterStatus(): DatabaseWalSearchIndexWriterStatus {
+    return this.getSearchIndexWriterPort()?.getStatus() ?? DEFAULT_UNREGISTERED_WRITER_STATUS
+  }
+
+  private isSearchIndexWriterPausedAndDrained(status: DatabaseWalSearchIndexWriterStatus): boolean {
     return status.admissionPaused && status.activeAdmissions === 0 && status.pending === 0
   }
 
   private logWalCheckpointSkippedWriter(
     mode: WalCheckpointMode,
     reason: 'search-index-writer-drain-timeout' | 'search-index-writer-not-quiescent',
-    status: ReturnType<typeof searchIndexWriter.getStatus>
+    status: DatabaseWalSearchIndexWriterStatus
   ): void {
     this.deps.log.info(DB_WAL_CHECKPOINT_SKIPPED_BUSY, {
       meta: {
@@ -226,6 +244,77 @@ export class DatabaseWalMaintenance {
     })
   }
 
+  private async executeScheduledWalCheckpoint(
+    mode: WalCheckpointMode,
+    writer: DatabaseWalSearchIndexWriterPort | null
+  ): Promise<void> {
+    await dbWriteScheduler.schedule(
+      `database.wal-checkpoint.${mode.toLowerCase()}`,
+      async () => {
+        if (writer) {
+          const statusBeforeExecute = writer.getStatus()
+          if (!this.isSearchIndexWriterPausedAndDrained(statusBeforeExecute)) {
+            this.logWalCheckpointSkippedWriter(
+              mode,
+              'search-index-writer-not-quiescent',
+              statusBeforeExecute
+            )
+            return
+          }
+        }
+
+        const activeClient = this.deps.getClient()
+        if (!activeClient) return
+
+        const checkpointStart = Date.now()
+        this.deps.log.debug('DB_WAL_CHECKPOINT_START', {
+          meta: { mode }
+        })
+
+        let reclaimedFreePages = 0
+        if (mode === 'TRUNCATE') {
+          // Reclaim incremental free pages before truncating WAL so freed-page
+          // moves are checkpointed and truncated right away instead of idling in `-wal`.
+          try {
+            reclaimedFreePages = await reclaimIncrementalVacuumPages(
+              activeClient,
+              DB_WAL_INCREMENTAL_VACUUM_MAX_PAGES,
+              DB_WAL_INCREMENTAL_VACUUM_MIN_FREELIST_PAGES
+            )
+          } catch (vacuumError) {
+            this.deps.log.debug('Bounded incremental_vacuum skipped before WAL TRUNCATE', {
+              error: vacuumError
+            })
+          }
+        }
+
+        const result = await activeClient.execute(`PRAGMA wal_checkpoint(${mode})`)
+        const parsed = parseWalCheckpointRow(result.rows?.[0])
+        const walSize = await this.deps.getWalSizeBytes()
+        this.walPeakBytes = Math.max(this.walPeakBytes, walSize)
+
+        this.deps.log.info(`WAL checkpoint ${mode} complete`, {
+          meta: {
+            mode,
+            busy: parsed.busy,
+            logFrames: parsed.log,
+            checkpointedFrames: parsed.checkpointed,
+            walSizeBytes: walSize,
+            walPeakBytes: this.walPeakBytes,
+            durationMs: Date.now() - checkpointStart,
+            schedulerQueuePeak: this.schedulerQueuePeak,
+            ...(reclaimedFreePages > 0 ? { reclaimedFreePages } : {})
+          }
+        })
+      },
+      {
+        priority: 'best_effort',
+        dropPolicy: 'drop',
+        maxQueueWaitMs: DB_WAL_CHECKPOINT_MAX_QUEUE_WAIT_MS
+      }
+    )
+  }
+
   async runWalCheckpoint(mode: WalCheckpointMode): Promise<void> {
     const client = this.deps.getClient()
     if (!client) return
@@ -236,8 +325,14 @@ export class DatabaseWalMaintenance {
       return
     }
 
+    const writer = this.getSearchIndexWriterPort()
     try {
-      await searchIndexWriter.withPausedAdmission(
+      if (!writer) {
+        await this.executeScheduledWalCheckpoint(mode, null)
+        return
+      }
+
+      await writer.withPausedAdmission(
         `database.wal-checkpoint.${mode.toLowerCase()}`,
         async (pausedStatus) => {
           if (!this.isSearchIndexWriterPausedAndDrained(pausedStatus)) {
@@ -249,74 +344,13 @@ export class DatabaseWalMaintenance {
             return
           }
 
-          await dbWriteScheduler.schedule(
-            `database.wal-checkpoint.${mode.toLowerCase()}`,
-            async () => {
-              const statusBeforeExecute = searchIndexWriter.getStatus()
-              if (!this.isSearchIndexWriterPausedAndDrained(statusBeforeExecute)) {
-                this.logWalCheckpointSkippedWriter(
-                  mode,
-                  'search-index-writer-not-quiescent',
-                  statusBeforeExecute
-                )
-                return
-              }
-
-              const activeClient = this.deps.getClient()
-              if (!activeClient) return
-
-              const checkpointStart = Date.now()
-              this.deps.log.debug('DB_WAL_CHECKPOINT_START', {
-                meta: { mode }
-              })
-
-              let reclaimedFreePages = 0
-              if (mode === 'TRUNCATE') {
-                // Reclaim incremental free pages before truncating WAL so freed-page
-                // moves are checkpointed and truncated right away instead of idling in `-wal`.
-                try {
-                  reclaimedFreePages = await reclaimIncrementalVacuumPages(
-                    activeClient,
-                    DB_WAL_INCREMENTAL_VACUUM_MAX_PAGES,
-                    DB_WAL_INCREMENTAL_VACUUM_MIN_FREELIST_PAGES
-                  )
-                } catch (vacuumError) {
-                  this.deps.log.debug('Bounded incremental_vacuum skipped before WAL TRUNCATE', {
-                    error: vacuumError
-                  })
-                }
-              }
-
-              const result = await activeClient.execute(`PRAGMA wal_checkpoint(${mode})`)
-              const parsed = parseWalCheckpointRow(result.rows?.[0])
-              const walSize = await this.deps.getWalSizeBytes()
-              this.walPeakBytes = Math.max(this.walPeakBytes, walSize)
-
-              this.deps.log.info(`WAL checkpoint ${mode} complete`, {
-                meta: {
-                  mode,
-                  busy: parsed.busy,
-                  logFrames: parsed.log,
-                  checkpointedFrames: parsed.checkpointed,
-                  walSizeBytes: walSize,
-                  walPeakBytes: this.walPeakBytes,
-                  durationMs: Date.now() - checkpointStart,
-                  schedulerQueuePeak: this.schedulerQueuePeak,
-                  ...(reclaimedFreePages > 0 ? { reclaimedFreePages } : {})
-                }
-              })
-            },
-            {
-              priority: 'best_effort',
-              dropPolicy: 'drop',
-              maxQueueWaitMs: DB_WAL_CHECKPOINT_MAX_QUEUE_WAIT_MS
-            }
-          )
+          await this.executeScheduledWalCheckpoint(mode, writer)
         },
         DB_WAL_CHECKPOINT_MAX_QUEUE_WAIT_MS
       )
     } catch (error) {
       if (
+        writer &&
         error instanceof Error &&
         (error.message === 'SEARCH_INDEX_WRITER_DRAIN_TIMEOUT' ||
           error.message === 'SEARCH_INDEX_WRITER_ADMISSION_DRAIN_TIMEOUT')
@@ -324,7 +358,7 @@ export class DatabaseWalMaintenance {
         this.logWalCheckpointSkippedWriter(
           mode,
           'search-index-writer-drain-timeout',
-          searchIndexWriter.getStatus()
+          writer.getStatus()
         )
         return
       }
@@ -335,7 +369,7 @@ export class DatabaseWalMaintenance {
   async reportDatabaseHealth(source: 'periodic' | 'threshold'): Promise<void> {
     const scheduler = dbWriteScheduler.getDetailedStats()
     this.schedulerQueuePeak = Math.max(this.schedulerQueuePeak, scheduler.queued)
-    const writer = searchIndexWriter.getStatus()
+    const writer = this.getSearchIndexWriterStatus()
 
     const [walSizeBytes, openFdCount] = await Promise.all([
       this.deps.getWalSizeBytes(),

@@ -11,6 +11,10 @@ import {
   intelligenceKnowledgeEvents
 } from '@talex-touch/utils/transport/sdk/domains/intelligence'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  registerPermissionPluginBridge,
+  resetPermissionPluginBridge
+} from '../permission/permission-ports'
 import './intelligence-test-harness'
 import { intelligenceContextExecutionService } from './intelligence-context-execution'
 import { contextHygieneService } from './intelligence-context-hygiene'
@@ -252,6 +256,12 @@ describe('IntelligenceModule plugin channel permission boundary', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     permissionMocks.getPluginByName.mockReturnValue({ sdkapi: SDK_API })
+    registerPermissionPluginBridge({
+      resolvePluginDeclaredSdkApi: (pluginId) => {
+        const plugin = permissionMocks.getPluginByName(pluginId) as { sdkapi?: number } | undefined
+        return typeof plugin?.sdkapi === 'number' ? plugin.sdkapi : undefined
+      }
+    })
     permissionMocks.checkPermission.mockReturnValue({ allowed: true })
     permissionMocks.getPermissionModule.mockReturnValue({
       checkPermission: permissionMocks.checkPermission
@@ -265,6 +275,10 @@ describe('IntelligenceModule plugin channel permission boundary', () => {
       available: true,
       providerIds: ['permission-test-provider']
     })
+  })
+
+  afterEach(() => {
+    resetPermissionPluginBridge()
   })
 
   it('lets an authoritative permitted plugin reach the provider through the real registrar', async () => {
@@ -530,6 +544,12 @@ describe('IntelligenceModule capability call failures', () => {
     vi.clearAllMocks()
     process.env.TZ = 'Asia/Shanghai'
     permissionMocks.getPluginByName.mockReturnValue({ sdkapi: SDK_API })
+    registerPermissionPluginBridge({
+      resolvePluginDeclaredSdkApi: (pluginId) => {
+        const plugin = permissionMocks.getPluginByName(pluginId) as { sdkapi?: number } | undefined
+        return typeof plugin?.sdkapi === 'number' ? plugin.sdkapi : undefined
+      }
+    })
     permissionMocks.checkPermission.mockReturnValue({ allowed: true })
     permissionMocks.getPermissionModule.mockReturnValue({
       checkPermission: permissionMocks.checkPermission
@@ -537,6 +557,7 @@ describe('IntelligenceModule capability call failures', () => {
   })
 
   afterEach(() => {
+    resetPermissionPluginBridge()
     if (originalTimeZone === undefined) delete process.env.TZ
     else process.env.TZ = originalTimeZone
   })

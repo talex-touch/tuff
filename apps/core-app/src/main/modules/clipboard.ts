@@ -40,11 +40,6 @@ import { TalexEvents, touchEventBus } from '../core/eventbus/touch-event'
 import { dbWriteScheduler } from '../db/db-write-scheduler'
 import { isStartupDegradeActive } from '../db/startup-degrade'
 import { clipboardHistory } from '../db/schema'
-import {
-  recordAcceptedExecute,
-  resolveExecuteEventId
-} from './box-tool/search-engine/execute-recorder'
-import { resolvePreviousAppContext } from './box-tool/search-engine/app-launch-recorder'
 import { APP_TASK_GATE_STARTUP_WAIT_MS, appTaskGate } from '../service/app-task-gate'
 import { normalizeRenderableSource } from '../utils/local-renderable-assets'
 import { normalizeAbsolutePath } from '@talex-touch/utils/common/utils/safe-path'
@@ -53,7 +48,6 @@ import { createLogger, type LogOptions } from '../utils/logger'
 import { perfMonitor } from '../utils/perf-monitor'
 import { BaseModule } from './abstract-base-module'
 import { databaseModule } from './database'
-import { ocrService } from './ocr/ocr-service'
 import {
   CLIPBOARD_NOTE_METADATA_KEY,
   CLIPBOARD_TAGS_METADATA_KEY,
@@ -63,11 +57,10 @@ import {
 import { DEFAULT_PRIVACY_RETENTION_POLICY } from './privacy/retention-policy'
 import { createMainPrivacyRetentionPolicyStore } from './privacy/retention-policy-store'
 import { getPermissionModule } from './permission'
-import { pluginModule } from './plugin/plugin-module'
 import { getMainConfig, isMainStorageReady, subscribeMainConfig } from './storage'
 import { activeAppService } from './system/active-app'
 import { getLocale } from '../utils/i18n-helper'
-import { windowManager } from './box-tool/core-box/window'
+import { getClipboardPorts } from './clipboard/clipboard-ports'
 import {
   createIneligibleClipboardFreshnessState,
   type ClipboardFreshnessState
@@ -294,7 +287,7 @@ export class ClipboardModule extends BaseModule {
     getAppLanguageHint: () => getLocale(),
     getLatestGeneration: () => this.clipboardStageBGeneration,
     enqueueOcr: async (job) => {
-      await ocrService.enqueueFromClipboard(job)
+      await getClipboardPorts().ocr.enqueueFromClipboard(job)
     },
     patchCachedMeta: (clipboardId, patch) => {
       this.handleMetaPatch(clipboardId, patch)
@@ -576,8 +569,7 @@ export class ClipboardModule extends BaseModule {
   }
 
   private isCoreBoxWindowVisible(): boolean {
-    const coreBoxWindow = windowManager.current?.window
-    return Boolean(coreBoxWindow && !coreBoxWindow.isDestroyed() && coreBoxWindow.isVisible())
+    return getClipboardPorts().coreBox.isCoreBoxWindowVisible()
   }
 
   private scheduleCoreBoxBaselineCapture(): void {
@@ -1291,10 +1283,7 @@ export class ClipboardModule extends BaseModule {
 
   private resolveSdkApiForPluginCall(pluginId: string, payload: unknown): number | undefined {
     const payloadSdkApi = this.extractPayloadSdkApi(payload)
-    const plugin = pluginModule.pluginManager?.getPluginByName(pluginId) as
-      | { sdkapi?: number }
-      | undefined
-    const declaredSdkApi = typeof plugin?.sdkapi === 'number' ? plugin.sdkapi : undefined
+    const declaredSdkApi = getClipboardPorts().plugin.getPluginSdkApi(pluginId)
 
     if (
       typeof declaredSdkApi === 'number' &&
@@ -1440,7 +1429,7 @@ export class ClipboardModule extends BaseModule {
     request: ClipboardApplyRequest,
     context: HandlerContext
   ): Promise<ClipboardActionResult> {
-    const sourceContext = await resolvePreviousAppContext()
+    const sourceContext = await getClipboardPorts().search.resolvePreviousAppContext()
     const result = await this.autopasteAutomation.handleApplyRequest(request, context)
     // The item write to the clipboard/system succeeded: that is a real use of the history record.
     // Ordinary capture after this write is a clipboard change, not an apply, so it cannot count
@@ -1484,11 +1473,12 @@ export class ClipboardModule extends BaseModule {
       } as TuffItem['meta']
     }
     try {
-      await recordAcceptedExecute({
+      const searchPort = getClipboardPorts().search
+      await searchPort.recordAcceptedExecute({
         item,
         sessionId: null,
         entryPoint: 'core-box',
-        eventId: resolveExecuteEventId(eventId),
+        eventId: searchPort.resolveExecuteEventId(eventId),
         previousApp
       })
     } catch (error) {
@@ -1712,7 +1702,8 @@ export class ClipboardModule extends BaseModule {
     this.historyPersistence.setDatabase(this.db)
     this.transportChannel =
       ctx.runtime?.channel ?? (ctx.app as { channel?: unknown } | null | undefined)?.channel
-    ocrService.setTransportChannel(this.transportChannel)
+    const ocrPort = getClipboardPorts().ocr
+    ocrPort.setTransportChannel(this.transportChannel)
     this.clipboardHelper = new ClipboardHelper()
     this.installClipboardHostService()
     this.setupPollingSubscriptions()
@@ -1724,10 +1715,10 @@ export class ClipboardModule extends BaseModule {
     })
     setImmediate(() => {
       void this.waitForAppTasksBeforeStartupWork('ocr-service')
-        .then(() => ocrService.start())
+        .then(() => getClipboardPorts().ocr.start())
         .catch((error) => clipboardLog.error('Failed to start OCR service', { error }))
     })
-    ocrService.registerClipboardMetaListener(this.handleMetaPatch)
+    ocrPort.registerClipboardMetaListener(this.handleMetaPatch)
     void this.refreshRetentionPolicy()
     setImmediate(() => {
       void this.waitForAppTasksBeforeStartupWork('clipboard-retention-backfill')

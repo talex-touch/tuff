@@ -32,11 +32,11 @@ import { buildSearchEngineLogsSettingMigrationPlan } from './search-engine-logs-
 import {
   providerConfigDocumentContainsCredential,
   redactProviderConfigDocument
-} from '../ai/provider-credential-service'
+} from '../../shared/provider-credential-document'
 import {
-  describeIntelligenceWriteRegression,
-  reportIntelligenceWriteRegression
-} from '../ai/intelligence-config-write-probe'
+  hasStorageBeforeRendererSaveObservers,
+  notifyStorageBeforeRendererSave
+} from './storage-ports'
 import { StorageCache } from './storage-cache'
 import { StorageFrequencyMonitor } from './storage-frequency-monitor'
 import { StorageLRUManager } from './storage-lru-manager'
@@ -592,13 +592,20 @@ export class StorageModule extends BaseModule {
         // conflict gate below is about to reject changes nothing and is already logged there.
         const serverVersion = this.cache.getVersion(request.key)
         const willBeApplied = request.version === undefined || request.version >= serverVersion
-        if (request.key === StorageList.IntelligenceConfig && willBeApplied) {
+        if (willBeApplied && hasStorageBeforeRendererSaveObservers(request.key)) {
           const previousDocument = this.cache.peekRaw(request.key) ?? this.getConfig(request.key)
-          const regression = describeIntelligenceWriteRegression(previousDocument, payload, {
-            clientVersion: request.version,
-            serverVersion
-          })
-          if (regression) reportIntelligenceWriteRegression(regression)
+          notifyStorageBeforeRendererSave(
+            {
+              key: request.key,
+              previousDocument,
+              incomingPayload: payload,
+              clientVersion: request.version,
+              serverVersion
+            },
+            (error, observerId) => {
+              storageLog.debug(`Storage before-save observer failed (${observerId})`, { error })
+            }
+          )
         }
         const result = this.saveConfig(
           request.key,

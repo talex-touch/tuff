@@ -9,9 +9,12 @@ import path from 'node:path'
 import { resolveLocalFilePath } from '@talex-touch/utils/network'
 import { clipboard, nativeImage } from 'electron'
 import { COREBOX_SCREENSHOT_TRANSLATE_SCENE_ID } from '../../../../shared/events/corebox-scenes'
-import type { NexusSceneRunResult } from '../../nexus/scene-client'
-import { extractTranslatedImageFromSceneRun, runNexusScene } from '../../nexus/scene-client'
-import { normalizeIntelligenceError } from '../../ai/intelligence-error-normalizer'
+import { normalizeBoxToolIntelligenceError } from '../ports/ai-capability-port'
+import {
+  extractBoxToolTranslatedImageFromSceneRun,
+  runBoxToolCloudScene,
+  type BoxToolCloudSceneRunResult
+} from '../ports/cloud-scene-port'
 import { openImageTranslatePinWindow } from './image-translate-pin-window'
 import { resolveStartupBenchmarkUserDataDir } from '../../../core/acceptance-mode'
 import { getBooleanEnv } from '@talex-touch/utils/env'
@@ -69,7 +72,7 @@ function toRouteStageKey(providerId: string, capability: string): string {
 }
 
 function extractImageTranslateRouteMetadata(
-  run: NexusSceneRunResult | null,
+  run: BoxToolCloudSceneRunResult | null,
   durationMs: number
 ): CoreBoxImageTranslateRouteMetadata | undefined {
   const runId = readOptionalString(run?.runId)
@@ -257,9 +260,9 @@ export async function translateImageBase64(
   }
 
   const sceneStartedAt = Date.now()
-  let run: Awaited<ReturnType<typeof runNexusScene>>
+  let run: Awaited<ReturnType<typeof runBoxToolCloudScene>>
   try {
-    run = await runNexusScene(COREBOX_SCREENSHOT_TRANSLATE_SCENE_ID, {
+    run = await runBoxToolCloudScene(COREBOX_SCREENSHOT_TRANSLATE_SCENE_ID, {
       input: {
         imageBase64: normalizedImageBase64,
         targetLang
@@ -267,7 +270,7 @@ export async function translateImageBase64(
       capability: options.openPinWindow ? undefined : 'image.translate.e2e'
     })
   } catch (error) {
-    const normalized = normalizeIntelligenceError(error, {
+    const normalized = normalizeBoxToolIntelligenceError(error, {
       capabilityId: 'image.translate.e2e'
     })
     if (normalized.code === 'UNKNOWN') {
@@ -287,7 +290,7 @@ export async function translateImageBase64(
     }
   }
   const sceneDurationMs = Date.now() - sceneStartedAt
-  const translated = extractTranslatedImageFromSceneRun(run)
+  const translated = extractBoxToolTranslatedImageFromSceneRun(run)
   if (!translated) {
     return {
       success: false,

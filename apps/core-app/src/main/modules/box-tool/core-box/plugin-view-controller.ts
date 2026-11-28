@@ -12,26 +12,25 @@ import { app, WebContentsView } from 'electron'
 import { buildWindowWebPreferences } from '../../../core/window-security-profile'
 import { useAliveWebContents } from '../../../hooks/use-electron-guard'
 import { createLogger } from '../../../utils/logger'
-import { pluginModule } from '../../plugin/plugin-module'
-import { usePluginInjections } from '../../plugin/runtime/plugin-injections'
 import {
   COREBOX_DETACH_SHORTCUT_ID,
   COREBOX_TRANSFER_SHORTCUT_ID
 } from '../../../../shared/corebox-shortcut'
 import { shortcutModule } from '../../global-shortcon'
-import { closePluginWebContents } from '../../plugin/runtime/plugin-view-close'
-import { buildPluginViewWebPreferences } from '../../plugin/runtime/plugin-view-host'
-import { resolvePluginViewSecurityProfile } from '../../plugin/runtime/plugin-view-security-profile'
-import {
-  registerPluginWebContents,
-  unregisterPluginWebContents
-} from '../../plugin/runtime/plugin-view-registry'
-import {
-  createPluginViewNavigationPolicy,
-  installPluginViewNavigationPolicy
-} from '../../plugin/runtime/plugin-window-policy'
 import { getMainConfig } from '../../storage'
 import { getBoxItemManager } from '../item-sdk'
+import {
+  buildBoxToolPluginViewWebPreferences,
+  closeBoxToolPluginWebContents,
+  createBoxToolPluginViewNavigationPolicy,
+  hasBoxToolPluginManager,
+  installBoxToolPluginViewNavigationPolicy,
+  registerBoxToolPluginWebContents,
+  resolveBoxToolPluginInjections,
+  resolveBoxToolPluginViewSecurityProfile,
+  setBoxToolActivePlugin,
+  unregisterBoxToolPluginWebContents
+} from '../ports/plugin-host-port'
 import {
   buildCoreBoxKeyModifiers,
   forwardKeyEventToWebContents,
@@ -181,8 +180,8 @@ export class PluginViewController {
     }
 
     const transport = this.options.getTransport()
-    const injections = usePluginInjections(plugin, 'core-box:attachUIView')
-    const securityProfile = resolvePluginViewSecurityProfile(plugin, {
+    const injections = resolveBoxToolPluginInjections(plugin, 'core-box:attachUIView')
+    const securityProfile = resolveBoxToolPluginViewSecurityProfile(plugin, {
       source: 'core-box:attachUIView',
       injections
     })
@@ -260,7 +259,7 @@ export class PluginViewController {
       transparent: true
     }
     const webPreferences = plugin
-      ? buildPluginViewWebPreferences(securityProfile.effectiveProfile, {
+      ? buildBoxToolPluginViewWebPreferences(securityProfile.effectiveProfile, {
           plugin,
           themeStyle: getMainConfig(StorageList.THEME_STYLE) ?? {},
           source: `core-box:${url}`,
@@ -268,7 +267,7 @@ export class PluginViewController {
         })
       : buildWindowWebPreferences('app', webPreferenceOverrides)
     const navigationPolicy = plugin
-      ? await createPluginViewNavigationPolicy({
+      ? await createBoxToolPluginViewNavigationPolicy({
           pluginRoot: plugin.pluginPath,
           targetUrl: url,
           devAddress: plugin.dev.address,
@@ -282,7 +281,7 @@ export class PluginViewController {
     const viewCreateStart = performance.now()
     const view = (this.uiView = new WebContentsView({ webPreferences }))
     if (navigationPolicy) {
-      installPluginViewNavigationPolicy(view.webContents, navigationPolicy)
+      installBoxToolPluginViewNavigationPolicy(view.webContents, navigationPolicy)
     } else {
       // No plugin means the app profile, which had no guards at all: no window-open handler and
       // no navigation restriction (#793).
@@ -290,12 +289,12 @@ export class PluginViewController {
     }
     if (plugin) {
       const pluginViewWebContentsId = view.webContents.id
-      const registrationToken = registerPluginWebContents(
+      const registrationToken = registerBoxToolPluginWebContents(
         pluginViewWebContentsId,
         plugin.getActivationIdentity()
       )
       view.webContents.once('destroyed', () => {
-        unregisterPluginWebContents(pluginViewWebContentsId, registrationToken)
+        unregisterBoxToolPluginWebContents(pluginViewWebContentsId, registrationToken)
       })
     }
     metrics.viewCreate = performance.now() - viewCreateStart
@@ -403,8 +402,8 @@ export class PluginViewController {
         if (injections?.styles) {
           void getLiveViewWebContents(this.uiView)?.insertCSS(injections.styles)
         }
-        if (pluginModule.pluginManager) {
-          pluginModule.pluginManager.setActivePlugin(plugin.name)
+        if (hasBoxToolPluginManager()) {
+          setBoxToolActivePlugin(plugin.name)
         } else {
           pluginViewLog.warn('Plugin manager not available, cannot set plugin active')
         }
@@ -491,7 +490,7 @@ export class PluginViewController {
         return
       }
 
-      if (this.attachedPlugin && pluginModule.pluginManager) {
+      if (this.attachedPlugin && hasBoxToolPluginManager()) {
         const plugin = this.attachedPlugin
         getBoxItemManager().clear(plugin.name)
         pluginViewLog.debug(`Cleared BoxItemManager items for plugin: ${plugin.name}`)
@@ -539,7 +538,7 @@ export class PluginViewController {
 
       if (!cacheEnabled || !this.attachedPlugin) {
         try {
-          closePluginWebContents(webContents)
+          closeBoxToolPluginWebContents(webContents)
         } catch (error) {
           pluginViewLog.warn('Failed to close UI view', { error })
         }

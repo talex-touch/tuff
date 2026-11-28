@@ -23,7 +23,7 @@ import { buildTempPluginPath } from '../utils/temp-plugin-path'
 import { createLogger } from '../utils/logger'
 import { BaseModule } from './abstract-base-module'
 import { focusMainWindowIfAlive, registerMacOSOpenUrlHandler } from './addon-opener-handlers'
-import { applyExternalAuthCallback, applyStepUpToken } from './auth'
+import { getPluginCloudAuthPort } from './plugin/plugin-ports'
 
 type ChannelKeyManagerHolder = {
   keyManager?: unknown
@@ -66,7 +66,12 @@ const schemaHandlers: SchemaHandler[] = [
             meta: { refreshTokenLength: refreshToken.length }
           })
         }
-        void applyExternalAuthCallback(token, appToken, refreshToken, ttlSeconds)
+        void getPluginCloudAuthPort().applyExternalAuthCallback(
+          token,
+          appToken,
+          refreshToken,
+          ttlSeconds
+        )
       } else {
         addonOpenerLog.warn('Auth callback received without token')
       }
@@ -80,7 +85,7 @@ const schemaHandlers: SchemaHandler[] = [
         addonOpenerLog.debug('Step-up callback received', {
           meta: { tokenLength: loginToken.length }
         })
-        applyStepUpToken(loginToken)
+        getPluginCloudAuthPort().applyStepUpToken(loginToken)
       } else {
         addonOpenerLog.warn('Step-up callback received without token')
       }

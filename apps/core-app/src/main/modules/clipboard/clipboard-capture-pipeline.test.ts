@@ -10,6 +10,7 @@ import {
   resetClipboardCaptureSuppression,
   withClipboardCaptureSuppressed
 } from './clipboard-capture-suppression'
+import { registerClipboardPorts, resetClipboardPorts } from './clipboard-ports'
 
 const VALID_1X1_PNG = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==',
@@ -81,13 +82,6 @@ vi.mock('electron', () => ({
   },
   nativeImage: {
     createFromBuffer: mocks.createFromBuffer
-  }
-}))
-
-vi.mock('../box-tool/core-box/window', () => ({
-  windowManager: {
-    getAttachedPlugin: mocks.getAttachedPlugin,
-    shouldForwardClipboardChange: mocks.shouldForwardClipboardChange
   }
 }))
 
@@ -200,12 +194,22 @@ function createPipeline(
 describe('clipboard-capture-pipeline', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    registerClipboardPorts({
+      coreBox: {
+        getAttachedPlugin: mocks.getAttachedPlugin,
+        shouldForwardClipboardChange: mocks.shouldForwardClipboardChange
+      }
+    })
     mocks.availableFormats.mockReturnValue(['text/plain', 'text/html'])
     mocks.readText.mockReturnValue('https://example.test')
     mocks.readHTML.mockReturnValue('<b>https://example.test</b>')
     mocks.readImage.mockReturnValue(createEmptyImage())
     mocks.getAttachedPlugin.mockReturnValue({ name: 'demo-plugin', _uniqueChannelKey: 'key' })
     mocks.shouldForwardClipboardChange.mockReturnValue(true)
+  })
+
+  afterEach(() => {
+    resetClipboardPorts()
   })
 
   it('persists changed text captures and forwards the change event', async () => {

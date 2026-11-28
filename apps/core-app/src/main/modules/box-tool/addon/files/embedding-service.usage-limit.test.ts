@@ -13,8 +13,14 @@ import * as schema from '../../../../db/schema'
 import { tuffIntelligence } from '../../../ai/intelligence-sdk'
 import {
   createUsageLimitError,
-  notifyUsageLimitsChanged
+  notifyUsageLimitsChanged,
+  onUsageLimitsChanged,
+  readUsageLimitInfo
 } from '../../../ai/usage-ledger/usage-limits'
+import {
+  registerBoxToolAiCapabilityPort,
+  resetBoxToolAiCapabilityPort
+} from '../../ports/ai-capability-port'
 import { EmbeddingService } from './embedding-service'
 import { getSearchIndexReadWorkerTestPath } from '../../search-engine/workers/search-index-read-worker.test-harness'
 
@@ -121,9 +127,42 @@ beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] })
   vi.setSystemTime(NOW)
   generate.mockReset()
+  registerBoxToolAiCapabilityPort({
+    intelligence: {
+      code: { review: vi.fn() },
+      text: { summarize: vi.fn(), rewrite: vi.fn(), translate: vi.fn() },
+      vision: { ocr: vi.fn(), caption: vi.fn() },
+      embedding: {
+        generate: (payload, options) => tuffIntelligence.embedding.generate(payload, options),
+        generateLocalImage: vi.fn()
+      },
+      rag: { rerank: vi.fn() }
+    },
+    normalizeIntelligenceError: (error, options) => ({
+      code: 'UNKNOWN',
+      message: String(error),
+      reason: String(error),
+      recovery: '',
+      capabilityId: options?.capabilityId
+    }),
+    resolveCapabilityStatus: (capabilityId) => ({
+      capabilityId,
+      available: false,
+      providerIds: []
+    }),
+    searchConversations: async () => [],
+    isLocalEmbeddingReady: () => false,
+    isLocalEmbeddingImageReady: () => false,
+    getLocalEmbeddingModelKey: () => 'test-local-embedding-model',
+    runWithEmbeddingPriority: (_priority, run) => run(),
+    onUsageLimitsChanged: (listener) => onUsageLimitsChanged(listener),
+    notifyUsageLimitsChanged: (limits) => notifyUsageLimitsChanged(limits),
+    readUsageLimitInfo: (error) => readUsageLimitInfo(error)
+  })
 })
 
 afterEach(async () => {
+  resetBoxToolAiCapabilityPort()
   for (const service of services.splice(0)) await service.close()
   for (const client of clients.splice(0)) client.close()
   for (const directory of directories.splice(0))

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 // Every registration is kept, mirroring TuffMainTransport's Set of handlers. A Map holding one
 // handler per event would let a second registration overwrite the first, which is how the
@@ -134,14 +134,6 @@ vi.mock('../../../utils/logger', () => ({
   createLogger: vi.fn(() => mocks.logger)
 }))
 
-vi.mock('../../plugin/plugin-module', () => ({
-  pluginModule: {
-    pluginManager: {
-      plugins: new Map()
-    }
-  }
-}))
-
 vi.mock('../item-sdk', () => ({
   getBoxItemManager: mocks.getBoxItemManager
 }))
@@ -236,6 +228,10 @@ vi.mock('../../../../shared/events/corebox-scenes', () => ({
 import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { MetaOverlayEvents } from '@talex-touch/utils/transport/events/meta-overlay'
 import { OnboardingGateError } from '../../storage'
+import {
+  registerBoxToolPluginHostPort,
+  resetBoxToolPluginHostPort
+} from '../ports/plugin-host-port'
 import { createSenderSearchSink, ipcManager } from './ipc'
 
 /**
@@ -269,6 +265,10 @@ describe('CoreBox IPC hide transport', () => {
     })
     ipcManager.unregister()
     ipcManager.register()
+  })
+
+  afterEach(() => {
+    resetBoxToolPluginHostPort()
   })
 
   it('registers the search-index commit stream with SearchEngineCore', () => {
@@ -935,5 +935,61 @@ describe('CoreBox IPC hide transport', () => {
     destroyed = true
     await sink.complete?.({ searchId: 's-1', sources: [] })
     expect(channel.broadcastTo).toHaveBeenCalledTimes(3)
+  })
+
+  it('resolves non-native provider details through the registered plugin host port', async () => {
+    const handler = soleHandler(CoreBoxEvents.provider.getDetails) as
+      | ((payload: {
+          providerIds: string[]
+        }) => Promise<Array<{ id: string; name: string; icon?: unknown }>>)
+      | undefined
+    expect(handler).toBeTypeOf('function')
+
+    mocks.searchEngineCore.getProvidersByIds.mockReturnValue([
+      { id: 'native-apps', name: 'Applications', icon: 'app-icon' }
+    ] as never)
+
+    expect(await handler?.({ providerIds: ['native-apps', 'plugin-alpha'] })).toEqual([
+      { id: 'native-apps', name: 'Applications', icon: 'app-icon' }
+    ])
+
+    registerBoxToolPluginHostPort({
+      hasPluginManager: () => true,
+      setActivePlugin: vi.fn(),
+      getPluginProviderDetail: (pluginId) =>
+        pluginId === 'plugin-alpha'
+          ? {
+              id: 'plugin-alpha',
+              name: 'plugin-alpha',
+              icon: { type: 'class', value: 'i-ri-apps-line' }
+            }
+          : null,
+      installDevPluginFromPath: vi.fn(async () => ({ status: 'error' as const, error: 'unused' })),
+      canInstallTpexPlugin: () => false,
+      installTpexPluginFromPath: vi.fn(async () => null),
+      handleActiveFeatureInput: vi.fn(async () => false),
+      searchPluginFeatures: vi.fn(async () => ({
+        items: [],
+        query: { text: '' },
+        duration: 0,
+        sources: []
+      })),
+      getDefaultSearchProviders: () => ({}),
+      usePluginInjections: () => null,
+      resolvePluginViewSecurityProfile: vi.fn(),
+      buildPluginViewWebPreferences: vi.fn(),
+      createPluginViewNavigationPolicy: vi.fn(),
+      installPluginViewNavigationPolicy: vi.fn(),
+      registerPluginWebContents: vi.fn(),
+      unregisterPluginWebContents: vi.fn(),
+      closePluginWebContents: vi.fn()
+    })
+
+    expect(
+      await handler?.({ providerIds: ['native-apps', 'plugin-alpha', 'missing-plugin'] })
+    ).toEqual([
+      { id: 'native-apps', name: 'Applications', icon: 'app-icon' },
+      { id: 'plugin-alpha', name: 'plugin-alpha', icon: { type: 'class', value: 'i-ri-apps-line' } }
+    ])
   })
 })
