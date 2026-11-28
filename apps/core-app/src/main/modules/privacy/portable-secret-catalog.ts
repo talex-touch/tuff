@@ -1,5 +1,5 @@
 import { types as utilTypes } from 'node:util'
-import { providerCredentialSecureStoreKey } from '../ai/provider-credential-service'
+import { providerCredentialSecureStoreKey } from '../../shared/provider-credential-key'
 
 export type PortableSecretOwnerKind = 'plugin' | 'provider'
 

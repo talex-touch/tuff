@@ -174,10 +174,10 @@ describe('docs prerender routes', () => {
     expect(routes).toEqual(expect.arrayContaining([
       ...publicPrerenderRoutes,
       ...docsApiPrerenderRoutes,
+      '/api/docs/navigation/en/all',
+      '/api/docs/navigation/zh/all',
       '/api/docs/search/en',
       '/api/docs/search/zh',
-      '/api/docs/navigation/en/components',
-      '/api/docs/sidebar-components/en',
       '/en/docs/guide/start',
       '/zh/docs/guide/start',
       // Without these in the Nitro list the source URLs reach a Worker that cannot read files.
@@ -188,6 +188,11 @@ describe('docs prerender routes', () => {
       '/docs',
       '/docs/guide/start',
       '/dashboard',
+      '/api/docs/navigation/en/components',
+      '/api/docs/navigation/zh/components',
+      '/api/docs/sidebar-components/en',
+      '/api/docs/sidebar-components/zh',
+      '/api/docs/component-sync',
     ]))
   })
 
@@ -195,12 +200,12 @@ describe('docs prerender routes', () => {
     const root = mkdtempSync(join(tmpdir(), 'nexus-prerender-evidence-'))
     const docsDir = join(root, 'content/docs')
     mkdirSync(join(docsDir, 'dev/getting-started'), { recursive: true })
-    mkdirSync(join(docsDir, 'dev/components'), { recursive: true })
+    mkdirSync(join(docsDir, 'dev/api'), { recursive: true })
     mkdirSync(join(docsDir, 'guide'), { recursive: true })
     writeFileSync(join(docsDir, 'index.en.mdc'), '# Docs')
     writeFileSync(join(docsDir, 'dev/index.en.mdc'), '# Developer Hub')
     writeFileSync(join(docsDir, 'dev/getting-started/quickstart.en.mdc'), '# Quickstart')
-    writeFileSync(join(docsDir, 'dev/components/index.zh.mdc'), '# Components')
+    writeFileSync(join(docsDir, 'dev/api/search.zh.mdc'), '# Search API')
     writeFileSync(join(docsDir, 'guide/start.zh.mdc'), '# Start')
 
     const evidence = createNexusPrerenderEvidence(root)
@@ -220,8 +225,8 @@ describe('docs prerender routes', () => {
       '/zh/docs/dev',
       '/en/docs/dev/getting-started/quickstart',
       '/zh/docs/dev/getting-started/quickstart',
-      '/en/docs/dev/components',
-      '/zh/docs/dev/components',
+      '/en/docs/dev/api/search',
+      '/zh/docs/dev/api/search',
       '/en/docs/guide/start',
       '/zh/docs/guide/start',
     ]))
@@ -245,10 +250,10 @@ describe('docs prerender routes', () => {
       '/zh/docs/index',
       '/en/docs/dev/getting-started/quickstart',
       '/zh/docs/dev/getting-started/quickstart',
-      '/en/docs/dev/components/index',
-      '/zh/docs/dev/components/index',
-      '/en/docs/dev/components/tabs',
-      '/zh/docs/dev/components/tabs',
+      '/en/docs/dev/api/index',
+      '/zh/docs/dev/api/index',
+      '/en/docs/dev/api/search',
+      '/zh/docs/dev/api/search',
       '/en/docs/guide/start',
       '/zh/docs/guide/start',
     ]))
@@ -257,11 +262,11 @@ describe('docs prerender routes', () => {
       '/zh/docs',
       '/en/docs/dev',
       '/zh/docs/dev',
-      '/en/docs/dev/components',
-      '/zh/docs/dev/components',
+      '/en/docs/dev/api',
+      '/zh/docs/dev/api',
     ]))
     // One JSON twin per docs route per mode, plus the canonical spelling of every directory
-    // index below the root (`dev/components.json` beside `dev/components/index.json`) — the
+    // index below the root (`dev/api.json` beside `dev/api/index.json`) — the
     // route client-side navigation actually asks for. None may carry a query string, which is
     // what made the earlier prerender attempt unbuildable on Pages.
     const directoryIndexRoutes = evidence.docsRoutes.filter(route => /\/index$/.test(route) && !/^\/(?:en|zh)\/docs\/index$/.test(route))
@@ -269,13 +274,13 @@ describe('docs prerender routes', () => {
     expect(evidence.docsPageApiRoutes.length).toBe((evidence.docsRoutes.length + directoryIndexRoutes.length) * 2)
     expect(evidence.docsPageApiRoutes.some(route => route.includes('?'))).toBe(false)
     expect(evidence.docsPageApiRoutes).toEqual(expect.arrayContaining([
-      '/api/docs/page/en/body/dev/components/tabs.json',
-      '/api/docs/page/zh/meta/dev/components/tabs.json',
+      '/api/docs/page/en/body/dev/api/search.json',
+      '/api/docs/page/zh/meta/dev/api/search.json',
       '/api/docs/page/en/body/index.json',
       '/api/docs/page/zh/meta/dev.json',
       '/api/docs/page/en/body/dev.json',
-      '/api/docs/page/zh/meta/dev/components.json',
-      '/api/docs/page/en/body/dev/components.json',
+      '/api/docs/page/zh/meta/dev/api.json',
+      '/api/docs/page/en/body/dev/api.json',
     ]))
     // Every real docs page must ship its source alongside it, and every page named as release
     // evidence must have one or that URL 404s in production. The count exceeds the page count
@@ -283,16 +288,26 @@ describe('docs prerender routes', () => {
     expect(evidence.missingRequiredDocsMarkdownRoutes).toEqual([])
     expect(evidence.docsMarkdownRouteCount).toBeGreaterThanOrEqual(evidence.docsRoutes.length)
     expect(evidence.docsMarkdownRoutes).toEqual(expect.arrayContaining([
-      '/en/docs/dev/components/tabs.md',
+      '/en/docs/dev/api/search.md',
       '/zh/docs/guide/start.md',
       '/en/docs.md',
       // The canonical directory-index twin: the URL an agent actually forms from the page.
       '/en/docs/dev.md',
-      '/zh/docs/dev/components.md',
+      '/zh/docs/dev/api.md',
     ]))
     expect(evidence.docsRoutes).not.toEqual(expect.arrayContaining([
       '/docs',
       '/docs/dev/getting-started/quickstart',
     ]))
+  })
+
+  it('produces identical route lists when reusing precomputed docs routes', () => {
+    const docsRoutes = createDocsPrerenderRoutes(nexusRoot)
+    expect(createDocsPageApiPrerenderRoutes(nexusRoot, docsRoutes)).toEqual(
+      createDocsPageApiPrerenderRoutes(nexusRoot),
+    )
+    expect(createDocsMarkdownPrerenderRoutes(nexusRoot, docsRoutes)).toEqual(
+      createDocsMarkdownPrerenderRoutes(nexusRoot),
+    )
   })
 })

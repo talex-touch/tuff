@@ -4,8 +4,7 @@ import type {
   IntelligenceProviderModelOption
 } from '@talex-touch/tuff-intelligence'
 import { types as utilTypes } from 'node:util'
-import { getProviderModelOptions } from '../../ai/intelligence-provider-model-options'
-import { tuffIntelligence } from '../../ai/intelligence-sdk'
+import { getPluginIntelligencePort } from '../plugin-ports'
 import type {
   PluginIntelligenceCapabilityId,
   PluginIntelligenceChatPayload,
@@ -517,11 +516,16 @@ function cancelled(): never {
 }
 
 const productionInvoke: IntelligenceInvokeDependency = (capabilityId, payload, options) =>
-  tuffIntelligence.invoke(capabilityId, payload, options)
+  getPluginIntelligencePort().invoke(capabilityId, payload, options)
+
+const productionGetProviderModelOptions = (
+  capabilityId: string
+): readonly IntelligenceProviderModelOption[] =>
+  getPluginIntelligencePort().getProviderModelOptions(capabilityId)
 
 const productionDependencies: PluginIntelligenceHostServiceDependencies = Object.freeze({
   invoke: productionInvoke,
-  getProviderModelOptions
+  getProviderModelOptions: productionGetProviderModelOptions
 })
 
 export function createPluginIntelligenceHostService(

@@ -3,7 +3,6 @@ import { docsContentAvailability } from '../../../server/utils/docsContentCache'
 
 const contentMocks = vi.hoisted(() => ({
   queryCollectionNavigation: vi.fn(),
-  queryCollection: vi.fn(),
 }))
 
 vi.mock('@nuxt/content/server', () => contentMocks)
@@ -70,9 +69,9 @@ describe('/api/docs/navigation', () => {
       staleMaxAge: 3600,
       name: 'docs-navigation',
     })
-    expect(cachedOptions.getKey({}, null, null)).toBe('locale:all:scope:all')
-    expect(cachedOptions.getKey({}, 'zh', null)).toBe('locale:zh:scope:all')
-    expect(cachedOptions.getKey({}, 'en', 'components')).toBe('locale:en:scope:components')
+    expect(cachedOptions.getKey({}, null)).toBe('locale:all:scope:all')
+    expect(cachedOptions.getKey({}, 'zh')).toBe('locale:zh:scope:all')
+    expect(cachedOptions.getKey({}, 'en')).toBe('locale:en:scope:all')
   })
 
   it('serves a resolved navigation tree from cache', async () => {
@@ -131,36 +130,36 @@ describe('/api/docs/navigation', () => {
     ])
   })
 
-  it('uses path locale and scope for prerenderable static variants', async () => {
+  it('uses path locale for prerenderable static variants', async () => {
     contentMocks.queryCollectionNavigation.mockResolvedValue([
       {
         title: 'Docs',
         path: '/docs',
         children: [
           {
-            title: 'Dev',
-            path: '/docs/dev',
+            title: 'Guide',
+            path: '/docs/guide',
             children: [
-              {
-                title: 'Components',
-                path: '/docs/dev/components',
-                children: [
-                  { title: 'Tabs', path: '/docs/dev/components/tabs.en' },
-                  { title: 'Tabs 标签页', path: '/docs/dev/components/tabs.zh' },
-                ],
-              },
+              { title: 'Start', path: '/docs/guide/start.en' },
+              { title: '快速开始', path: '/docs/guide/start.zh' },
             ],
           },
         ],
       },
     ])
 
-    await expect(handler({ context: { params: { locale: 'en', scope: 'components' } } })).resolves.toEqual([
+    await expect(handler({ context: { params: { locale: 'en', scope: 'all' } } })).resolves.toEqual([
       {
-        title: 'Components',
-        path: '/docs/dev/components',
+        title: 'Docs',
+        path: '/docs',
         children: [
-          { title: 'Tabs', path: '/docs/dev/components/tabs.en' },
+          {
+            title: 'Guide',
+            path: '/docs/guide',
+            children: [
+              { title: 'Start', path: '/docs/guide/start.en' },
+            ],
+          },
         ],
       },
     ])
@@ -208,67 +207,5 @@ describe('/api/docs/navigation', () => {
 
     await expect(handler({})).rejects.toThrow('database is locked')
     expect(contentMocks.queryCollectionNavigation).toHaveBeenCalledTimes(1)
-  })
-
-  it('embeds component sidebar metadata on components-scoped navigation without changing all-scope output', async () => {
-    const rawTree = [
-      {
-        title: 'Docs',
-        path: '/docs',
-        children: [
-          {
-            title: 'Dev',
-            path: '/docs/dev',
-            children: [
-              {
-                title: 'Components',
-                path: '/docs/dev/components',
-                children: [
-                  { title: 'Tabs', path: '/docs/dev/components/tabs.en' },
-                ],
-              },
-            ],
-          },
-        ],
-      },
-    ]
-    contentMocks.queryCollectionNavigation.mockResolvedValue(rawTree)
-    contentMocks.queryCollection.mockReturnValue({
-      where: () => ({
-        all: async () => [
-          {
-            path: '/docs/dev/components/tabs.en',
-            category: 'Navigation',
-            since: '0.8.0',
-            syncStatus: 'verified',
-            verified: true,
-          },
-        ],
-      }),
-    })
-
-    const scoped = await handler({ context: { params: { locale: 'en', scope: 'components' } } })
-    expect(scoped).toEqual([
-      {
-        title: 'Components',
-        path: '/docs/dev/components',
-        children: [
-          {
-            title: 'Tabs',
-            path: '/docs/dev/components/tabs.en',
-            category: 'Navigation',
-            since: '0.8.0',
-            syncStatus: 'verified',
-            verified: true,
-          },
-        ],
-      },
-    ])
-
-    const full = await handler({ context: { params: { locale: 'en' } } })
-    expect(full[0].children[0].children[0].children[0]).toEqual({
-      title: 'Tabs',
-      path: '/docs/dev/components/tabs.en',
-    })
   })
 })

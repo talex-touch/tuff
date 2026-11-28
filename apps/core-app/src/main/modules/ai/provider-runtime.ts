@@ -1,6 +1,6 @@
 import type { IntelligenceProviderConfig } from '@talex-touch/tuff-intelligence'
 import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
-import { getAuthToken } from '../auth'
+import { getAiAuthPort } from './ai-ports'
 import { resolveProviderCredential } from './provider-credential-runtime'
 import { isOnDeviceAsrProvider } from '@talex-touch/utils/intelligence/voice-asr'
 import {
@@ -55,7 +55,7 @@ function injectRuntimeCredential(provider: IntelligenceProviderConfig): Intellig
     }
   }
 
-  const authToken = toNexusApiKey(getAuthToken())
+  const authToken = toNexusApiKey(getAiAuthPort().getAuthToken())
   const capabilities = provider.capabilities?.includes('audio.asr')
     ? provider.capabilities
     : [...(provider.capabilities ?? []), 'audio.asr']

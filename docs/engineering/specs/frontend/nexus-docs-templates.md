@@ -1,14 +1,14 @@
 # Nexus Docs Templates
 
-> The 模板 / Templates tab of the Nexus component docs: page-level compositions of tuffex components, one per page, each rendered inside the shared `TemplateFrame` stage. Established 2026-09-24 (task `09-23-nexus-docs-templates-tab`, 10 templates); batch 2 (`09-24-nexus-docs-templates-batch-2`) added five pages and a second style on five existing ones. Read this before adding a template, changing `TemplateFrame`, or touching the `templates` suite.
+> The 模板 / Templates tab of the TuffEx component docs (`apps/tuffex-docs/`, served at `/tuffex/*`): page-level compositions of tuffex components, one per page, each rendered inside the shared `TemplateFrame` stage. Established 2026-09-24 (task `09-23-nexus-docs-templates-tab`, 10 templates); batch 2 (`09-24-nexus-docs-templates-batch-2`) added five pages and a second style on five existing ones. Read this before adding a template, changing `TemplateFrame`, or touching the `templates` suite.
 
 ---
 
 ## 1. Scope / Trigger
 
 - Adding a template page, a second style to an existing template page, or a new template group.
-- Changing `apps/nexus/app/components/content/demos/TemplateFrame.vue`.
-- Changing anything that renders templates: the `templates` suite in `docs-suites.ts` / `DocsSidebar.vue`, or the Template section of the docs page.
+- Changing `apps/tuffex-docs/app/components/content/demos/TemplateFrame.vue`.
+- Changing anything that renders templates: the `templates` suite in `apps/tuffex-docs/app/utils/docs-suites.ts` / `apps/tuffex-docs/app/components/docs/DocsSidebar.vue`, or the Template section of the docs page.
 
 A template is a **docs-only** artefact: one demo SFC plus a zh and an en `.mdc`. It is not a tuffex export, has no barrel, and must not add tuffex source.
 
@@ -18,15 +18,14 @@ A template is a **docs-only** artefact: one demo SFC plus a zh and an en `.mdc`.
 
 | Step | File | What |
 | --- | --- | --- |
-| 1 | `content/docs/dev/components/template-<slug>.{zh,en}.mdc` | Flat file name (the taxonomy script globs `*.mdc`, no sub-directories). Frontmatter `category` is one of `TemplateApp` / `TemplateContent` / `TemplateAi` / `TemplateData` |
-| 2 | `scripts/recategorize-component-docs.py` → `TAXONOMY` | Slug under its `Template*` group. The script errors on a doc with no entry **and** on an entry with no doc, so steps 1 and 2 land together |
-| 3 | `app/components/DocsSidebar.vue` → `SECTION_ORDER['/docs/dev/components']` | Path inside the templates block (between the concepts pages and `base-suite`), in `TAXONOMY` order |
-| 4 | `app/components/content/demos/Template<Name>Demo.vue` | The demo; root element is `<TemplateFrame>` |
-| 5 | `app/components/content/demo-registry.ts` | One alphabetical line. It lands with the demo file: Vite resolves every dynamic `import()` in the registry when it transforms it, so a line pointing at a missing file breaks **every** demo on the dev server |
+| 1 | `apps/tuffex-docs/content/docs/components/template-<slug>.{zh,en}.mdc` | Flat file name (globs `*.mdc`, no sub-directories). Frontmatter `category` is one of `TemplateApp` / `TemplateContent` / `TemplateAi` / `TemplateData` |
+| 2 | `apps/tuffex-docs/app/utils/docs-suites.ts` & `apps/tuffex-docs/build/tuffex-nav-builder.ts` | Register slug/category ordering so the build-time navigation tree places it in the templates suite |
+| 3 | `apps/tuffex-docs/app/components/content/demos/Template<Name>Demo.vue` | The demo; root element is `<TemplateFrame>` |
+| 4 | `apps/tuffex-docs/app/components/content/demo-registry.ts` | One alphabetical line. It lands with the demo file: Vite resolves every dynamic `import()` in the registry when it transforms it, so a line pointing at a missing file breaks the build |
 
-A new **group** additionally adds the category to `SUITE_CATEGORY_KEYS.templates`, `CATEGORY_SUITE_MAP`, `CATEGORY_I18N_KEY` (`app/utils/docs-suites.ts`) and `docsSidebar.categories.<key>` in both `i18n/locales/{zh,en}.ts`.
+A new **group** additionally adds the category to `SUITE_CATEGORY_KEYS.templates`, `CATEGORY_SUITE_MAP`, `CATEGORY_I18N_KEY` (`apps/tuffex-docs/app/utils/docs-suites.ts`) and `docsSidebar.categories.<key>` in both `apps/tuffex-docs/i18n/locales/{zh,en}.json`.
 
-The suite itself has **no overview page**: `SUITES` gives it `standalonePages: []` and `entryPage: '/docs/dev/components/template-shell'`, and `suiteOverviewLink()` falls back to `entryPage`. It also has no `DocsComponentsGallery` band and no row in the hub's suite-overview table (see `component-guidelines.md` → TuffEx Suite Taxonomy).
+The suite itself has **no overview page**: `SUITES` gives it `standalonePages: []` and `entryPage: '/template-shell'`, and `suiteOverviewLink()` falls back to `entryPage`. It also has no `DocsComponentsGallery` band and no row in the hub's suite-overview table (see `component-guidelines.md` → TuffEx Suite Taxonomy).
 
 ---
 
@@ -54,7 +53,7 @@ This is the structure every template page has had since `da4d09250` (2026-09-25,
 ## 4. `TemplateFrame` signature
 
 ```ts
-// apps/nexus/app/components/content/demos/TemplateFrame.vue
+// apps/tuffex-docs/app/components/content/demos/TemplateFrame.vue
 defineProps<{ title: string, height?: number /* column stage height, default 540 */ }>()
 defineEmits<{ enter: [] }>()   // once, when ≥35% of the stage is first on screen
 defineSlots<{ default: (p: { expanded: boolean, width: number, height: number }) => unknown }>()
@@ -106,16 +105,15 @@ The overlay **does not** take its z-index from the tuffex allocator on purpose: 
 ## 8. Verification required
 
 ```bash
-cd apps/nexus
-node build/check-demo-registry-orphans.mjs && node build/check-mdc-fences.mjs \
-  && node build/check-doc-translation-parity.mjs && node build/check-icon-collections.mjs
-python3 scripts/recategorize-component-docs.py        # must print "would update 0 file(s)"
-curl -s 'http://[::1]:3200/api/docs/sidebar-components/en' | node -e \
-  "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>console.log(JSON.parse(s).filter(i=>/template-/.test(i.path)&&!i.category).map(i=>i.path)))"   # must print []
-pnpm exec vue-tsc --noEmit -p .nuxt/tsconfig.app.json   # only the known errors in nuxt.config.ts / server/utils/cloudflare.ts
+cd apps/tuffex-docs
+node scripts/checks/check-demo-registry.mjs && node scripts/checks/check-mdc-fences.mjs \
+  && node scripts/checks/check-doc-parity.mjs
+pnpm exec vitest run
+pnpm exec vue-tsc --noEmit -p .nuxt/tsconfig.app.json
+pnpm run generate
 ```
 
-The dev server binds the IPv6 loopback; on this machine `127.0.0.1:3000` is a different app, so address it as `[::1]`. Evict `.nuxt/cache/nitro/functions/docs-sidebar-components/` (and `docs-page/` entries for edited pages) before trusting either.
+Dev preview runs on `http://127.0.0.1:3210/tuffex/en` (`pnpm -C apps/tuffex-docs run dev`), and staged Cloudflare static assets live under `apps/tuffex-docs/.dist-cf/` (`pnpm -C apps/tuffex-docs run preview`).
 
 > **Warning — a vue-tsc run with TS1128 in `.nuxt/types/typed-router-i18n.d.ts` checked nothing.** Two dev servers sharing one `.nuxt` rewrite that file at the same time and leave a duplicated tail. While any syntax error exists tsc skips semantic checking entirely, so the run looks nearly clean. Trim the tail after the last complete `export {}` and rerun.
 

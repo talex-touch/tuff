@@ -2,7 +2,8 @@ import { cp, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { registerDp2Ports, resetDp2PortsForTests } from '../../core/ports/register-dp2-ports'
 import { runOrchestratorPrivacyAcceptance } from './orchestrator-run-privacy-acceptance'
 import { ORCHESTRATOR_PRIVACY_GATE_KEYS } from './orchestrator-run-privacy-gates'
 
@@ -15,6 +16,29 @@ const RETENTION_MIGRATION = '0041_ai_orchestrator_run_retention.sql'
 const RETENTION_INDEX = 'idx_ai_orchestrator_runs_retention'
 
 describe('orchestrator run packaged Privacy acceptance', () => {
+  beforeEach(() => {
+    registerDp2Ports()
+  })
+
+  afterEach(() => {
+    resetDp2PortsForTests()
+  })
+
+  it('fails closed when no orchestrator privacy store factory is registered or supplied', async () => {
+    resetDp2PortsForTests()
+    const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), 'tuff-privacy-unregistered-'))
+    try {
+      await expect(
+        runOrchestratorPrivacyAcceptance({
+          migrationsFolder: MIGRATIONS_FOLDER,
+          temporaryRoot
+        })
+      ).rejects.toThrow('ORCHESTRATOR_PRIVACY_STORE_FACTORY_UNAVAILABLE')
+    } finally {
+      await rm(temporaryRoot, { recursive: true, force: true })
+    }
+  })
+
   it('rejects the legacy same-name partial index migration after a positive control', async () => {
     const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), 'tuff privacy #%-'))
     try {

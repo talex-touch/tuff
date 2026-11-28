@@ -1,4 +1,6 @@
 import { flushPromises, mount } from '@vue/test-utils'
+import { createSSRApp, defineComponent, h } from 'vue'
+import { renderToString } from 'vue/server-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import TxFlatRadio from '../src/TxFlatRadio.vue'
 import flatRadioSource from '../src/TxFlatRadio.vue?raw'
@@ -407,5 +409,70 @@ describe('txFlatRadio size ladder', () => {
     // which is what lets TxFineTuneCard's inline pin stay untouched.
     expect(md).toContain('--tx-flat-radio-item-padding: 0 8px')
     expect(md).toContain('--tx-flat-radio-item-gap: 4px')
+  })
+})
+
+describe('txFlatRadio SSR hydration safety', () => {
+  function extractItemIds(html: string): string[] {
+    return [...html.matchAll(/id="(tx-flat-radio-[^"]+)"/g)].map(match => match[1]!)
+  }
+
+  it('uses Vue useId() instead of getCurrentInstance().uid for deterministic SSR item IDs', async () => {
+    expect(flatRadioSource).toContain('useId()')
+    expect(flatRadioSource).not.toContain('getCurrentInstance()?.uid')
+
+    const RadioDemo = defineComponent({
+      render() {
+        return h(TxFlatRadio, { modelValue: 'pnpm' }, {
+          default: () => [
+            h(TxFlatRadioItem, { value: 'pnpm', label: 'pnpm' }),
+            h(TxFlatRadioItem, { value: 'npm', label: 'npm' }),
+            h(TxFlatRadioItem, { value: 'bun', label: 'bun' }),
+          ],
+        })
+      },
+    })
+
+    const firstHtml = await renderToString(createSSRApp(RadioDemo))
+
+    // Mounting unrelated components advances Vue's internal instance uid counter;
+    // SSR output for a fresh app must stay identical so client hydration never mismatches.
+    mount(defineComponent({ render: () => h('div', 'noise') })).unmount()
+    mount(defineComponent({ render: () => h('div', 'noise-2') })).unmount()
+
+    const secondHtml = await renderToString(createSSRApp(RadioDemo))
+    const firstIds = extractItemIds(firstHtml)
+    const secondIds = extractItemIds(secondHtml)
+
+    expect(firstIds).toHaveLength(3)
+    expect(secondIds).toEqual(firstIds)
+    expect(new Set(firstIds).size).toBe(3)
+  })
+
+  it('generates distinct item IDs for sibling TxFlatRadio groups in the same SSR tree', async () => {
+    const DualGroups = defineComponent({
+      render() {
+        return h('div', [
+          h(TxFlatRadio, { modelValue: 'a' }, {
+            default: () => [
+              h(TxFlatRadioItem, { value: 'a', label: 'A' }),
+              h(TxFlatRadioItem, { value: 'b', label: 'B' }),
+            ],
+          }),
+          h(TxFlatRadio, { modelValue: 'x' }, {
+            default: () => [
+              h(TxFlatRadioItem, { value: 'x', label: 'X' }),
+              h(TxFlatRadioItem, { value: 'y', label: 'Y' }),
+            ],
+          }),
+        ])
+      },
+    })
+
+    const html = await renderToString(createSSRApp(DualGroups))
+    const ids = extractItemIds(html)
+
+    expect(ids).toHaveLength(4)
+    expect(new Set(ids).size).toBe(4)
   })
 })

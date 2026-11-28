@@ -22,7 +22,9 @@ import { createDbUtils } from '../db/utils'
 import type { CoreDatabase } from '../db/utils'
 import { SearchUsageService } from './box-tool/search-engine/search-usage-service'
 import * as executeRecorder from './box-tool/search-engine/execute-recorder'
+import { resolvePreviousAppContext } from './box-tool/search-engine/app-launch-recorder'
 import { resolveUsageIdentity } from './box-tool/search-engine/usage-identity'
+import { registerClipboardPorts, resetClipboardPorts } from './clipboard/clipboard-ports'
 import { activeAppService } from './system/active-app'
 import { foregroundAppSnapshotStore } from './system/foreground-app-snapshot'
 
@@ -369,12 +371,6 @@ vi.mock('./database', () => ({
   }
 }))
 
-vi.mock('./ocr/ocr-service', () => ({
-  ocrService: {
-    enqueueClipboardMeta: vi.fn()
-  }
-}))
-
 vi.mock('./permission', () => ({
   getPermissionModule: permissionModuleMock.getPermissionModule
 }))
@@ -387,12 +383,6 @@ vi.mock('./platform/capability-adapter', () => ({
   getAutoPasteCapabilityPatch: vi.fn(async () => ({
     supportLevel: 'supported'
   }))
-}))
-
-vi.mock('./plugin/plugin-module', () => ({
-  pluginModule: {
-    pluginManager: null
-  }
 }))
 
 vi.mock('./storage', () => ({
@@ -416,26 +406,6 @@ vi.mock('../service/temp-file.service', () => ({
 vi.mock('./system/active-app', () => ({
   activeAppService: {
     getActiveApp: vi.fn(async () => null)
-  }
-}))
-
-vi.mock('./box-tool/core-box/manager', () => ({
-  coreBoxManager: {
-    isVisible: vi.fn(() => false)
-  }
-}))
-
-vi.mock('./box-tool/core-box/window', () => ({
-  windowManager: {
-    get current() {
-      return {
-        window: {
-          isDestroyed: vi.fn(() => false),
-          isVisible: vi.fn(() => clipboardRuntimeMocks.coreBoxWindowVisible)
-        }
-      }
-    },
-    getWindows: vi.fn(() => [])
   }
 }))
 
@@ -467,7 +437,21 @@ type ClipboardModuleTestHandle = {
   registerTransportHandlers: () => void
 }
 
+beforeEach(() => {
+  registerClipboardPorts({
+    coreBox: {
+      isCoreBoxWindowVisible: () => clipboardRuntimeMocks.coreBoxWindowVisible
+    },
+    search: {
+      resolvePreviousAppContext: () => resolvePreviousAppContext(),
+      resolveExecuteEventId: (eventId) => executeRecorder.resolveExecuteEventId(eventId),
+      recordAcceptedExecute: (record) => executeRecorder.recordAcceptedExecute(record)
+    }
+  })
+})
+
 afterEach(() => {
+  resetClipboardPorts()
   vi.clearAllMocks()
   permissionModuleMock.getPermissionModule.mockReturnValue(null)
   clipboardRuntimeMocks.transportOn.mockImplementation(() => () => {})

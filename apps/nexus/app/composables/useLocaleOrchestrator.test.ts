@@ -18,6 +18,7 @@ const fakes = vi.hoisted(() => ({
   onMergeLocaleMessage: null as ((locale: string, payload: Record<string, unknown>) => void) | null,
 }))
 vi.mock('#imports', () => ({
+  tryUseNuxtApp: () => activeNuxtApp,
   useCookie: () => ({ value: null }),
   useI18n: () => ({
     locale: activeLocale,
@@ -72,6 +73,7 @@ vi.mock('~/composables/useCurrentUserApi', () => ({
 }))
 
 let activeLocale = ref<string>('en')
+let activeNuxtApp: Record<string, unknown> = {}
 
 let authStatus = ref('unauthenticated')
 let routePath = '/settings'
@@ -97,6 +99,7 @@ beforeEach(() => {
   nuxtState.clear()
   localStorageValues.clear()
   activeLocale = ref('en')
+  activeNuxtApp = {}
   authStatus = ref('unauthenticated')
   routePath = '/settings'
   setLocale = async (locale) => {
@@ -490,5 +493,57 @@ describe('locale contracts', () => {
 
     expect(mergeCalls).toEqual([])
     expect(activeLocale.value).toBe('en')
+  })
+
+  it('isolates locale queues per NuxtApp instance so concurrent SSR /en and /zh prerenders never cancel each other', async () => {
+    const zhLocaleRef = ref<string>('en')
+    const enLocaleRef = ref<string>('en')
+    const zhWrites: Locale[] = []
+    const enWrites: Locale[] = []
+
+    let releaseZhSetLocale!: () => void
+    const zhSetLocaleGate = new Promise<void>((resolve) => {
+      releaseZhSetLocale = resolve
+    })
+
+    // Simulate request A (`/zh/docs/dev/api/search`) with its own NuxtApp instance.
+    activeNuxtApp = { id: 'ssr-zh' }
+    routePath = '/zh/docs/dev/api/search'
+    activeLocale = zhLocaleRef
+    setLocale = async (locale) => {
+      zhWrites.push(locale)
+      await zhSetLocaleGate
+      zhLocaleRef.value = locale
+    }
+    const zhOrchestrator = useLocaleOrchestrator()
+
+    // Simulate concurrent request B (`/en/docs/dev/api/search`) with a distinct NuxtApp instance.
+    activeNuxtApp = { id: 'ssr-en' }
+    routePath = '/en/docs/dev/api/search'
+    activeLocale = enLocaleRef
+    setLocale = async (locale) => {
+      enWrites.push(locale)
+      enLocaleRef.value = locale
+    }
+    const enOrchestrator = useLocaleOrchestrator()
+
+    // Start zh request, then interleave en request before zh finishes — zh must NOT be dropped.
+    routePath = '/zh/docs/dev/api/search'
+    const zhPromise = zhOrchestrator.setLocaleSerial('zh', 'browser')
+
+    routePath = '/en/docs/dev/api/search'
+    const enPromise = enOrchestrator.setLocaleSerial('en', 'browser')
+
+    // Restore zh path for the queued zh resolution step and release gate.
+    routePath = '/zh/docs/dev/api/search'
+    releaseZhSetLocale()
+    const [zhSettled, enSettled] = await Promise.all([zhPromise, enPromise])
+
+    expect(zhSettled).toBe('zh')
+    expect(zhLocaleRef.value).toBe('zh')
+    expect(zhWrites).toEqual(['zh'])
+    expect(enSettled).toBe('en')
+    expect(enLocaleRef.value).toBe('en')
+    expect(enWrites).toEqual([])
   })
 })

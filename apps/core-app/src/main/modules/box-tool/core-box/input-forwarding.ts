@@ -1,7 +1,7 @@
 import type { TuffQuery } from '@talex-touch/utils'
 import type { CoreBoxInputChangeRequest } from '@talex-touch/utils/transport/events/types'
 import { createLogger } from '../../../utils/logger'
-import pluginFeaturesAdapter from '../../plugin/adapters/plugin-features-adapter'
+import { forwardBoxToolActiveFeatureInput } from '../ports/plugin-host-port'
 import { windowManager } from './window'
 
 const coreBoxInputForwardingLog = createLogger('CoreBox').child('InputForwarding')
@@ -49,7 +49,7 @@ class CoreBoxInputForwarding {
     })
 
     windowManager.forwardInputChange(payload)
-    return pluginFeaturesAdapter.handleActiveFeatureInput(payload)
+    return forwardBoxToolActiveFeatureInput(payload)
   }
 }
 

@@ -179,6 +179,10 @@ vi.mock('./ai-automation-scheduler', () => ({
 }))
 
 import { AgentStatus } from '@talex-touch/utils'
+import {
+  registerPermissionPluginBridge,
+  resetPermissionPluginBridge
+} from '../permission/permission-ports'
 import { agentManager } from './agents'
 import { registerAgentChannels } from './agents/agent-channels'
 import { aiCliOrchestrator } from './ai-cli-orchestrator'
@@ -264,10 +268,17 @@ beforeAll(async () => {
 }, 60_000)
 
 beforeEach(async () => {
+  registerPermissionPluginBridge({
+    resolvePluginDeclaredSdkApi: () => {
+      const plugin = permissionMocks.getPluginByName() as { sdkapi?: number } | undefined
+      return typeof plugin?.sdkapi === 'number' ? plugin.sdkapi : undefined
+    }
+  })
   await setUsageLimits({})
 })
 
 afterAll(async () => {
+  resetPermissionPluginBridge()
   await aiCliOrchestrator.shutdown().catch(() => undefined)
   intelligenceCapabilityRegistry.clear()
   await closeUsageLimitRefusalDatabase(fixture)

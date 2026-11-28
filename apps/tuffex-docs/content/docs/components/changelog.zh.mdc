@@ -1,0 +1,465 @@
+---
+title: 组件变更历程
+description: TuffEx 版本历程与各组件的引入版本
+category: Foundations
+status: beta
+since: 0.3.4
+tags: [changelog, versions, lifecycle, since, tuffex]
+syncStatus: reviewed
+verified: false
+---
+
+## 版本概览
+
+| 项目 | 值 |
+|------|----|
+| 源码版本 | **0.9.6** |
+| 发布版本 | **0.9.6**（最近一次 npm 发布） |
+| 组件模块 | **198**：基础 99 · 进阶 62 · AI 37 |
+
+## 版本更新历程
+
+### 0.9.6 版本（2026-11-28）
+
+在 AI 套件中新增球面半调数学加载器，在 Pro 套件中新增多设备样机容器与三款动效组件。
+
+- **新增组件**：matrix-loader、device-mockup、distortion-wave、pixel-field、voice-ring
+- **主要更新组件**：无
+- **关键特性**：
+  - 新增 `TxMatrixLoader`（`@talex-touch/tuffex/ai`）：基于球面凸透镜与半调棋盘格的纯数学 Canvas 加载器，提供 8 种 AI 语义状态、状态间平滑融合、2D 梯度噪声与 5 种电子屏幕显示时代（`oled`、`crt`、`vfd`、`dither`、`lcd`）。
+  - 新增 `TxDeviceMockup`（`@talex-touch/tuffex/pro`）：内置 75+ 款可按需 Tree-Shaking 的手机、平板、笔记本、桌面、圆/方形手表与浏览器外壳预设，支持真 3D 挤出机身与着地阴影、8 套 Shots.so 精选场景搭配、7 种阴影与出血构图、12 组渐变与胶片噪点、设备与横竖屏弹性形变切换，以及按需加载的客户端 SVG/PNG/WebP 导出。
+  - 新增 `TxDistortionWave`（`@talex-touch/tuffex/pro`）：基于透明 WebGL2 色散折射层的视图转场组件，支持 `vertical` / `horizontal` / `center` 几何形态、5 套内置色板、`#overlay` 保活控件层、`scrub` 进度定格与 Vue `Ref` 触发源，并提供降动效自动降级。
+  - 新增 `TxVoiceRing`（`@talex-touch/tuffex/pro`）：支持 `ring` 玻璃光谱光环与 `mono` 双环的实时语音动效组件，支持情绪色、声源方向 `direction` 倾斜与边缘玻璃折射、`hoverBend` 及 `useVoiceRingMicrophone`。
+  - 新增 `TxPixelField`（`@talex-touch/tuffex/pro`）：零外部依赖的 Canvas 2D 方形像素粒子舞台，内置 6 组植物与几何预设，支持自定义 `src` / `text` 等比采样、5 套色板、`obsidian` / `adaptive` 双舞台、4 种指针物理模式、点击脉冲与 `useMotionActivity` 门禁。
+
+### 0.9.5 版本（2026-11-23）
+
+在 Pro 套件中新增 3D 多面板折页与四角纸角卷折组件。
+
+- **新增组件**：fold-page
+- **主要更新组件**：无
+- **关键特性**：
+  - 新增 `TxFoldPage` 与 `TxFoldCorner`（`@talex-touch/tuffex/pro`）：支持水平/垂直风琴折、对开翼板三折页以及四向纸角卷折掀开效果，默认采用 `refraction` 琉光材质。
+
+### 0.9.4 版本（2026-11-16）
+
+表单控件统一规格、Escape 归属，以及随文档对齐一起修复的组件行为。
+
+- **新增组件**：无
+- **主要更新组件**：form、text、image-preview、image-generation、input、textarea、number-input、select、flat-select、date-picker、cascader、tag-input、tree-select、sensitive-input、base-anchor、dialog、modal、drawer、radio、miko、offline-state、working-indicator、tool-call-card、grid-layout、motion-control、skeleton、toast、toast-panel、text-morph、text-transformer
+- **关键特性**：
+  - `TxFormItem` 新增 `hint`：字段说明放进标签旁的 `?`，悬停或键盘聚焦时浮出。
+  - `TxText` 新增 `scroll="loop"` 循环滚动与 `loopEdge` 边缘效果（`gap`、`clip`、`fade`、`wrap`）。
+  - `TxImagePreview` 新增 `loadingEffect` 与 `loading` 插槽，加载中可显示 TxImageGeneration 预设效果、骨架占位或不显示。
+  - 表单控件统一为 `TxInput` 的规格：数字输入、日期字段、扁平选择与多选的高度统一为 32px，圆角统一为 12px，边缘改用不改变尺寸的内描边。
+  - 打开的浮层先处理 Escape，外层 `TxModal` / `TxDrawer` 保持打开；表单字段里按 Escape 不再关闭对话框。
+  - `TxMiko` 各状态改为懒加载，默认颜色调亮为 `#9726D9`。
+  - `TxOfflineState` 转发 `primary` / `secondary` 事件；`TxWorkingIndicator` 与 `TxToolCallCard` 离开视口后停止刷新耗时。
+  - 修复：`TxRadioGroup` 指示器随分组尺寸重新测量，`TxSensitiveInput` 焦点移到复制按钮时保持明文，`TxBlowDialog` 卸载时清除页面缩放，骨架屏与收起的通知不再被屏幕阅读器读到。
+
+### 0.9.3 版本（2026-11-03）
+
+触控液态表面、Miko 桌面伴侣猫、文本省略与自定义表情包。
+
+- **新增组件**：touch-surface、miko、text
+- **主要更新组件**：chain-of-thought、glass-surface、stream-markdown、icon-picker、markdown-editor、icon
+- **关键特性**：
+  - 新增 `TxText`：溢出时省略号可放在开头、中间或末尾（`overflow`）；`scroll="auto"` 循环来回滚动，`scroll="hover"` 平时截断、悬停时滑动露出全文。触屏上 `hover` 改为点按切换，减弱动效时两种滚动都停止。
+  - 新增 `TxTouchSurface` 与 `useLiquidTouch`：鼠标划过或手指按下时，表面像一滴液态玻璃。
+  - 新增 `TxMiko` 桌面伴侣猫。
+  - `TxIconPicker` 与 `TxMarkdownEditor` 支持 `emojiPacks` 自定义表情包：图标选择器存为 `url:` 标识符，编辑器插入 `:name:` 并渲染为图片；短码为 2–40 个字符。
+  - `TxGlassSurface` 新增 `engine="lens"` 液态透镜引擎（默认仍为 `classic`），并新增 `useLiquidDrag`。
+  - `TxChainOfThought` 的思考正文按节奏逐步放出。
+  - 修复 `TxStreamMarkdown` 表格「复制为 CSV」按钮被表头压住、只露出一半的问题。
+
+### 0.9.2 版本（2026-10-27）
+
+表单体系重写、全窗口图片预览，以及抽屉的实色默认材质。
+
+- **新增组件**：drawer-form、image-preview、modal-form、steps-form
+- **主要更新组件**：attachment-tray、base-surface、charts、command-palette、dialog、drawer、flip-overlay、form、image-gallery、input、modal、motion-transition、number-input、select、sensitive-input、stream-markdown、switch、textarea
+- **关键特性**：
+  - 重写 `TxForm` 与 `TxFormItem`：`layout` 按表单宽度在侧边与上方之间切换，规则新增 `type`、`min` / `max`、长度与 `pattern`，`level: 'warning'` 只提示不拦提交，`deps` 让依赖字段变化时重新校验；表单项里的输入控件自动接入 label、必填、错误与只读状态。
+  - `TxForm` 新增草稿（`persist`）、自动保存（`autosave`）与只读（`readonly`）：草稿按表单 `id` 存在本地，刷新或重开标签页后仍在，提交成功或 `reset()` 后删除。
+  - 新增 `TxModalForm` 与 `TxDrawerForm`：在对话框或抽屉里编辑记录，每次打开编辑 `initialValues` 的副本，提交成功才关闭。新增 `TxStepsForm` 与 `TxFormStep`：把一个表单分成几步，用 `v-model` 传值，逐步校验后再提交整个表单。
+  - 新增 `TxImagePreview`：滚轮与捏合缩放、放大后拖动滑行、未放大时横滑翻页、上下拖走关闭，支持缩略图飞入飞出。`TxImageGallery` 与 `TxAttachmentTray` 改走它，首次要用时才加载预览与样式。
+  - `TxDrawer` 面板默认改为实色材质（`surface` 默认 `pure`），正文不再透出后面页面；要琉光传 `surface="refraction"`。
+  - 图表标签可交给界面语言：`TxTimeseriesChart`、`TxSankeyChart` 的 `labels` 新增条目，`TxMonoChart` 新增 `formatX`。
+  - Tab 循环统一规则：只停在可见、可 Tab 的控件上，跳过隐藏、`inert` 与 `tabindex="-1"`；`TxDrawer` 打开时焦点正确移入。
+  - 升级 dompurify，修掉上游 critical 与 high 公告。
+
+### 0.9.1 版本（2026-10-21）
+
+修复 0.9.0 折射材质在大面板上的卡顿。
+
+- **新增组件**：无。
+- **主要更新组件**：base-surface、card、glass-surface
+- **关键特性**：
+  - `TxGlassSurface` 的位移图改为长边不超过 256px 的位图再拉伸。Chromium 每出一帧都要在 CPU 上栅格化位移图，原先整幅大小的位移图让大面板每帧花 100–200ms，改后不到 1ms。
+  - `refraction` 默认改用 `css` 渲染器，不再画 SVG 玻璃层；要看到折射时传 `refractionRenderer="svg"`，强弱用新增的 `refractionGlassOpacity` 调（默认 `0.3`）。`TxCard` 透传这两个属性。
+  - 新增 `setSurfacePerformanceMode('max')`：页面上所有重材质换成实色，`systemBackdrop` 的表面除外。
+  - `TxCard` 被宿主用 `overflow: hidden` 裁切，或放在圆角裁切容器里时，SVG 玻璃层不再消失。
+
+### 0.9.0 版本（2026-10-20）
+
+学习曲线、手势交互与折射材质，包含此前未发布的组件改动。
+
+- **新增组件**：无新增独立组件模块；学习曲线从 `charts` 导出。
+- **主要更新组件**：alert、allocation-bar、attachment-tray、base-surface、card-spread、carousel-3d、charts、command-palette、dialog、drawer、fine-tune-card、flip-book、image-gallery、markdown-editor、modal、motion-dock、physics-motion、stream-element、stream-markdown、stream-text、thinking-orb、toast
+- **关键特性**：
+  - `TxLearningCurve` 支持平滑、多种子区间和可见窗口；图表补齐按住读数、缩放、平移与键盘操作，并修复学习曲线 Y 轴名称重叠。
+  - 轮播、翻书、卡片堆与物理动效支持直接拖动和动量释放；Motion Dock 更新材质与放大布局。
+  - Modal、Drawer、Command Palette 与对话框采用折射材质，透明窗口可使用 `systemBackdrop`。
+  - Markdown 编辑器支持块编辑、按需加载的 CodeMirror、图片上传、AI 改写、评论与协作接口。
+  - 附件托盘和图库共用预览器，补齐焦点恢复、加载失败与图标按钮的无障碍名称；Thinking Orb 新增渐变配色。
+
+### 0.8.0 版本（2026-10-14）
+
+固定品牌色流光底、语音播放条，以及语义数据表与表单尺寸修复。
+
+- **新增组件（2 个）**：[flow-light](/zh/flow-light)、[voice-clip](/zh/voice-clip)
+- **更新组件（13 个）**：base-anchor、base-surface、button、card、conversation-stream、data-table、dropdown-menu、input、number-input、select、tag-input、textarea、voice-beam
+- **关键特性**：
+  - `TxFlowLight` 支持 corners / rim / aurora，BaseSurface、Card 与菜单面板可透传固定品牌色流光；高对比度下隐藏
+  - `TxVoiceClip` 支持播放、波形定位、键盘操作、本地录音解码与单条播放；`TxVoiceBeam` 新增 `organic` 独立起伏，尊重减少动态效果
+  - `TxButton` 新增 `progress`、`showProgress`、`formatProgress`；`TxConversationStream` 挂载时测量恢复的对话行
+  - `TxDataTable` 新增语义列 `type`、列级 `filter` / `filterOptions`、受控 `filter` / `defaultFilter`、`update:filter` / `filterChange`，默认客户端筛选；`filterOnClient=false` 将筛选交给调用方，`autoStickyActions` 默认固定操作列到右侧
+  - `TxSelect` 在未指定 `searchable` 时，选项数达到 `searchThreshold`（默认 8）自动启用搜索；显式 `false` 或阈值不大于 0 可关闭
+  - Input、Textarea、Select、NumberInput 与 TagInput 显式使用 `border-box`，无需宿主全局 reset，也不注入全局通配重置
+  - DataTable 内部状态拆分与样式去重后，单组件 JS 为 42.9 KiB，完整 / 按需 CSS 为 749.0 / 719.6 KiB；总量基线为 750 / 720.5 KiB，单文件预算与导入禁令不变
+
+
+### 0.7.0 版本（2026-10-09）
+
+动效原语与 Motion 套件、悬停弹层的悬停桥，以及终端显示组件。
+
+- **新增组件（16 个）**：[card-spread](/zh/card-spread)、[carousel-3d](/zh/carousel-3d)、[flip-book](/zh/flip-book)、[morph](/zh/morph)、[motion](/zh/motion)、[motion-button](/zh/motion-button)、[motion-control](/zh/motion-control)、[motion-dock](/zh/motion-dock)、[motion-form](/zh/motion-form)、[motion-loader](/zh/motion-loader)、[motion-metric](/zh/motion-metric)、[motion-text](/zh/motion-text)、[motion-toggle](/zh/motion-toggle)、[motion-transition](/zh/motion-transition)、[physics-motion](/zh/physics-motion)、[terminal](/zh/terminal)
+- **更新组件（18 个）**：[ai-elements](/zh/ai-elements)、[base-anchor](/zh/base-anchor)、[button](/zh/button)、[charts](/zh/charts)、[chat](/zh/chat)、[code-stream](/zh/code-stream)、[flat-dropdown](/zh/flat-dropdown)、[fusion-surface](/zh/fusion-surface)、[icon-chip](/zh/icon-chip)、[icon-morph](/zh/icon-morph)、[liquid](/zh/liquid)、[popover](/zh/popover)、[rating](/zh/rating)、[slider](/zh/slider)、[steps](/zh/steps)、[switch](/zh/switch)、[tooltip](/zh/tooltip)、[transition](/zh/transition)
+- **Motion 文档套件**：导航新增[动效套件](/zh/motion-suite)，含可独立重置的实时标本，以及双语分类、侧栏、总览和演示注册
+- **现有 charts 模块新增**：Motion 中的 [dither-chart](/zh/dither-chart) 与 Data 中的 [mono-chart](/zh/mono-chart)，均从 `@talex-touch/tuffex/charts` 导出
+- **安装边界**：仍为 Base、Pro、AI 三套 barrel；Motion 只是文档套件，`/motion` 单组件子路径引入 `TxMotion`，不是第四套 barrel；复合表单、控件和指标归 Pro
+- **来源与授权**：标签、内容、条目、模型和数据由调用方驱动；持续动效共享可见性、减少动态效果与清理处理，spring 与文字变化复用现有引擎。保留 Amicro 的 MIT 署名与源文件级 Apache-2.0 声明；保留的 46 个 Lucide 图标附 ISC 及适用的 Feather-MIT 声明，不引入 React 或 Lucide 运行时依赖
+- **关键特性**：
+  - 闭式弹簧（`solveSpring`、`createSpringTrack`）与 `useMorphBox`；TxMorph 一形多态容器；TxTransitionSmoothSize 改由弹簧驱动，并新增 blur 过渡
+  - 悬停弹层与触发器之间渲染悬停桥，斜向移动由安全三角保护；锚点家族默认不画箭头，expand 回弹按面板高度封顶
+  - TuffSwitch 滑块走 glide 材质，TxSlider 可越界回弹，TxLineSeries 沿线描出，TxIconMorph 新增播放与暂停，TxCopyButton 在复制、成功、失败之间形变
+  - TxTerminal 在网页与 Electron 中共用 ANSI / Unicode 终端显示
+
+### 0.6.3 版本（2026-10-01）
+
+流式内容组件与菜单确认反馈；最初随客户端 beta 测试，2026-10-03 发布到 npm。
+
+- **新增组件（3 个）**：[descriptions](/zh/descriptions)、[stream-element](/zh/stream-element)、[stream-text](/zh/stream-text)
+- **更新组件（6 个）**：[code-stream](/zh/code-stream)、[context-menu](/zh/context-menu)、[data-table](/zh/data-table)、[dropdown-menu](/zh/dropdown-menu)、[pagination](/zh/pagination)、[stream-markdown](/zh/stream-markdown)
+- **关键特性**：文字、代码与回答共享流式节奏，支持引用与插槽；关闭型菜单项的确认反馈；记录详情的标签/值列表；数据表格骨架加载；分页每页条数选择
+
+### 0.6.2 版本（2026-09-28）
+
+交互视觉特效与后台数据容器增强。
+
+- **新增组件（4 个）**：[bot-avatar](/zh/bot-avatar)、[image-generation](/zh/image-generation)、[metal-fx](/zh/metal-fx)、[voice-beam](/zh/voice-beam)
+- **更新组件（4 个）**：[card](/zh/card)、[empty-state](/zh/empty-state)、[progress-bar](/zh/progress-bar)、[status-badge](/zh/status-badge)
+- **关键特性**：
+  - 智能体头像、图像生成揭示、液态金属与语音响应光束
+  - TxProgressBar 支持多段聚合；后台卡片与空状态容器统一
+
+### 0.6.1 版本（2026-09-28）
+
+为复制、固定、失败等短时操作结果提供统一的无障碍提示。
+
+- **新增组件（1 个）**：[status-hint](/zh/status-hint)
+- **关键特性**：
+  - TxStatusHint 支持语气色带、字符级文字形变与重复触发强调
+  - 支持深浅色、减少动态效果与单一无障碍 live region
+
+### 0.6.0 版本（2026-09-12）
+
+触感系统重构、视觉特效套件与通知栈重写。
+
+- **新增组件（12 个）**：[agent-screen](/zh/agent-screen)、[charts](/zh/charts)、[choice-card](/zh/choice-card)、[flowchart](/zh/flowchart)、[fusion-surface](/zh/fusion-surface)、[icon-morph](/zh/icon-morph)、[icon-picker](/zh/icon-picker)、[mode-chip](/zh/mode-chip)、[prism-glow](/zh/prism-glow)、[sensitive-input](/zh/sensitive-input)、[text-morph](/zh/text-morph)、[toast-panel](/zh/toast-panel)
+- **更新组件（17 个）**：[alert](/zh/alert)、[badge](/zh/badge)、[cascader](/zh/cascader)、[date-picker](/zh/date-picker)、[flat-radio](/zh/flat-radio)、[group-block](/zh/group-block)、[picker](/zh/picker)、[progress-bar](/zh/progress-bar)、[slider](/zh/slider)、[sortable-list](/zh/sortable-list)、[stream-markdown](/zh/stream-markdown)、[tab-bar](/zh/tab-bar)、[text-transformer](/zh/text-transformer)、[toast](/zh/toast)、[toast-panel](/zh/toast-panel)、[transfer](/zh/transfer)、[tree](/zh/tree)
+- **关键特性**：
+  - TxTextMorph 字符形变过渡，移除第三方数字流依赖
+  - TxToastHost 重构为可堆叠通知栈，支持拖拽滑落与倒计时暂停
+  - TxSortableList 支持握柄与键盘排序，实时重排反馈
+  - TxDatePicker 与 TxCascader 支持区间选择与多级浮层
+  - 新增 TxPrismGlow 棱镜光效
+
+### 0.5.0 版本（2026-09-07）
+
+交互反馈打磨与性能优化。
+
+- **更新组件（5 个）**：[card-item](/zh/card-item)、[dropdown-menu](/zh/dropdown-menu)、[filter-chips](/zh/filter-chips)、[slider](/zh/slider)、[stream-markdown](/zh/stream-markdown)
+- **关键特性**：
+  - TxFilterChips 增加滑动填充与 icon-only 模式
+  - 浮层面板改用 transform 定位，优化尺寸测量
+  - 统一交互光标样式与 PostCSS 产物构建
+
+### 0.4.0 版本（2026-09-01）
+
+组件族收拢与文档站迁移。
+
+- **更新组件（2 个）**：[button](/zh/button)、[icon](/zh/icon)
+- **关键特性**：
+  - 收拢 TxButton 与 TxIcon 组件族，移除冗余子路径
+  - 移除弃用的 TuffFlatButton，改用 TxButton variant="flat"
+  - 运行时 Demo 与公开文档迁移至 Nexus
+
+### 0.3.9 版本（2026-06-12）
+
+AI 原生套件与按需子路径样式。
+
+- **新增组件（43 个）**：[agent-trace](/zh/agent-trace)、[ai-elements](/zh/ai-elements)、[allocation-bar](/zh/allocation-bar)、[approval-card](/zh/approval-card)、[attachment-tray](/zh/attachment-tray)、[border-beam](/zh/border-beam)、[cell-link](/zh/cell-link)、[chain-of-thought](/zh/chain-of-thought)、[code-stream](/zh/code-stream)、[context-cards](/zh/context-cards)、[context-indicator](/zh/context-indicator)、[conversation-stream](/zh/conversation-stream)、[diff-table](/zh/diff-table)、[dot-indicator](/zh/dot-indicator)、[filter-chips](/zh/filter-chips)、[fine-tune-card](/zh/fine-tune-card)、[flat-dropdown](/zh/flat-dropdown)、[icon-chip](/zh/icon-chip)、[inline-citation](/zh/inline-citation)、[insight-cards](/zh/insight-cards)、[liquid](/zh/liquid)、[markdown-editor](/zh/markdown-editor)、[message-actions](/zh/message-actions)、[prompt-bar](/zh/prompt-bar)、[reasoning-disclosure](/zh/reasoning-disclosure)、[recommendation-card](/zh/recommendation-card)、[resize-box](/zh/resize-box)、[scrub-field](/zh/scrub-field)、[search-panel](/zh/search-panel)、[selection-actions](/zh/selection-actions)、[sidebar-nav](/zh/sidebar-nav)、[signal-meter](/zh/signal-meter)、[sources](/zh/sources)、[spark-chart](/zh/spark-chart)、[stream-markdown](/zh/stream-markdown)、[suggestion-chips](/zh/suggestion-chips)、[task-rows](/zh/task-rows)、[thinking-orb](/zh/thinking-orb)、[tool-call-card](/zh/tool-call-card)、[tool-chips](/zh/tool-chips)、[tool-confirmation](/zh/tool-confirmation)、[version-capsule](/zh/version-capsule)、[working-indicator](/zh/working-indicator)
+- **更新组件（8 个）**：[base-anchor](/zh/base-anchor)、[base-surface](/zh/base-surface)、[code-editor](/zh/code-editor)、[empty-state](/zh/empty-state)、[flip-overlay](/zh/flip-overlay)、[radio](/zh/radio)、[scroll](/zh/scroll)、[tabs](/zh/tabs)
+- **关键特性**：
+  - 上线 AI 聊天、智能体屏幕、推理展示等 43 个组件
+  - 提供 `@talex-touch/tuffex/<component>` 子路径按需导出
+  - 导出 `base.css`，可独立加载全局 token
+
+### 0.3.8 版本（2026-05-29）
+
+抽屉与分割线增强。
+
+- **更新组件（2 个）**：[divider](/zh/divider)、[drawer](/zh/drawer)
+- **关键特性**：
+  - TxDrawer 支持四方向滑出与全屏模态
+  - TxDivider 增加渐变透明分割模式
+
+### 0.3.7 版本（2026-05-28）
+
+基础录入与排版组件补齐。
+
+- **新增组件（4 个）**：[divider](/zh/divider)、[kbd](/zh/kbd)、[number-input](/zh/number-input)、[textarea](/zh/textarea)
+- **更新组件（16 个）**：[avatar](/zh/avatar)、[chat](/zh/chat)、`flat-input`、[flat-radio](/zh/flat-radio)、[flat-select](/zh/flat-select)、[flip-overlay](/zh/flip-overlay)、[glass-surface](/zh/glass-surface)、[group-block](/zh/group-block)、[icon](/zh/icon)、[input](/zh/input)、[scroll](/zh/scroll)、[slider](/zh/slider)、[stagger](/zh/stagger)、[stat-card](/zh/stat-card)、[tabs](/zh/tabs)、[transfer](/zh/transfer)
+- **关键特性**：
+  - 补齐 TxTextarea、TxNumberInput、TxDivider、TxKbd 等基础录入组件
+  - 修复 SSR hydration 场景下的客户端结构同步
+
+### 0.3.4 版本（2026-03-08）
+
+TuffEx 独立包初始基线。
+
+- **初始组件（101 个）**：首批 101 个核心导出组件，覆盖通用基础、表单、布局与导航
+
+## 全组件引入版本索引
+
+全部 192 个组件模块的引入版本与安装 barrel；文档套件分类见[组件中心页](/zh)。
+
+| 组件 | 安装 barrel | 引入版本 |
+|---|---|---|
+| [`agent-screen`](/zh/agent-screen) | ai | 0.6.0 |
+| [`agent-trace`](/zh/agent-trace) | ai | 0.3.9 |
+| [`agents`](/zh/agents) | ai | 0.3.4 |
+| [`ai-elements`](/zh/ai-elements) | ai | 0.3.9 |
+| [`alert`](/zh/alert) | base | 0.3.4 |
+| [`allocation-bar`](/zh/allocation-bar) | pro | 0.3.9 |
+| [`approval-card`](/zh/approval-card) | ai | 0.3.9 |
+| [`attachment-tray`](/zh/attachment-tray) | ai | 0.3.9 |
+| [`auto-sizer`](/zh/auto-sizer) | pro | 0.3.4 |
+| [`avatar`](/zh/avatar) | base | 0.3.4 |
+| [`badge`](/zh/badge) | base | 0.3.4 |
+| [`base-anchor`](/zh/base-anchor) | pro | 0.3.4 |
+| [`base-surface`](/zh/base-surface) | pro | 0.3.4 |
+| [`blank-slate`](/zh/blank-slate) | base | 0.3.4 |
+| [`border-beam`](/zh/border-beam) | pro | 0.3.9 |
+| [`bot-avatar`](/zh/bot-avatar) | ai | 0.6.2 |
+| [`breadcrumb`](/zh/breadcrumb) | base | 0.3.4 |
+| [`button`](/zh/button) | base | 0.3.4 |
+| [`card`](/zh/card) | base | 0.3.4 |
+| [`card-item`](/zh/card-item) | base | 0.3.4 |
+| [`card-spread`](/zh/card-spread) | pro | 0.7.0 |
+| [`carousel-3d`](/zh/carousel-3d) | pro | 0.7.0 |
+| [`cascader`](/zh/cascader) | base | 0.3.4 |
+| [`cell-link`](/zh/cell-link) | base | 0.3.9 |
+| [`chain-of-thought`](/zh/chain-of-thought) | ai | 0.3.9 |
+| [`charts`](/zh/charts) | pro | 0.6.0 |
+| [`chat`](/zh/chat) | ai | 0.3.4 |
+| [`checkbox`](/zh/checkbox) | base | 0.3.4 |
+| [`choice-card`](/zh/choice-card) | ai | 0.6.0 |
+| [`code-editor`](/zh/code-editor) | pro | 0.3.4 |
+| [`code-stream`](/zh/code-stream) | ai | 0.3.9 |
+| [`collapse`](/zh/collapse) | base | 0.3.4 |
+| [`command-palette`](/zh/command-palette) | pro | 0.3.4 |
+| [`container`](/zh/container) | base | 0.3.4 |
+| [`context-cards`](/zh/context-cards) | ai | 0.3.9 |
+| [`context-indicator`](/zh/context-indicator) | ai | 0.3.9 |
+| [`context-menu`](/zh/context-menu) | base | 0.3.4 |
+| [`conversation-stream`](/zh/conversation-stream) | ai | 0.3.9 |
+| [`corner-overlay`](/zh/corner-overlay) | pro | 0.3.4 |
+| [`data-table`](/zh/data-table) | base | 0.3.4 |
+| [`date-picker`](/zh/date-picker) | base | 0.3.4 |
+| [`descriptions`](/zh/descriptions) | base | 0.6.3 |
+| [`device-mockup`](/zh/device-mockup) | pro | 0.9.6 |
+| [`dialog`](/zh/dialog) | base | 0.3.4 |
+| [`diff-table`](/zh/diff-table) | pro | 0.3.9 |
+| [`distortion-wave`](/zh/distortion-wave) | pro | 0.9.6 |
+| [`divider`](/zh/divider) | base | 0.3.7 |
+| [`dot-indicator`](/zh/dot-indicator) | base | 0.3.9 |
+| [`drawer`](/zh/drawer) | base | 0.3.4 |
+| [`drawer-form`](/zh/drawer-form) | base | 0.9.2 |
+| [`dropdown-menu`](/zh/dropdown-menu) | base | 0.3.4 |
+| [`edge-fade-mask`](/zh/edge-fade-mask) | pro | 0.3.4 |
+| [`empty`](/zh/empty) | base | 0.3.4 |
+| [`empty-state`](/zh/empty-state) | base | 0.3.4 |
+| [`error-state`](/zh/error-state) | base | 0.3.4 |
+| [`file-uploader`](/zh/file-uploader) | base | 0.3.4 |
+| [`filter-chips`](/zh/filter-chips) | base | 0.3.9 |
+| [`fine-tune-card`](/zh/fine-tune-card) | ai | 0.3.9 |
+| [`flat-dropdown`](/zh/flat-dropdown) | base | 0.3.9 |
+| [`flat-radio`](/zh/flat-radio) | base | 0.3.4 |
+| [`flat-select`](/zh/flat-select) | base | 0.3.4 |
+| [`flex`](/zh/flex) | base | 0.3.4 |
+| [`flip-book`](/zh/flip-book) | pro | 0.7.0 |
+| [`flip-overlay`](/zh/flip-overlay) | pro | 0.3.4 |
+| [`fold-page`](/zh/fold-page) | pro | 0.9.5 |
+| [`floating`](/zh/floating) | pro | 0.3.4 |
+| [`flow-light`](/zh/flow-light) | pro | 0.8.0 |
+| [`flowchart`](/zh/flowchart) | ai | 0.6.0 |
+| [`form`](/zh/form) | base | 0.3.4 |
+| [`fusion`](/zh/fusion) | pro | 0.3.4 |
+| [`fusion-surface`](/zh/fusion-surface) | pro | 0.6.0 |
+| [`glass-surface`](/zh/glass-surface) | pro | 0.3.4 |
+| [`glow-text`](/zh/glow-text) | pro | 0.3.4 |
+| [`gradient-border`](/zh/gradient-border) | pro | 0.3.4 |
+| [`gradual-blur`](/zh/gradual-blur) | pro | 0.3.4 |
+| [`grid`](/zh/grid) | base | 0.3.4 |
+| [`grid-layout`](/zh/grid-layout) | base | 0.3.4 |
+| [`group-block`](/zh/group-block) | base | 0.3.4 |
+| [`guide-state`](/zh/guide-state) | base | 0.3.4 |
+| [`icon`](/zh/icon) | base | 0.3.4 |
+| [`icon-chip`](/zh/icon-chip) | base | 0.3.9 |
+| [`icon-morph`](/zh/icon-morph) | pro | 0.6.0 |
+| [`icon-picker`](/zh/icon-picker) | base | 0.6.0 |
+| [`image-gallery`](/zh/image-gallery) | base | 0.3.4 |
+| [`image-generation`](/zh/image-generation) | pro | 0.6.2 |
+| [`image-preview`](/zh/image-preview) | base | 0.9.2 |
+| [`image-uploader`](/zh/image-uploader) | base | 0.3.4 |
+| [`inline-citation`](/zh/inline-citation) | ai | 0.3.9 |
+| [`input`](/zh/input) | base | 0.3.4 |
+| [`insight-cards`](/zh/insight-cards) | ai | 0.3.9 |
+| [`kbd`](/zh/kbd) | base | 0.3.7 |
+| [`keyframe-stroke-text`](/zh/keyframe-stroke-text) | pro | 0.3.4 |
+| [`layout-skeleton`](/zh/layout-skeleton) | base | 0.3.4 |
+| [`liquid`](/zh/liquid) | pro | 0.3.9 |
+| [`loading-overlay`](/zh/loading-overlay) | base | 0.3.4 |
+| [`loading-state`](/zh/loading-state) | base | 0.3.4 |
+| [`markdown-editor`](/zh/markdown-editor) | pro | 0.3.9 |
+| [`markdown-view`](/zh/markdown-view) | base | 0.3.4 |
+| [`matrix-loader`](/zh/matrix-loader) | ai | 0.9.6 |
+| [`message-actions`](/zh/message-actions) | ai | 0.3.9 |
+| [`metal-fx`](/zh/metal-fx) | pro | 0.6.2 |
+| [`miko`](/zh/miko) | ai | 0.9.3 |
+| [`modal`](/zh/modal) | base | 0.3.4 |
+| [`modal-form`](/zh/modal-form) | base | 0.9.2 |
+| [`mode-chip`](/zh/mode-chip) | ai | 0.6.0 |
+| [`morph`](/zh/morph) | pro | 0.7.0 |
+| [`motion`](/zh/motion) | pro | 0.7.0 |
+| [`motion-button`](/zh/motion-button) | pro | 0.7.0 |
+| [`motion-control`](/zh/motion-control) | pro | 0.7.0 |
+| [`motion-dock`](/zh/motion-dock) | pro | 0.7.0 |
+| [`motion-form`](/zh/motion-form) | pro | 0.7.0 |
+| [`motion-loader`](/zh/motion-loader) | pro | 0.7.0 |
+| [`motion-metric`](/zh/motion-metric) | pro | 0.7.0 |
+| [`motion-text`](/zh/motion-text) | pro | 0.7.0 |
+| [`motion-toggle`](/zh/motion-toggle) | pro | 0.7.0 |
+| [`motion-transition`](/zh/motion-transition) | pro | 0.7.0 |
+| [`nav-bar`](/zh/nav-bar) | base | 0.3.4 |
+| [`no-data`](/zh/no-data) | base | 0.3.4 |
+| [`no-selection`](/zh/no-selection) | base | 0.3.4 |
+| [`number-input`](/zh/number-input) | base | 0.3.7 |
+| [`offline-state`](/zh/offline-state) | base | 0.3.4 |
+| [`outline-border`](/zh/outline-border) | pro | 0.3.4 |
+| [`pagination`](/zh/pagination) | base | 0.3.4 |
+| [`permission-state`](/zh/permission-state) | base | 0.3.4 |
+| [`physics-motion`](/zh/physics-motion) | pro | 0.7.0 |
+| [`picker`](/zh/picker) | base | 0.3.4 |
+| [`pixel-field`](/zh/pixel-field) | pro | 0.9.6 |
+| [`popover`](/zh/popover) | base | 0.3.4 |
+| [`prism-glow`](/zh/prism-glow) | pro | 0.6.0 |
+| [`progress`](/zh/progress) | base | 0.3.4 |
+| [`progress-bar`](/zh/progress-bar) | base | 0.3.4 |
+| [`prompt-bar`](/zh/prompt-bar) | ai | 0.3.9 |
+| [`radio`](/zh/radio) | base | 0.3.4 |
+| [`rating`](/zh/rating) | base | 0.3.4 |
+| [`reasoning-disclosure`](/zh/reasoning-disclosure) | ai | 0.3.9 |
+| [`recommendation-card`](/zh/recommendation-card) | ai | 0.3.9 |
+| [`resize-box`](/zh/resize-box) | pro | 0.3.9 |
+| [`scroll`](/zh/scroll) | base | 0.3.4 |
+| [`scrub-field`](/zh/scrub-field) | base | 0.3.9 |
+| [`search-empty`](/zh/search-empty) | base | 0.3.4 |
+| [`search-input`](/zh/search-input) | base | 0.3.4 |
+| [`search-panel`](/zh/search-panel) | pro | 0.3.9 |
+| [`search-select`](/zh/search-select) | base | 0.3.4 |
+| [`segmented-slider`](/zh/segmented-slider) | base | 0.3.4 |
+| [`select`](/zh/select) | base | 0.3.4 |
+| [`selection-actions`](/zh/selection-actions) | base | 0.3.9 |
+| [`sensitive-input`](/zh/sensitive-input) | base | 0.6.0 |
+| [`sidebar-nav`](/zh/sidebar-nav) | base | 0.3.9 |
+| [`signal-meter`](/zh/signal-meter) | pro | 0.3.9 |
+| [`skeleton`](/zh/skeleton) | base | 0.3.4 |
+| [`slider`](/zh/slider) | base | 0.3.4 |
+| [`sortable-list`](/zh/sortable-list) | base | 0.3.4 |
+| [`sources`](/zh/sources) | ai | 0.3.9 |
+| [`spark-chart`](/zh/spark-chart) | pro | 0.3.9 |
+| [`spinner`](/zh/spinner) | base | 0.3.4 |
+| [`splitter`](/zh/splitter) | base | 0.3.4 |
+| [`stack`](/zh/stack) | base | 0.3.4 |
+| [`stagger`](/zh/stagger) | pro | 0.3.4 |
+| [`stat-card`](/zh/stat-card) | base | 0.3.4 |
+| [`status-badge`](/zh/status-badge) | base | 0.3.4 |
+| [`status-hint`](/zh/status-hint) | base | 0.6.1 |
+| [`steps`](/zh/steps) | base | 0.3.4 |
+| [`steps-form`](/zh/steps-form) | base | 0.9.2 |
+| [`stream-element`](/zh/stream-element) | ai | 0.6.3 |
+| [`stream-markdown`](/zh/stream-markdown) | ai | 0.3.9 |
+| [`stream-text`](/zh/stream-text) | ai | 0.6.3 |
+| [`suggestion-chips`](/zh/suggestion-chips) | ai | 0.3.9 |
+| [`switch`](/zh/switch) | base | 0.3.4 |
+| [`tab-bar`](/zh/tab-bar) | base | 0.3.4 |
+| [`tabs`](/zh/tabs) | base | 0.3.4 |
+| [`tag`](/zh/tag) | base | 0.3.4 |
+| [`tag-input`](/zh/tag-input) | base | 0.3.4 |
+| [`task-rows`](/zh/task-rows) | ai | 0.3.9 |
+| [`terminal`](/zh/terminal) | pro | 0.7.0 |
+| [`text`](/zh/text) | base | 0.9.3 |
+| [`text-morph`](/zh/text-morph) | pro | 0.6.0 |
+| [`text-transformer`](/zh/text-transformer) | pro | 0.3.4 |
+| [`textarea`](/zh/textarea) | base | 0.3.7 |
+| [`thinking-orb`](/zh/thinking-orb) | ai | 0.3.9 |
+| [`timeline`](/zh/timeline) | base | 0.3.4 |
+| [`toast`](/zh/toast) | base | 0.3.4 |
+| [`toast-panel`](/zh/toast-panel) | base | 0.6.0 |
+| [`tool-call-card`](/zh/tool-call-card) | ai | 0.3.9 |
+| [`tool-chips`](/zh/tool-chips) | ai | 0.3.9 |
+| [`tool-confirmation`](/zh/tool-confirmation) | ai | 0.3.9 |
+| [`tooltip`](/zh/tooltip) | base | 0.3.4 |
+| [`touch-surface`](/zh/touch-surface) | pro | 0.9.3 |
+| [`transfer`](/zh/transfer) | base | 0.3.4 |
+| [`transition`](/zh/transition) | pro | 0.3.4 |
+| [`tree`](/zh/tree) | base | 0.3.4 |
+| [`tree-select`](/zh/tree-select) | base | 0.3.4 |
+| [`tuff-logo-stroke`](/zh/tuff-logo-stroke) | pro | 0.3.4 |
+| [`version-capsule`](/zh/version-capsule) | pro | 0.3.9 |
+| [`virtual-list`](/zh/virtual-list) | pro | 0.3.4 |
+| [`voice-beam`](/zh/voice-beam) | pro | 0.6.2 |
+| [`voice-clip`](/zh/voice-clip) | ai | 0.8.0 |
+| [`voice-ring`](/zh/voice-ring) | pro | 0.9.6 |
+| [`working-indicator`](/zh/working-indicator) | ai | 0.3.9 |
+
+### Charts 模块新增
+
+以下图表组件属于现有 `charts` 聚合模块，经 `@talex-touch/tuffex/charts` 引入，不计入模块数。
+
+| 图表组件 | 文档套件 | 引入版本 |
+| --- | --- | --- |
+| [`dither-chart`](/zh/dither-chart) | Motion | 0.7.0 |
+| [`mono-chart`](/zh/mono-chart) | Data | 0.7.0 |
+
+## 版本门禁与规范
+
+| 规则 | 校验 |
+|------|------|
+| 版本号变更时，`CHANGELOG.md` 与本页新增对应版本章节 | `audit:changelog`，在 CI 与发布流程中拦截 |
+| 版本章节列明新增与更新的组件 | `audit:changelog` |
+| 组件文档的 Since 与本索引一致，且不高于当前版本 | `audit:changelog` |
+| 中英文页面标题结构对齐 | CI 静态对账 |

@@ -1,5 +1,5 @@
 import type { RouteLocaleChunkName } from '~/utils/route-locale-chunks'
-import { useI18n, useNexusAuth, useRequestHeaders, useRoute, useState } from '#imports'
+import { tryUseNuxtApp, useI18n, useNexusAuth, useRequestHeaders, useRoute, useState } from '#imports'
 import { watch } from 'vue'
 import { useLocalePreference } from '~/composables/useLocalePreference'
 
@@ -8,6 +8,20 @@ import { resolveAllRouteLocaleChunks } from '~/utils/route-locale-chunks'
 
 export type SupportedLocale = 'en' | 'zh'
 type LocaleSource = 'profile' | 'cookie' | 'browser' | 'manual'
+
+interface LocaleQueueState {
+  setQueue: Promise<void>
+  requestSeq: number
+  initQueue: Promise<SupportedLocale | null> | null
+}
+
+function createLocaleQueueState(): LocaleQueueState {
+  return {
+    setQueue: Promise.resolve(),
+    requestSeq: 0,
+    initQueue: null,
+  }
+}
 
 const LOG_PREFIX = '[i18n/orchestrator]'
 
@@ -28,9 +42,24 @@ function logLocaleInitialized(source: LocaleSource, locale: SupportedLocale, ext
   console.info(`${LOG_PREFIX} initialized`, { source, locale, ...extra })
 }
 
-let localeSetQueue: Promise<void> = Promise.resolve()
-let localeRequestSeq = 0
-let localeInitQueue: Promise<SupportedLocale | null> | null = null
+// Isolate mutable locale queues per NuxtApp instance (per SSR/prerender request) so concurrent
+// `/en/docs/*` and `/zh/docs/*` prerenders can never increment each other's request sequence or
+// share an `initQueue` and skip `setLocale('zh')`.
+const nuxtAppLocaleQueueStates = new WeakMap<object, LocaleQueueState>()
+const fallbackClientLocaleQueueState = createLocaleQueueState()
+
+function resolveLocaleQueueState(nuxtApp: object | null | undefined): LocaleQueueState {
+  if (nuxtApp && typeof nuxtApp === 'object') {
+    let state = nuxtAppLocaleQueueStates.get(nuxtApp)
+    if (!state) {
+      state = createLocaleQueueState()
+      nuxtAppLocaleQueueStates.set(nuxtApp, state)
+    }
+    return state
+  }
+
+  return import.meta.server ? createLocaleQueueState() : fallbackClientLocaleQueueState
+}
 
 export function normalizeLocale(value?: string | null): SupportedLocale | null {
   if (!value || typeof value !== 'string')
@@ -67,6 +96,8 @@ function resolveBrowserLocale(): SupportedLocale {
 }
 
 export function useLocaleOrchestrator() {
+  const nuxtApp = typeof tryUseNuxtApp === 'function' ? tryUseNuxtApp() : null
+  const queueState = resolveLocaleQueueState(nuxtApp)
   const composer = useI18n()
   const { locale, setLocale } = composer
   const route = useRoute()
@@ -168,27 +199,27 @@ export function useLocaleOrchestrator() {
     if (initialDocsLocale && initialDocsLocale !== normalized)
       return normalizeLocale(locale.value)
 
-    const requestSeq = ++localeRequestSeq
+    const requestSeq = ++queueState.requestSeq
     const prefetchedChunks = resolveAllRouteLocaleChunks(route.path || '/', activeRouteLocaleChunks.value)
     try {
       await ensureRouteLocaleChunks(normalized, prefetchedChunks)
     }
     catch (error) {
-      if (requestSeq === localeRequestSeq)
+      if (requestSeq === queueState.requestSeq)
         throw error
-      await localeSetQueue.catch(() => {})
+      await queueState.setQueue.catch(() => {})
       return normalizeLocale(locale.value) || normalized
     }
 
-    if (requestSeq !== localeRequestSeq) {
-      await localeSetQueue.catch(() => {})
+    if (requestSeq !== queueState.requestSeq) {
+      await queueState.setQueue.catch(() => {})
       return normalizeLocale(locale.value) || normalized
     }
 
-    localeSetQueue = localeSetQueue
+    queueState.setQueue = queueState.setQueue
       .catch(() => {})
       .then(async () => {
-        if (requestSeq !== localeRequestSeq)
+        if (requestSeq !== queueState.requestSeq)
           return
 
         const docsLocale = explicitDocsLocale()
@@ -202,7 +233,7 @@ export function useLocaleOrchestrator() {
           .filter(chunk => !loadedChunks.has(chunk))
         while (missingChunks.length > 0) {
           await ensureRouteLocaleChunks(normalized, missingChunks)
-          if (requestSeq !== localeRequestSeq)
+          if (requestSeq !== queueState.requestSeq)
             return
           missingChunks.forEach(chunk => loadedChunks.add(chunk))
           missingChunks = resolveAllRouteLocaleChunks(route.path || '/', activeRouteLocaleChunks.value)
@@ -225,7 +256,7 @@ export function useLocaleOrchestrator() {
         }
       })
 
-    await localeSetQueue
+    await queueState.setQueue
     return normalizeLocale(locale.value) || normalized
   }
 
@@ -278,12 +309,12 @@ export function useLocaleOrchestrator() {
       return normalizeLocale(locale.value)
     }
 
-    if (localeInitQueue)
-      return await localeInitQueue
+    if (queueState.initQueue)
+      return await queueState.initQueue
 
     const preferredLocale = normalizeLocaleWithMetrics(getPreferredLocale(), 'cookie')
 
-    localeInitQueue = (async () => {
+    queueState.initQueue = (async () => {
       const profileLocale = input?.isAuthenticated
         ? normalizeLocaleWithMetrics(input.profileLocale, 'profile')
         : null
@@ -307,10 +338,10 @@ export function useLocaleOrchestrator() {
     })()
 
     try {
-      return await localeInitQueue
+      return await queueState.initQueue
     }
     finally {
-      localeInitQueue = null
+      queueState.initQueue = null
     }
   }
 

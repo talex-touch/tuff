@@ -1,0 +1,153 @@
+---
+title: Experiments 训练实验
+description: 对比多次训练运行的曲线、超参扫描与配置的实验看板
+category: TemplateData
+status: beta
+since: 0.9.1
+tags: [template, ml, training, charts, comparison]
+syncStatus: reviewed
+verified: false
+---
+
+## 用法
+
+### 训练对比
+:::TuffDemoWrapper{demo="TemplateExperimentsDemo" code-lang="vue" description="进入视口后 r6 从第 1,200 步继续训练约 6 秒直到完成；随时可以停止、勾选要对比的运行、切换指标。"}
+---
+code: |
+  <script setup lang="ts">
+  import type { HeatmapSelection, LearningCurveRun } from '@talex-touch/tuffex/charts'
+  import { ChartPalette } from '@talex-touch/tuffex/charts'
+  import { computed, reactive, ref } from 'vue'
+  import TemplateFrame from './TemplateFrame.vue'
+
+  // 六次运行出自带种子的生成器：train/loss 每 50 步一个点，val 每 200 步一个点
+  const live = reactive({ step: 1200, status: 'running' }) // r6 仍在训练
+  const metric = ref('valAcc') // valAcc、valLoss 或 trainLoss
+  const compared = ref(['r1', 'r2', 'r3', 'r4', 'r5', 'r6'])
+  const view = ref<[number, number] | null>(null) // 拖拽放大后的步数区间
+
+  // 曲线取图表色板的第 N 色，表格里的勾选框换成同一个颜色
+  const RUN_COLOR = Object.fromEntries(RUNS.map((run, index) => [run.id, ChartPalette.categoricalVar(index)]))
+  const curveRuns = computed<LearningCurveRun[]>(() => RUNS.map(run => ({
+    name: run.id,
+    color: RUN_COLOR[run.id],
+    data: run.id === 'r6'
+      ? SERIES.r6[metric.value].filter(([step]) => step <= live.step)
+      : SERIES[run.id][metric.value],
+  })))
+
+  // 隐藏色标但保留颜色映射；始终是同一个对象，TxEChart 每收到新 option 都会重绘
+  const HEAT_OPTION = { visualMap: { show: false }, tooltip: { formatter: heatTooltip } }
+
+  // @enter 后每 100ms 推进 80 步，约 6 秒到第 6,000 步；「停止」清掉计时器
+  function tick() {
+    live.step = Math.min(6000, live.step + 80)
+    if (live.step < 6000)
+      later(100, tick)
+    else
+      finish() // 状态改为完成，并打开 TxToastPanel
+  }
+
+  // 框选热力图的格子 → 只对比这几次；选区清除时恢复框选前的对比
+  function onHeatSelect(selection: HeatmapSelection | null) {
+    compared.value = selection
+      ? selection.cells.map(cell => GRID_RUNS[cell.row][cell.column])
+      : beforeBox
+  }
+  </script>
+
+  <template>
+    <TemplateFrame title="Experiments" @enter="start">
+      <template #default="{ width, height }">
+        <header class="exp-head">
+          <TxWorkingIndicator v-if="live.status === 'running'" variant="dots" label="r6 训练中" :show-elapsed="false" />
+          <TxFlatRadio v-model="metric" size="sm">
+            <TxFlatRadioItem value="valAcc" label="val/acc" />
+            <TxFlatRadioItem value="valLoss" label="val/loss" />
+            <TxFlatRadioItem value="trainLoss" label="train/loss" />
+          </TxFlatRadio>
+          <TxButton size="sm" icon="i-carbon-stop-filled-alt" @click="stop">停止</TxButton>
+        </header>
+
+        <section class="exp-chart">
+          <TxChartLegendItem
+            v-for="run in RUNS" :key="run.id" :name="run.id" :color="RUN_COLOR[run.id]"
+            :inactive="!compared.includes(run.id)" @click="toggle(run.id)"
+          />
+          <TxLearningCurve
+            v-model:window="view" :runs="curveRuns" :hidden-runs="hidden" :highlighted-run="hovered"
+            x-axis-name="训练步数" :y-axis-name="METRIC_LABEL[metric]" :height="chartHeight(width, height)"
+          />
+        </section>
+
+        <aside class="exp-side">
+          <TxHeatmapChart
+            :values="heatValues" :rows="['bs 64', 'bs 128']" :columns="['lr 1e-4', 'lr 3e-4', 'lr 1e-3']"
+            :min="0.75" :max="0.92" show-label :selectable="heatSelectable" :option="HEAT_OPTION"
+            @select="onHeatSelect" @click="focusCell"
+          />
+          <TxDescriptions size="sm" :columns="1">
+            <TxDescriptionsItem v-for="item in configItems" :key="item.key" :label="item.label">
+              {{ item.value }}
+            </TxDescriptionsItem>
+          </TxDescriptions>
+        </aside>
+
+        <TxDataTable
+          row-key="id" :columns="columns" :data="rows" :row-class="rowClass" sticky-header
+          @row-click="({ row }) => (focused = row.id)"
+        >
+          <template #cell-pick="{ row }">
+            <!-- 勾选框换成该运行的曲线颜色；@click.stop 不让它同时触发整行点击 -->
+            <span :style="PICK_STYLE[row.id]" @click.stop>
+              <TxCheckbox :model-value="compared.includes(row.id)" @update:model-value="toggle(row.id)" />
+            </span>
+          </template>
+          <template #cell-status="{ row }">
+            <TxStatusBadge size="sm" :status="STATUS_TONE[row.status]" :text="STATUS_TEXT[row.status]" />
+          </template>
+        </TxDataTable>
+      </template>
+    </TemplateFrame>
+  </template>
+
+  <style scoped>
+  /* 只按 TemplateFrame 的容器宽度换版式：< 640 三个页签，640–959 侧栏页签，≥ 960 三区同屏 */
+  @container template (min-width: 960px) {
+    .exp-body { grid-template-areas: 'chart side' 'runs side'; }
+  }
+  </style>
+---
+:::
+
+## 概述
+
+CoreBox 端侧意图分类器 `corebox-intent-mini`（把一条查询分到 12 类意图之一）的训练对比看板，形式参照 TensorBoard 与 W&B：六次运行扫过学习率 × 批大小的网格，其中 r6 仍在训练。所有数字都是示例数据，由带种子的生成器得出，每次渲染都一样。
+
+- 首次进入视口时，r6 从第 1,200 步继续训练，约 6 秒到第 6,000 步：曲线逐段延长，运行表里的最佳值与时长同步更新，约第 4,600 步超过 r3 成为当前最佳，奖杯随之移到 r6。完成后状态变为「完成」，并弹出「r6 训练完成 · 最佳 0.912（示例数据）」，3.2 秒后自动收起，指针或焦点停留时保持打开；减少动态效果时直接显示训练完成后的终态，不启动计时器，也不弹提示。
+- 「停止」随时中断 r6：状态变为「已停止」，并提示停在第几步；按钮随即变为「继续」，从停下的位置接着训练。训练完成后按钮不可用。
+- 三种方式选择要对比的运行：点击图例；勾选运行表首列（勾选框与曲线同色，表头可全选或全不选）；在超参扫描热力图上拖拽框选几格，只对比这几次。单击任一格子或按 Escape 清除框选，并恢复框选前的对比；框选期间改用图例或勾选框，框选随即取消。指针或焦点停在图例项、表格行上时，对应的曲线保持清晰，其余曲线变淡。
+- 单击运行表的行（或用 Tab 聚焦后按 Enter）或热力图的格子，查看该运行的配置；顶栏在 val/acc、val/loss、train/loss 之间切换曲线；在曲线上拖拽可放大一段步数，放大后拖动可平移；双击曲线或点击右上角的「已放大」标签恢复全部步数。
+- 数据里有几种典型走向：r4 学习率过高，约第 1,900 步后损失发散，在第 2,150 步终止；r5 约第 2,800 步后过拟合，val/loss 回升；r2 在第 3,200 步被手动停止。
+- 宽屏（≥ 960px）同时显示曲线、侧栏（扫描在上、配置在下）与运行表；640–959px 曲线旁的侧栏用「扫描 / 配置」页签切换；窄屏（< 640px）分成「曲线 / 运行 / 扫描」三个页签，配置跟在运行表或热力图下方。
+
+## 自定义
+
+- 接真实数据：每次运行的标量就是 `[step, value]` 数组，TensorBoard 的 scalars 或 W&B 的 history 导出即可；同一配置跑了多个种子时改传 `seeds`，曲线画成均值与 ±1 标准差的范围带。把定时推进换成训练进程推来的新点（SSE / WebSocket）。
+- 图表色板只有 6 色，按序号循环取用：第 7 次运行会与第 1 次同色，运行更多时给每条曲线指定 `color`，并让表格勾选框（`PICK_STYLE`）用同一个值。
+- TxHeatmapChart 的框选是组件内部状态，没有受控的 prop：要从外部清掉，就把 `selectable` 关一拍再打开（模板的 `dropBox()`），不必重新挂载、也不会重新初始化 ECharts。格子标签直接显示数值，`option` 合并时数组整体替换，没法只改 series 的标签格式，所以示例数据都取三位小数且末位不为 0；提示框文案用 `option.tooltip.formatter` 自定义。
+- 保持 `option` 为同一个对象：TxEChart 每收到新的 `option` 都会重新套主题并整张重绘，r6 每刷新一次最佳值，热力图就重绘一次。隐藏色标用 `option.visualMap.show = false`，不要传 `:visual-map="false"`，那会连颜色映射一起去掉。
+- 首列没有用 TxDataTable 自带的 `selectable`：它的勾选框无障碍名称固定为英文 Select row，也不能按行换颜色。TxDataTable 也没有行悬停事件，模板在外层监听 `pointerover` / `focusin`，从行里的 `data-run` 读出运行来突出曲线。
+
+## 相关组件
+
+| 区域 | 组件 | 作用 |
+|---|---|---|
+| 顶栏 | [TxWorkingIndicator](/zh/working-indicator)、[TxStatusBadge](/zh/status-badge)、[TxFlatRadio](/zh/flat-radio)、[TxButton](/zh/button) | r6 的状态、曲线指标与停止 / 继续 |
+| 曲线 | [TxLearningCurve](/zh/learning-curve)、[TxChartLegendItem](/zh/charts) | 平滑后的多运行对比、放大与图例开关 |
+| 运行表 | [TxDataTable](/zh/data-table)、[TxCheckbox](/zh/checkbox)、[TxStatusBadge](/zh/status-badge) | 选择对比的运行、状态、超参与最佳值 |
+| 超参扫描 | [TxHeatmapChart](/zh/echart-charts) | lr × batch 的最佳 val/acc，框选即对比 |
+| 配置 | [TxDescriptions](/zh/descriptions)、[TxTag](/zh/tag) | 当前运行的超参与环境 |
+| 页签（列内 / 窄屏） | [TxFlatRadio](/zh/flat-radio) | 切换扫描 / 配置，或曲线 / 运行 / 扫描 |
+| 完成提示 | [TxToastPanel](/zh/toast-panel) | 3.2 秒后收起的结果卡 |

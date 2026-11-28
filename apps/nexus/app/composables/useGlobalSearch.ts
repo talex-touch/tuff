@@ -1,3 +1,4 @@
+import { computed } from 'vue'
 import { useGlobalSearchState } from '~/composables/useGlobalSearchState'
 import type { GlobalSearchResult } from '~/composables/useGlobalSearchState'
 import type { FeatureSearchItem } from '~/data/search/featureIndex'
@@ -26,7 +27,7 @@ const RESULTS_PER_SOURCE = 6
 const EXACT_NAME_SCORE = 1000
 /** Splits a Chinese docs title, "Button 按钮", into its English and Chinese names. */
 const TITLE_NAMES = /\s+(?=[\u3400-\u9FFF])/
-const COMPONENT_DOCS_PREFIX = '/docs/dev/components/'
+const TUFFEX_INDEX_RETRY_COOLDOWN_MS = 30_000
 
 let searchRunId = 0
 let fuzzyTimer: ReturnType<typeof setTimeout> | null = null
@@ -43,13 +44,32 @@ interface DocIndexItem {
   searchTokens?: string[]
 }
 
+interface TuffexSearchIndexItem {
+  id?: string
+  path: string
+  slug?: string
+  locale?: string
+  title: string
+  description?: string
+  suite?: string
+  category?: string
+  tags?: string[]
+}
+
+interface TuffexSearchIndexResponse {
+  locale?: string
+  items?: TuffexSearchIndexItem[]
+}
+
 interface SearchSources {
   matchFeature: FeatureMatcherModule['matchFeature']
   docs: DocIndexItem[]
   components: DocIndexItem[]
   pages: PageSearchItem[]
   features: FeatureSearchItem[]
-  /** The docs index arrived; without it only pages and features are searched. */
+  /** At least one docs index (Nexus or TuffEx) arrived; without either, only pages and features are searched. */
+  hasAnyDocsIndex: boolean
+  /** Both docs indexes arrived and can be reused directly from cache. */
   complete: boolean
 }
 
@@ -64,11 +84,64 @@ interface RankedSources {
 
 const docsIndexCache = new Map<string, DocIndexItem[]>()
 const docsIndexPromise = new Map<string, Promise<DocIndexItem[]>>()
+const tuffexIndexCache = new Map<string, DocIndexItem[]>()
+const tuffexIndexPromise = new Map<string, Promise<DocIndexItem[]>>()
+const tuffexIndexFailedUntil = new Map<string, number>()
 const sourcesCache = new Map<string, SearchSources>()
 const sourcesPromise = new Map<string, Promise<SearchSources>>()
 let featureMatcherPromise: Promise<FeatureMatcherModule> | null = null
 let featureIndexPromise: Promise<typeof import('~/data/search/featureIndex')> | null = null
 let pageIndexPromise: Promise<typeof import('~/data/search/pageIndex')> | null = null
+
+export function toTuffexPublicPath(rawPath: string, locale: string) {
+  const trimmed = rawPath.trim()
+  if (!trimmed || trimmed === '/tuffex' || trimmed === '/tuffex/')
+    return `/tuffex/${locale}`
+  if (trimmed.startsWith('/tuffex/'))
+    return trimmed
+  const normalized = trimmed.startsWith('/') ? trimmed : `/${trimmed}`
+  return `/tuffex${normalized}`
+}
+
+export function normalizeTuffexSearchItems(
+  payload: TuffexSearchIndexResponse | null | undefined,
+  locale: string,
+): DocIndexItem[] {
+  if (!payload || !Array.isArray(payload.items))
+    return []
+
+  return payload.items
+    .filter((item): item is TuffexSearchIndexItem =>
+      Boolean(item && typeof item.path === 'string' && item.path.trim() && typeof item.title === 'string' && item.title.trim()),
+    )
+    .filter(item => !item.locale || item.locale === locale)
+    .map((item): DocIndexItem => {
+      const publicPath = toTuffexPublicPath(item.path, locale)
+      const tokenSet = new Set<string>()
+      for (const token of [item.slug, item.category, item.suite, ...(Array.isArray(item.tags) ? item.tags : [])]) {
+        if (typeof token === 'string' && token.trim())
+          tokenSet.add(token.trim())
+      }
+      return {
+        id: `tuffex-${item.id || publicPath}`,
+        path: publicPath,
+        title: item.title,
+        description: typeof item.description === 'string' ? item.description : undefined,
+        icon: 'i-carbon-cube',
+        searchTokens: tokenSet.size ? [...tokenSet] : undefined,
+      }
+    })
+}
+
+export function resetGlobalSearchIndexCaches() {
+  docsIndexCache.clear()
+  docsIndexPromise.clear()
+  tuffexIndexCache.clear()
+  tuffexIndexPromise.clear()
+  tuffexIndexFailedUntil.clear()
+  sourcesCache.clear()
+  sourcesPromise.clear()
+}
 
 function loadFeatureMatcher() {
   featureMatcherPromise ??= import('@talex-touch/utils/search/feature-matcher')
@@ -118,20 +191,43 @@ async function loadDocsIndex(locale: string) {
   return loader
 }
 
-/**
- * The component pages, taken from the docs index. It covers every page under /docs with
- * the same titles, descriptions and tags as the sidebar's component list, which the
- * search used to fetch as well: the same 227 entries, twice.
- */
-function componentsOf(docs: DocIndexItem[]) {
-  return docs
-    .filter(item => item.path.startsWith(COMPONENT_DOCS_PREFIX))
-    .map((item): DocIndexItem => ({ ...item, id: `component-${item.path}`, icon: 'i-carbon-cube' }))
+async function loadTuffexIndex(locale: string) {
+  const cached = tuffexIndexCache.get(locale)
+  if (cached)
+    return cached
+
+  const retryAfter = tuffexIndexFailedUntil.get(locale) ?? 0
+  if (retryAfter > Date.now())
+    throw new Error('tuffex search index retry cooldown active')
+
+  const pending = tuffexIndexPromise.get(locale)
+  if (pending)
+    return pending
+
+  const loader = (async () => {
+    try {
+      const payload = await fetchContentApi<TuffexSearchIndexResponse>(`/tuffex/search-index.${locale}.json`, {})
+      const items = normalizeTuffexSearchItems(payload, locale)
+      tuffexIndexFailedUntil.delete(locale)
+      tuffexIndexCache.set(locale, items)
+      return items
+    }
+    catch (error) {
+      tuffexIndexFailedUntil.set(locale, Date.now() + TUFFEX_INDEX_RETRY_COOLDOWN_MS)
+      throw error
+    }
+    finally {
+      tuffexIndexPromise.delete(locale)
+    }
+  })()
+
+  tuffexIndexPromise.set(locale, loader)
+  return loader
 }
 
 /**
- * Everything one search reads, loaded together. Cached only once the docs index has
- * arrived, so a failed fetch is retried by the next search instead of sticking.
+ * Everything one search reads, loaded in parallel with independent failure isolation
+ * between the Nexus docs index and the standalone TuffEx SSG index.
  */
 function loadSearchSources(locale: string) {
   const pending = sourcesPromise.get(locale)
@@ -140,18 +236,24 @@ function loadSearchSources(locale: string) {
 
   const loader = Promise.all([
     loadFeatureMatcher(),
-    loadDocsIndex(locale).catch(() => null),
+    Promise.allSettled([
+      loadDocsIndex(locale),
+      loadTuffexIndex(locale),
+    ]),
     loadPageIndex(),
     loadFeatureIndex(),
   ])
-    .then(([{ matchFeature }, docs, { pageSearchItems }, { featureSearchItems }]) => {
+    .then(([{ matchFeature }, [docsResult, tuffexResult], { pageSearchItems }, { featureSearchItems }]) => {
+      const docs = docsResult.status === 'fulfilled' ? docsResult.value : null
+      const components = tuffexResult.status === 'fulfilled' ? tuffexResult.value : null
       const sources: SearchSources = {
         matchFeature,
         docs: docs ?? [],
-        components: docs ? componentsOf(docs) : [],
+        components: components ?? [],
         pages: pageSearchItems,
         features: featureSearchItems,
-        complete: Boolean(docs),
+        hasAnyDocsIndex: Boolean(docs || components),
+        complete: Boolean(docs && components),
       }
       if (sources.complete)
         sourcesCache.set(locale, sources)
@@ -206,7 +308,7 @@ function dedupeByTarget(items: GlobalSearchResult[]) {
 }
 
 function mergeRanked({ components, docs, pages, features }: RankedSources) {
-  const mergedDocs = dedupeByTarget([...components, ...docs, ...pages]).slice(0, RESULTS_PER_SOURCE)
+  const mergedDocs = dedupeByTarget([...components, ...docs, ...pages].sort(byScore)).slice(0, RESULTS_PER_SOURCE)
   return [...mergedDocs, ...features]
 }
 
@@ -228,6 +330,8 @@ export function useGlobalSearch() {
   const { t, locale } = useI18n()
   const docsLocale = computed(() => locale.value === 'zh' ? 'zh' : 'en')
   const resolveSearchPath = (path: string) => {
+    if (path === '/tuffex' || path === '/tuffex/' || path.startsWith('/tuffex/'))
+      return toTuffexPublicPath(path, docsLocale.value)
     return isDocsPath(path) ? toLocalizedDocsPath(path, docsLocale.value) : path
   }
 
@@ -283,12 +387,12 @@ export function useGlobalSearch() {
         return null
       return {
         id: item.id,
-        source: 'docs',
+        source: 'tuffex',
         title: item.title,
         description: item.description,
         to: resolveSearchPath(item.path),
         score,
-        icon: item.icon,
+        icon: item.icon ?? 'i-carbon-cube',
         keywords: item.searchTokens,
       }
     }
@@ -362,7 +466,7 @@ export function useGlobalSearch() {
   function showResults(sources: SearchSources, trimmed: string, runId: number) {
     const strict = rankStrict(sources, trimmed)
     results.value = strict
-    unavailable.value = !sources.complete
+    unavailable.value = !sources.hasAnyDocsIndex
     const needsFuzzy = strict.length < FUZZY_FALLBACK_BELOW && trimmed.length >= FUZZY_MIN_QUERY_LENGTH
     loading.value = needsFuzzy
     if (!needsFuzzy)

@@ -51,7 +51,7 @@ function pluginSlug(review: PendingPluginReview): string {
 }
 
 function authorName(review: PendingPluginReview): string {
-  return review.author?.name?.trim() || t('store.detail.reviews.anonymous', 'Anonymous')
+  return review.author?.name?.trim() || t('dashboard.sections.reviews.anonymous', 'Anonymous')
 }
 
 function reviewText(review: PendingPluginReview): string {

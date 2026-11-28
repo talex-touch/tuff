@@ -1,0 +1,177 @@
+---
+title: ProgressBar 进度条
+description: 显示确定、不确定或分段进度的进度条
+category: Feedback
+status: beta
+since: 0.3.4
+tags: [progress, bar, loading]
+syncStatus: reviewed
+verified: true
+---
+
+## 用法
+
+底层进度条：支持不确定、加载、分段、上传明细与 tooltip；只需要行级百分比时用 [Progress 进度](/zh/progress)。
+
+### 状态
+`status` 设置状态色；`success` 表示完成，`loading` 表示时长未知的加载。
+:::TuffDemoWrapper{demo="ProgressBarStatefulProgressDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxProgressBar :percentage="32" show-text />
+    <TxProgressBar :percentage="68" status="warning" show-text />
+    <TxProgressBar success message="完成" />
+    <TxProgressBar loading message="同步中" />
+  </template>
+---
+:::
+
+### 上传进度
+`textPlacement="top"` 与 `"bottom"` 在轨道上方或下方显示文案行与 `detail`；`flowEffect="stardust"` 在纯色或渐变填充上流动星点。
+:::TuffDemoWrapper{demo="ProgressBarUploadDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxProgressBar
+      :percentage="percentage"
+      :format="p => `上传中 ${p}%`"
+      detail="1.4 MB / 2.3 MB"
+      aria-label="上传 report.pdf"
+      show-text
+      text-placement="top"
+      height="6px"
+      flow-effect="stardust"
+    />
+    <TxProgressBar
+      :percentage="percentage"
+      detail="report.pdf"
+      aria-label="上传 report.pdf"
+      show-text
+      text-placement="bottom"
+      height="6px"
+      color="linear-gradient(90deg, #3b82f6, #a855f7)"
+      flow-effect="stardust"
+    />
+  </template>
+---
+:::
+
+### 分段进度
+悬停某段时显示其 `label` 与占 `segmentsTotal` 的比例；进度条上方需留出提示的空间。
+:::TuffDemoWrapper{demo="ProgressBarSegmentsDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  const segments = [
+    { value: 25, color: 'linear-gradient(90deg, #60a5fa, #34d399)', label: '视频' },
+    { value: 18, color: 'linear-gradient(90deg, #a78bfa, #f472b6)', label: '图片' },
+    { value: 12, color: 'linear-gradient(90deg, #fb7185, #f59e0b)', label: '文档' },
+  ]
+  </script>
+
+  <template>
+    <TxProgressBar :segments="segments" :segments-total="100" height="8px" />
+  </template>
+---
+:::
+
+### 运营面板
+与指标卡、状态徽标组合，表达后台健康度。
+:::TuffDemoWrapper{demo="ComponentsOperationsStatusDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxProgressBar :percentage="86" status="success" height="10px" flow-effect="shimmer" mask-variant="dashed" />
+    <TxProgressBar :percentage="72" status="warning" height="10px" flow-effect="wave" />
+    <TxProgressBar :percentage="48" height="10px" indicator-effect="sparkle" />
+  </template>
+---
+:::
+
+### 状态面板
+:::TuffDemoWrapper{demo="ProgressBarStatusPanelDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxProgressBar :percentage="80" show-text message="上传中" />
+    <TxStatusBadge text="进行中" status="warning" />
+  </template>
+---
+:::
+
+### 最佳实践
+
+- 进度已知时才用 `percentage`；时长未知用 `loading` 或 `indeterminate`。
+- 完成时传 `success` 和简短的 `message`，不要伪造 100%。
+- `message` 同时是可访问名，保持简短；上传、下载的量级信息放进 `detail`，配合 `textPlacement="top"` 或 `"bottom"`。
+- 文本要留在轨道内时，`height` 至少设为 `16px`，并保持标签简短；轨道更细或比标签窄时，`inside` 文本会显示在轨道下方。
+- 给每一段写 `label`；分段只代表部分总量时设置 `segmentsTotal`。
+- 动效只用于高价值的进度；过多 shimmer、wave、stardust 会让仪表盘变得嘈杂。
+
+## API 参考
+
+### 属性
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `loading` | `boolean` | `false` | 不确定的加载模式。 |
+| `indeterminate` | `boolean` | `false` | 不确定进度模式，不表示加载。 |
+| `indeterminateVariant` | `'classic' \| 'sweep' \| 'bounce' \| 'elastic' \| 'split'` | `'sweep'` | loading / indeterminate 状态的动画。 |
+| `error` | `boolean` | `false` | 错误状态，优先于 `status`。 |
+| `success` | `boolean` | `false` | 成功状态，优先于 `status`。 |
+| `status` | `'success' \| 'error' \| 'warning' \| ''` | `''` | 状态色。 |
+| `message` | `string` | `''` | 可见文本，同时作为可访问名。 |
+| `detail` | `string` | `''` | 次要文案，只在上方或下方的文案行中显示（`top`、`bottom`，以及轨道放不下文本时的 `inside`），不进入可访问名。 |
+| `ariaLabel` | `string` | `''` | 可访问名；未设置时回退到 `message`，再到 `'Progress'`。 |
+| `percentage` | `number` | `0` | 确定进度值，钳制到 `0..100`。 |
+| `segments` | `ProgressSegment[]` | - | 多段进度数据。 |
+| `segmentsTotal` | `number` | `100` | 有 `segments` 时计算填充宽度的总量。 |
+| `height` | `string` | `'5px'` | 进度条高度。 |
+| `showText` | `boolean` | `false` | 确定进度下显示百分比文本。 |
+| `textPlacement` | `'inside' \| 'outside' \| 'top' \| 'bottom'` | `'inside'` | 文本位置；`top`、`bottom` 在轨道上方或下方显示文案行与 `detail`；`inside` 在轨道低于 `16px` 或比标签窄时按 `bottom` 显示。 |
+| `format` | `(percentage: number) => string` | - | 自定义百分比文本。 |
+| `flowEffect` | `'none' \| 'shimmer' \| 'wave' \| 'stardust' \| 'particles'` | `'none'` | 填充动效；`particles` 是 `stardust` 的废弃别名，对 `segments` 无效。 |
+| `indicatorEffect` | `'none' \| 'sparkle'` | `'none'` | 进度大于零时的端点效果。 |
+| `hoverEffect` | `'none' \| 'glow'` | `'none'` | 外层悬停效果。 |
+| `color` | `string` | - | 自定义填充色，优先于状态色；渐变字符串原样使用。 |
+| `maskVariant` | `'solid' \| 'dashed' \| 'plain'` | `'plain'` | 轨道描边；`plain` 不画描边。 |
+| `maskBackground` | `'none' \| 'blur' \| 'glass' \| 'mask'` | `'none'` | 轨道遮罩层；`none` 不渲染遮罩节点。 |
+| `tooltip` | `boolean` | `false` | 以解析后的文本显示 tooltip。 |
+| `tooltipContent` | `string` | - | 覆盖 tooltip 内容。 |
+| `tooltipProps` | `Partial<TooltipProps>` | - | 透传给 `TxTooltip` 的 props。 |
+
+### 事件
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `complete` | - | 进度达到 `100` 时每个完成周期触发一次；回落后再次完成会再触发。 |
+
+### 类型
+
+`ProgressSegment`：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `value` | `number` | 段值；只渲染正的有限数。 |
+| `color` | `string` | 段填充色，默认回退为进度条填充色。 |
+| `label` | `string` | 悬停提示中位于占比之前（`视频 · 25%`）；省略时只显示占比。 |
+
+## 概述
+
+- 轨道为 `role="progressbar"`（`aria-valuemin="0"`、`aria-valuemax="100"`）；`aria-valuenow` 取钳制后的进度，`loading`、`indeterminate` 时省略。
+- 文本依次取 `message`、`format`、四舍五入的百分比；只有设置 `message` 或 `showText` 时显示，`loading`、`indeterminate` 时只显示 `message`。
+- `inside` 只在轨道至少有一行 `16px` 文本高、且宽度放得下标签时把文本放进轨道，未填充处用正文色、填充处用白色；否则（包括默认的 `5px` 轨道）按 `bottom` 显示。其余位置的长标签最多折成两行：`detail` 保持单行、最多占行宽的 60%，`outside` 文本最多占半行。
+- 在 `TxTooltip` 中（自身的 `tooltip`，或直接包裹进度条的外部 tooltip），进度条保持满宽，不会缩成文本的宽度。
+- `success` 或 `error` 带 `message` 且 `percentage` 为 `0` 时，填充宽度按 `100%` 计算。
+- 分段忽略非正值：整体填充宽度按 `segmentsTotal` 计算，各段宽度按正值之和归一化。
+- 宽度变化以 480ms 过渡；不确定态动画只改 `transform` 与 `opacity`，减少动态效果时停止。
+
+## 技术实现
+
+- 填充默认是由淡到饱和的 `linear-gradient`，端点柔光只在 0% 与 100% 之间显示；渐变 `color` 的柔光为白色。轨道内标签的两份副本在 `--tx-progress-width` 处裁切，并沿填充自身的 `480ms` 曲线过渡，颜色分界始终贴着填充边缘。
+- `hoverEffect="glow"` 与 `indicatorEffect="sparkle"` 位于 `overflow: hidden` 的轨道内，会被裁到轨道高度。
+- 文本是否放得进轨道，SSR 与首帧按 `height` 判断：`px` 直接比较，`rem`、`em` 按每单位 `16px` 换算，`%`、`calc()`、`var()` 视为放得下。挂载后由 `ResizeObserver` 同时观察轨道与标签，比较轨道的实际高度与标签行高、轨道宽度与标签宽度；文本移到下方时标签隐藏保留，以便再次测量；卸载时断开。
+- 源码：`packages/tuffex/packages/components/src/progress-bar/`。
+
+<TuffDocSourceLink />

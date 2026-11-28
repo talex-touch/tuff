@@ -66,7 +66,7 @@ import { getCoreBoxRendererPath } from '../../utils/renderer-url'
 import { BaseModule } from '../abstract-base-module'
 import { getCoreBoxWindow, windowManager } from '../box-tool/core-box/window'
 import { shortcutModule } from '../global-shortcon'
-import { extractTranslatedTextFromSceneRun, runNexusScene } from '../nexus/scene-client'
+import { getOmniPanelNexusPort } from './omni-panel-ports'
 import { pluginModule } from '../plugin/plugin-module'
 import { getMainConfig, saveMainConfig } from '../storage'
 import { activeAppService } from '../system/active-app'
@@ -1496,7 +1496,8 @@ export class OmniPanelModule extends BaseModule {
     text: string
   ): Promise<OmniPanelFeatureExecuteResponse> {
     try {
-      const run = await runNexusScene(SELECTION_TRANSLATE_SCENE_ID, {
+      const nexusPort = getOmniPanelNexusPort()
+      const run = await nexusPort.runNexusScene(SELECTION_TRANSLATE_SCENE_ID, {
         input: {
           text,
           sourceLang: 'auto',
@@ -1504,7 +1505,7 @@ export class OmniPanelModule extends BaseModule {
         },
         capability: 'text.translate'
       })
-      const translatedText = extractTranslatedTextFromSceneRun(run)
+      const translatedText = nexusPort.extractTranslatedTextFromSceneRun(run)
       if (!translatedText) {
         return { success: false }
       }

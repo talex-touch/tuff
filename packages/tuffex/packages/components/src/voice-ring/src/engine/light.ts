@@ -1,0 +1,418 @@
+/* eslint-disable one-var, no-cond-assign */
+// @ts-nocheck — vendored upstream MIT engine kept diffable with upstream.
+// Ported from voice-ring/src/engine/light.ts
+// (https://github.com/Jakubantalik/Libraries.dev). MIT License © 2026 Jakub Antalik.
+// The luminous painter: a frame's strokes drawn as coloured light instead
+// of ink. One conic gradient carries the spectrum around the orb, so every
+// pass — halo, bloom, core — is a handful of stroke() calls however many
+// points the rings have. Bloom comes from stacking wide, faint strokes
+// (no ctx.filter, so Safari draws the same picture), additively on dark
+// substrates so overlaps run hot toward white, like light does.
+
+import type { FrameLight, LightLook, OrbFrame } from './core';
+import { clamp01 } from './core';
+import type { OrbGlow, OrbTint } from './paint';
+
+type Stop = [number, number, number, number];
+
+// The chromatic fringes either side of each ring: a cool teal just
+// outside, a deep blue just inside — the split a lens gives bright light.
+const FRINGE_OUT: [number, number, number] = [120, 232, 214];
+const FRINGE_IN: [number, number, number] = [64, 72, 255];
+
+function toHsl(r: number, g: number, b: number): [number, number, number] {
+  r /= 255;
+  g /= 255;
+  b /= 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  if (max === min) return [0, 0, l];
+  const d = max - min;
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  const h = max === r ? (g - b) / d + (g < b ? 6 : 0) : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return [h / 6, s, l];
+}
+
+function fromHsl(h: number, s: number, l: number): [number, number, number] {
+  const k = (n: number) => (n + h * 12) % 12;
+  const a = s * Math.min(l, 1 - l);
+  const f = (n: number) => l - a * Math.max(-1, Math.min(k(n) - 3, 9 - k(n), 1));
+  return [f(0) * 255, f(8) * 255, f(4) * 255];
+}
+
+// OKLab, where a straight line between two colours looks like an even blend
+const lin = (c: number) => ((c /= 255) <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+const gam = (c: number) => 255 * (c <= 0.0031308 ? 12.92 * c : 1.055 * Math.max(0, c) ** (1 / 2.4) - 0.055);
+
+function toLab(r: number, g: number, b: number): [number, number, number] {
+  const [R, G, B] = [lin(r), lin(g), lin(b)];
+  const l = Math.cbrt(0.4122214708 * R + 0.5363325363 * G + 0.0514459929 * B);
+  const m = Math.cbrt(0.2119034982 * R + 0.6806995451 * G + 0.1073969566 * B);
+  const s = Math.cbrt(0.0883024619 * R + 0.2817188376 * G + 0.6299787005 * B);
+  return [
+    0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s,
+    1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s,
+    0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s
+  ];
+}
+
+function fromLab(L: number, A: number, B: number): [number, number, number] {
+  const l = (L + 0.3963377774 * A + 0.2158037573 * B) ** 3;
+  const m = (L - 0.1055613458 * A - 0.0638541728 * B) ** 3;
+  const s = (L - 0.0894841775 * A - 1.291485548 * B) ** 3;
+  const c = (v: number) => Math.max(0, Math.min(255, gam(v)));
+  return [
+    c(4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s),
+    c(-1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s),
+    c(-0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s)
+  ];
+}
+
+// Green runs from green to yellow, like light through leaves, rather than
+// round its own hue toward teal: near green, the swing spans the frame's
+// green range (81°–136° unless the aura's `greenFrom` / `greenTo` say
+// otherwise). Faded out over 40° so a colour crossfading through green
+// turns smoothly.
+const GREEN = 146 / 360;
+const GREEN_RANGE: [number, number] = [81, 136];
+const SWING = 0.1;
+
+/** The hue an emotion's spectrum swings round, and how far, in turns. */
+function emotionHue(eh: number, green: [number, number] = GREEN_RANGE): [number, number] {
+  const mid = (green[0] + green[1]) / 720;
+  const swing = (green[1] - green[0]) / 720;
+  const off = Math.abs(((eh - GREEN + 1.5) % 1) - 0.5);
+  const w = Math.max(0, 1 - off / (40 / 360));
+  return [eh + (mid - eh) * w, SWING + (swing - SWING) * w];
+}
+
+/** The spectrum after tint, emotion and theme have had their say. */
+function palette(stops: Stop[], dark: boolean, tint?: OrbTint, glow?: OrbGlow, green?: [number, number]): Stop[] {
+  const e = glow && glow.amount > 0.005 ? glow : undefined;
+  return stops.map(([o, r, g, b]) => {
+    if (tint) {
+      // keep a breath of the hue variation so a tinted aura still shimmers
+      r += (tint.r - r) * 0.85;
+      g += (tint.g - g) * 0.85;
+      b += (tint.b - b) * 0.85;
+    }
+    if (e) {
+      // An emotion recolours the spectrum as a gradient of its own hue's
+      // neighbours — green runs from green to yellow, red from magenta to
+      // orange, blue from cyan to violet — swinging round the ring so it
+      // closes seamlessly. Each stop takes its new hue at its own
+      // saturation and lightness, so the light stays as vivid as it was.
+      const [, sat, l] = toHsl(r, g, b);
+      const [mid, swing] = emotionHue(toHsl(e.r, e.g, e.b)[0], green);
+      const to = fromHsl((mid + swing * Math.sin(2 * Math.PI * o) + 1) % 1, sat, l);
+      // It comes and goes as an even blend from each stop's own colour, not
+      // a turn of the hue: turning a whole spectrum to one hue tears the
+      // ring where neighbouring stops turn opposite ways round the wheel.
+      const a = toLab(r, g, b);
+      const z = toLab(to[0], to[1], to[2]);
+      const k = e.amount;
+      [r, g, b] = fromLab(a[0] + (z[0] - a[0]) * k, a[1] + (z[1] - a[1]) * k, a[2] + (z[2] - a[2]) * k);
+    }
+    // on paper, light reads as deeper, saturated ink
+    const d = dark ? 1 : 0.82;
+    return [o, r * d, g * d, b * d];
+  });
+}
+
+/**
+ * The spectrum graded in OKLab: its hues turned, its colourfulness scaled,
+ * warmed or cooled, and the lightness between its colours stretched about
+ * their mean. Before the emotion and theme, so an emotion keeps its hue.
+ */
+function grade(stops: Stop[], k: LightLook): Stop[] {
+  if (!k.hue && k.chroma === 1 && !k.warmth && k.contrast === 1) return stops;
+  const lab = stops.map(([, r, g, b]) => toLab(r, g, b));
+  const mean = lab.reduce((s, [l]) => s + l, 0) / lab.length;
+  const c = Math.cos((k.hue * Math.PI) / 180);
+  const s = Math.sin((k.hue * Math.PI) / 180);
+  return stops.map(([o], i) => {
+    const [l, a, b] = lab[i];
+    const L = Math.max(0, Math.min(1, mean + (l - mean) * k.contrast));
+    const A = (a * c - b * s) * k.chroma + 0.02 * k.warmth;
+    const B = (a * s + b * c) * k.chroma + 0.07 * k.warmth;
+    return [o, ...fromLab(L, A, B)];
+  });
+}
+
+/** The spectrum run `n` times round the ring. */
+function cycle(stops: Stop[], n: number): Stop[] {
+  if (n <= 1) return stops;
+  const out: Stop[] = [];
+  for (let k = 0; k < n; k++) for (const [o, r, g, b] of stops) out.push([(o + k) / n, r, g, b]);
+  return out;
+}
+
+const LOOK: LightLook = {
+  hue: 0,
+  chroma: 1,
+  warmth: 0,
+  contrast: 1,
+  cycles: 1,
+  glowSize: 1,
+  bloom: 1,
+  bloomSize: 1,
+  soft: 1.5,
+  core: 1
+};
+
+const css = (r: number, g: number, b: number) => `rgb(${Math.round(r)},${Math.round(g)},${Math.round(b)})`;
+
+/**
+ * The ring's colours resampled every 10° along a smooth curve through the
+ * stops, in OKLab. Joined in straight lines, the colours turn sharply at a
+ * stop — the warm one at the top peaks there — and the additive bloom, which
+ * runs a channel into white, turns that corner into a visible edge.
+ */
+export function smoothSpectrum(stops: Stop[], samples = 36): Stop[] {
+  // the ring closes on itself: the stop at 1 is the one at 0 again
+  const ring = stops.filter(([o]) => o < 1);
+  const m = ring.length;
+  if (m < 3) return stops;
+  const lab = ring.map(([, r, g, b]) => toLab(r, g, b));
+  const at = (i: number) => ((i % m) + m) % m;
+  // where stop i sits, counting laps round the ring
+  const pos = (i: number) => ring[at(i)][0] + Math.floor(i / m);
+  // the slope through each stop, from its neighbours: no corner at the stop
+  const slope = (i: number) => {
+    const d = pos(i + 1) - pos(i - 1);
+    return lab[at(i + 1)].map((v, c) => (v - lab[at(i - 1)][c]) / d);
+  };
+  const out: Stop[] = [];
+  for (let k = 0; k <= samples; k++) {
+    const u = k / samples;
+    let i = -1;
+    while (i < m - 1 && pos(i + 1) <= u) i++;
+    const h = pos(i + 1) - pos(i);
+    const t = (u - pos(i)) / h;
+    const t2 = t * t, t3 = t2 * t;
+    const a = lab[at(i)], b = lab[at(i + 1)], ma = slope(i), mb = slope(i + 1);
+    const v = [0, 1, 2].map(
+      (c) =>
+        (2 * t3 - 3 * t2 + 1) * a[c] + (t3 - 2 * t2 + t) * h * ma[c] + (-2 * t3 + 3 * t2) * b[c] + (t3 - t2) * h * mb[c]
+    );
+    const [r, g, bl] = fromLab(v[0], v[1], v[2]);
+    out.push([u, r, g, bl]);
+  }
+  return out;
+}
+
+type Ctx = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
+
+// The halo and bloom are stacks of wide, faint, hard-edged strokes. Each
+// edge is a small step in the light, and the dither the browser lays on
+// every faint gradient pass adds up, pass on pass, into a fine checker. So
+// they're drawn on a layer of their own and laid down through a blur (the
+// look's `soft`, 1.5 CSS px by default): the steps melt into a smooth
+// falloff and the dither averages away, at full resolution.
+
+// A canvas blur filter where the browser has one. Where it hasn't (older
+// Safari), the layer is halved, halved again and doubled back up a step at
+// a time: each step a smooth bilinear pass, together about as soft.
+const FILTER = typeof CanvasRenderingContext2D === 'function' && 'filter' in CanvasRenderingContext2D.prototype;
+
+interface GlowLayer {
+  full: Ctx;
+  half?: Ctx;
+  quarter?: Ctx;
+}
+
+const layers = new WeakMap<CanvasRenderingContext2D, GlowLayer>();
+
+function canvas(w: number, h: number): Ctx {
+  const c =
+    typeof OffscreenCanvas === 'function'
+      ? new OffscreenCanvas(w, h)
+      : Object.assign(document.createElement('canvas'), { width: w, height: h });
+  return c.getContext('2d') as Ctx;
+}
+
+/** The glow layer for `ctx`: its size, cleared, drawn in `ctx`'s coordinates. */
+function glowLayer(ctx: CanvasRenderingContext2D): GlowLayer {
+  const { width: w, height: h } = ctx.canvas;
+  let l = layers.get(ctx);
+  if (!l || l.full.canvas.width !== w || l.full.canvas.height !== h) {
+    l = { full: canvas(w, h) };
+    if (!FILTER) {
+      l.half = canvas(Math.ceil(w / 2), Math.ceil(h / 2));
+      l.quarter = canvas(Math.ceil(w / 4), Math.ceil(h / 4));
+    }
+    layers.set(ctx, l);
+  }
+  l.full.setTransform(1, 0, 0, 1, 0, 0);
+  l.full.clearRect(0, 0, w, h);
+  l.full.setTransform(ctx.getTransform());
+  return l;
+}
+
+/** Redraw `from` over the whole of `to`, smoothly scaled. */
+function resample(to: Ctx, from: Ctx): void {
+  to.globalCompositeOperation = 'copy';
+  to.imageSmoothingEnabled = true;
+  to.imageSmoothingQuality = 'high';
+  to.drawImage(from.canvas, 0, 0, to.canvas.width, to.canvas.height);
+}
+
+/** Lay the glow layer over `ctx`, blurred by `soft` CSS px. */
+function laySoftened(ctx: CanvasRenderingContext2D, l: GlowLayer, op: GlobalCompositeOperation, soft: number): void {
+  const m = ctx.getTransform();
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.globalCompositeOperation = op;
+  ctx.globalAlpha = 1;
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  if (FILTER || soft <= 0) {
+    if (soft > 0) ctx.filter = `blur(${soft * Math.hypot(m.a, m.b)}px)`;
+    ctx.drawImage(l.full.canvas, 0, 0);
+  } else if (l.half && l.quarter) {
+    resample(l.half, l.full);
+    resample(l.quarter, l.half);
+    resample(l.half, l.quarter);
+    ctx.drawImage(l.half.canvas, 0, 0, l.half.canvas.width * 2, l.half.canvas.height * 2);
+  }
+  ctx.restore();
+}
+
+function spectrum(ctx: Ctx, L: FrameLight, stops: Stop[]): CanvasGradient {
+  // conic where the browser has it (all current ones); a diagonal sweep otherwise
+  const grad =
+    typeof ctx.createConicGradient === 'function'
+      ? ctx.createConicGradient(L.angle, L.cx, L.cy)
+      : ctx.createLinearGradient(L.cx - L.r, L.cy - L.r, L.cx + L.r, L.cy + L.r);
+  for (const [o, r, g, b] of stops) grad.addColorStop(clamp01(o), css(r, g, b));
+  return grad;
+}
+
+/** Paint `frame`'s strokes as light, lit by `L`. */
+export function paintLight(
+  ctx: CanvasRenderingContext2D,
+  frame: OrbFrame,
+  L: FrameLight,
+  dark: boolean,
+  tint?: OrbTint,
+  glow?: OrbGlow
+): void {
+  // the frame's look over the defaults, a part it leaves unset keeping its default
+  const k = { ...LOOK };
+  for (const key of Object.keys(LOOK) as Array<keyof LightLook>) k[key] = L.look?.[key] ?? LOOK[key];
+  const stops = cycle(smoothSpectrum(palette(grade(L.stops, k), dark, tint, glow, L.green)), Math.round(k.cycles));
+  const grad = spectrum(ctx, L, stops);
+  // one path per ring, lit at its mean depth: per-segment opacity would
+  // seam where the wide, additive bloom strokes overlap
+  const rings = frame.strokes.map((s) => {
+    const p = new Path2D();
+    const n = s.pts.length >> 1;
+    let a = 0;
+    for (let i = 0; i < n; i++) {
+      if (i === 0) p.moveTo(s.pts[0], s.pts[1]);
+      else p.lineTo(s.pts[2 * i], s.pts[2 * i + 1]);
+      a += s.a[i];
+    }
+    if (s.closed) p.closePath();
+    return { p, a: n ? a / n : 1, w: s.w };
+  });
+  const n = Math.max(1, rings.length);
+  const I = L.intensity;
+  const op: GlobalCompositeOperation = dark ? 'lighter' : 'source-over';
+  const pass = (width: (w: number) => number, alpha: (a: number) => number, c: Ctx = ctx) => {
+    for (const r of rings) {
+      c.lineWidth = width(r.w);
+      c.globalAlpha = clamp01(alpha(r.a));
+      c.stroke(r.p);
+    }
+  };
+  const begin = (c: Ctx, style: CanvasGradient) => {
+    c.lineCap = 'round';
+    c.lineJoin = 'round';
+    c.globalCompositeOperation = op;
+    c.strokeStyle = style;
+  };
+
+  // the glow, on its own layer to be softened
+  const layer = glowLayer(ctx);
+  const g = layer.full;
+  begin(g, spectrum(g, L, stops));
+
+  // 1 · halo: very wide, very faint, shared out between the rings so the
+  // total stays the same however many there are
+  const haloK = (L.halo * I * (dark ? 1 : 0.2)) / n;
+  for (const [wk, ak] of [
+    [0.7, 0.045],
+    [0.42, 0.075],
+    [0.24, 0.11],
+    [0.12, 0.16]
+  ]) {
+    pass(
+      () => L.r * wk * k.glowSize,
+      () => ak * haloK,
+      g
+    );
+  }
+
+  // 2 · bloom: three soft passes hugging each ring; across a bundle of
+  // rings they sum into one luminous band, the glassy ribbon
+  const bloomK = I * (dark ? 1 : 0.6) * k.bloom;
+  for (const [wk, ak] of [
+    [16, 0.05],
+    [8, 0.11],
+    [4, 0.2]
+  ]) {
+    pass(
+      (w) => w * wk * k.bloomSize,
+      (a) => ak * bloomK * a,
+      g
+    );
+  }
+  laySoftened(ctx, layer, op, k.soft);
+
+  ctx.save();
+  begin(ctx, grad);
+
+  // 3 · chromatic fringes, scaled about the centre (dark substrates only)
+  if (dark && L.fringe > 0) {
+    for (const [scale, rgb, ak] of [
+      [1 + L.fringe, FRINGE_OUT, 0.16],
+      [1 - L.fringe, FRINGE_IN, 0.22]
+    ] as const) {
+      ctx.save();
+      ctx.translate(L.cx, L.cy);
+      ctx.scale(scale, scale);
+      ctx.translate(-L.cx, -L.cy);
+      ctx.strokeStyle = css(rgb[0], rgb[1], rgb[2]);
+      pass(
+        (w) => (w * 1.4) / scale,
+        (a) => ak * I * a
+      );
+      ctx.restore();
+    }
+    ctx.strokeStyle = grad;
+  }
+
+  // 4 · the crisp core of every ring
+  pass(
+    (w) => w,
+    (a) => 0.7 * a * (0.75 + 0.25 * I) * k.core
+  );
+
+  // 5 · specular hot spots: white pooled where the light sits
+  if (dark) {
+    for (const s of L.spec) {
+      const g = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, s.r);
+      g.addColorStop(0, 'rgba(255,255,255,1)');
+      g.addColorStop(0.35, 'rgba(255,255,255,0.45)');
+      g.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.strokeStyle = g;
+      pass(
+        (w) => w * 2.2,
+        (a) => s.a * a
+      );
+    }
+  }
+  ctx.restore();
+}

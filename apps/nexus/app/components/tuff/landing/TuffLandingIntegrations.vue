@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, nextTick, ref } from 'vue'
-import { gsap } from 'gsap'
+import type { gsap as GsapNamespace } from 'gsap'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useGsapReveal } from '~/composables/useGsapReveal'
 import CoreBoxMock from './ai/CoreBoxMock.vue'
 import TuffLandingLineShadowText from './TuffLandingLineShadowText.vue'
@@ -19,15 +19,70 @@ const panelRef = ref<HTMLElement | null>(null)
 const isExpanded = ref(false)
 const coreboxWrapRef = ref<HTMLElement | null>(null)
 
-let resultsTween: gsap.core.Tween | null = null
-let heightTween: gsap.core.Tween | null = null
-let hoverToken = 0
+type GsapTween = ReturnType<typeof GsapNamespace.to>
 
-function handleHover(active: boolean) {
+let gsapInstance: typeof GsapNamespace | null = null
+let gsapLoadPromise: Promise<typeof GsapNamespace | null> | null = null
+let visibilityObserver: IntersectionObserver | null = null
+let resultsTween: GsapTween | null = null
+let heightTween: GsapTween | null = null
+let hoverToken = 0
+let disposed = false
+
+function loadGsap(): Promise<typeof GsapNamespace | null> {
+  if (gsapInstance)
+    return Promise.resolve(gsapInstance)
+  if (gsapLoadPromise)
+    return gsapLoadPromise
+
+  gsapLoadPromise = import('gsap')
+    .then((mod) => {
+      if (disposed)
+        return null
+      gsapInstance = mod.gsap
+      return gsapInstance
+    })
+    .catch(() => {
+      gsapLoadPromise = null
+      return null
+    })
+
+  return gsapLoadPromise
+}
+
+onMounted(() => {
+  if (!import.meta.client || !panelRef.value || typeof IntersectionObserver === 'undefined')
+    return
+
+  visibilityObserver = new IntersectionObserver((entries) => {
+    if (entries.some(entry => entry.isIntersecting)) {
+      visibilityObserver?.disconnect()
+      visibilityObserver = null
+      void loadGsap()
+    }
+  }, { rootMargin: '200px 0px' })
+  visibilityObserver.observe(panelRef.value)
+})
+
+onBeforeUnmount(() => {
+  disposed = true
+  visibilityObserver?.disconnect()
+  visibilityObserver = null
+  resultsTween?.kill()
+  heightTween?.kill()
+  resultsTween = null
+  heightTween = null
+})
+
+async function handleHover(active: boolean) {
   const token = ++hoverToken
   const coreboxEl = coreboxWrapRef.value?.querySelector<HTMLElement>('.corebox-mock')
+  const gsap = gsapInstance ?? await loadGsap()
+  if (disposed || token !== hoverToken)
+    return
+
   if (active) {
-    if (!coreboxEl) {
+    if (!coreboxEl || !gsap) {
       isExpanded.value = true
       return
     }
@@ -35,7 +90,7 @@ function handleHover(active: boolean) {
     gsap.set(coreboxEl, { height: startHeight })
     isExpanded.value = true
     nextTick(() => {
-      if (token !== hoverToken || !isExpanded.value)
+      if (disposed || token !== hoverToken || !isExpanded.value)
         return
       const resultsEl = coreboxWrapRef.value?.querySelector<HTMLElement>('.corebox-mock__results')
       if (!resultsEl)
@@ -64,8 +119,8 @@ function handleHover(active: boolean) {
   }
 
   const resultsEl = coreboxWrapRef.value?.querySelector<HTMLElement>('.corebox-mock__results')
-  if (!resultsEl || !coreboxEl) {
-    if (coreboxEl)
+  if (!resultsEl || !coreboxEl || !gsap) {
+    if (coreboxEl && gsap)
       gsap.set(coreboxEl, { clearProps: 'height' })
     isExpanded.value = false
     return

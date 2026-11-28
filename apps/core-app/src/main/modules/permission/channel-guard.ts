@@ -6,6 +6,7 @@ import type { HandlerContext, ITuffTransportMain } from '@talex-touch/utils/tran
 import { isAuthoritativePluginContext } from '@talex-touch/utils/transport/security/plugin-identity'
 import { CAPABILITY_AUTH_MIN_VERSION } from '@talex-touch/utils/plugin'
 import { getPermissionModule } from './permission-module-ref'
+import { resolvePermissionPluginDeclaredSdkApi } from './permission-ports'
 
 export interface ProtectedChannelOptions {
   permissionId: string
@@ -25,9 +26,6 @@ export type ProtectedHandler<TReq = unknown, TRes = unknown> = (
 interface PayloadWithSdkApi {
   _sdkapi?: number
 }
-interface PluginLike {
-  sdkapi?: number
-}
 
 interface SerializablePermissionError {
   name: 'Error'
@@ -38,27 +36,12 @@ interface SerializablePermissionError {
   showRequest?: boolean
 }
 
-let pluginModuleImport: Promise<{
-  pluginModule?: { pluginManager?: { getPluginByName: (name: string) => unknown } }
-}> | null = null
-
 function extractPayloadSdkApi(payload: unknown): number | undefined {
   if (!payload || typeof payload !== 'object') {
     return undefined
   }
   const sdkapi = (payload as PayloadWithSdkApi)._sdkapi
   return typeof sdkapi === 'number' ? sdkapi : undefined
-}
-
-async function resolvePluginDeclaredSdkApi(pluginId: string): Promise<number | undefined> {
-  try {
-    pluginModuleImport = pluginModuleImport ?? import('../plugin/plugin-module')
-    const { pluginModule } = await pluginModuleImport
-    const plugin = pluginModule?.pluginManager?.getPluginByName(pluginId) as PluginLike | undefined
-    return typeof plugin?.sdkapi === 'number' ? plugin.sdkapi : undefined
-  } catch {
-    return undefined
-  }
 }
 
 function createSerializablePermissionError(
@@ -127,7 +110,7 @@ export function withPermission<TReq = unknown, TRes = unknown>(
       return callback(payload, context)
     }
 
-    const declaredSdkApi = await resolvePluginDeclaredSdkApi(pluginId)
+    const declaredSdkApi = await resolvePermissionPluginDeclaredSdkApi(pluginId)
     const authoritativePlugin = isAuthoritativePluginContext(context.plugin)
     if (authoritativePlugin && typeof declaredSdkApi !== 'number') {
       const message = `Plugin sdkapi authority is unavailable for '${pluginId}'`

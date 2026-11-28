@@ -1,7 +1,7 @@
 import { hasWindow } from '@talex-touch/utils/env'
 import { reserveOverlayLayer } from '~/utils/layers'
 
-export type SearchSource = 'docs' | 'feature' | 'page'
+export type SearchSource = 'docs' | 'tuffex' | 'feature' | 'page'
 
 export interface GlobalSearchResult {
   id: string

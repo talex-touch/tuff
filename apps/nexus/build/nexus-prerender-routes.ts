@@ -5,17 +5,28 @@ import { toDocsMarkdownPaths } from '../shared/utils/docs-markdown'
 
 export { docsApiPrerenderRoutes, docsPrerenderEvidenceRoutes, publicPrerenderRoutes, staticFallbackPrerenderRoutes }
 
-export function createNexusPrerenderRoutes(nexusRoot: string) {
+function buildNexusPrerenderRouteSet(
+  docsRoutes: readonly string[],
+  docsPageApiRoutes: readonly string[],
+  docsMarkdownRoutes: readonly string[],
+) {
   return [
     ...new Set([
       ...publicPrerenderRoutes,
       ...staticFallbackPrerenderRoutes,
       ...docsApiPrerenderRoutes,
-      ...createDocsPrerenderRoutes(nexusRoot),
-      ...createDocsPageApiPrerenderRoutes(nexusRoot),
-      ...createDocsMarkdownPrerenderRoutes(nexusRoot),
+      ...docsRoutes,
+      ...docsPageApiRoutes,
+      ...docsMarkdownRoutes,
     ]),
   ]
+}
+
+export function createNexusPrerenderRoutes(nexusRoot: string) {
+  const docsRoutes = createDocsPrerenderRoutes(nexusRoot)
+  const docsPageApiRoutes = createDocsPageApiPrerenderRoutes(nexusRoot, docsRoutes)
+  const docsMarkdownRoutes = createDocsMarkdownPrerenderRoutes(nexusRoot, docsRoutes)
+  return buildNexusPrerenderRouteSet(docsRoutes, docsPageApiRoutes, docsMarkdownRoutes)
 }
 
 function hasPrerenderEvidenceRoute(routeSet: Set<string>, route: string) {
@@ -24,9 +35,9 @@ function hasPrerenderEvidenceRoute(routeSet: Set<string>, route: string) {
 
 export function createNexusPrerenderEvidence(nexusRoot: string) {
   const docsRoutes = createDocsPrerenderRoutes(nexusRoot)
-  const docsPageApiRoutes = createDocsPageApiPrerenderRoutes(nexusRoot)
-  const docsMarkdownRoutes = createDocsMarkdownPrerenderRoutes(nexusRoot)
-  const routes = createNexusPrerenderRoutes(nexusRoot)
+  const docsPageApiRoutes = createDocsPageApiPrerenderRoutes(nexusRoot, docsRoutes)
+  const docsMarkdownRoutes = createDocsMarkdownPrerenderRoutes(nexusRoot, docsRoutes)
+  const routes = buildNexusPrerenderRouteSet(docsRoutes, docsPageApiRoutes, docsMarkdownRoutes)
   const routeSet = new Set(routes)
   const requiredDocsRoutes = docsPrerenderEvidenceRoutes.flatMap(route => toLocalizedDocsPaths(route))
   // Every evidence page must also ship its raw source; the handler behind these routes cannot

@@ -3,7 +3,7 @@ import type { Slots } from 'vue'
 import type { HoverTransitHandlers } from '../../../../utils/hover-intent'
 import type { BaseAnchorProps } from '../../base-anchor/src/types'
 import type { TooltipProps } from './types'
-import { computed, getCurrentInstance, onBeforeUnmount, onMounted, ref, useSlots, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, useId, useSlots, watch } from 'vue'
 import { useAnchorDelay } from '../../../../utils/anchor-delay'
 import {
   beginHoverTransit,
@@ -49,7 +49,7 @@ const DEFAULT_MAX_HEIGHT = 320
 const slots: Slots = useSlots()
 
 // Stable id so the reference can point at the tooltip body via aria-describedby.
-const uid = getCurrentInstance()?.uid ?? 0
+const uid = useId()
 const tooltipId = `tx-tooltip-${uid}`
 
 const internalOpen = ref(false)

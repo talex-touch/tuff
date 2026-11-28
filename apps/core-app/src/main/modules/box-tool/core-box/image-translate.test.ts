@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const sceneMocks = vi.hoisted(() => ({
   runNexusScene: vi.fn(),
@@ -28,7 +28,6 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('../../nexus/scene-client', () => sceneMocks)
 vi.mock('./image-translate-pin-window', () => ({
   openImageTranslatePinWindow: pinWindowMocks.openImageTranslatePinWindow
 }))
@@ -36,6 +35,15 @@ vi.mock('./image-translate-pin-window', () => ({
 import { mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
+import { normalizeIntelligenceError } from '../../ai/intelligence-error-normalizer'
+import {
+  registerBoxToolAiCapabilityPort,
+  resetBoxToolAiCapabilityPort
+} from '../ports/ai-capability-port'
+import {
+  registerBoxToolCloudScenePort,
+  resetBoxToolCloudScenePort
+} from '../ports/cloud-scene-port'
 import {
   normalizeImageBase64Payload,
   translateClipboardImage,
@@ -55,7 +63,34 @@ describe('normalizeImageBase64Payload', () => {
 })
 
 describe('translateCoreBoxImageItem', () => {
+  beforeEach(() => {
+    registerBoxToolCloudScenePort({
+      runScene: sceneMocks.runNexusScene,
+      extractTranslatedImage: sceneMocks.extractTranslatedImageFromSceneRun,
+      extractFxConvert: vi.fn(() => null),
+      extractFxRateSnapshot: vi.fn(() => null)
+    })
+    registerBoxToolAiCapabilityPort({
+      intelligence: {} as never,
+      normalizeIntelligenceError,
+      resolveCapabilityStatus: (capabilityId) => ({
+        capabilityId,
+        available: false,
+        providerIds: []
+      }),
+      searchConversations: async () => [],
+      isLocalEmbeddingReady: () => false,
+      isLocalEmbeddingImageReady: () => false,
+      getLocalEmbeddingModelKey: () => 'test-local-embedding-model',
+      runWithEmbeddingPriority: (_priority, run) => run(),
+      onUsageLimitsChanged: () => () => {},
+      readUsageLimitInfo: () => null
+    })
+  })
+
   afterEach(() => {
+    resetBoxToolCloudScenePort()
+    resetBoxToolAiCapabilityPort()
     delete process.env.TUFF_VISIBLE_EVIDENCE_ASSISTANT_IMAGE_TRANSLATE
     delete process.env.TUFF_STARTUP_BENCHMARK_USER_DATA_DIR
     delete process.env.TUFF_VISIBLE_EVIDENCE_ASSISTANT_IMAGE_TRANSLATE_CLIPBOARD_FILE

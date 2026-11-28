@@ -10,14 +10,16 @@ import { migrate } from 'drizzle-orm/libsql/migrator'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { scheduleDbWrite } from '../../db/db-write'
 import * as schema from '../../db/schema'
-import { AiOrchestratorStore } from '../ai/ai-orchestrator-store'
 import {
   createOrchestratorRunPrivacyLifecycle,
   type OrchestratorRunPrivacyLifecycle
 } from './owners/orchestrator-run-privacy-lifecycle'
 import type { OrchestratorPrivacyGateChecks } from './orchestrator-run-privacy-gates'
+import {
+  resolveOrchestratorPrivacyStoreFactory,
+  type OrchestratorPrivacyAcceptanceStoreFactory
+} from './privacy-ports'
 
 const CUTOFF_MS = 10_000
 const RETENTION_MS = 30 * 24 * 60 * 60_000
@@ -67,6 +69,7 @@ interface TrackingFence {
 export interface OrchestratorPrivacyAcceptanceOptions {
   readonly migrationsFolder: string
   readonly temporaryRoot: string
+  readonly createStore?: OrchestratorPrivacyAcceptanceStoreFactory
 }
 
 export interface OrchestratorPrivacyTransportFixture {
@@ -165,11 +168,21 @@ function createTrackingFence(protectedRunIds: ReadonlySet<string> = new Set()): 
   }
 }
 
-function createStore(db: LibSQLDatabase<typeof schema>): AiOrchestratorStore {
-  return new AiOrchestratorStore({
-    getDb: () => db,
-    scheduleWrite: scheduleDbWrite
-  })
+function resolveStoreFactory(
+  storeFactory?: OrchestratorPrivacyAcceptanceStoreFactory
+): OrchestratorPrivacyAcceptanceStoreFactory {
+  const factory = storeFactory ?? resolveOrchestratorPrivacyStoreFactory()
+  if (!factory) {
+    throw new Error('ORCHESTRATOR_PRIVACY_STORE_FACTORY_UNAVAILABLE')
+  }
+  return factory
+}
+
+function createStore(
+  db: LibSQLDatabase<typeof schema>,
+  storeFactory?: OrchestratorPrivacyAcceptanceStoreFactory
+): OrchestratorRunPrivacyStore {
+  return resolveStoreFactory(storeFactory)(db)
 }
 
 async function openDatabase(databasePath: string): Promise<AcceptanceDatabase> {
@@ -182,6 +195,7 @@ export async function withOrchestratorPrivacyTransportFixture<T>(
   options: OrchestratorPrivacyAcceptanceOptions,
   operation: (fixture: OrchestratorPrivacyTransportFixture) => Promise<T>
 ): Promise<T> {
+  const storeFactory = resolveStoreFactory(options.createStore)
   const workspace = await mkdtemp(path.join(options.temporaryRoot, 'typed-orchestrator-'))
   const database = await openDatabase(path.join(workspace, 'typed-transport.sqlite'))
   const runId = 'packaged-typed-orchestrator-run'
@@ -191,7 +205,7 @@ export async function withOrchestratorPrivacyTransportFixture<T>(
     await seedEvent(database.client, runId, 1, 20_100)
     await seedEvent(database.client, runId, 2, 20_200)
 
-    const store = createStore(database.db)
+    const store = createStore(database.db, storeFactory)
     const tracking = createTrackingFence()
     const lifecycle = createOrchestratorRunPrivacyLifecycle({ store, fence: tracking.fence })
     return await operation(
@@ -241,7 +255,8 @@ async function withMigratedDatabase<T>(
 
 async function verifyDeleteLifecycle(
   workspace: string,
-  migrationsFolder: string
+  migrationsFolder: string,
+  storeFactory?: OrchestratorPrivacyAcceptanceStoreFactory
 ): Promise<
   Pick<
     OrchestratorPrivacyGateChecks,
@@ -257,7 +272,7 @@ async function verifyDeleteLifecycle(
     'delete-lifecycle',
     migrationsFolder,
     async ({ client, db }) => {
-      const store = createStore(db)
+      const store = createStore(db, storeFactory)
       const protectedRunIds = new Set(['authority-protected'])
       const tracking = createTrackingFence(protectedRunIds)
       const lifecycle = createOrchestratorRunPrivacyLifecycle({ store, fence: tracking.fence })
@@ -396,7 +411,8 @@ async function seedRetentionCandidates(client: Client, prefix: string): Promise<
 
 async function verifyRetentionLifecycle(
   workspace: string,
-  migrationsFolder: string
+  migrationsFolder: string,
+  storeFactory?: OrchestratorPrivacyAcceptanceStoreFactory
 ): Promise<
   Pick<
     OrchestratorPrivacyGateChecks,
@@ -408,7 +424,7 @@ async function verifyRetentionLifecycle(
     'retention-lifecycle',
     migrationsFolder,
     async ({ client, db }) => {
-      const store = createStore(db)
+      const store = createStore(db, storeFactory)
       const automaticIds = await seedRetentionCandidates(client, 'automatic')
       const firstPage = await store.listOrchestratorRunRetentionCandidates(CUTOFF_MS, undefined, 2)
       const secondPage = await store.listOrchestratorRunRetentionCandidates(
@@ -616,7 +632,8 @@ async function stageMigrationChain(
 
 async function verifyJournaledMigration(
   workspace: string,
-  migrationsFolder: string
+  migrationsFolder: string,
+  storeFactory?: OrchestratorPrivacyAcceptanceStoreFactory
 ): Promise<Pick<OrchestratorPrivacyGateChecks, 'cascadeDelete' | 'journaledMigration'>> {
   const journal = await readMigrationJournal(migrationsFolder)
   const target = journal.entries.findIndex(
@@ -694,7 +711,8 @@ async function verifyJournaledMigration(
     await migrate(upgradeDatabase.db, { migrationsFolder: upgradeFolder })
 
     const productionPage = await createStore(
-      upgradeDatabase.db
+      upgradeDatabase.db,
+      storeFactory
     ).listOrchestratorRunRetentionCandidates(CUTOFF_MS, undefined, 10)
     const productionQueryResult =
       JSON.stringify(productionPage.candidates.map((candidate) => candidate.runId)) ===
@@ -813,12 +831,13 @@ CREATE INDEX impossible_acceptance_index ON missing_acceptance_table (id);`
 export async function runOrchestratorPrivacyAcceptance(
   options: OrchestratorPrivacyAcceptanceOptions
 ): Promise<OrchestratorPrivacyGateChecks> {
+  const storeFactory = resolveStoreFactory(options.createStore)
   const workspace = await mkdtemp(path.join(options.temporaryRoot, 'orchestrator-privacy-'))
   try {
     const [deleteChecks, retentionChecks, migrationChecks] = await Promise.all([
-      verifyDeleteLifecycle(workspace, options.migrationsFolder),
-      verifyRetentionLifecycle(workspace, options.migrationsFolder),
-      verifyJournaledMigration(workspace, options.migrationsFolder)
+      verifyDeleteLifecycle(workspace, options.migrationsFolder, storeFactory),
+      verifyRetentionLifecycle(workspace, options.migrationsFolder, storeFactory),
+      verifyJournaledMigration(workspace, options.migrationsFolder, storeFactory)
     ])
     assertAcceptance(deleteChecks.cascadeDelete && migrationChecks.cascadeDelete, 'CASCADE_PARITY')
     return Object.freeze({

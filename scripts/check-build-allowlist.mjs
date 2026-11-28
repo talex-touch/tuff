@@ -52,7 +52,6 @@ const REVIEWED = {
     + 'install compiles the pty binding and ships a per-platform spawn-helper prebuild.',
   'protobufjs': 'Pulled in by @google/genai. postinstall.',
   'sharp': 'apps/core-app dependency. install fetches/builds libvips.',
-  'typeit': 'apps/nexus dependency. postinstall + prepare.',
   'uiohook-napi': 'apps/core-app optionalDependency. install compiles the input-monitoring addon.',
   'unrs-resolver': 'Pulled in by eslint-plugin-import-x. postinstall installs the native resolver.',
   'utf-8-validate': 'apps/core-app optionalDependency. install compiles the ws speedup.',

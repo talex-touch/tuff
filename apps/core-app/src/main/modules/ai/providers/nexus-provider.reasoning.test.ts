@@ -4,7 +4,8 @@ import type {
 } from '@talex-touch/tuff-intelligence'
 import { Readable } from 'node:stream'
 import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { registerAiPorts, resetAiPorts } from '../ai-ports'
 import { planProviderReasoning, withReasoningPlan } from '../reasoning-effort-runtime'
 
 const networkMocks = vi.hoisted(() => ({
@@ -67,6 +68,18 @@ function sentOptions(mock: typeof networkMocks.request): Record<string, unknown>
 describe('Nexus reasoning effort', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    registerAiPorts({
+      nexus: {
+        getRuntimeNexusBaseUrl: () => 'https://nexus.example.com',
+        runNexusScene: vi.fn(async () => null),
+        extractTranslatedImageFromSceneRun: vi.fn(() => null),
+        transcribeNexusAudio: vi.fn()
+      }
+    })
+  })
+
+  afterEach(() => {
+    resetAiPorts()
   })
 
   it('forwards the level asked for, and leaves the body as it was on auto', async () => {

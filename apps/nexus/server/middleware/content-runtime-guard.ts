@@ -5,23 +5,36 @@
  * build on each isolate's first query and rebuilt inline when it differs — up to 671 statements one
  * after another for the docs collection (100–170 s), with other isolates waiting up to 90 s on it,
  * and stuck for good if the rebuilding request is cancelled. The site needs none of it: docs and
- * policy pages are prerendered, and their clients read the static JSON twins. So outside
- * development and prerendering, the query forms answer from those twins or with a 404, and the
- * module's own query endpoint is closed.
+ * policy pages are prerendered, and their clients read the static JSON twins. Outside development
+ * and prerendering, ANY request matching these prefixes that escapes `_routes.json` onto the Worker
+ * fails fast with 404/410 and ZERO D1 `queryCollection` rebuild.
  */
-const DOCS_QUERY_ROUTES = new Set([
+const BLOCKED_CONTENT_PREFIXES = [
+  '/__nuxt_content',
   '/api/docs/page',
   '/api/docs/navigation',
   '/api/docs/search',
+  '/llms.txt',
+] as const
+
+const EVICTED_CONTENT_PREFIXES = [
   '/api/docs/sidebar-components',
-])
+  '/api/docs/component-sync',
+] as const
+
+function matchesRoutePrefix(pathname: string, prefix: string): boolean {
+  return pathname === prefix || pathname.startsWith(`${prefix}/`)
+}
 
 export default defineEventHandler((event) => {
   if (import.meta.dev || import.meta.prerender)
     return
 
   const pathname = getRequestURL(event).pathname
-  if (pathname.startsWith('/__nuxt_content/') || DOCS_QUERY_ROUTES.has(pathname))
+  if (EVICTED_CONTENT_PREFIXES.some(prefix => matchesRoutePrefix(pathname, prefix)))
+    throw createError({ statusCode: 410, statusMessage: 'Gone' })
+
+  if (BLOCKED_CONTENT_PREFIXES.some(prefix => matchesRoutePrefix(pathname, prefix)))
     throw createError({ statusCode: 404, statusMessage: 'Not Found' })
 
   // Clients built before the policy documents were prerendered still ask the query form.

@@ -1,0 +1,198 @@
+---
+title: Dashboard 数据看板
+description: 带指标卡、趋势图与热门插件表的产品数据看板
+category: TemplateData
+status: beta
+since: 0.6.0
+tags: [template, dashboard, analytics, charts, table]
+syncStatus: reviewed
+verified: false
+---
+
+## 用法
+
+### Tuff Pulse 产品看板
+:::TuffDemoWrapper{demo="TemplateDashboardDemo" code-lang="vue" description="范围、日期、框选与图例联动重算整页。图中为示例数据。"}
+---
+code: |
+  <script setup lang="ts">
+  import { ChartPalette } from '@talex-touch/tuffex/charts'
+  import { computed, ref } from 'vue'
+  import TemplateFrame from './TemplateFrame.vue'
+
+  const range = ref('30d')
+  const zoom = ref<[number, number] | null>(null)
+  const hidden = ref<string[]>([])
+
+  // 指标卡、图例、占比和插件表都从同一份按天序列里按 range + zoom 算出来
+  const kpis = computed(() => buildKpis(range.value, zoom.value))
+
+  // TxTimeseriesChart 的高度是像素 prop，容器查询够不到，从舞台尺寸算
+  function chartHeight(width: number, height: number) {
+    if (width >= 960)
+      return Math.min(320, Math.max(220, Math.round(height * 0.36)))
+    return width >= 640 ? 240 : 176
+  }
+  </script>
+
+  <template>
+    <TemplateFrame title="Dashboard" @enter="entered = true">
+      <template #default="{ width, height }">
+        <div class="pulse">
+          <header class="pulse__header">
+            <TxFlatRadio v-model="range" size="lg">
+              <TxFlatRadioItem value="7d" label="7 天" />
+              <TxFlatRadioItem value="30d" label="30 天" />
+              <TxFlatRadioItem value="90d" label="90 天" />
+            </TxFlatRadio>
+            <TxDatePicker v-model="dates" variant="field" range />
+          </header>
+
+          <section class="pulse__kpis">
+            <TxStatCard v-for="kpi in kpis" :key="kpi.key" :value="kpi.value" :label="kpi.label" :insight="kpi.insight">
+              <template #value>
+                <TxTextMorph :text="kpi.value" />
+              </template>
+            </TxStatCard>
+          </section>
+
+          <div class="pulse__main">
+            <section class="pulse__trend">
+              <TxChartLegendItem
+                v-for="(item, index) in legend" :key="item.name"
+                :name="item.name" :value="item.value" :color="ChartPalette.categoricalVar(index)"
+                :inactive="hidden.includes(item.name)" @click="toggle(item.name)"
+              />
+              <TxTimeseriesChart
+                v-model:hidden-series="hidden"
+                :data="series" :markers="releases" :incomplete="{ after: yesterday }"
+                :height="chartHeight(width, height)"
+                @time-range-change="(from, to) => (zoom = [from, to])"
+              />
+            </section>
+            <aside class="pulse__rail">
+              <TxAllocationBar v-model="platform" :segments="share" />
+              <TxProgressBar :segments="usage" height="8px" />
+            </aside>
+          </div>
+
+          <TxDataTable v-model:sort="sort" :columns="columns" :data="plugins" row-key="id">
+            <template #cell-trend="{ row }">
+              <TxSparkChart :series="row.trend" :padding="{ top: 4, bottom: 4 }" :baseline="false" :interactive="false" />
+            </template>
+            <template #cell-status="{ row }">
+              <TxStatusBadge size="sm" :status="row.tone" :text="row.status" />
+            </template>
+          </TxDataTable>
+        </div>
+      </template>
+    </TemplateFrame>
+  </template>
+
+  <style scoped>
+  .pulse__kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  @container template (max-width: 639.98px) { .pulse__kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @container template (min-width: 960px) { .pulse__kpis { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+  </style>
+---
+:::
+
+### 运营大屏
+挂墙值守用的暗色实时屏：没有筛选与表格，只看此刻，不跟随站点主题。
+:::TuffDemoWrapper{demo="TemplateDashboardOpsDemo" code-lang="vue" description="进入视口后实时刷新，东京云同步会降级再恢复；可随时暂停。图中为示例数据。"}
+---
+code: |
+  <script setup lang="ts">
+  import { ChartPalette } from '@talex-touch/tuffex/charts'
+  import { computed, ref, watch } from 'vue'
+  import TemplateFrame from './TemplateFrame.vue'
+
+  const sec = ref(0)
+  const paused = ref(false)
+  const hidden = ref(false) // IntersectionObserver（可见 < 10%）与 visibilitychange
+  const live = computed(() => entered.value && !reduced && !paused.value && !hidden.value)
+
+  // 一个心跳驱动全部节奏：指标 2 秒、事件 3 秒、城市 4 秒、焦点 8 秒、桑基窗口 12 秒
+  watch(live, on => (on ? later(1000, beat) : clearTimers()))
+
+  // 每个中间节点流入等于流出，桑基图才不会留下秃尾巴
+  const flow = computed(() => flowAt(flowWindow.value))
+  const bubbleColor = (row: City) => (row.id === 'tyo' && degraded.value ? orange : ChartPalette.categoricalVar(0))
+  </script>
+
+  <template>
+    <TemplateFrame title="运营大屏" :height="600" @enter="onEnter">
+      <template #default="{ width, height }">
+        <!-- 局部暗色：tuffex、BUI 与图表 token 的暗色块都认任意元素上的 data-theme -->
+        <div class="ops" data-theme="dark" :style="{ gridTemplateRows: geometry(width, height).rows }">
+          <header class="ops__head">
+            <TxStatusBadge :status="healthy ? 'success' : 'warning'" :text="servicesText" />
+            <TxModeChip :label="paused ? '已暂停' : '实时刷新中'" :tone="paused ? 'warning' : 'success'" @click="paused = !paused" />
+          </header>
+          <div v-for="kpi in kpis" :key="kpi.key" class="ops-kpi">
+            <TxTextMorph :text="kpi.value" :locale="localeTag" />
+            <TxSparkChart :series="kpiSeries[kpi.key]" theme="dark" :animation="false" :interactive="false" />
+          </div>
+          <TxBubbleMap
+            v-if="entered && world" :geo-json="world" :data="cities" lng="lng" lat="lat" value="online"
+            :height="geometry(width, height).map" :bubble-color="bubbleColor" :bubble-border-width="ringWidth"
+          />
+          <TxInsightCards :active-index="focus" :pages="pages" @update:active-index="takeOverRotation" />
+          <TxSankeyChart :nodes="nodes" :links="flow.links" :height="geometry(width, height).sankey" node-label-layout="inline">
+            <template #tooltip="{ params }">
+              {{ params.name }} · {{ count(params) }} 次 / 分
+            </template>
+          </TxSankeyChart>
+          <TxTransition group preset="slide-fade" tag="ul">
+            <li v-for="item in events" :key="item.id">{{ item.text }}</li>
+          </TxTransition>
+        </div>
+      </template>
+    </TemplateFrame>
+  </template>
+
+  <style scoped>
+  .ops {
+    color-scheme: dark; /* tooltip 的 canvas 兜底色与滚动条随之变暗 */
+    --tx-skeleton-base-color: var(--tx-chart-semantic-skeleton); /* :root 用 var() 派生的 token 要在这里重新声明 */
+  }
+  </style>
+---
+:::
+
+## 概述
+
+给启动器团队看的产品数据看板：所有数字跟随同一个时间范围，换范围、选日期或框选时整页重算。
+
+- 切换 7 / 30 / 90 天或选日期：指标卡滚动到新值，涨跌对比紧挨着的上一段同长度时间；7 天及以内按小时画。
+- 在趋势图上横向拖选即放大，整页只统计这一段；「已放大」胶囊一键还原。
+- 点图例隐藏或显示平台；插件表可按安装量或无崩溃率排序，换范围时趋势列平滑变形。
+- 进入视口后图表才开始绘制，没有自动演示；宽屏（≥ 960px）多出崩溃率卡与洞察卡，窄屏（< 640px）指标卡两列、表格只留三列。
+- 运营大屏：进入视口后实时刷新，18 秒时东京云同步降级、30 秒恢复；滚出视口或切换标签页时停止刷新。
+- 运营大屏：点「实时刷新中」暂停全部更新；指针停在焦点卡、桑基图或事件列表上时该部分先停；减少动态效果时只显示静态快照。
+- 运营大屏：始终为暗色；列内正好铺满舞台，窄屏（< 640px）单列滚动。
+
+## 自定义
+
+- 换数据源时，把 `daily()` 换成接口返回的按天序列；`total()`、`average()`、`previousWindow()` 已处理「今天未过完」与同长度对比。
+- 比率类指标不要放进 TxTimeseriesChart（y 轴始终包含 0）；改画次数，或用 TxSparkChart 并传 `domain`。
+- 图表高度、表格 `maxHeight` 这类像素 prop 容器查询够不到，从舞台尺寸或自己的 ResizeObserver 算出。
+- 按行下钻时，给 TxDataTable 加 `@row-click`，把趋势图换成该插件的安装量序列。
+- 运营大屏：局部暗色在根上写 `data-theme="dark"` 与 `color-scheme: dark`，并重新声明 `:root` 派生的几个 token；会 teleport 的浮层不要用。
+
+## 相关组件
+
+| 区域 | 组件 | 作用 |
+|---|---|---|
+| 顶栏 | [TxFlatRadio](/zh/flat-radio)、[TxDatePicker](/zh/date-picker)、[TxStatusBadge](/zh/status-badge) | 时间范围与降级提示 |
+| 指标卡 | [TxStatCard](/zh/stat-card)、[TxTextMorph](/zh/text-morph) | 关键指标与环比 |
+| 趋势 | [TxTimeseriesChart](/zh/timeseries-chart)、[TxChartLegendItem](/zh/charts) | 分平台趋势，可框选放大 |
+| 侧栏 | [TxAllocationBar](/zh/allocation-bar)、[TxDotIndicator](/zh/dot-indicator)、[TxSignalMeter](/zh/signal-meter)、[TxProgressBar](/zh/progress-bar) | 占比、健康与 AI 用量 |
+| 洞察（宽屏） | [TxInsightCards](/zh/insight-cards)、[TxSparkChart / TxChartScrubber](/zh/spark-chart)、[TxToastPanel](/zh/toast-panel) | 可翻页、可逐日读值的洞察 |
+| 热门插件 | [TxDataTable](/zh/data-table)、[TxSparkChart](/zh/spark-chart)、[TxSignalMeter](/zh/signal-meter)、[TxStatusBadge](/zh/status-badge) | 可排序的插件表 |
+| 顶栏（运营大屏） | [TxModeChip](/zh/mode-chip) | 实时标记与暂停开关 |
+| 大字指标（运营大屏） | [TxTextMorph](/zh/text-morph)、[TxSparkChart](/zh/spark-chart) | 滚动数字与走势条 |
+| 城市地图（运营大屏） | [TxBubbleMap](/zh/maps)、[TxSkeleton](/zh/skeleton) | 14 个城市的在线气泡 |
+| 焦点轮播（运营大屏） | [TxInsightCards](/zh/insight-cards)、[TxAllocationBar](/zh/allocation-bar) | 每 8 秒翻页的焦点卡 |
+| 搜索流向（运营大屏） | [TxSankeyChart](/zh/sankey-chart) | 输入 → 插件 → 动作 |
+| 健康与事件（运营大屏） | [TxDotIndicator](/zh/dot-indicator)、[TxSignalMeter](/zh/signal-meter)、[TxTransition](/zh/transition) | 服务健康与事件流 |

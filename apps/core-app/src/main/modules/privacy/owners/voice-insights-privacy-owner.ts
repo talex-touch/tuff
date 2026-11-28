@@ -9,8 +9,24 @@ import {
   privacyOwnerCompletedExport
 } from '../data-owner'
 import type { PrivacyOwnerExportWriter } from '../data-owner'
-import type { VoiceInsightsStore } from '../../voice/voice-insights-store'
-import type { VoiceRecognitionStore } from '../../voice/voice-recognition-store'
+
+export interface VoiceInsightsPrivacySnapshot {
+  readonly sessionCount: number
+}
+
+export interface VoiceInsightsPrivacyStore {
+  getInsights: (now?: number) => Promise<VoiceInsightsPrivacySnapshot>
+  clearInsights: (now?: number) => Promise<void>
+}
+
+export interface VoiceRecognitionPrivacyRecord {
+  readonly audioBytes?: number
+}
+
+export interface VoiceRecognitionPrivacyStore {
+  list: (limit?: number) => Promise<readonly VoiceRecognitionPrivacyRecord[]>
+  clear: () => Promise<void>
+}
 
 const CATEGORY = 'voice-insights' as const
 
@@ -40,8 +56,8 @@ function emptyPreview() {
 }
 /** Privacy lifecycle for local voice aggregates and optional detailed recognition records. */
 export function createVoiceInsightsPrivacyOwner(
-  store: VoiceInsightsStore,
-  recordsStore?: VoiceRecognitionStore
+  store: VoiceInsightsPrivacyStore,
+  recordsStore?: VoiceRecognitionPrivacyStore
 ): PrivacyDataOwner {
   return definePrivacyDataOwner({
     categories: [CATEGORY],

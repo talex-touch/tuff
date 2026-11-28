@@ -41,9 +41,9 @@ import {
   coreBoxImageTranslateEvent
 } from '../../../../shared/events/corebox-scenes'
 import { extendMetaPanelHeightForPluginRows } from '../../../../shared/meta-overlay-geometry'
-import { pluginModule } from '../../plugin/plugin-module'
 import { OnboardingGateError } from '../../storage'
 import { getBoxItemManager } from '../item-sdk'
+import { getBoxToolPluginProviderDetail } from '../ports/plugin-host-port'
 import searchEngineCore from '../search-engine/search-core'
 import { searchLogger } from '../search-engine/search-logger'
 import type { SearchCallerIdentity, SearchSink } from '../search-engine/search-session'
@@ -576,15 +576,7 @@ export class IpcManager {
       const pluginIdsToFetch = providerIds.filter((id) => !nativeProviderIds.has(id))
 
       const pluginDetails: ProviderDetail[] = pluginIdsToFetch
-        .map((id): ProviderDetail | null => {
-          const plugin = pluginModule.pluginManager!.plugins.get(id)
-          if (!plugin) return null
-          return {
-            id: plugin.name,
-            name: plugin.name,
-            icon: plugin.icon
-          }
-        })
+        .map((id): ProviderDetail | null => getBoxToolPluginProviderDetail(id))
         .filter((p): p is ProviderDetail => p !== null)
 
       return [...nativeProviderDetails, ...pluginDetails]

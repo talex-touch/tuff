@@ -1,0 +1,119 @@
+---
+title: ImageStudio
+description: An image generation studio with style controls, generating placeholders, and a full-size viewer.
+category: TemplateAi
+status: beta
+since: 0.9.1
+tags: [template, ai, image, generation, gallery]
+syncStatus: reviewed
+verified: false
+---
+
+## Usage
+
+### Image generation
+:::TuffDemoWrapper{demo="TemplateImageStudioDemo" code-lang="vue" description="Plays once when it scrolls into view: picks Aurora and 16:9, types a prompt and generates four images; click or press a key to take over."}
+---
+code: |
+  <script setup lang="ts">
+  import type { ImageGenerationCycleEvent, ImageGenerationHandle } from '@talex-touch/tuffex/image-generation'
+  import { nextTick, reactive, ref } from 'vue'
+  import TemplateFrame from './TemplateFrame.vue'
+
+  const form = reactive({ style: 'aurora', ratio: '16:9', count: 4, seed: 7310, guidance: 7, steps: 30 })
+  const draft = ref('')
+  const handles = new Map<string, ImageGenerationHandle>()
+
+  // No model: paint() draws an SVG from the prompt and parameters and returns its URL
+  function generate() {
+    const set = createSet(draft.value, form) // every image starts queued
+    set.tiles.forEach((tile, i) => cue(450 + i * 320, () => reveal(tile)))
+  }
+
+  // A paused TxImageGeneration ignores triggers: let `paused` turn false, render, then trigger
+  async function reveal(tile: Tile) {
+    tile.status = 'revealing'
+    await nextTick()
+    handles.get(tile.id)?.triggerReveal({ hold: 'manual' })
+  }
+
+  // Done once this image is revealed; the effect then pauses behind the plain image
+  function onCycle(tile: Tile, event: ImageGenerationCycleEvent) {
+    if (event.phase === 'visible' && event.src === tile.src)
+      settle(tile)
+  }
+  </script>
+
+  <template>
+    <TemplateFrame title="ImageStudio" :height="600" @enter="play">
+      <aside class="img-studio__params">
+        <TxFlatSelect v-model="form.style">…</TxFlatSelect>
+        <TxFlatRadio v-model="form.ratio">…</TxFlatRadio>
+        <TxSegmentedSlider v-model="form.count" :segments="counts" :show-labels="false" />
+        <TxNumberInput v-model="form.seed" :min="0" :max="99999" :controls="false" />
+        <TxCollapse>
+          <TxCollapseItem name="advanced" title="Advanced">
+            <TxScrubField v-model="form.guidance" label="Guidance" :min="1" :max="12" />
+            <TxScrubField v-model="form.steps" label="Steps" :min="10" :max="50" :step="5" />
+          </TxCollapseItem>
+        </TxCollapse>
+      </aside>
+
+      <section class="img-studio__main">
+        <TxPromptBar v-model="draft" :clear-on-send="false" send-label="Generate" :submitting="generating" @send="generate" />
+        <TxSuggestionChips :suggestions="ideas" @select="useIdea" />
+        <div v-for="tile in active.tiles" :key="tile.id" class="img-studio-tile" role="listitem">
+          <TxImageGeneration
+            :ref="el => setHandle(tile.id, el)"
+            :preset="EFFECT[active.params.style]"
+            :images="tile.src"
+            :paused="tile.status === 'done' || (tile.status === 'queued' && !onScreen)"
+            @cycle="event => onCycle(tile, event)"
+          />
+          <img v-if="tile.shownSrc" :src="tile.shownSrc" :alt="altOf(tile)">
+        </div>
+      </section>
+
+      <!-- History only when wide (≥ 960px) -->
+      <aside v-if="mode === 'wide'" class="img-studio__history">…</aside>
+
+      <!-- The viewer: Zoom sets the index, then opens it -->
+      <TxImagePreview v-model:open="viewerOpen" v-model:index="viewerIndex" :images="finished" />
+    </TemplateFrame>
+  </template>
+---
+:::
+
+## Overview
+
+An image studio making assets for Tuff themes and plugins, in the style of Midjourney or Krea: parameters on the left, the prompt and a grid of generating images in the middle, and history on the right when wide. No model is called. Every image is an SVG that this file draws from the prompt, style, ratio, seed, guidance and steps, so the same inputs always give the same picture and nothing goes over the network; the header and the toasts say the results are sample data.
+
+- The first time it scrolls into view it plays once: it picks Aurora, 16:9 and seed 7310, types a prompt one character at a time and presses Generate. The four images start revealing 0.32 seconds apart, each taking about 3 seconds, and a toast then says “Generated 4 images · sample”. The whole script takes about 7 seconds.
+- The stage's clock stops while the template is off screen or the page is in the background, and carries on from where it stopped; the pulses pause with it.
+- The first pointer, key or focus inside the template takes over: the script stops, and the parameters and prompt are set to what it was going to write, but nothing presses Generate for you; a generation already running carries on. Reduced motion shows the four finished images at once without mounting the generating effect, and only the toast keeps its own timer.
+- The reveal effect follows the style: `sweep-gradient` for Glass and Watercolour, `pixels-mechanic` for Aurora and Neon, and `pixels-organic` for Pixel.
+- A finished image shows four actions on hover or focus: zoom, variation, copy prompt, and set as wallpaper (set as plugin icon for icon prompts). A variation first breaks the image into cells, then dissolves the new one in. Setting a wallpaper or an icon only marks the image, and the toast can undo it.
+- ⌘/Ctrl+Enter anywhere in the studio generates; a prompt idea fills in its style and ratio too. Toasts close after about 3.6 seconds (4.8 with Undo), stay while the pointer or focus is on them, and close about 2 seconds after both leave.
+- Wide (≥ 960px) adds the history, which keeps up to 6 sets; click one to restore its parameters, prompt and images. 640–959px keeps the parameters and the grid; below 640px the parameters move behind a button in the header and slide in from the left, closing on Escape or a click on the scrim, with focus back on the button.
+- The grid picks the column count that makes each image largest at its ratio (at most 2 columns below 640px, 4 otherwise); when an image would be narrower than 112px, the grid scrolls instead.
+
+## Customization
+
+- For a real model, replace `paint()` so that it returns the URL of the generated image. Set TxImageGeneration's `images` to the new URL and reveal it with `triggerReveal()`; it is done when `@cycle` reports `phase: 'visible'` with this image's `src`.
+- A paused TxImageGeneration ignores `triggerReveal()` and `triggerRegenerate()`, and a queued image is paused while the stage is off screen. So the status moves to revealing first, and the trigger waits for the next render to turn `paused` false. Pausing mid-reveal loses that reveal's `visible`, so only finished images are paused.
+- TxImageGeneration only draws what is visible inside the grid and the window. A watchdog checks 8 seconds after a reveal starts: an image in view that has not finished shows its plain image and the effect is dropped, and one scrolled out of the grid or the window gets another round.
+- A variation calls `triggerRegenerate({ autoReveal: false })` on the effect showing the image, then `triggerReveal()` 1.4 seconds later. An image restored from history has no effect mounted, so one is mounted and reveals from scratch.
+- Zoom opens the set's finished images in `TxImagePreview`, which zooms, pans, and swipes to page; the images carry `width` / `height`, so the placeholder before one loads has its shape. The preview returns focus on close to whatever had it on opening, and WebKit does not focus a clicked button, so the Zoom button takes focus first.
+- The studio sets `:clear-on-send="false"`, so the prompt stays after `send` and the next set can start from it.
+- Below 640px the parameters are the template's own sheet, not TxDrawer, which would take Tab and Escape on the whole page. While the sheet is open the main area is `inert`; with the style menu open, the first Escape closes the menu, the second the sheet, and only the third leaves full screen.
+- The Generate button is disabled while a set generates, an image's actions while it varies, and the toast's buttons hide with the toast. The template moves focus to the image or the studio first; left on `<body>`, focus would no longer let Escape leave full screen.
+
+## Related components
+
+| Region | Components | Role |
+|---|---|---|
+| Parameters | [TxFlatSelect](/en/flat-select), [TxFlatRadio](/en/flat-radio), [TxSegmentedSlider](/en/segmented-slider), [TxNumberInput](/en/number-input), [TxCollapse](/en/collapse), [TxScrubField](/en/scrub-field) | Style, ratio, count and seed, with guidance and steps folded away |
+| Prompt | [TxPromptBar](/en/prompt-bar), [TxSuggestionChips](/en/suggestion-chips) | Write a prompt and generate; prompt ideas fill in their style and ratio |
+| Generating grid | [TxImageGeneration](/en/image-generation), [TxIconButton](/en/button) | The reveal effect for new sets and variations, and each image's actions |
+| Viewer | [TxImagePreview](/en/image-preview) | Full window, with zoom, pan, and ←/→ or a swipe to page |
+| Header and notices | [TxButton](/en/button), [TxIconButton](/en/button), [TxToastPanel](/en/toast-panel) | The parameters button (below 640px), Replay, and the toasts for generating, copying and setting a wallpaper |

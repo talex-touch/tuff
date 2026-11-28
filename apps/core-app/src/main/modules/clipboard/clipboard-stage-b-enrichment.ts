@@ -5,7 +5,7 @@ import type { IClipboardItem } from './clipboard-history-persistence'
 import { eq } from 'drizzle-orm'
 import { classifyClipboardContent } from '@talex-touch/utils/clipboard'
 import { clipboardHistory } from '../../db/schema'
-import { resolveAppSemanticAliases } from '../box-tool/addon/apps/app-semantic-catalog'
+import { getClipboardPorts, type ClipboardAppSemanticAliasInput } from './clipboard-ports'
 import type { ClipboardMetaEntry, ClipboardMetaPersistence } from './clipboard-meta-persistence'
 import type { ClipboardClassificationSettings } from './clipboard-classification-settings'
 import { DEFAULT_CLIPBOARD_CLASSIFICATION_SETTINGS } from './clipboard-classification-settings'
@@ -65,7 +65,9 @@ function mergeMetadataString(
 
 export function buildActiveAppSourcePatch(
   activeApp: ClipboardActiveAppSnapshot,
-  fallbackSourceApp?: string | null
+  fallbackSourceApp?: string | null,
+  resolveAliases: (app: ClipboardAppSemanticAliasInput) => string[] = (app) =>
+    getClipboardPorts().search.resolveAppSemanticAliases(app)
 ): {
   sourceApp: string | null
   patch: Record<string, unknown>
@@ -80,7 +82,7 @@ export function buildActiveAppSourcePatch(
     executablePath: activeApp.executablePath ?? null,
     icon: activeApp.icon ?? null
   }
-  const sourceSearchTerms = resolveAppSemanticAliases({
+  const sourceSearchTerms = resolveAliases({
     name: activeApp.displayName ?? undefined,
     displayName: activeApp.displayName ?? undefined,
     bundleId: activeApp.bundleId ?? activeApp.identifier ?? undefined,

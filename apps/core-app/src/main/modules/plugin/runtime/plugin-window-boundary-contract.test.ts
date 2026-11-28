@@ -14,6 +14,8 @@ describe('plugin window boundary contract', () => {
     'src/main/modules/plugin/services/plugin-window-transport-service.ts'
   )
   const coreBoxSource = read('src/main/modules/box-tool/core-box/plugin-view-controller.ts')
+  const dp4PortsRegistrarSource = read('src/main/core/ports/register-dp4-ports.ts')
+  const portsBootstrapSource = read('src/main/core/ports/index.ts')
   const coreBoxIpcSource = read('src/main/modules/box-tool/core-box/ipc.ts')
   const detachHookSource = read('src/renderer/src/modules/box/adapter/hooks/useDetach.ts')
   const divisionBoxSource = read('src/main/modules/division-box/session.ts')
@@ -53,12 +55,22 @@ describe('plugin window boundary contract', () => {
   })
 
   it('contains all plugin view surfaces with the shared host and navigation policy', () => {
-    for (const source of [windowTransportSource, coreBoxSource, divisionBoxSource]) {
+    for (const source of [windowTransportSource, divisionBoxSource]) {
       expect(source).toContain('buildPluginViewWebPreferences')
       expect(source).toContain('installPluginViewNavigationPolicy')
       expect(source).toContain('registerPluginWebContents')
       expect(source).toContain('unregisterPluginWebContents')
     }
+    // CoreBox (DP4) reaches DP5 plugin-view security controls via typed DIP ports wired at the composition root.
+    expect(coreBoxSource).toContain('buildBoxToolPluginViewWebPreferences')
+    expect(coreBoxSource).toContain('installBoxToolPluginViewNavigationPolicy')
+    expect(coreBoxSource).toContain('registerBoxToolPluginWebContents')
+    expect(coreBoxSource).toContain('unregisterBoxToolPluginWebContents')
+    expect(dp4PortsRegistrarSource).toContain('buildPluginViewWebPreferences')
+    expect(dp4PortsRegistrarSource).toContain('installPluginViewNavigationPolicy')
+    expect(dp4PortsRegistrarSource).toContain('registerPluginWebContents')
+    expect(dp4PortsRegistrarSource).toContain('unregisterPluginWebContents')
+    expect(portsBootstrapSource).toContain('registerDp4Ports()')
     expect(coreBoxSource).not.toContain('compat-plugin-view')
     expect(divisionBoxSource).not.toContain('compat-plugin-view')
     expect(coreBoxSource).not.toContain('getPluginChannelPreludeCode')
@@ -136,10 +148,11 @@ describe('plugin window boundary contract', () => {
     expect(publicProfile).toBeGreaterThan(-1)
     expect(publicConstructor).toBeGreaterThan(publicProfile)
 
-    const coreProfile = coreBoxSource.indexOf('resolvePluginViewSecurityProfile')
+    const coreProfile = coreBoxSource.indexOf('resolveBoxToolPluginViewSecurityProfile')
     const coreConstructor = coreBoxSource.indexOf('new WebContentsView', coreProfile)
     expect(coreProfile).toBeGreaterThan(-1)
     expect(coreConstructor).toBeGreaterThan(coreProfile)
+    expect(dp4PortsRegistrarSource).toContain('resolvePluginViewSecurityProfile')
 
     const divisionProfile = divisionBoxSource.indexOf('resolvePluginViewSecurityProfile')
     const divisionConstructor = divisionBoxSource.indexOf('new WebContentsView', divisionProfile)

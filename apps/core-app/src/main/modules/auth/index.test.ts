@@ -1265,6 +1265,13 @@ describe('plugin account access', () => {
 
   async function startAuth() {
     const authModule = await importAuthModule()
+    const { registerPermissionPluginBridge } = await import('../permission/permission-ports')
+    registerPermissionPluginBridge({
+      resolvePluginDeclaredSdkApi: (pluginId) => {
+        const plugin = getPluginByNameMock(pluginId) as { sdkapi?: number } | undefined
+        return typeof plugin?.sdkapi === 'number' ? plugin.sdkapi : undefined
+      }
+    })
     authModule.__test__.resetState()
     authModule.__test__.setState({ appRootPath: '/tmp/tuff' })
     const module = new authModule.AuthModule()

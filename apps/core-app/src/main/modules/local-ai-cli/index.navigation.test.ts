@@ -87,7 +87,17 @@ vi.mock('../../db/db-write', () => ({
   scheduleDbWrite: (_label: string, task: () => Promise<unknown>) => task()
 }))
 
+import { registerLocalAiCliPorts } from './local-ai-cli-ports'
 import { LocalAiCliModule } from './index'
+
+registerLocalAiCliPorts({
+  surface: {
+    requestFeatureRefresh: vi.fn(),
+    restoreLocalAi: mocks.restoreLocalAi,
+    showLocalAi: mocks.showLocalAi,
+    hideForPasteBack: vi.fn()
+  }
+})
 
 const WORKSPACE_ROOT = mkdtempSync(join(tmpdir(), 'local-ai-cli-navigation-'))
 const HOST_CONTEXT = { sender: { id: 1 } } as never

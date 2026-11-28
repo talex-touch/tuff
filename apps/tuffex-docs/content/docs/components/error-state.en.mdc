@@ -1,0 +1,109 @@
+---
+title: "ErrorState"
+description: "A state view shown when loading or an operation fails."
+category: Status
+status: beta
+since: 0.3.4
+tags: [empty, state, error, feedback]
+syncStatus: reviewed
+verified: true
+---
+
+## Usage
+
+### Basic
+:::TuffDemoWrapper{demo="ErrorStateBasicDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxErrorState
+      :primary-action="{ label: 'Retry', type: 'primary' }"
+      :secondary-action="{ label: 'Go Back' }"
+    />
+  </template>
+---
+:::
+
+### Custom Copy
+`title` and `description` override the preset copy; `surface="card"` adds a card surface.
+:::TuffDemoWrapper{demo="ErrorStateCustomDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxErrorState
+      title="Failed to load data"
+      description="The server returned error 500. Please check your network and try again."
+      surface="card"
+      :primary-action="{ label: 'Retry', type: 'primary' }"
+    />
+  </template>
+---
+:::
+
+### Dashboard Recovery States
+Shares one data container with the loading and empty states.
+:::TuffDemoWrapper{demo="ComponentsRecoveryStatesDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxErrorState
+      title="Rules failed to load"
+      description="The service is temporarily unavailable. Retry or check backend logs."
+      surface="card"
+      :primary-action="{ label: 'Retry', type: 'primary', icon: 'i-carbon-renew' }"
+      :secondary-action="{ label: 'View guide', icon: 'i-carbon-help' }"
+    />
+  </template>
+---
+:::
+
+### Best Practices
+
+- Name what failed in `title`, such as "Rules failed to load", not "Something went wrong".
+- Always offer a way out: retry, go back, open logs, or contact support.
+- Use `surface="card"` when the error replaces a data panel; keep `plain` inside an existing card.
+- Keep technical detail in logs or expandable diagnostics; the description tells users what to do next.
+- Use the `actions` slot only when the generated buttons cannot express the recovery flow.
+
+## API Reference
+
+Takes every [TxEmptyState](/en/empty-state) prop, event, and slot except `variant`, which is fixed to `error`.
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `title` | `string` | `'Something went wrong'` | Error title; name the failed object or operation. |
+| `description` | `string` | `'Please try again later.'` | Supporting text and recovery advice. |
+| `icon` | `TxIconSource \| string \| null` | variant default | Replaces the built-in error illustration; `null` hides the icon area. |
+| `iconSize` | `number` | derived from `size` | Icon size; resolves from `size` to 28 / 36 / 44 when unset. |
+| `layout` | `'vertical' \| 'horizontal'` | `'vertical'` | Layout direction. |
+| `align` | `'start' \| 'center' \| 'end'` | `'center'` | Content alignment. |
+| `size` | `'small' \| 'medium' \| 'large'` | `'medium'` | Size tier. |
+| `surface` | `'plain' \| 'card'` | `'plain'` | Surface style. |
+| `primaryAction` | `EmptyStateAction` | - | Primary recovery action. |
+| `secondaryAction` | `EmptyStateAction` | - | Secondary action. |
+| `actionSize` | `TxButtonProps['size']` | `'sm'` | Size of the generated buttons. |
+| `loading` | `boolean` | `false` | Without an `icon` prop or slot, swaps the illustration for a `TxSpinner`; buttons are unaffected. |
+
+### Events
+
+| Event | Params | Description |
+|------|------|------|
+| `primary` | - | Fires when the generated primary button is clicked; the host implements the retry. |
+| `secondary` | - | Fires when the generated secondary button is clicked. |
+
+### Slots
+
+| Slot | Props | Description |
+|------|-------|-------------|
+| `icon` | - | Replaces the built-in error illustration. |
+| `title` | - | Replaces the title. |
+| `description` | - | Replaces the description. |
+| `actions` | - | Replaces the generated primary and secondary buttons. |
+
+## Technologies
+
+- Source: `packages/tuffex/packages/components/src/error-state/`; `TxEmptyState` draws the illustration.
+
+<TuffDocSourceLink />

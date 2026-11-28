@@ -51,8 +51,6 @@ jobs:
               - 'apps/nexus/**'
               - 'packages/tuffex/**'
               - 'packages/tuffex-core/**'
-              - 'packages/tuffex-react/**'
-              - 'packages/tuffex-wc/**'
               - '.github/workflows/ci.yml'
 
       # A contribution policy, so it only makes sense on the incoming change, not on the branch.
@@ -400,8 +398,9 @@ jobs:
   #     under job_app_tests (nexus).
   #   audit:contrast → requires a live localhost:3200 dev server + headless Chrome CDP; its pure
   #     colour/luminance parser self-test (`audit:contrast:self-test`) runs below.
-  # All five static `check:*` scripts (api-routes, mdc-fences, icon-collections, doc-parity,
-  # demo-registry), `audit:contrast:self-test`, `build`, and `build:analyze-worker` run here.
+  # All four static `check:*` scripts (api-routes, mdc-fences, icon-collections, doc-parity),
+  # `audit:contrast:self-test`, `build`, and `build:analyze-worker` run here. Component demo registry
+  # checks moved with the component docs to `.github/workflows/tuffex-docs-ci.yml`.
   job_nexus:
     name: Nexus (build + checks)
     runs-on: ubuntu-latest
@@ -457,16 +456,6 @@ jobs:
       # "heading 10 is h2 in zh but h3 in en".
       - name: Verify zh/en doc parity
         run: pnpm -C apps/nexus check:doc-parity
-
-      # Re-wired into job_nexus (#1776): commit 65e09d5f4 introduced check:demo-registry and its
-      # --self-test (and docs/engineering/specs/frontend/bui-component-family.md records it as
-      # CI-gated), but the step was subsequently dropped from ci.yml. Keeps demo-registry.ts,
-      # demos/*.vue, and TuffDemoWrapper content refs agreeing three ways so missing keys cannot
-      # render empty demo boxes or leave orphaned demo files behind.
-      - name: Verify demo registry and self-test
-        run: |
-          pnpm -C apps/nexus check:demo-registry
-          node apps/nexus/build/check-demo-registry-orphans.mjs --self-test
 
       # Pure Node self-test for the WCAG contrast parser (rgb() vs CSS Color 4 color(srgb ...)).
       # The full `audit:contrast` sweep requires a live localhost:3200 dev server and Chrome CDP,
@@ -539,10 +528,6 @@ jobs:
       - name: Build tuffex
         if: ${{ matrix.app == 'nexus' || matrix.app == 'core-app' }}
         run: pnpm -C packages/tuffex build
-
-      - name: Build tuffex multi-framework packages
-        if: ${{ matrix.app == 'nexus' }}
-        run: pnpm -C packages/tuffex-wc build && pnpm -C packages/tuffex-react build
 
       # The plugin SQLite sandbox tests need out/main/plugin-sqlite-worker.js, and only
       # electron-vite build produces it: the worker is a rollup input in the main-process build

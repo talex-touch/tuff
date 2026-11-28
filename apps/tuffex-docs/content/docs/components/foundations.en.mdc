@@ -1,0 +1,181 @@
+---
+title: Design Foundations
+description: Design philosophy, geometry, refraction materials, dark optics, and tokens.
+category: Foundations
+status: reviewed
+since: 1.0.0
+tags: [design, concepts, tokens, typography, color, motion, geometry]
+syncStatus: reviewed
+verified: true
+---
+
+# Design Foundations
+
+The design foundations of Tuffex are grounded in three core axioms: **Physical Honesty**, **Sub-100ms Velocity**, and **Deterministic Discipline**.
+
+It governs not merely raw CSS variables, but the physical geometric, material, and optical baselines of professional desktop interaction.
+
+## Geometry & Squircles
+
+### G2 Curvature Continuity & Squircles
+
+Standard CSS `border-radius` relies on circular fillets ($G^1$ tangent continuity). Curvature $\kappa$ jumps abruptly from $0$ on straight edges to $1/R$ at the fillet boundary, inducing an optical crease (the Specular Break defect).
+
+TuffEx draws superellipse (Lamé curve / squircle) corners on TxCard, TxModal, TxCommandPalette, TxFlipOverlay, the dialogs and CoreBox:
+$$\left| \frac{x}{a} \right|^n + \left| \frac{y}{a} \right|^n = 1 \quad (n \approx 3.43)$$
+The superellipse meets the straight edge with zero curvature ($G^2$ continuity) and cuts as deep along the 45° diagonal as the plain radius, so reflections run unbroken around the corner. The implementation is `tx-squircle` in `style/mixins.scss`; browsers without `corner-shape` keep the plain radius.
+
+### Concentric Radii Geometric Law
+
+When nested containers share the same numeric radius, the corner gap expands by $\sqrt{2}$ (approximately 1.414x), creating an ungrounded, pinched visual defect.
+TuffEx enforces the geometric conservation law:
+$$R_{\text{outer}} = R_{\text{inner}} + \text{Padding}$$
+
+### Inset Clearance Against Caret Clipping
+
+Corner curves encroach into content boxes. To prevent input carets from clipping into corner arcs, the horizontal inset must fully cover the radius:
+$$Padding_{\text{horizontal}} \ge R$$
+Single-line text containers set their vertical padding to **0.6–0.75x** the horizontal padding (TxModeChip and TxTag both use 0.625), neutralizing the bottom-heavy illusion created by typographic leading.
+
+## Surfaces & Refraction
+
+### The Default to Refraction Mandate
+
+All components featuring a surface layer **must strictly default to `refraction`**: `TxBaseSurface`'s `mode`, `TxCard`'s `background`, the `surface` of `TxFlipOverlay`, `TxModal`, `TxCommandPalette` and the dialogs `TxPopperDialog`, `TxBlowDialog`, `TxBottomDialog` and `TxTouchTip`, and the `panelBackground` of the pop-up panels rendered through `TxBaseAnchor` (`TxPopover`, `TxTooltip`, dropdown and context menus, `TxSelect`, `TxSearchSelect`).
+`TxDrawer` is an exception the user confirmed (2026-10-25): its panel defaults to a solid `pure`, so the page behind does not show through its body and forms; pass `surface="refraction"` for the refractive panel.
+Switching to another material (such as `flat`, `mask` or `glass`) **mandates explicit manual user confirmation**; the fallback a surface takes in motion and `autoDetect`'s temporary degradation leave the declared material alone and are not switches. See [Surface 8-Material Taxonomy & Gatekeepers](/en/concepts/surface-taxonomy).
+
+### Snell's Refraction & RGB Dispersion Pipeline
+
+`TxBaseSurface`'s `refraction` uses `TxGlassSurface` as its glass layer, where an SVG displacement map simulates Snell's Law as light traverses a prism: the Red, Green and Blue channels are each displaced once, by slightly different amounts (−180, −170 and −160 by default), and the offset channels separate subtle spectral dispersion fringes along refracted contours.
+
+### 120Hz Fallback & 140ms Hysteresis Recovery
+
+When a surface moves with its element, `backdrop-filter` sampling lags behind the element's position and the filter layers drag a misaligned patch of backdrop along; while a window is dragged on a 120Hz display, heavy filters also eat into a frame budget of only 8.3ms. So `TxBaseSurface` **falls back the frame motion starts (0ms, no debounce)**: `blur`, `glass` and `acrylic` switch wholesale to `fallbackMode` (`mask` by default), while `refraction` keeps its mode, fading its glass and filter layers out over 140ms under a translucent cover. Recovery follows once motion ends, and `autoDetect`'s signals must first stay quiet for **140ms** so a gesture trembling around the threshold does not flip it back and forth: `refraction` then recovers layer by layer, its cover gone at 287ms, while the other materials hold the fallback for 299ms before switching back. See [Adaptive Surface Deduction & 120Hz Fallback](/en/concepts/surface-deduction).
+
+## Color Science & Dark Palette
+
+### #141414 Canvas & 3-Tier Elevation
+
+Why reject pure black `#000000`?
+1. **Preventing OLED Purple Smearing**: Switching OLED pixels off introduces latency, creating purple ghosting streaks when scrolling.
+2. **Preserving Shadow Elevation**: Shadows must physically register darker than the background. `#141414` provides depth headroom for cast shadows.
+3. **Three-Tier Elevation**: L0 canvas `--tx-bg-color: #141414`, L1 container `--tx-bg-color-overlay: #1d1e1f` (cards, dialogs, drawers, pop-ups), L2 highlight `--tx-fill-color-light: #262727` (hover, selection). In the dark theme `--tx-fill-color-blank` is `transparent` and carries no container colour.
+
+### Dark Mode Retinal Bloom Weight Compensation
+
+Under the Helmholtz optical irradiation effect, white strokes over dark canvases bleed into the retina, **reading bolder than the same weight in light mode**; how much depends on luminance, contrast and size, with no fixed percentage.
+TuffEx's dark theme takes each of the three emphasis weights 40 lighter; components read them as `var(--tx-font-weight-medium, 500)` and the like, so they lighten when the theme switches:
+- Body copy: `400`, left alone (any lower and a static font drops to its Light face)
+- Inline emphasis, `--tx-font-weight-medium`: `500` (Light) $\to$ `460` (Dark)
+- Headings and buttons, `--tx-font-weight-semibold`: `600` (Light) $\to$ `560` (Dark)
+- Bold and numerals, `--tx-font-weight-bold`: `700` (Light) $\to$ `660` (Dark)
+
+Only fonts with a weight axis (San Francisco, Segoe UI Variable, Inter Variable) actually draw thinner; static fonts such as PingFang SC and Microsoft YaHei round these values back to the face light mode uses, so the compensation does nothing there but never makes text bolder. Every dark value sits within (light − 100, light], which the Sass function `tx-dark-weight` checks at build time. On macOS without Inter, the default font stack draws with PingFang SC and shows no difference. See [Retinal Irradiation & Weight Tuning](/en/concepts/irradiation-tuning).
+
+### color-mix Ink Fusion & WCAG 4.5:1
+
+Semantic text never uses isolated raw hues; it blends dynamically with primary ink, as in TxModeChip's danger ink:
+`color-mix(in srgb, var(--tx-color-danger) 55%, var(--tx-text-color-primary))`.
+Each hue has its own share: danger 55%, success and warning 45%, info 50% of the primary colour. At 13px on the `-light-9` tints, the raw hues reach only **2.03:1–2.61:1**; the blends measure **5.07:1–5.32:1**, clearing WCAG 2.1 AA's 4.5:1.
+
+## Typography & 13–14px Baseline
+
+- **13px–14px Productivity Anchor**: Desktop productivity tools avoid oversized marketing typography, keeping crucial context within the human 2-degree foveal vision window.
+- **Monospace 0.9em Optical Scale**: Code typefaces carry slightly taller x-heights than sans-serif faces at the same size (1.7%–7.7% taller, measured on the fonts shipped with macOS); inline `<code>` scales to `0.9em` and stays on the baseline to preserve typographic line rhythm. `<code>` outside `<pre>` inside `.tx-prose` gets this automatically; elsewhere, add `.tx-inline-code`.
+- **Modern Soft Line Breaks**: Short titles use `text-wrap: balance` (the `.tx-heading` utility; `TxModal`'s title has it built in); long prose uses `text-wrap: pretty` to eliminate terminal orphans (`.tx-prose p`, `.tx-description`, `.tx-help-text`); hardcoded `<br>` tags are banned. Streaming paragraphs are the exception: they wrap normally while text is still arriving and switch back to `pretty` once they are complete.
+- **Zero Tracking on Body Copy**: Body copy never touches `letter-spacing`. It does not remove kerning pairs; it adds the same space between every pair of characters on top of them, diluting the spacing the type foundry tuned, and with non-zero spacing browsers also stop applying optional ligatures such as `fi` and `fl`. Only three cases are exempt: uppercase micro-labels at 11px or below, headings and display numerals at 17px or above, and avatar initials.
+
+## Micro-Motion & Micro-Interactions
+
+- **Motion as Spatial Anchors**: Most micro-interactions resolve within **90ms–180ms**; animations must never block user keystrokes or clicks.
+- **0ms Instant Hover**: Transitioning colors on `:hover` is banned (preventing sluggish lag); semantic shifts isolate transitions to `.is-morphing`.
+- **90ms+90ms Confirmation Rhythm**: Menus apply a two-beat feedback rhythm (90ms clear highlight + 90ms active pulse) before closing.
+- **Four Compositor Properties**: High-frequency animations, loading effects and loops animate only `translate`, `scale`, `rotate` and `opacity`, which run whole on the compositor thread and keep up with the display even while the main thread is busy. Keyframes may use `var()` for start and end points and amplitudes, but never animate a custom property itself (it is interpolated on the main thread every frame); replays alternate two keyframe names instead of forcing a reflow with `void el.offsetWidth`.
+
+## AI Streaming & Anti-Jitter
+
+- **useStreamPacer Cadence**: Releases at least one unit every 24ms; a backlog speeds up evenly against a deadline, so every unit shows within 600ms of arriving; once the source ends, the rest clears within 320ms. A burst from the network reads as a quicker flow of text.
+- **Twin-Layer Reserve Mirror**: When finished content replays, a hidden copy (`aria-hidden`, `inert`, `visibility: hidden`) holds the full height first, so the container stops growing and the scrollbar stays put while the text plays out. `reserve` is off by default; live streaming (regeneration included) cannot know the final height, and the container still grows with the content.
+- **Immediate Text Selection & Copying**: Release tokens are standard DOM text nodes; users can drag-select and trigger `Cmd+C` at any millisecond without waiting.
+
+## Color System Tokens
+
+### Brand + semantic
+
+| Token | Light | Dark | Usage |
+| --- | --- | --- | --- |
+| `--tx-color-primary` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#409eff;"></span><code>#409eff</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#409eff;"></span><code>#409eff</code></span> | Primary actions |
+| `--tx-color-success` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#67c23a;"></span><code>#67c23a</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#4ade80;"></span><code>#4ade80</code></span> | Success states |
+| `--tx-color-warning` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#e6a23c;"></span><code>#e6a23c</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#fbbf24;"></span><code>#fbbf24</code></span> | Warning states |
+| `--tx-color-danger` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#f56c6c;"></span><code>#f56c6c</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#f87171;"></span><code>#f87171</code></span> | Error states |
+| `--tx-color-info` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#909399;"></span><code>#909399</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#909399;"></span><code>#909399</code></span> | Informational states |
+
+### Primary ramps
+
+| Token | Light | Dark | Usage |
+| --- | --- | --- | --- |
+| `--tx-color-primary-light-3` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#79bbff;"></span><code>#79bbff</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#3375b9;"></span><code>#3375b9</code></span> | Hover / focus |
+| `--tx-color-primary-light-5` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#a0cfff;"></span><code>#a0cfff</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#2a598a;"></span><code>#2a598a</code></span> | Light background |
+| `--tx-color-primary-light-7` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#c6e2ff;"></span><code>#c6e2ff</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#213d5b;"></span><code>#213d5b</code></span> | Faint background |
+| `--tx-color-primary-light-9` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#ecf5ff;"></span><code>#ecf5ff</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#18222c;"></span><code>#18222c</code></span> | Surface background |
+| `--tx-color-primary-dark-2` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#337ecc;"></span><code>#337ecc</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#66b1ff;"></span><code>#66b1ff</code></span> | Active states |
+
+### Text color and accessibility baseline
+
+| Token | Light | Dark | Usage & Contrast |
+| --- | --- | --- | --- |
+| `--tx-text-color-primary` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#303133;"></span><code>#303133</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#e5eaf3;"></span><code>#e5eaf3</code></span> | Primary text (Max contrast) |
+| `--tx-text-color-regular` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#606266;"></span><code>#606266</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#cfd3dc;"></span><code>#cfd3dc</code></span> | **Mandatory 13px body text (5.69:1)** |
+| `--tx-text-color-secondary` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#909399;"></span><code>#909399</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#a3a6ad;"></span><code>#a3a6ad</code></span> | Secondary text (3.08:1, icons only) |
+| `--tx-text-color-placeholder` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#a8abb2;"></span><code>#a8abb2</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#8d9095;"></span><code>#8d9095</code></span> | Placeholder text |
+| `--tx-text-color-disabled` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#c0c4cc;"></span><code>#c0c4cc</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#6c6e72;"></span><code>#6c6e72</code></span> | Disabled text |
+
+### Backgrounds and borders
+
+| Token | Light | Dark | Usage |
+| --- | --- | --- | --- |
+| `--tx-bg-color` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#ffffff;"></span><code>#ffffff</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#141414;"></span><code>#141414</code></span> | Application canvas |
+| `--tx-bg-color-page` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#f2f3f5;"></span><code>#f2f3f5</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#0a0a0a;"></span><code>#0a0a0a</code></span> | Page canvas |
+| `--tx-bg-color-overlay` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#ffffff;"></span><code>#ffffff</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#1d1e1f;"></span><code>#1d1e1f</code></span> | Overlays |
+| `--tx-fill-color` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#f0f2f5;"></span><code>#f0f2f5</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#303030;"></span><code>#303030</code></span> | Weak fill |
+| `--tx-fill-color-light` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#f5f7fa;"></span><code>#f5f7fa</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#262727;"></span><code>#262727</code></span> | Lighter fill |
+| `--tx-fill-color-lighter` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#fafafa;"></span><code>#fafafa</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#1d1d1d;"></span><code>#1d1d1d</code></span> | Lightest fill |
+| `--tx-fill-color-darker` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#ebeef5;"></span><code>#ebeef5</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#3a3a3a;"></span><code>#3a3a3a</code></span> | Darker fill |
+| `--tx-fill-color-blank` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#ffffff;"></span><code>#ffffff</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip tuff-swatch__chip--transparent" style="--swatch:transparent;"></span><code>transparent</code></span> | Transparent fill |
+| `--tx-border-color` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#dcdfe6;"></span><code>#dcdfe6</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#4c4d4f;"></span><code>#4c4d4f</code></span> | Default borders |
+| `--tx-border-color-light` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#e4e7ed;"></span><code>#e4e7ed</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#414243;"></span><code>#414243</code></span> | Light borders |
+| `--tx-border-color-lighter` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#ebeef5;"></span><code>#ebeef5</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#363637;"></span><code>#363637</code></span> | Lighter borders |
+| `--tx-border-color-extra-light` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#f2f6fc;"></span><code>#f2f6fc</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#2b2b2c;"></span><code>#2b2b2c</code></span> | Lightest borders |
+
+## Implementation & Extended Concepts
+
+- **Style Source**: `packages/tuffex/packages/components/style/variables.scss`, exported through `@talex-touch/tuffex/base.css`.
+- **Extended Architecture Manual**: For in-depth mathematical derivations and physics models, see `apps/nexus/content/docs/dev/concepts/`.
+
+<style scoped>
+.tuff-swatch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tuff-swatch__chip {
+  width: 16px;
+  height: 16px;
+  border-radius: 6px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: var(--swatch);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
+}
+
+.tuff-swatch__chip--transparent {
+  background-image:
+    linear-gradient(45deg, rgba(148, 163, 184, 0.45) 25%, transparent 25%),
+    linear-gradient(-45deg, rgba(148, 163, 184, 0.45) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, rgba(148, 163, 184, 0.45) 75%),
+    linear-gradient(-45deg, transparent 75%, rgba(148, 163, 184, 0.45) 75%);
+  background-size: 8px 8px;
+  background-position: 0 0, 0 4px, 4px -4px, -4px 0;
+}
+</style>

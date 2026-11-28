@@ -1,0 +1,87 @@
+---
+title: Voice
+description: Voice notes that transcribe while recording, then produce a summary and to-dos.
+category: TemplateAi
+status: beta
+since: 0.9.1
+tags: [template, ai, voice, transcription, summary, todo]
+syncStatus: reviewed
+verified: false
+---
+
+## Usage
+
+### Meeting notes
+:::TuffDemoWrapper{demo="TemplateVoiceDemo" code-lang="vue" description="Records a stand-up once in view, stops by itself after about 15 seconds, and writes a summary with to-dos; the record key or another recording hands it to you."}
+---
+code: |
+  <script setup lang="ts">
+  import TemplateFrame from './TemplateFrame.vue'
+
+  // The level is a getter: TxVoiceBeam samples it every frame from its own
+  // loop, so the page never re-renders per frame
+  function level() {
+    return speaking ? syllableLoudness(now() - startedAt) : 0
+  }
+
+  // Recognized words arrive a few at a time; TxStreamText paces them on screen
+  line.received = text.slice(0, end)
+
+  // Stop: the clock ends, an unfinished sentence stays in the transcript only,
+  // and the finished ones go to the summary
+  function stopRecording() {
+    endRecording()
+    live.phase = 'processing'
+    streamSummary()
+  }
+  </script>
+
+  <template>
+    <TemplateFrame title="Voice notes" @enter="start">
+      <TxVoiceClip :src="row.src" :peaks="row.peaks" :duration-ms="row.durationMs" />
+      <TxVoiceBeam :level="level" :active="busy" :processing="summarizing" :organic="1" :paused="!onScreen" :theme="theme">
+        <button class="vnote-key" :aria-label="keyLabel" @click="onKey" />
+      </TxVoiceBeam>
+      <TxStreamText :content="line.received" :streaming="line.live" reveal="blur" />
+      <TxBotAvatar :size="30" :state="botState" :paused="botPaused" :theme="theme" />
+      <TxStreamText :content="point.received" :streaming="point.live" />
+      <TxCheckbox v-model="checked[todo.key]" :label="todo.text" />
+      <TxSuggestionChips :suggestions="suggestions" layout="list" @select="onSuggestion" />
+      <TxToastPanel :open="toast.open" :tether="false" :stack="0">{{ toast.text }}</TxToastPanel>
+    </TemplateFrame>
+  </template>
+---
+:::
+
+## Overview
+
+Voice notes that transcribe while people talk: the transcript arrives speaker by speaker, and once recording stops an AI writes the summary and to-dos.
+
+- Once in view it presses Record: after four speakers and 2 seconds of silence it stops by itself (about 15 seconds), writes the key points and 3 to-dos, and says "3 to-dos created" inside the stage.
+- Stop works at any point while recording: only finished sentences reach the summary, and an unfinished one stays in the transcript; the key then becomes Record again.
+- Choosing another recording while one is recording or summarizing settles it at once: what was heard is summarized in place, without a toast.
+- The glow follows a simulated level and turns to its processing state while summarizing; the glow and the assistant avatar hold still when the stage is out of view, and the avatar moves only while summarizing, just after it finishes, or under the pointer.
+- Every recording plays: the audio is synthesized in the page, with no microphone and no network request, and playback starts only from your click.
+- Follow-ups answer inside the stage: Translate switches to a sample translation, while Send to Inbox and Set reminders only say they are samples; nothing is sent or scheduled.
+- The transcript and the summary follow the newest content and stop while you scroll up; the page never moves.
+- In the docs column (640–959px) the transcript sits above the summary, and from 960px the summary takes its own column with each side scrolling apart; narrow (< 640px) moves the recordings list behind a toggle in the header; reduced motion shows the finished recording with the glow off.
+
+## Customization
+
+- To use a real microphone, pass the stream from `useMicrophone` to TxVoiceBeam's `stream`; it analyses the level and bands itself and ignores `level`. Without a stream, give `level` a getter as this template does.
+- Append the recognizer's partial results to TxStreamText's `content`, keep `streaming` true while the person speaks, and set it to false when the sentence ends.
+- Keep the loudest level per time slice while recording and pass it as TxVoiceClip's `peaks`, so playback never decodes the audio; leave `durationMs` unset until the audio exists, because an unavailable clip holds its duration's width as a minimum and overflows a narrow column.
+- For real recordings, turn the MediaRecorder Blob into an object URL for `src`, and release it with `URL.revokeObjectURL` when the recording changes and on unmount.
+- To-do checks are stored by to-do id, not by language, so they survive switching to the translation.
+
+## Related components
+
+| Region | Components | Role |
+|---|---|---|
+| Header | [TxTag](/en/tag), [TxFlatRadio](/en/flat-radio) | The sample-data label; the list/detail toggle when narrow |
+| Recordings | [TxVoiceClip](/en/voice-clip) | Each recording's waveform, length, and playback |
+| Recorder | [TxVoiceBeam](/en/voice-beam) | A glow that follows the level, and its processing state |
+| Transcript | [TxStreamText](/en/stream-text) | Speaker-labelled paragraphs revealed as they are spoken |
+| Summary | [TxBotAvatar](/en/bot-avatar), [TxSkeleton](/en/skeleton) | The assistant's state and the skeleton before the points |
+| To-dos and follow-ups | [TxCheckbox](/en/checkbox), [TxSuggestionChips](/en/suggestion-chips) | Checkable to-dos and follow-up actions |
+| Notice | [TxToastPanel](/en/toast-panel) | The in-stage completion notice |

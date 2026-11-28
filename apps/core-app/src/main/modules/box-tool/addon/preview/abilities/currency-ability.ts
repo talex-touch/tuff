@@ -13,10 +13,10 @@ import {
   COREBOX_FX_LATEST_SCENE_ID
 } from '../../../../../../shared/events/corebox-scenes'
 import {
-  extractFxConvertFromSceneRun,
-  extractFxRateSnapshotFromSceneRun,
-  runNexusScene
-} from '../../../../nexus/scene-client'
+  extractBoxToolFxConvertFromSceneRun,
+  extractBoxToolFxRateSnapshotFromSceneRun,
+  runBoxToolCloudScene
+} from '../../../ports/cloud-scene-port'
 
 // 有本地化名称（previewCard.currency.names）的货币；其余显示代码
 const NAMED_CURRENCIES = new Set([
@@ -229,7 +229,7 @@ export class CurrencyPreviewAbility extends BasePreviewAbility {
     amount: number,
     target: string
   ): Promise<CurrencyConversionResult | null> {
-    const fx = await runNexusScene(COREBOX_FX_CONVERT_SCENE_ID, {
+    const fx = await runBoxToolCloudScene(COREBOX_FX_CONVERT_SCENE_ID, {
       input: {
         base: 'USD',
         target,
@@ -238,7 +238,7 @@ export class CurrencyPreviewAbility extends BasePreviewAbility {
       capability: 'fx.convert',
       timeoutMs: NEXUS_FX_TIMEOUT_MS
     })
-      .then(extractFxConvertFromSceneRun)
+      .then(extractBoxToolFxConvertFromSceneRun)
       .catch(() => null)
     if (!fx) {
       return null
@@ -260,11 +260,11 @@ export class CurrencyPreviewAbility extends BasePreviewAbility {
   }
 
   private async tryApplyNexusLatestRates(): Promise<void> {
-    const snapshot = await runNexusScene(COREBOX_FX_LATEST_SCENE_ID, {
+    const snapshot = await runBoxToolCloudScene(COREBOX_FX_LATEST_SCENE_ID, {
       capability: 'fx.rate.latest',
       timeoutMs: NEXUS_FX_TIMEOUT_MS
     })
-      .then(extractFxRateSnapshotFromSceneRun)
+      .then(extractBoxToolFxRateSnapshotFromSceneRun)
       .catch(() => null)
     if (!snapshot) {
       return

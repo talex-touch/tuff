@@ -1,5 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { resolveAppSemanticAliases } from '../box-tool/addon/apps/app-semantic-catalog'
+import { registerClipboardPorts, resetClipboardPorts } from './clipboard-ports'
 import {
   ClipboardStageBEnrichment,
   buildActiveAppSourcePatch,
@@ -40,6 +41,21 @@ function createDb() {
 describe('clipboard-stage-b-enrichment', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    registerClipboardPorts({
+      search: {
+        resolveAppSemanticAliases: (app) =>
+          resolveAppSemanticAliases({
+            name: app.name ?? undefined,
+            displayName: app.displayName ?? undefined,
+            bundleId: app.bundleId ?? undefined,
+            path: app.path ?? undefined
+          })
+      }
+    })
+  })
+
+  afterEach(() => {
+    resetClipboardPorts()
   })
 
   it('projects source application aliases from the semantic catalog', () => {

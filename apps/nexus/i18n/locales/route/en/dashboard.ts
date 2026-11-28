@@ -1989,6 +1989,7 @@ Tuff may update this agreement at any time. Continued submission indicates accep
         actionFailed: 'Failed to update review.',
         loadFailed: 'Unable to load pending reviews.',
         unknownPlugin: 'Unknown plugin',
+        anonymous: 'Anonymous',
         approveTitle: 'Approve this review?',
         approveDescription: 'The review by {author} on {plugin} will be shown on the plugin page.',
         rejectTitle: 'Reject this review?',
