@@ -60,7 +60,7 @@ describe('compat-registry Single Source of Truth', () => {
 
   it('matches TuffEx base/pro/ai suite taxonomy exactly', () => {
     expect(baseIds.size).toBe(99)
-    expect(proIds.size).toBe(59)
+    expect(proIds.size).toBe(62)
     expect(aiIds.size).toBe(37)
 
     for (const entry of COMPAT_REGISTRY) {
@@ -118,7 +118,7 @@ describe('compat-registry Single Source of Truth', () => {
     }
 
     const proEntries = getCompatByCategory('pro')
-    expect(proEntries).toHaveLength(59)
+    expect(proEntries).toHaveLength(62)
     for (const entry of proEntries) {
       expect(entry.react).toBe('planned')
       expect(entry.wc).not.toBe('ready')

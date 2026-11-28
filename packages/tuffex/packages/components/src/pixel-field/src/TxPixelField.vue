@@ -375,7 +375,7 @@ defineExpose(handle)
   background: var(--tx-pixel-field-obsidian-bg, var(--tx-bg-color-page, #040506));
   box-shadow:
     inset 0 0 0 1px color-mix(in srgb, var(--tx-border-color-light, #e4e7ed) 14%, transparent),
-    0 18px 40px -24px color-mix(in srgb, var(--tx-text-color-primary, #000) 55%, transparent);
+    9px 18px 40px -24px color-mix(in srgb, var(--tx-text-color-primary, #000) 55%, transparent);
   color: var(--tx-color-on-primary, #fff);
 }
 

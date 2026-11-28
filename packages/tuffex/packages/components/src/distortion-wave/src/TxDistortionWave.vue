@@ -130,7 +130,7 @@ const handle: DistortionWaveHandle = {
   play: (options?: PlayOptions) => controllerRef.value?.play(options),
   reverse: () => controllerRef.value?.reverse(),
   reset: () => controllerRef.value?.reset(),
-  prepare: () => controllerRef.value?.prepare() ?? Promise.resolve(),
+  prepare: () => (controllerRef.value ? controllerRef.value.prepare() : Promise.resolve()),
   get element() {
     return rootRef.value
   },
