@@ -1,0 +1,198 @@
+import type { H3Event } from 'h3'
+import type { SubscriptionPlan } from './subscriptionStore'
+import type { TeamInvite } from './teamStore'
+import type { AuthUser } from './authStore'
+import type { TeamRecord } from './creditsStore'
+import { createError } from 'h3'
+import { addTeamMember, countTeamMembers, getTeamById, isUserTeamMember, listUserTeams } from './creditsStore'
+import { getUserById } from './authStore'
+import { getUserSubscription } from './subscriptionStore'
+import { getInviteByCode, getInviteById, getTeamQuota, updateTeamSeats, useInvite } from './teamStore'
+
+export type InviteValidationReason =
+  | 'ok'
+  | 'expired'
+  | 'revoked'
+  | 'used_up'
+  | 'email_mismatch'
+  | 'already_member'
+  | 'seat_full'
+  | 'plan_locked'
+
+export interface InviteValidationResult {
+  canJoin: boolean
+  reason: InviteValidationReason
+  invite: TeamInvite
+  team: TeamRecord
+  ownerPlan: SubscriptionPlan
+  seatsUsed: number
+  seatsLimit: number
+}
+
+function normalizeEmail(value?: string | null): string {
+  return (value || '').trim().toLowerCase()
+}
+
+function isCollaborationPlan(plan: SubscriptionPlan): boolean {
+  return plan === 'TEAM' || plan === 'ENTERPRISE'
+}
+
+function resolveValidationErrorMessage(reason: InviteValidationReason): string {
+  const messageMap: Record<InviteValidationReason, string> = {
+    ok: 'OK',
+    expired: 'Invite has expired',
+    revoked: 'Invite has been revoked',
+    used_up: 'Invite has reached max uses',
+    email_mismatch: 'Invite email does not match current account',
+    already_member: 'You are already in a team',
+    seat_full: 'Team seats are full',
+    plan_locked: 'Team plan does not allow collaboration',
+  }
+
+  return messageMap[reason]
+}
+
+async function resolveInviteByReference(
+  event: H3Event,
+  inviteRef: string,
+  refType: 'code' | 'id' = 'code',
+): Promise<TeamInvite | null> {
+  return refType === 'id'
+    ? await getInviteById(event, inviteRef)
+    : await getInviteByCode(event, inviteRef)
+}
+
+/**
+ * Whether `userId` may join through an invite. Reads run in three parallel stages (the invite; its
+ * team; then the owner's plan, the seat count, the caller's row, teams and membership together)
+ * where they ran one after another, eight round trips per invite. The quota read needs the plan, so
+ * it follows it. `currentUser` saves the user read when the caller already has the row.
+ */
+export async function validateInviteForUser(
+  event: H3Event,
+  userId: string,
+  inviteRef: string,
+  refType: 'code' | 'id' = 'code',
+  currentUserRow?: AuthUser | null,
+): Promise<InviteValidationResult> {
+  const invite = await resolveInviteByReference(event, inviteRef, refType)
+  if (!invite) {
+    throw createError({ statusCode: 404, statusMessage: 'Invite not found' })
+  }
+
+  const team = await getTeamById(event, invite.organizationId)
+  if (!team) {
+    throw createError({ statusCode: 404, statusMessage: 'Team not found' })
+  }
+
+  const [ownerSubscription, seatsUsed, userRow, userTeams, alreadyMember] = await Promise.all([
+    getUserSubscription(event, team.ownerUserId),
+    countTeamMembers(event, team.id),
+    currentUserRow !== undefined ? Promise.resolve(currentUserRow) : getUserById(event, userId),
+    listUserTeams(event, userId),
+    isUserTeamMember(event, team.id, userId),
+  ])
+  const ownerPlan = ownerSubscription.plan
+  const quota = await getTeamQuota(event, team.id, ownerPlan)
+  const seatsLimit = quota.seatsLimit
+
+  const fail = (reason: InviteValidationReason): InviteValidationResult => ({
+    canJoin: false,
+    reason,
+    invite,
+    team,
+    ownerPlan,
+    seatsUsed,
+    seatsLimit,
+  })
+
+  if (invite.status === 'revoked') {
+    return fail('revoked')
+  }
+
+  if (invite.status === 'expired') {
+    return fail('expired')
+  }
+
+  if (invite.expiresAt && new Date(invite.expiresAt).getTime() <= Date.now()) {
+    return fail('expired')
+  }
+
+  if (invite.uses >= invite.maxUses || invite.status === 'accepted') {
+    return fail('used_up')
+  }
+
+  const currentUser = userRow
+  if (!currentUser) {
+    throw createError({ statusCode: 404, statusMessage: 'User not found' })
+  }
+
+  const boundEmail = normalizeEmail(invite.email)
+  if (boundEmail) {
+    const userEmail = normalizeEmail(currentUser.email)
+    if (!userEmail || boundEmail !== userEmail) {
+      return fail('email_mismatch')
+    }
+  }
+
+  const organizationTeam = userTeams.find(item => item.type === 'organization')
+  if (organizationTeam) {
+    if (organizationTeam.id === team.id) {
+      return fail('already_member')
+    }
+
+    return fail('already_member')
+  }
+
+  if (alreadyMember) {
+    return fail('already_member')
+  }
+
+  if (!isCollaborationPlan(ownerPlan)) {
+    return fail('plan_locked')
+  }
+
+  if (seatsUsed >= seatsLimit) {
+    return fail('seat_full')
+  }
+
+  return {
+    canJoin: true,
+    reason: 'ok',
+    invite,
+    team,
+    ownerPlan,
+    seatsUsed,
+    seatsLimit,
+  }
+}
+
+export async function joinTeamWithInvite(
+  event: H3Event,
+  userId: string,
+  inviteRef: string,
+  refType: 'code' | 'id' = 'code',
+) {
+  const validation = await validateInviteForUser(event, userId, inviteRef, refType)
+  if (!validation.canJoin) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: resolveValidationErrorMessage(validation.reason),
+      data: {
+        reason: validation.reason,
+      },
+    })
+  }
+
+  await useInvite(event, validation.invite.code)
+  await addTeamMember(event, validation.team.id, userId, validation.invite.role || 'member')
+
+  const nextSeatsUsed = await countTeamMembers(event, validation.team.id)
+  await updateTeamSeats(event, validation.team.id, nextSeatsUsed)
+
+  return {
+    validation,
+    seatsUsed: nextSeatsUsed,
+    seatsLimit: validation.seatsLimit,
+  }
+}

@@ -1,0 +1,98 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "tuff-nexus-api",
+  "main": ".output/server/index.mjs",
+  "compatibility_date": "2024-09-23",
+  "compatibility_flags": [
+    "nodejs_compat",
+    "enable_nodejs_http_modules",
+    "no_nodejs_compat_v2"
+  ],
+  "placement": {
+    "mode": "smart"
+  },
+  "routes": [
+    {
+      "pattern": "tuff.tagzxia.com/api/*",
+      "zone_name": "tagzxia.com"
+    }
+  ],
+  "triggers": {
+    "crons": [
+      "0 */8 * * *"
+    ]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "tuff-nexus-prod",
+      "database_id": "ebdeb7fc-74a4-4963-9bca-310a9aa0e4d6"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "R2",
+      "bucket_name": "tuff-nexus-imgable-prod"
+    }
+  ],
+  "kv_namespaces": [
+    {
+      "binding": "TUFF_INTELLIGENCE_RUNTIME",
+      "id": "8c235ea8b96d4209bed631ee6c698803"
+    }
+  ],
+  "vars": {
+    "AUTH_ORIGIN": "https://tuff.tagzxia.com",
+    "AUTH_EMAIL_FROM": "tuff@tagzxia.com",
+    "LINUXDO_ISSUER": "https://connect.linux.do",
+    "EXCHANGE_RATE_BASE_URL": "https://v6.exchangerate-api.com/v6",
+    "EXCHANGE_RATE_TTL_MS": "28800000",
+    "EXCHANGE_RATE_TIMEOUT_MS": "10000",
+    "EXCHANGE_RATE_HISTORY_RETENTION_DAYS": "0",
+    "EXCHANGE_RATE_STORE_RATE_ROWS": "true",
+    "NEXUS_SERVER_TIMING": "0"
+  },
+  "env": {
+    "preview": {
+      "compatibility_date": "2024-09-23",
+      "compatibility_flags": [
+        "nodejs_compat",
+        "enable_nodejs_http_modules",
+        "no_nodejs_compat_v2"
+      ],
+      "placement": {
+        "mode": "smart"
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "tuff-nexus-dev",
+          "database_id": "963cd4ae-2a63-408d-b3bc-fa5945f1e878"
+        }
+      ],
+      "r2_buckets": [
+        {
+          "binding": "R2",
+          "bucket_name": "tuff-nexus-imgable-dev"
+        }
+      ],
+      "kv_namespaces": [
+        {
+          "binding": "TUFF_INTELLIGENCE_RUNTIME",
+          "id": "77c5f7ddc0014c49b0b5977b23e599e3"
+        }
+      ],
+      "vars": {
+        "AUTH_ORIGIN": "http://localhost:3200",
+        "AUTH_EMAIL_FROM": "tuff@tagzxia.com",
+        "LINUXDO_ISSUER": "https://connect.linux.do",
+        "EXCHANGE_RATE_BASE_URL": "https://v6.exchangerate-api.com/v6",
+        "EXCHANGE_RATE_TTL_MS": "28800000",
+        "EXCHANGE_RATE_TIMEOUT_MS": "10000",
+        "EXCHANGE_RATE_HISTORY_RETENTION_DAYS": "0",
+        "EXCHANGE_RATE_STORE_RATE_ROWS": "true",
+        "NEXUS_SERVER_TIMING": "1"
+      }
+    }
+  }
+}

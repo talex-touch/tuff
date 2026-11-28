@@ -1,0 +1,83 @@
+import type { R2Bucket } from '@cloudflare/workers-types'
+import type { H3Event } from 'h3'
+import type { Buffer } from 'node:buffer'
+import { createError } from 'h3'
+import { resolveObjectBucket } from './cloudflare'
+import {
+  getStorageObject,
+  putStorageObject,
+  type StorageObjectMemory,
+  type StorageObjectResult,
+} from './storageObjectStore'
+
+const DEFAULT_CONTENT_TYPE = 'application/octet-stream'
+const memoryStorage: StorageObjectMemory = new Map()
+
+interface SceneAssetStorageOptions {
+  actorId?: unknown
+  resourceType?: string
+}
+
+type SceneAssetUploadResult = Omit<StorageObjectResult, 'data'>
+
+function getSceneAssetBucket(event?: H3Event | null): R2Bucket | null {
+  return resolveObjectBucket(event)
+}
+
+export async function uploadSceneAsset(
+  event: H3Event,
+  key: string,
+  data: Buffer,
+  contentType?: string | null,
+  options: SceneAssetStorageOptions & { ownerId?: string | null } = {},
+): Promise<SceneAssetUploadResult> {
+  const bucket = getSceneAssetBucket(event)
+  return await putStorageObject({
+    event,
+    bucket,
+    memoryStorage,
+    key,
+    data,
+    contentType,
+    actorId: options.actorId,
+    resourceType: options.resourceType ?? 'scene-asset',
+    defaultContentType: DEFAULT_CONTENT_TYPE,
+    ownerId: options.ownerId,
+  })
+}
+
+export async function getSceneAsset(
+  event: H3Event,
+  key: string,
+  options: Pick<SceneAssetStorageOptions, 'resourceType'> = {},
+): Promise<{ data: Buffer, contentType: string, sha256: string, ownerId?: string, storesOwnership: boolean } | null> {
+  const bucket = getSceneAssetBucket(event)
+  const object = await getStorageObject({
+    event,
+    bucket,
+    memoryStorage,
+    key,
+    resourceType: options.resourceType ?? 'scene-asset',
+    defaultContentType: DEFAULT_CONTENT_TYPE,
+  })
+  return object
+    ? {
+        data: object.data,
+        contentType: object.contentType,
+        sha256: object.sha256,
+        ownerId: object.ownerId,
+        storesOwnership: object.storesOwnership,
+      }
+    : null
+}
+
+export async function requireSceneAsset(
+  event: H3Event,
+  key: string,
+  options: Pick<SceneAssetStorageOptions, 'resourceType'> = {},
+): Promise<{ data: Buffer, contentType: string, sha256: string, ownerId?: string, storesOwnership: boolean }> {
+  const result = await getSceneAsset(event, key, options)
+  if (!result)
+    throw createError({ statusCode: 404, statusMessage: 'Scene asset not found.' })
+  return result
+}

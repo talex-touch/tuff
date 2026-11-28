@@ -1,0 +1,2373 @@
+import type { H3Event } from 'h3'
+import type { ProviderRegistryRecord } from './providerRegistryStore'
+import type { SceneRegistryRecord, SceneStrategyBindingRecord } from './sceneRegistryStore'
+import { Buffer } from 'node:buffer'
+import { randomUUID } from 'node:crypto'
+import { createError } from 'h3'
+import { toRegistryCapabilityId, toRuntimeCapabilityId, type IntelligenceMessage } from '@talex-touch/tuff-intelligence/light'
+import { networkClient } from '@talex-touch/utils/network'
+import { getLatestProviderHealthChecks, type ProviderHealthCheckEntry } from './providerHealthStore'
+import { assertIntelligenceProviderQuota, recordIntelligenceProviderRequest } from './providerQuota'
+import { getProviderRegistryEntry } from './providerRegistryStore'
+import { getProviderCredential } from './providerCredentialStore'
+import { recordProviderUsageLedger } from './providerUsageLedgerStore'
+import { getSceneRegistryEntry } from './sceneRegistryStore'
+import { uploadSceneAsset } from './sceneAssetStorage'
+import { invokeIntelligenceVisionOcr } from './intelligenceVisionOcrProvider'
+import { buildCapabilityMessages } from './tuffIntelligenceCapabilityMessages'
+import { buildOpenAiCompatBaseUrls, resolveProviderBaseUrl } from './intelligenceModels'
+import { invokeTencentImageTranslate, invokeTencentTextTranslate } from './tencentMachineTranslationProvider'
+import { consumeCredits, releaseConsumedCredits } from './creditsStore'
+import {
+  computeCreditCharge,
+  computeCreditReservation,
+  resolveCreditPricingRule,
+  resolveSellableCreditPricingRule,
+  type CreditPricingRule,
+  type CreditPricingUnit,
+  type CreditPricingUsage,
+} from './creditPricingStore'
+import {
+  clearSceneCapabilityAdapterRegistryForTest,
+  registerSceneCapabilityAdapterRegistryEntry,
+  resolveProviderSceneAdapterKey,
+  resolveSceneCapabilityAdapterEntry,
+  SCENE_CAPABILITY_ADAPTER_CATALOG,
+  sceneCapabilityAdapterSupports,
+} from './sceneCapabilityAdapterRegistry'
+
+export type { SceneCapabilityAdapterRegistryReadiness as SceneCapabilityAdapterReadiness } from './sceneCapabilityAdapterRegistry'
+
+export type SceneRunStatus = 'planned' | 'completed' | 'failed'
+export type SceneRunMode = 'dry_run' | 'execute'
+export type SceneRunTraceStatus = 'success' | 'skipped' | 'failed'
+export type SceneRunErrorCode =
+  | 'SCENE_NOT_FOUND'
+  | 'SCENE_DISABLED'
+  | 'CAPABILITY_UNSUPPORTED'
+  | 'PROVIDER_UNAVAILABLE'
+  | 'PROVIDER_ADAPTER_UNAVAILABLE'
+  | 'PROVIDER_ADAPTER_FAILED'
+  | 'CREDITS_EXCEEDED'
+
+export interface SceneRunUsage {
+  unit: string
+  quantity: number
+  billable: boolean
+  providerId?: string
+  capability?: string
+  model?: string
+  providerType?: string
+  estimated?: boolean
+  pricingRef?: string
+  providerUsageRef?: string
+}
+
+export interface SceneAdapterMergedConfig {
+  adapter: Record<string, unknown> | null
+  upload: Record<string, unknown> | null
+  assets: Record<string, unknown> | null
+  constraints: Record<string, unknown> | null
+  sources: string[]
+}
+
+export interface SceneRunTraceStep {
+  phase: 'scene.load' | 'provider.resolve' | 'strategy.select' | 'adapter.dispatch'
+  status: SceneRunTraceStatus
+  at: string
+  message: string
+  metadata?: Record<string, string | number | boolean | null>
+}
+
+export interface SceneRunCandidate {
+  providerId: string
+  providerName: string
+  vendor: string
+  capability: string
+  priority: number
+  weight: number | null
+  model: string | null
+  bindingId: string
+}
+
+export interface SceneRunSelection extends SceneRunCandidate {
+  authRef: string | null
+  endpoint: string | null
+  region: string | null
+}
+
+export interface SceneRunFallbackTrailItem {
+  providerId: string
+  capability: string
+  status: 'candidate' | 'selected' | 'rejected' | 'failed'
+  reason?: string
+}
+
+/**
+ * Credits a scene run actually moved. A run holds the estimated price of every
+ * capability it is about to dispatch, settles against the usage the provider
+ * reported, and hands the unused part of the hold back. It is reported on the run
+ * so a failed settlement can be reconciled from the response instead of only from
+ * the ledger.
+ */
+export interface SceneRunBilling {
+  /** Credits held before upstream dispatch; 0 when nothing was billable. */
+  reservedCredits: number
+  /** What the recorded provider usage costs. Kept for `settleFailed` runs. */
+  chargedCredits: number
+  /** Unused hold returned to the user. */
+  releasedCredits: number
+  /** Ledger entry of the hold. */
+  ledgerId: string | null
+  /** Ledger entry of the difference when the charge exceeded the hold. */
+  settlementLedgerId: string | null
+  /** True when the charge could not be fully consumed; reconcile from the ledger. */
+  settleFailed: boolean
+}
+
+export interface SceneRunResult {
+  runId: string
+  sceneId: string
+  status: SceneRunStatus
+  mode: SceneRunMode
+  strategyMode: SceneRegistryRecord['strategyMode']
+  requestedCapabilities: string[]
+  selected: SceneRunSelection[]
+  candidates: SceneRunCandidate[]
+  fallbackTrail: SceneRunFallbackTrailItem[]
+  trace: SceneRunTraceStep[]
+  usage: SceneRunUsage[]
+  output: unknown
+  billing?: SceneRunBilling
+  error?: {
+    code: SceneRunErrorCode
+    message: string
+  }
+}
+
+export interface SceneRunInput {
+  input?: unknown
+  capability?: unknown
+  providerId?: unknown
+  dryRun?: unknown
+  /**
+   * Who the run belongs to, recorded with every asset it uploads so the download endpoint has
+   * something to authorize against. Both callers authenticate; neither used to keep the result,
+   * so a run had no owner and the assets it produced were readable by any authenticated
+   * caller who had the key (#898).
+   */
+  ownerId?: string
+}
+
+export interface SceneAdapterContext {
+  event: H3Event
+  runId: string
+  scene: SceneRegistryRecord
+  provider: ProviderRegistryRecord
+  binding: SceneStrategyBindingRecord
+  model: string | null
+  capability: string
+  input: unknown
+  originalInput: unknown
+  outputs: Readonly<Record<string, unknown>>
+  adapterConfig: SceneAdapterMergedConfig
+}
+
+export interface SceneAdapterAssetUpload {
+  id?: string
+  outputField?: string
+  data?: string | ArrayBuffer | Uint8Array | Buffer
+  base64?: string
+  dataUrl?: string
+  contentType?: string
+  fileName?: string
+  extension?: string
+  resourceType?: string
+  replaceOutput?: boolean
+  metadata?: Record<string, unknown>
+}
+
+export interface SceneAdapterResult {
+  output: unknown
+  usage?: SceneRunUsage[]
+  providerRequestId?: string
+  latencyMs?: number
+  assets?: SceneAdapterAssetUpload[]
+}
+
+export type SceneCapabilityAdapter = (context: SceneAdapterContext) => Promise<SceneAdapterResult>
+
+interface ResolvedSceneCandidate {
+  candidate: SceneRunCandidate
+  provider: ProviderRegistryRecord
+  binding: SceneStrategyBindingRecord
+}
+
+interface CapabilityExecutionPlan {
+  capability: string
+  candidates: ResolvedSceneCandidate[]
+}
+
+interface SceneRunFailure {
+  statusCode: number
+  code: SceneRunErrorCode
+  message: string
+}
+
+const SENSITIVE_CONFIG_KEY_EXACT = new Set([
+  'apikey',
+  'authtoken',
+  'bearertoken',
+  'clientsecret',
+  'credential',
+  'credentials',
+  'password',
+  'privatekey',
+  'refreshtoken',
+  'secret',
+  'secretkey',
+  'sessiontoken',
+  'token',
+])
+
+const SENSITIVE_CONFIG_KEY_MARKERS = [
+  'key',
+  'secret',
+]
+
+const DEFAULT_SCENE_ASSET_CONTENT_TYPE = 'application/octet-stream'
+const DEFAULT_SCENE_ASSET_MAX_BYTES = 12 * 1024 * 1024
+
+const SCENE_ASSET_EXTENSION_BY_MIME: Record<string, string> = {
+  'application/json': 'json',
+  'application/octet-stream': 'bin',
+  'image/gif': 'gif',
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/svg+xml': 'svg',
+  'image/webp': 'webp',
+  'text/markdown': 'md',
+  'text/plain': 'txt',
+}
+
+function normalizeTencentTranslateInput(input: unknown) {
+  const record = input && typeof input === 'object' && !Array.isArray(input)
+    ? input as Record<string, unknown>
+    : {}
+  return {
+    text: record.text,
+    sourceLang: record.sourceLang,
+    targetLang: record.targetLang,
+    projectId: record.projectId,
+  }
+}
+
+function normalizeTencentImageTranslateInput(input: unknown) {
+  const record = input && typeof input === 'object' && !Array.isArray(input)
+    ? input as Record<string, unknown>
+    : {}
+  return {
+    data: record.data,
+    imageBase64: record.imageBase64,
+    url: record.url,
+    imageUrl: record.imageUrl,
+    targetLang: record.targetLang,
+  }
+}
+
+const tencentTextTranslateAdapter: SceneCapabilityAdapter = async ({ event, provider, input }) => {
+  const result = await invokeTencentTextTranslate(event, provider, normalizeTencentTranslateInput(input))
+  return {
+    output: {
+      translatedText: result.translatedText,
+    },
+    providerRequestId: result.providerRequestId,
+    latencyMs: result.latencyMs,
+    usage: [
+      {
+        ...result.usage,
+        providerId: provider.id,
+        capability: 'text.translate',
+        model: 'tencent-text-translate',
+        providerType: provider.vendor,
+      },
+    ],
+  }
+}
+
+const tencentImageTranslateAdapter: SceneCapabilityAdapter = async ({ event, provider, input, capability }) => {
+  const imageCapability = capability === 'image.translate' ? 'image.translate' : 'image.translate.e2e'
+  const result = await invokeTencentImageTranslate(event, provider, normalizeTencentImageTranslateInput(input), imageCapability)
+  return {
+    output: {
+      translatedImageBase64: result.translatedImageBase64,
+      sourceLang: result.sourceLang,
+      targetLang: result.targetLang,
+      sourceText: result.sourceText,
+      targetText: result.targetText,
+      angle: result.angle,
+      transDetails: result.transDetails,
+    },
+    providerRequestId: result.providerRequestId,
+    latencyMs: result.latencyMs,
+    usage: [
+      {
+        ...result.usage,
+        providerId: provider.id,
+        capability: imageCapability,
+        model: 'tencent-image-translate',
+        providerType: provider.vendor,
+      },
+    ],
+  }
+}
+
+const intelligenceVisionOcrAdapter: SceneCapabilityAdapter = async ({ event, provider, input, capability }) => {
+  const result = await invokeIntelligenceVisionOcr(event, provider, input)
+  return {
+    output: result.output,
+    providerRequestId: result.providerRequestId,
+    latencyMs: result.latencyMs,
+    usage: [
+      {
+        ...result.usage,
+        providerId: provider.id,
+        capability,
+        model: result.model,
+        providerType: readOptionalString(provider.metadata?.intelligenceType) ?? provider.vendor,
+      },
+    ],
+  }
+}
+
+function readMetadataString(provider: ProviderRegistryRecord, key: string): string | null {
+  return readString(provider.metadata?.[key])
+}
+
+function readMetadataStringArray(provider: ProviderRegistryRecord, key: string): string[] {
+  const value = provider.metadata?.[key]
+  return Array.isArray(value)
+    ? value.map(item => readString(item)).filter((item): item is string => Boolean(item))
+    : []
+}
+
+function normalizeIntelligenceScenePayload(capability: string, input: unknown): unknown {
+  const record = isRecord(input) ? input : { text: String(input ?? '') }
+  if (capability === 'chat.completion') {
+    if (Array.isArray(record.messages))
+      return record
+    const prompt = readString(record.prompt) ?? readString(record.input) ?? readString(record.text)
+    return prompt ? { ...record, messages: [{ role: 'user', content: prompt }] } : record
+  }
+  if (capability === 'content.extract') {
+    return {
+      ...record,
+      tags: Array.isArray(record.tags) ? record.tags : ['summary', 'entities', 'actions'],
+    }
+  }
+  return record
+}
+
+function buildSceneIntelligenceMessages(capability: string, input: unknown): IntelligenceMessage[] {
+  return buildCapabilityMessages(
+    toRuntimeCapabilityId(capability),
+    normalizeIntelligenceScenePayload(capability, input),
+  )
+}
+
+async function resolveProviderApiKey(event: H3Event, provider: ProviderRegistryRecord): Promise<string> {
+  if (provider.authType !== 'api_key' || !provider.authRef) {
+    throw createError({
+      statusCode: 401,
+      statusMessage: 'Provider API key credential is missing.',
+    })
+  }
+
+  const credential = await getProviderCredential(event, provider.authRef)
+  if (!credential || !('apiKey' in credential) || !credential.apiKey) {
+    throw createError({
+      statusCode: 401,
+      statusMessage: 'Provider API key credential is missing.',
+    })
+  }
+
+  return credential.apiKey
+}
+
+function extractOpenAiResponsesText(data: unknown): string {
+  const record = isRecord(data) ? data : {}
+  const outputText = readString(record.output_text)
+  if (outputText)
+    return outputText
+
+  const output = Array.isArray(record.output) ? record.output : []
+  return output
+    .flatMap((item) => {
+      const content = isRecord(item) && Array.isArray(item.content) ? item.content : []
+      return content.map((part) => {
+        if (!isRecord(part))
+          return ''
+        return readString(part.text) ?? readString(part.content) ?? ''
+      })
+    })
+    .filter(Boolean)
+    .join('\n')
+    .trim()
+}
+
+function summarizeProviderErrorData(data: unknown): string {
+  if (typeof data === 'string')
+    return data.trim().slice(0, 200)
+
+  if (!isRecord(data))
+    return ''
+
+  const error = isRecord(data.error) ? data.error : null
+  const message = readString(error?.message)
+    ?? readString(data.message)
+    ?? readString(data.error)
+  if (message)
+    return message.slice(0, 200)
+
+  return JSON.stringify(data).slice(0, 200)
+}
+
+function extractOpenAiResponsesUsage(data: unknown): SceneRunUsage {
+  const usage = isRecord(data) && isRecord(data.usage) ? data.usage : {}
+  const inputTokens = typeof usage.input_tokens === 'number' ? usage.input_tokens : 0
+  const outputTokens = typeof usage.output_tokens === 'number' ? usage.output_tokens : 0
+  const totalTokens = typeof usage.total_tokens === 'number' ? usage.total_tokens : inputTokens + outputTokens
+  return {
+    unit: 'token',
+    quantity: totalTokens,
+    billable: true,
+  }
+}
+
+function resolveOpenAiSceneModel(provider: ProviderRegistryRecord, input: unknown, bindingModel: string | null): string {
+  const record = isRecord(input) ? input : {}
+  const model = bindingModel
+    ?? readString(record.model)
+    ?? readMetadataString(provider, 'defaultModel')
+    ?? readMetadataStringArray(provider, 'models')[0]
+  if (!model) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: 'OpenAI model is missing.',
+    })
+  }
+  return model
+}
+
+function buildOpenAiResponsesTextInput(messages: IntelligenceMessage[]): string {
+  return messages
+    .filter(message => message.role !== 'system')
+    .map(message => `${message.role}: ${message.content}`)
+    .join('\n')
+    .trim()
+}
+
+function buildOpenAiResponsesInstructions(messages: IntelligenceMessage[], input: unknown): string | null {
+  const explicitInstructions = isRecord(input) ? readString(input.instructions) : null
+  const systemInstructions = messages
+    .filter(message => message.role === 'system')
+    .map(message => message.content)
+    .join('\n')
+    .trim()
+  return explicitInstructions ?? (systemInstructions || null)
+}
+
+async function invokeOpenAiResponsesSceneAdapter(
+  event: H3Event,
+  provider: ProviderRegistryRecord,
+  capability: string,
+  input: unknown,
+  bindingModel: string | null,
+): Promise<SceneAdapterResult> {
+  const apiKey = await resolveProviderApiKey(event, provider)
+  const intelligenceType = readMetadataString(provider, 'intelligenceType') ?? provider.vendor
+  const baseUrl = resolveProviderBaseUrl(intelligenceType, provider.endpoint)
+  const compatBaseUrl = buildOpenAiCompatBaseUrls(baseUrl)[0] ?? baseUrl.replace(/\/+$/, '')
+  const endpoint = `${compatBaseUrl}/responses`
+  const normalizedInput = normalizeIntelligenceScenePayload(capability, input)
+  const model = resolveOpenAiSceneModel(provider, normalizedInput, bindingModel)
+  const messages = buildSceneIntelligenceMessages(capability, normalizedInput)
+  const instructions = buildOpenAiResponsesInstructions(messages, normalizedInput)
+  const timeoutMs = typeof provider.metadata?.timeout === 'number' ? provider.metadata.timeout : 45000
+  const startedAt = Date.now()
+  const response = await networkClient.request<Record<string, unknown> | string>({
+    method: 'POST',
+    url: endpoint,
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: {
+      model,
+      input: buildOpenAiResponsesTextInput(messages),
+      store: false,
+      ...(instructions ? { instructions } : {}),
+    },
+    timeoutMs,
+    validateStatus: Array.from({ length: 500 }, (_, index) => index + 100),
+  })
+  if (response.status < 200 || response.status >= 300) {
+    const detail = summarizeProviderErrorData(response.data)
+    throw createError({
+      statusCode: response.status,
+      statusMessage: `OpenAI Responses returned ${response.status}: ${detail}`,
+    })
+  }
+
+  const text = extractOpenAiResponsesText(response.data)
+  if (!text) {
+    throw createError({
+      statusCode: 502,
+      statusMessage: 'OpenAI Responses returned empty content.',
+    })
+  }
+
+  return {
+    output: text,
+    providerRequestId: readString(isRecord(response.data) ? response.data.id : undefined) ?? `responses:${Date.now()}`,
+    latencyMs: Date.now() - startedAt,
+    usage: [
+      {
+        ...extractOpenAiResponsesUsage(response.data),
+        providerId: provider.id,
+        capability,
+        model,
+        providerType: intelligenceType,
+      },
+    ],
+  }
+}
+
+function extractOpenAiChatContent(data: unknown): string {
+  const choices = isRecord(data) && Array.isArray(data.choices) ? data.choices : []
+  for (const choice of choices) {
+    const message = isRecord(choice) ? choice.message : null
+    const content = isRecord(message) ? message.content : null
+    const text = readString(content)
+    if (text)
+      return text
+  }
+  return ''
+}
+
+function extractOpenAiChatUsage(data: unknown): SceneRunUsage {
+  const usage = isRecord(data) && isRecord(data.usage) ? data.usage : {}
+  const promptTokens = typeof usage.prompt_tokens === 'number' ? usage.prompt_tokens : 0
+  const completionTokens = typeof usage.completion_tokens === 'number' ? usage.completion_tokens : 0
+  const totalTokens = typeof usage.total_tokens === 'number' ? usage.total_tokens : promptTokens + completionTokens
+  return {
+    unit: 'token',
+    quantity: totalTokens,
+    billable: true,
+  }
+}
+
+async function invokeOpenAiCompatibleSceneAdapter(
+  event: H3Event,
+  provider: ProviderRegistryRecord,
+  capability: string,
+  input: unknown,
+  bindingModel: string | null,
+): Promise<SceneAdapterResult> {
+  const apiKey = await resolveProviderApiKey(event, provider)
+  const intelligenceType = readMetadataString(provider, 'intelligenceType') ?? provider.vendor
+  const baseUrl = resolveProviderBaseUrl(intelligenceType, provider.endpoint)
+  const compatBaseUrl = buildOpenAiCompatBaseUrls(baseUrl)[0] ?? baseUrl.replace(/\/+$/, '')
+  const endpoint = `${compatBaseUrl}/chat/completions`
+  const normalizedInput = normalizeIntelligenceScenePayload(capability, input)
+  const model = resolveOpenAiSceneModel(provider, normalizedInput, bindingModel)
+  const messages = buildSceneIntelligenceMessages(capability, normalizedInput)
+  const timeoutMs = typeof provider.metadata?.timeout === 'number' ? provider.metadata.timeout : 45000
+  const startedAt = Date.now()
+  const response = await networkClient.request<Record<string, unknown> | string>({
+    method: 'POST',
+    url: endpoint,
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: {
+      model,
+      messages,
+      temperature: 0.2,
+    },
+    timeoutMs,
+    validateStatus: Array.from({ length: 500 }, (_, index) => index + 100),
+  })
+  if (response.status < 200 || response.status >= 300) {
+    const detail = summarizeProviderErrorData(response.data)
+    throw createError({
+      statusCode: response.status,
+      statusMessage: `OpenAI-compatible chat returned ${response.status}: ${detail}`,
+    })
+  }
+
+  const text = extractOpenAiChatContent(response.data)
+  if (!text) {
+    throw createError({
+      statusCode: 502,
+      statusMessage: 'OpenAI-compatible chat returned empty content.',
+    })
+  }
+
+  return {
+    output: text,
+    providerRequestId: readString(isRecord(response.data) ? response.data.id : undefined) ?? `chat:${Date.now()}`,
+    latencyMs: Date.now() - startedAt,
+    usage: [
+      {
+        ...extractOpenAiChatUsage(response.data),
+        providerId: provider.id,
+        capability,
+        model,
+        providerType: intelligenceType,
+      },
+    ],
+  }
+}
+
+const openAiCompatibleTextAdapter: SceneCapabilityAdapter = async ({ event, provider, input, capability, model }) => {
+  return await invokeOpenAiCompatibleSceneAdapter(event, provider, capability, input, model)
+}
+
+const openAiResponsesTextAdapter: SceneCapabilityAdapter = async ({ event, provider, input, capability, model }) => {
+  return await invokeOpenAiResponsesSceneAdapter(event, provider, capability, input, model)
+}
+
+function normalizeFxConvertInput(input: unknown) {
+  const record = input && typeof input === 'object' && !Array.isArray(input)
+    ? input as Record<string, unknown>
+    : {}
+  return {
+    base: typeof record.base === 'string' ? record.base.trim().toUpperCase() : 'USD',
+    target: typeof record.target === 'string' ? record.target.trim().toUpperCase() : '',
+    amount: Number(record.amount),
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value))
+}
+
+function readString(value: unknown): string | null {
+  if (typeof value !== 'string')
+    return null
+  const trimmed = value.trim()
+  return trimmed || null
+}
+
+function stripDataUrlPrefix(value: string): { base64: string, mimeType: string | null } {
+  const matched = /^data:([^;,]+);base64,(.+)$/i.exec(value.trim())
+  if (!matched)
+    return { base64: value.trim(), mimeType: null }
+
+  return {
+    base64: matched[2]?.trim() ?? '',
+    mimeType: matched[1]?.trim().toLowerCase() ?? null,
+  }
+}
+
+function readImagePayload(input: Record<string, unknown>): { imageBase64: string | null, imageMimeType: string | null } {
+  const mimeType = readString(input.imageMimeType) ?? readString(input.mimeType)
+  const rawCandidates = [input.imageBase64, input.data]
+
+  for (const candidate of rawCandidates) {
+    const value = readString(candidate)
+    if (!value)
+      continue
+
+    const parsed = stripDataUrlPrefix(value)
+    if (parsed.base64) {
+      return {
+        imageBase64: parsed.base64,
+        imageMimeType: parsed.mimeType ?? mimeType,
+      }
+    }
+  }
+
+  const urlCandidates = [input.url, input.imageUrl]
+  for (const candidate of urlCandidates) {
+    const value = readString(candidate)
+    if (!value?.startsWith('data:image/'))
+      continue
+
+    const parsed = stripDataUrlPrefix(value)
+    if (parsed.base64) {
+      return {
+        imageBase64: parsed.base64,
+        imageMimeType: parsed.mimeType ?? mimeType,
+      }
+    }
+  }
+
+  return { imageBase64: null, imageMimeType: mimeType }
+}
+
+function readOutputRecord(outputs: Record<string, unknown>, capability: string): Record<string, unknown> | null {
+  const output = outputs[capability]
+  return isRecord(output) ? output : null
+}
+
+function resolveOcrText(outputs: Record<string, unknown>): string | null {
+  const ocrOutput = readOutputRecord(outputs, 'vision.ocr')
+  return readString(ocrOutput?.text)
+    ?? readString(ocrOutput?.sourceText)
+    ?? readString(ocrOutput?.detectedText)
+}
+
+function resolveTranslatedText(outputs: Record<string, unknown>): string | null {
+  const translateOutput = readOutputRecord(outputs, 'text.translate')
+  return readString(translateOutput?.translatedText)
+    ?? readString(translateOutput?.targetText)
+    ?? readString(translateOutput?.text)
+}
+
+function buildCapabilityInput(
+  capability: string,
+  originalInput: unknown,
+  outputs: Record<string, unknown>,
+): unknown {
+  if (!isRecord(originalInput))
+    return originalInput
+
+  if (capability === 'vision.ocr') {
+    const { imageBase64, imageMimeType } = readImagePayload(originalInput)
+    return {
+      ...originalInput,
+      source: imageBase64
+        ? {
+            type: 'data-url',
+            dataUrl: `data:${imageMimeType ?? 'image/png'};base64,${imageBase64}`,
+          }
+        : originalInput.source,
+      includeLayout: originalInput.includeLayout ?? true,
+      includeKeywords: originalInput.includeKeywords ?? true,
+    }
+  }
+
+  if (capability === 'text.translate') {
+    return {
+      ...originalInput,
+      text: resolveOcrText(outputs) ?? originalInput.text,
+      sourceLang: readOutputRecord(outputs, 'vision.ocr')?.language ?? originalInput.sourceLang,
+    }
+  }
+
+  if (capability === 'overlay.render') {
+    const { imageBase64, imageMimeType } = readImagePayload(originalInput)
+    const ocrOutput = readOutputRecord(outputs, 'vision.ocr')
+    const sourceText = resolveOcrText(outputs) ?? readString(originalInput.sourceText)
+    const targetText = resolveTranslatedText(outputs) ?? readString(originalInput.targetText)
+    return {
+      ...originalInput,
+      imageBase64,
+      imageMimeType,
+      sourceText,
+      targetText,
+      blocks: ocrOutput?.blocks,
+      ocr: ocrOutput,
+      translation: readOutputRecord(outputs, 'text.translate'),
+    }
+  }
+
+  return {
+    ...originalInput,
+    previousOutputs: outputs,
+  }
+}
+
+const localOverlayRenderAdapter: SceneCapabilityAdapter = async ({ input, originalInput, outputs, provider, capability, runId }) => {
+  if (!isRecord(input))
+    throw createError({ statusCode: 400, statusMessage: 'overlay.render input is invalid.' })
+
+  const targetText = readString(input.targetText)
+  if (!targetText)
+    throw createError({ statusCode: 400, statusMessage: 'overlay.render requires targetText.' })
+
+  const imageBase64 = readString(input.imageBase64)
+  if (!imageBase64)
+    throw createError({ statusCode: 400, statusMessage: 'overlay.render requires imageBase64.' })
+
+  const output = {
+    translatedImageBase64: imageBase64,
+    imageBase64,
+    imageMimeType: readString(input.imageMimeType) ?? 'image/png',
+    sourceText: readString(input.sourceText) ?? undefined,
+    targetText,
+    overlay: {
+      mode: 'client-render',
+      blocks: Array.isArray(input.blocks) ? input.blocks : undefined,
+      sourceCapability: 'overlay.render',
+    },
+    composed: {
+      inputCapabilities: Object.keys(outputs),
+      originalInputPreserved: Boolean(originalInput),
+    },
+  }
+
+  return {
+    output,
+    providerRequestId: `local-overlay:${runId}`,
+    latencyMs: 0,
+    usage: [
+      {
+        unit: 'image',
+        quantity: 1,
+        billable: false,
+        providerId: provider.id,
+        capability,
+        model: 'local-overlay-render',
+        providerType: provider.vendor,
+        estimated: true,
+      },
+    ],
+  }
+}
+
+function registerTextAdapterFamily(adapterKey: 'openai-compatible' | 'openai-responses', adapter: SceneCapabilityAdapter) {
+  const catalog = SCENE_CAPABILITY_ADAPTER_CATALOG.find(entry => entry.key === adapterKey)
+  if (!catalog)
+    throw new Error(`Missing adapter catalog entry: ${adapterKey}`)
+  for (const capability of catalog.capabilities) {
+    registerSceneCapabilityAdapter(
+      `${adapterKey}:${capability}`,
+      capability === 'vision.ocr' ? intelligenceVisionOcrAdapter : adapter,
+    )
+  }
+}
+
+function registerDefaultSceneCapabilityAdapters() {
+  registerSceneCapabilityAdapter('tencent-translation:text.translate', tencentTextTranslateAdapter)
+  registerSceneCapabilityAdapter('tencent-translation:image.translate', tencentImageTranslateAdapter)
+  registerSceneCapabilityAdapter('tencent-translation:image.translate.e2e', tencentImageTranslateAdapter)
+  registerTextAdapterFamily('openai-compatible', openAiCompatibleTextAdapter)
+  registerTextAdapterFamily('openai-responses', openAiResponsesTextAdapter)
+  registerSceneCapabilityAdapter('local-overlay:overlay.render', localOverlayRenderAdapter)
+}
+
+registerDefaultSceneCapabilityAdapters()
+
+export function registerSceneCapabilityAdapter(key: string, adapter: SceneCapabilityAdapter): () => void {
+  return registerSceneCapabilityAdapterRegistryEntry(key, adapter)
+}
+
+export function clearSceneCapabilityAdaptersForTest() {
+  clearSceneCapabilityAdapterRegistryForTest()
+}
+
+export function resetSceneCapabilityAdaptersForTest() {
+  clearSceneCapabilityAdapterRegistryForTest()
+  registerDefaultSceneCapabilityAdapters()
+}
+
+function nowIso() {
+  return new Date().toISOString()
+}
+
+function addTrace(
+  trace: SceneRunTraceStep[],
+  phase: SceneRunTraceStep['phase'],
+  status: SceneRunTraceStatus,
+  message: string,
+  metadata?: SceneRunTraceStep['metadata'],
+) {
+  trace.push({
+    phase,
+    status,
+    at: nowIso(),
+    message,
+    metadata,
+  })
+}
+
+function resolveAdapter(provider: ProviderRegistryRecord, capability: string): SceneCapabilityAdapter | null {
+  return resolveSceneCapabilityAdapterEntry<SceneCapabilityAdapter>(provider, capability)?.adapter ?? null
+}
+
+function readOptionalString(value: unknown, maxLength = 160): string | null {
+  if (typeof value !== 'string')
+    return null
+  const trimmed = value.trim()
+  if (!trimmed || trimmed.length > maxLength)
+    return null
+  return trimmed
+}
+
+function isRetrySafeProviderFailure(error: unknown): boolean {
+  if (!error || typeof error !== 'object')
+    return false
+  const statusCode = 'statusCode' in error && typeof error.statusCode === 'number'
+    ? error.statusCode
+    : null
+  return statusCode != null && [400, 401, 403, 404, 409, 422, 429].includes(statusCode)
+}
+
+function readRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null
+}
+
+function readDryRun(value: unknown) {
+  return value === true || value === 'true'
+}
+
+function resolveRequestedCapabilities(scene: SceneRegistryRecord, request: SceneRunInput): string[] {
+  const requestedCapability = readOptionalString(request.capability, 120)
+  if (requestedCapability)
+    return [requestedCapability]
+
+  if (scene.requiredCapabilities.length > 0)
+    return scene.requiredCapabilities
+
+  return [...new Set(scene.bindings.map(binding => binding.capability))]
+}
+
+function providerHasCapability(provider: ProviderRegistryRecord, capability: string) {
+  return provider.capabilities.some(item => item.capability === capability)
+}
+
+function resolveProviderCapability(provider: ProviderRegistryRecord, capability: string) {
+  return provider.capabilities.find(item => item.capability === capability) ?? null
+}
+
+function comparePriorityCandidates(a: SceneRunCandidate, b: SceneRunCandidate) {
+  if (a.priority !== b.priority)
+    return a.priority - b.priority
+  const weightA = a.weight ?? 0
+  const weightB = b.weight ?? 0
+  if (weightA !== weightB)
+    return weightB - weightA
+  return a.providerId.localeCompare(b.providerId)
+}
+
+function readNumber(value: unknown): number | null {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+function readNestedNumber(record: Record<string, unknown> | null | undefined, paths: string[][]): number | null {
+  if (!record)
+    return null
+
+  for (const path of paths) {
+    let current: unknown = record
+    for (const part of path) {
+      if (!current || typeof current !== 'object' || Array.isArray(current)) {
+        current = undefined
+        break
+      }
+      current = (current as Record<string, unknown>)[part]
+    }
+    const numeric = readNumber(current)
+    if (numeric != null)
+      return numeric
+  }
+  return null
+}
+
+function mergeConfigObjects(...records: Array<Record<string, unknown> | null | undefined>): Record<string, unknown> | null {
+  const merged: Record<string, unknown> = {}
+  for (const record of records) {
+    if (!record)
+      continue
+    for (const [key, value] of Object.entries(record))
+      merged[key] = value
+  }
+  return Object.keys(merged).length ? merged : null
+}
+
+function readConfigSection(record: Record<string, unknown> | null | undefined, key: string): Record<string, unknown> | null {
+  return readRecord(record?.[key])
+}
+
+function hasConfigSection(record: Record<string, unknown> | null | undefined, ...keys: string[]): boolean {
+  return Boolean(record && keys.some(key => readConfigSection(record, key)))
+}
+
+function resolveSceneAdapterMergedConfig(
+  scene: SceneRegistryRecord,
+  provider: ProviderRegistryRecord,
+  binding: SceneStrategyBindingRecord,
+  capabilityName: string,
+): SceneAdapterMergedConfig {
+  const capability = resolveProviderCapability(provider, capabilityName)
+  const adapter = mergeConfigObjects(
+    readConfigSection(provider.metadata, 'adapter'),
+    readConfigSection(capability?.metadata, 'adapter'),
+    readConfigSection(scene.metadata, 'adapter'),
+    readConfigSection(binding.metadata, 'adapter'),
+  )
+  const upload = mergeConfigObjects(
+    readConfigSection(provider.metadata, 'upload'),
+    readConfigSection(capability?.metadata, 'upload'),
+    readConfigSection(scene.metadata, 'upload'),
+    readConfigSection(binding.metadata, 'upload'),
+  )
+  const assets = mergeConfigObjects(
+    readConfigSection(provider.metadata, 'assets'),
+    readConfigSection(capability?.metadata, 'assets'),
+    readConfigSection(scene.metadata, 'assets'),
+    readConfigSection(binding.metadata, 'assets'),
+  )
+  const constraints = mergeConfigObjects(
+    capability?.constraints,
+    binding.constraints,
+  )
+  const sources = [
+    hasConfigSection(provider.metadata, 'adapter', 'upload', 'assets') ? 'provider.metadata' : null,
+    hasConfigSection(capability?.metadata, 'adapter', 'upload', 'assets') ? 'capability.metadata' : null,
+    capability?.constraints ? 'capability.constraints' : null,
+    hasConfigSection(scene.metadata, 'adapter', 'upload', 'assets') ? 'scene.metadata' : null,
+    hasConfigSection(binding.metadata, 'adapter', 'upload', 'assets') ? 'binding.metadata' : null,
+    binding.constraints ? 'binding.constraints' : null,
+  ].filter((source): source is string => Boolean(source))
+
+  return {
+    adapter,
+    upload,
+    assets,
+    constraints,
+    sources,
+  }
+}
+
+function toTraceValue(value: unknown): string | number | boolean | null {
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean')
+    return value
+  return null
+}
+
+function normalizeConfigKey(value: string): string {
+  return value.replace(/[-_\s]/g, '').toLowerCase()
+}
+
+function isSensitiveConfigKey(key: string): boolean {
+  const normalized = normalizeConfigKey(key)
+  if (SENSITIVE_CONFIG_KEY_EXACT.has(normalized))
+    return true
+  if (normalized.includes('credential') || normalized.includes('password') || normalized.includes('secret'))
+    return true
+  if (normalized.endsWith('key')) {
+    return SENSITIVE_CONFIG_KEY_MARKERS.some(marker => normalized.includes(marker))
+      || normalized.includes('api')
+      || normalized.includes('auth')
+      || normalized.includes('private')
+  }
+  if (normalized.endsWith('token')) {
+    return normalized.startsWith('access')
+      || normalized.startsWith('auth')
+      || normalized.startsWith('bearer')
+      || normalized.startsWith('refresh')
+      || normalized.startsWith('session')
+  }
+  return false
+}
+
+function summarizeConfigKeys(record: Record<string, unknown> | null): string | null {
+  if (!record)
+    return null
+
+  const safeKeys = Object.keys(record)
+    .filter(key => !isSensitiveConfigKey(key))
+    .sort()
+
+  return safeKeys.length ? safeKeys.join(',') : null
+}
+
+function summarizeSceneAdapterConfig(config: SceneAdapterMergedConfig): SceneRunTraceStep['metadata'] {
+  return {
+    adapterKeys: summarizeConfigKeys(config.adapter),
+    uploadKeys: summarizeConfigKeys(config.upload),
+    assetKeys: summarizeConfigKeys(config.assets),
+    constraintKeys: summarizeConfigKeys(config.constraints),
+    storageChannel: toTraceValue(config.upload?.storageChannel),
+    storageProvider: toTraceValue(config.upload?.storageProvider),
+    assetKind: toTraceValue(config.assets?.kind),
+    sources: config.sources.join(',') || null,
+  }
+}
+
+function buildAdapterTraceMetadata(
+  providerId: string,
+  capability: string,
+  adapterConfig: SceneAdapterMergedConfig,
+  extra: SceneRunTraceStep['metadata'] = {},
+): SceneRunTraceStep['metadata'] {
+  return {
+    providerId,
+    capability,
+    ...summarizeSceneAdapterConfig(adapterConfig),
+    ...extra,
+  }
+}
+
+function readBooleanValue(value: unknown): boolean | null {
+  return typeof value === 'boolean' ? value : null
+}
+
+function sanitizeSceneAssetToken(value: unknown, fallback: string, maxLength = 64): string {
+  const raw = typeof value === 'string' ? value.trim() : ''
+  const normalized = raw
+    .replace(/[^a-z0-9._-]+/gi, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, maxLength)
+  return normalized || fallback
+}
+
+function sanitizeSceneAssetExtension(value: unknown): string | null {
+  if (typeof value !== 'string')
+    return null
+  const normalized = value.trim().toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 16)
+  return normalized || null
+}
+
+function extensionFromFileName(value: unknown): string | null {
+  if (typeof value !== 'string')
+    return null
+  return sanitizeSceneAssetExtension(value.match(/\.([a-z0-9]+)$/i)?.[1])
+}
+
+function normalizeSceneAssetContentType(...values: unknown[]): string {
+  for (const value of values) {
+    const contentType = readOptionalString(value, 120)?.toLowerCase()
+    if (contentType)
+      return contentType
+  }
+  return DEFAULT_SCENE_ASSET_CONTENT_TYPE
+}
+
+function normalizeSceneAssetExtension(input: {
+  extension?: unknown
+  fileName?: unknown
+  contentType: string
+}): string {
+  return sanitizeSceneAssetExtension(input.extension)
+    ?? extensionFromFileName(input.fileName)
+    ?? SCENE_ASSET_EXTENSION_BY_MIME[input.contentType]
+    ?? 'bin'
+}
+
+function readConfiguredSceneAssetMaxBytes(config: SceneAdapterMergedConfig): number {
+  const configured = readNumber(config.assets?.maxBytes) ?? readNumber(config.upload?.maxBytes)
+  if (!configured || configured <= 0)
+    return DEFAULT_SCENE_ASSET_MAX_BYTES
+  return Math.min(Math.round(configured), DEFAULT_SCENE_ASSET_MAX_BYTES)
+}
+
+function normalizeBase64Payload(value: string, field: string): Buffer {
+  const normalized = value.trim().replace(/\s+/g, '').replace(/-/g, '+').replace(/_/g, '/')
+  if (!normalized || normalized.length % 4 === 1 || !/^[a-z0-9+/]*={0,2}$/i.test(normalized)) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: `Scene asset ${field} is not valid base64.`,
+    })
+  }
+  return Buffer.from(normalized, 'base64')
+}
+
+function resolveSceneAssetBuffer(asset: SceneAdapterAssetUpload): { data: Buffer, contentTypeFromDataUrl: string | null } {
+  const dataUrl = readOptionalString(asset.dataUrl, 16 * 1024 * 1024)
+  if (dataUrl) {
+    const parsed = stripDataUrlPrefix(dataUrl)
+    return {
+      data: normalizeBase64Payload(parsed.base64, asset.outputField ?? asset.id ?? 'dataUrl'),
+      contentTypeFromDataUrl: parsed.mimeType,
+    }
+  }
+
+  const base64 = readOptionalString(asset.base64, 16 * 1024 * 1024)
+  if (base64) {
+    const parsed = stripDataUrlPrefix(base64)
+    return {
+      data: normalizeBase64Payload(parsed.base64, asset.outputField ?? asset.id ?? 'base64'),
+      contentTypeFromDataUrl: parsed.mimeType,
+    }
+  }
+
+  if (Buffer.isBuffer(asset.data))
+    return { data: asset.data, contentTypeFromDataUrl: null }
+  if (asset.data instanceof ArrayBuffer)
+    return { data: Buffer.from(asset.data), contentTypeFromDataUrl: null }
+  if (asset.data instanceof Uint8Array)
+    return { data: Buffer.from(asset.data.buffer, asset.data.byteOffset, asset.data.byteLength), contentTypeFromDataUrl: null }
+  if (typeof asset.data === 'string') {
+    const parsed = asset.data.startsWith('data:')
+      ? stripDataUrlPrefix(asset.data)
+      : { base64: asset.data, mimeType: null }
+    return {
+      data: normalizeBase64Payload(parsed.base64, asset.outputField ?? asset.id ?? 'data'),
+      contentTypeFromDataUrl: parsed.mimeType,
+    }
+  }
+
+  throw createError({
+    statusCode: 400,
+    statusMessage: 'Scene asset upload requires data, base64, or dataUrl.',
+  })
+}
+
+function resolveSceneAssetContentTypeHint(asset: SceneAdapterAssetUpload): string | null {
+  const candidates = [asset.dataUrl, asset.base64, asset.data]
+  for (const candidate of candidates) {
+    if (typeof candidate !== 'string')
+      continue
+
+    const value = readOptionalString(candidate, 16 * 1024 * 1024)
+    if (!value?.startsWith('data:'))
+      continue
+
+    return stripDataUrlPrefix(value).mimeType
+  }
+
+  return null
+}
+
+function resolveSceneAssetUploadContext(input: {
+  runId: string
+  sceneId: string
+  providerId: string
+  capability: string
+  asset: SceneAdapterAssetUpload
+  adapterConfig: SceneAdapterMergedConfig
+  contentTypeHint?: string | null
+}): {
+  assetId: string
+  key: string
+  resourceType: string
+  contentType: string
+  extension: string
+  metadata: Record<string, unknown>
+} {
+  const asset = input.asset
+  const contentType = normalizeSceneAssetContentType(asset.contentType, input.contentTypeHint, input.adapterConfig.assets?.contentType)
+  const extension = normalizeSceneAssetExtension({
+    extension: asset.extension ?? input.adapterConfig.assets?.extension,
+    fileName: asset.fileName ?? input.adapterConfig.assets?.fileName,
+    contentType,
+  })
+  const assetId = sanitizeSceneAssetToken(asset.id ?? asset.outputField ?? input.adapterConfig.assets?.kind, 'asset')
+  const capabilityToken = sanitizeSceneAssetToken(input.capability, 'capability')
+  const key = `${input.runId}-${capabilityToken}-${assetId}-${randomUUID()}.${extension}`
+  const resourceType = readOptionalString(asset.resourceType, 80)
+    ?? readOptionalString(input.adapterConfig.assets?.resourceType, 80)
+    ?? 'scene-asset'
+  const metadata = {
+    surface: 'scene-adapter-upload',
+    sceneId: input.sceneId,
+    providerId: input.providerId,
+    capability: input.capability,
+    assetId,
+    assetKind: readOptionalString(input.adapterConfig.assets?.kind, 80) ?? assetId,
+  }
+
+  return {
+    assetId,
+    key,
+    resourceType,
+    contentType,
+    extension,
+    metadata,
+  }
+}
+
+function resolveConfiguredSceneAssetUploads(output: unknown, config: SceneAdapterMergedConfig): SceneAdapterAssetUpload[] {
+  const outputField = readOptionalString(config.assets?.outputField, 120)
+  if (!outputField || !isRecord(output))
+    return []
+
+  const value = output[outputField]
+  if (typeof value !== 'string' || !value.trim())
+    return []
+
+  return [
+    {
+      id: readOptionalString(config.assets?.id, 80) ?? readOptionalString(config.assets?.kind, 80) ?? outputField,
+      outputField,
+      base64: value,
+      contentType: readOptionalString(config.assets?.contentType, 120) ?? undefined,
+      extension: readOptionalString(config.assets?.extension, 24) ?? undefined,
+      fileName: readOptionalString(config.assets?.fileName, 180) ?? undefined,
+      resourceType: readOptionalString(config.assets?.resourceType, 80) ?? undefined,
+      replaceOutput: readBooleanValue(config.assets?.replaceOutput) ?? true,
+    },
+  ]
+}
+
+function replaceSceneAssetOutput(
+  output: unknown,
+  reference: Record<string, unknown>,
+  asset: SceneAdapterAssetUpload,
+): unknown {
+  if (!isRecord(output)) {
+    return {
+      value: output,
+      sceneAssets: [reference],
+    }
+  }
+
+  const existingAssets = Array.isArray(output.sceneAssets) ? output.sceneAssets : []
+  const next: Record<string, unknown> = {
+    ...output,
+    sceneAssets: [...existingAssets, reference],
+  }
+  if (asset.outputField && asset.replaceOutput !== false)
+    next[asset.outputField] = reference
+  return next
+}
+
+async function uploadSceneAdapterAssets(input: {
+  event: H3Event
+  runId: string
+  ownerId?: string
+  sceneId: string
+  providerId: string
+  capability: string
+  output: unknown
+  resultAssets?: SceneAdapterAssetUpload[]
+  adapterConfig: SceneAdapterMergedConfig
+}): Promise<{ output: unknown, uploadedAssets: number }> {
+  const assets = [
+    ...(input.resultAssets ?? []),
+    ...resolveConfiguredSceneAssetUploads(input.output, input.adapterConfig),
+  ]
+  if (assets.length === 0)
+    return { output: input.output, uploadedAssets: 0 }
+
+  const maxBytes = readConfiguredSceneAssetMaxBytes(input.adapterConfig)
+  let output = input.output
+  let uploadedAssets = 0
+
+  for (const asset of assets) {
+    const assetContext = resolveSceneAssetUploadContext({
+      runId: input.runId,
+      sceneId: input.sceneId,
+      providerId: input.providerId,
+      capability: input.capability,
+      asset,
+      adapterConfig: input.adapterConfig,
+      contentTypeHint: resolveSceneAssetContentTypeHint(asset),
+    })
+
+    const { data, contentTypeFromDataUrl } = resolveSceneAssetBuffer(asset)
+    if (data.byteLength > maxBytes) {
+      throw createError({
+        statusCode: 413,
+        statusMessage: 'Scene asset exceeds configured upload limit.',
+      })
+    }
+
+    const contentType = normalizeSceneAssetContentType(asset.contentType, contentTypeFromDataUrl, input.adapterConfig.assets?.contentType)
+    const stored = await uploadSceneAsset(input.event, assetContext.key, data, contentType, {
+      resourceType: assetContext.resourceType,
+      ownerId: input.ownerId,
+    })
+
+    const reference = {
+      type: 'scene-asset',
+      id: assetContext.assetId,
+      key: stored.key,
+      url: `/api/v1/scenes/assets/${encodeURIComponent(stored.key)}`,
+      contentType: stored.contentType,
+      sha256: stored.sha256,
+      size: stored.size,
+      storageChannel: stored.storageChannel,
+      storageProvider: stored.storageProvider,
+      resourceType: assetContext.resourceType,
+    }
+    output = replaceSceneAssetOutput(output, reference, asset)
+    uploadedAssets += 1
+  }
+
+  return { output, uploadedAssets }
+}
+
+function resolveCandidateCost(candidate: ResolvedSceneCandidate): number | null {
+  const capability = resolveProviderCapability(candidate.provider, candidate.candidate.capability)
+  return readNestedNumber(candidate.binding.constraints, [
+    ['cost'],
+    ['estimatedCost'],
+    ['unitCost'],
+    ['price'],
+    ['pricing', 'unitCost'],
+    ['pricing', 'estimatedCost'],
+  ]) ?? readNestedNumber(capability?.metering, [
+    ['cost'],
+    ['estimatedCost'],
+    ['unitCost'],
+    ['price'],
+    ['unitPrice'],
+    ['pricing', 'unitCost'],
+    ['pricing', 'estimatedCost'],
+  ]) ?? readNestedNumber(capability?.metadata, [
+    ['cost'],
+    ['estimatedCost'],
+    ['unitCost'],
+    ['price'],
+    ['pricing', 'unitCost'],
+    ['pricing', 'estimatedCost'],
+  ])
+}
+
+function resolveCandidateLatency(
+  candidate: ResolvedSceneCandidate,
+  healthByProviderId: Map<string, ProviderHealthCheckEntry>,
+): number | null {
+  const health = healthByProviderId.get(candidate.provider.id)
+  if (health?.status === 'healthy' || health?.status === 'degraded')
+    return health.latencyMs
+
+  return readNestedNumber(candidate.binding.constraints, [
+    ['latencyMs'],
+    ['expectedLatencyMs'],
+    ['p50LatencyMs'],
+  ]) ?? readNestedNumber(candidate.provider.metadata, [
+    ['latencyMs'],
+    ['expectedLatencyMs'],
+    ['p50LatencyMs'],
+  ])
+}
+
+function compareNullableNumber(a: number | null, b: number | null) {
+  if (a == null && b == null)
+    return 0
+  if (a == null)
+    return 1
+  if (b == null)
+    return -1
+  return a - b
+}
+
+function compareStrategyCandidates(
+  strategyMode: SceneRegistryRecord['strategyMode'],
+  healthByProviderId: Map<string, ProviderHealthCheckEntry>,
+  a: ResolvedSceneCandidate,
+  b: ResolvedSceneCandidate,
+) {
+  if (strategyMode === 'least_cost') {
+    const costCompare = compareNullableNumber(resolveCandidateCost(a), resolveCandidateCost(b))
+    if (costCompare !== 0)
+      return costCompare
+  }
+  else if (strategyMode === 'lowest_latency') {
+    const latencyCompare = compareNullableNumber(resolveCandidateLatency(a, healthByProviderId), resolveCandidateLatency(b, healthByProviderId))
+    if (latencyCompare !== 0)
+      return latencyCompare
+  }
+  else if (strategyMode === 'balanced') {
+    const costCompare = compareNullableNumber(resolveCandidateCost(a), resolveCandidateCost(b))
+    const latencyCompare = compareNullableNumber(resolveCandidateLatency(a, healthByProviderId), resolveCandidateLatency(b, healthByProviderId))
+    const weightCompare = (b.candidate.weight ?? 0) - (a.candidate.weight ?? 0)
+    const balancedCompare = Math.sign(costCompare) + Math.sign(latencyCompare) + Math.sign(weightCompare)
+    if (balancedCompare !== 0)
+      return balancedCompare
+  }
+
+  return comparePriorityCandidates(a.candidate, b.candidate)
+}
+
+async function sortCandidatesByStrategy(
+  event: H3Event,
+  scene: SceneRegistryRecord,
+  capability: string,
+  candidates: ResolvedSceneCandidate[],
+  trace: SceneRunTraceStep[],
+): Promise<ResolvedSceneCandidate[]> {
+  const healthByProviderId = ['lowest_latency', 'balanced'].includes(scene.strategyMode)
+    ? await getLatestProviderHealthChecks(event, {
+        providerIds: candidates.map(item => item.provider.id),
+        capability,
+      })
+    : new Map<string, ProviderHealthCheckEntry>()
+
+  const sorted = [...candidates].sort((a, b) => compareStrategyCandidates(scene.strategyMode, healthByProviderId, a, b))
+  addTrace(trace, 'strategy.select', 'success', `Applied ${scene.strategyMode} strategy for ${capability}.`, {
+    capability,
+    strategyMode: scene.strategyMode,
+    candidates: sorted.length,
+    healthSamples: healthByProviderId.size,
+  })
+  return sorted
+}
+
+async function resolveProvider(
+  event: H3Event,
+  providerId: string,
+  cache: Map<string, ProviderRegistryRecord | null>,
+) {
+  if (!cache.has(providerId)) {
+    cache.set(providerId, await getProviderRegistryEntry(event, providerId))
+  }
+  return cache.get(providerId) ?? null
+}
+
+function createRunError(statusCode: number, code: SceneRunErrorCode, message: string, run?: SceneRunResult): Error {
+  return createError({
+    statusCode,
+    statusMessage: message,
+    data: {
+      code,
+      run,
+    },
+  })
+}
+
+async function resolveCandidatesForCapability(
+  event: H3Event,
+  scene: SceneRegistryRecord,
+  capability: string,
+  ownerId: string | null,
+  providerCache: Map<string, ProviderRegistryRecord | null>,
+  trace: SceneRunTraceStep[],
+  fallbackTrail: SceneRunFallbackTrailItem[],
+): Promise<ResolvedSceneCandidate[]> {
+  const resolved: ResolvedSceneCandidate[] = []
+  const bindings = scene.bindings.filter(binding => binding.capability === capability)
+  // The bindings' providers side by side: on a cold registry cache they were read one after another.
+  await Promise.all([...new Set(bindings.map(binding => binding.providerId))]
+    .map(providerId => resolveProvider(event, providerId, providerCache)))
+
+  for (const binding of bindings) {
+    const provider = await resolveProvider(event, binding.providerId, providerCache)
+    if (!provider) {
+      fallbackTrail.push({
+        providerId: binding.providerId,
+        capability,
+        status: 'rejected',
+        reason: 'provider_not_found',
+      })
+      continue
+    }
+
+    const rejectReason = resolveBindingRejectReason(binding, provider, capability, ownerId)
+    if (rejectReason) {
+      fallbackTrail.push({
+        providerId: provider.id,
+        capability,
+        status: 'rejected',
+        reason: rejectReason,
+      })
+      continue
+    }
+
+    const candidate: SceneRunCandidate = {
+      providerId: provider.id,
+      providerName: provider.displayName,
+      vendor: provider.vendor,
+      capability,
+      model: binding.model,
+      priority: binding.priority,
+      weight: binding.weight,
+      bindingId: binding.id,
+    }
+    resolved.push({ candidate, provider, binding })
+    fallbackTrail.push({
+      providerId: provider.id,
+      capability,
+      status: 'candidate',
+    })
+  }
+
+  addTrace(trace, 'provider.resolve', resolved.length > 0 ? 'success' : 'failed', `Resolved ${resolved.length} candidate provider(s) for ${capability}.`, {
+    capability,
+    candidates: resolved.length,
+  })
+
+  return await sortCandidatesByStrategy(event, scene, capability, resolved, trace)
+}
+
+function resolveBindingRejectReason(
+  binding: SceneStrategyBindingRecord,
+  provider: ProviderRegistryRecord,
+  capability: string,
+  ownerId: string | null,
+): string | null {
+  if (binding.status !== 'enabled')
+    return 'binding_disabled'
+  if (provider.ownerScope === 'user' && (!ownerId || provider.ownerId !== ownerId))
+    return 'provider_owner_mismatch'
+  if (provider.ownerScope === 'workspace')
+    return 'workspace_scope_unresolved'
+  if (provider.status !== 'enabled')
+    return `provider_${provider.status}`
+  if (!providerHasCapability(provider, capability))
+    return 'provider_capability_missing'
+  const adapterKey = resolveProviderSceneAdapterKey(provider)
+  const registeredAdapter = resolveSceneCapabilityAdapterEntry<SceneCapabilityAdapter>(provider, capability)
+  if ((!adapterKey || !sceneCapabilityAdapterSupports(adapterKey, capability)) && !registeredAdapter)
+    return 'provider_adapter_missing'
+  if (binding.model && !readMetadataStringArray(provider, 'models').includes(binding.model))
+    return 'provider_model_missing'
+  return null
+}
+
+function toSelection(candidate: SceneRunCandidate, provider: ProviderRegistryRecord): SceneRunSelection {
+  return {
+    ...candidate,
+    authRef: provider.authRef,
+    endpoint: provider.endpoint,
+    region: provider.region,
+  }
+}
+
+function createFailedRun(
+  baseRun: Omit<SceneRunResult, 'status' | 'output'>,
+  outputs: Record<string, unknown>,
+  failure: SceneRunFailure,
+): SceneRunResult {
+  return {
+    ...baseRun,
+    status: 'failed',
+    output: Object.keys(outputs).length === 0 ? null : outputs,
+    error: {
+      code: failure.code,
+      message: failure.message,
+    },
+  }
+}
+
+async function finalizeSceneRun(event: H3Event, run: SceneRunResult): Promise<SceneRunResult> {
+  await recordProviderUsageLedger(event, run).catch((error) => {
+    console.warn('[sceneOrchestrator] Failed to record provider usage ledger', error)
+  })
+  return run
+}
+
+/**
+ * Why a scene run moved credits. The three stages are separate ledger reasons with
+ * one stable key per run, so a replayed run cannot charge, settle or release twice.
+ */
+const SCENE_RUN_RESERVE_REASON = 'scene-run-reserve'
+const SCENE_RUN_SETTLE_REASON = 'scene-run-settle'
+const SCENE_RUN_RELEASE_REASON = 'scene-run-release'
+
+/** Raised by `creditsStore` when a scope cannot afford the amount. */
+const CREDITS_EXCEEDED_MESSAGES: Record<string, true> = {
+  'Team credits exceeded.': true,
+  'User credits exceeded.': true,
+  'Credits exceeded.': true,
+}
+
+/**
+ * Input keys that carry media rather than prose. A base64 screenshot is not prompt
+ * text, and counting it as tokens would hold a fortune for a capability priced per
+ * image, so the estimate walks past them.
+ */
+const SCENE_RUN_MEDIA_INPUT_KEYS: Record<string, true> = {
+  asset: true,
+  assets: true,
+  audio: true,
+  audiobase64: true,
+  base64: true,
+  data: true,
+  dataurl: true,
+  file: true,
+  files: true,
+  image: true,
+  imagebase64: true,
+  imagedata: true,
+  imageurl: true,
+  url: true,
+  urls: true,
+  video: true,
+  videobase64: true,
+}
+
+interface SceneRunCreditContext {
+  ownerId: string
+  sceneId: string
+  runId: string
+}
+
+interface SceneRunCreditReservation {
+  context: SceneRunCreditContext
+  /** The price list every dispatched capability was quoted from, reused at settlement. */
+  rules: Map<string, CreditPricingRule>
+  billing: SceneRunBilling
+}
+
+function estimateSceneInputCharacters(value: unknown, depth = 0): number {
+  // The body is caller-supplied, so the walk is bounded: a deeply nested payload must
+  // not turn a price estimate into a stack overflow.
+  if (depth > 8)
+    return 0
+  if (typeof value === 'string')
+    return value.length
+  if (Array.isArray(value))
+    return value.reduce((total, item) => total + estimateSceneInputCharacters(item, depth + 1), 0)
+  if (!isRecord(value))
+    return 0
+
+  let total = 0
+  for (const [key, entry] of Object.entries(value)) {
+    if (Object.hasOwn(SCENE_RUN_MEDIA_INPUT_KEYS, normalizeConfigKey(key)))
+      continue
+    total += estimateSceneInputCharacters(entry, depth + 1)
+  }
+  return total
+}
+
+/**
+ * Pre-dispatch usage estimate for one capability. Only the basis the capability is
+ * priced on is estimated: text capabilities from the request prose, media-priced
+ * capabilities per invocation. Anything else has no honest estimate before the
+ * provider answers, so the rule's floor is held instead of a guess.
+ *
+ * The prose is estimated as one token per character, the same basis a character-metered
+ * adapter settles on. That keeps the hold from being systematically cheaper than the
+ * charge it stands in for, and it is the accurate ratio for the Chinese-first text this
+ * product translates.
+ */
+function estimateSceneCapabilityUsage(rule: CreditPricingRule, input: unknown): CreditPricingUsage {
+  if (rule.unit === 'image')
+    return { images: 1 }
+  if (rule.unit === 'audio_second' || rule.unit === 'transcript_unit')
+    return {}
+
+  const characters = estimateSceneInputCharacters(input)
+  if (characters <= 0)
+    return {}
+  return { tokens: characters }
+}
+
+/**
+ * Provider-reported usage, translated into the basis the price list reads, together with
+ * the price-list unit it is metered in. Unrecognized units price as tokens — the same
+ * fallback the estimate path uses — because reading them as zero would let a priced
+ * capability settle for free. The unit travels with the basis so a caller can tell
+ * whether the capability's own rule is able to read what the provider reported.
+ */
+function toCreditPricingUsage(
+  usage: SceneRunUsage,
+): { unit: CreditPricingUnit, usage: CreditPricingUsage } | null {
+  const quantity = Number(usage.quantity)
+  if (!Number.isFinite(quantity) || quantity <= 0)
+    return null
+
+  switch (usage.unit) {
+    case 'image':
+      return { unit: 'image', usage: { images: quantity } }
+    case 'second':
+    case 'audio_second':
+      return { unit: 'audio_second', usage: { seconds: quantity } }
+    case 'transcript_unit':
+    case 'unit':
+      return { unit: 'transcript_unit', usage: { units: quantity } }
+    default:
+      return { unit: '1k_tokens', usage: { tokens: quantity } }
+  }
+}
+
+/** A billable item the run reported in a unit its capability's price row cannot convert. */
+interface SceneRunUnitMismatch {
+  capability: string
+  providerId: string | null
+  reportedUnit: string
+  pricedUnit: CreditPricingUnit
+  ruleUnit: CreditPricingUnit
+}
+
+/**
+ * The price-list units a row converts. A row reads its primary basis and, when it carries
+ * one, its secondary basis too — the ASR rows price both seconds and transcript units — so
+ * comparing the reported unit against the primary alone would call a perfectly sellable
+ * report a mismatch and keep the whole hold instead of charging it.
+ */
+function convertiblePricingUnits(rule: CreditPricingRule): CreditPricingUnit[] {
+  return rule.secondaryUnit && rule.secondaryCreditsPerUnit !== null
+    ? [rule.unit, rule.secondaryUnit]
+    : [rule.unit]
+}
+
+interface SceneRunCharge {
+  credits: number
+  unitMismatches: SceneRunUnitMismatch[]
+}
+
+/**
+ * Holds the estimated price of every capability the run is about to dispatch. The
+ * hold must clear before the provider is called, otherwise the upstream cost is
+ * already spent by the time we learn the caller cannot pay.
+ */
+async function reserveSceneRunCredits(
+  event: H3Event,
+  context: SceneRunCreditContext,
+  request: { capabilities: string[], requestInput: unknown },
+): Promise<SceneRunCreditReservation> {
+  const rules = new Map<string, CreditPricingRule>()
+  let estimatedCredits = 0
+  for (const capability of request.capabilities) {
+    const rule = await resolveSellableCreditPricingRule(event, capability)
+    rules.set(capability, rule)
+    estimatedCredits += computeCreditReservation(rule, estimateSceneCapabilityUsage(rule, request.requestInput))
+  }
+
+  const billing: SceneRunBilling = {
+    reservedCredits: 0,
+    chargedCredits: 0,
+    releasedCredits: 0,
+    ledgerId: null,
+    settlementLedgerId: null,
+    settleFailed: false,
+  }
+  if (estimatedCredits > 0) {
+    const consumption = await consumeCredits(event, context.ownerId, estimatedCredits, SCENE_RUN_RESERVE_REASON, {
+      sceneId: context.sceneId,
+      runId: context.runId,
+      capabilities: request.capabilities,
+    }, { idempotencyKey: `scene-run-reserve:${context.runId}` })
+    billing.reservedCredits = consumption.amount
+    billing.ledgerId = consumption.ledgerId
+  }
+
+  return { context, rules, billing }
+}
+
+/** What the run owes, summed from the usage the providers reported. */
+async function computeSceneRunChargeCredits(
+  event: H3Event,
+  usage: readonly SceneRunUsage[],
+  rules: Map<string, CreditPricingRule>,
+): Promise<SceneRunCharge> {
+  let total = 0
+  const unitMismatches: SceneRunUnitMismatch[] = []
+  for (const item of usage) {
+    if (item.billable === false)
+      continue
+    const reported = toCreditPricingUsage(item)
+    if (!reported)
+      continue
+
+    const capability = readOptionalString(item.capability, 180) ?? ''
+    let rule = rules.get(capability)
+    if (!rule) {
+      // An adapter may report under a capability the plan did not name; price it from
+      // the same table rather than treating it as unpriced.
+      rule = await resolveCreditPricingRule(event, capability)
+      rules.set(capability, rule)
+    }
+
+    if (!convertiblePricingUnits(rule).includes(reported.unit)) {
+      // The row cannot read the basis the provider metered in, so this item converts to no
+      // amount at all. Summing it as zero would settle the run for free; the caller keeps
+      // the hold instead (see settleSceneRunCredits), exactly as the invoke path does for
+      // its own unit mismatch.
+      unitMismatches.push({
+        capability,
+        providerId: readOptionalString(item.providerId, 180) ?? null,
+        reportedUnit: item.unit,
+        pricedUnit: reported.unit,
+        ruleUnit: rule.unit,
+      })
+      continue
+    }
+
+    total += computeCreditCharge(rule, reported.usage)
+  }
+  return { credits: total, unitMismatches }
+}
+
+/**
+ * Settles a completed run: consumes the difference when the real charge outgrew the
+ * hold, and returns the rest. Never throws into the caller — the result is already
+ * in the user's hands, so a failed settlement is an operator problem, not a failed run.
+ */
+async function settleSceneRunCredits(
+  event: H3Event,
+  reservation: SceneRunCreditReservation,
+  usage: readonly SceneRunUsage[],
+): Promise<void> {
+  const { billing, context, rules } = reservation
+
+  let charge: SceneRunCharge
+  try {
+    charge = await computeSceneRunChargeCredits(event, usage, rules)
+  }
+  catch (error) {
+    // The charge cannot be derived, so the whole hold is kept: keeping a hold is
+    // reconcilable from the ledger, giving the provider's work away is not.
+    billing.chargedCredits = billing.reservedCredits
+    billing.settleFailed = true
+    console.warn('[sceneOrchestrator] Failed to derive credit charge; reservation kept (metering integrity)', error)
+    return
+  }
+
+  if (charge.unitMismatches.length > 0) {
+    // Same fault the invoke path refuses to settle: a billable item metered in a unit its
+    // capability's price row cannot convert. The amount is not derivable from what the
+    // provider reported, so the whole hold is kept rather than zeroing the item —
+    // refunding it would turn a metering fault into free provider spend. A partial sum is
+    // deliberately discarded too: the hold is one amount, and an under-charge here is
+    // unrecoverable from the ledger.
+    billing.chargedCredits = billing.reservedCredits
+    billing.settleFailed = true
+    console.warn('[sceneOrchestrator] Scene run reported usage in an unsellable unit; keeping the reservation', {
+      sceneId: context.sceneId,
+      runId: context.runId,
+      reservedCredits: billing.reservedCredits,
+      unitMismatches: charge.unitMismatches,
+    })
+    return
+  }
+
+  billing.chargedCredits = charge.credits
+
+  if (billing.chargedCredits <= billing.reservedCredits) {
+    const releaseCredits = billing.reservedCredits - billing.chargedCredits
+    if (releaseCredits <= 0)
+      return
+    try {
+      const released = await releaseConsumedCredits(event, context.ownerId, releaseCredits, SCENE_RUN_RELEASE_REASON, {
+        sceneId: context.sceneId,
+        runId: context.runId,
+        chargedCredits: billing.chargedCredits,
+      }, { idempotencyKey: `scene-run-release:${context.runId}`, reservationLedgerId: billing.ledgerId ?? undefined })
+      billing.releasedCredits = released.amount
+    }
+    catch (error) {
+      billing.settleFailed = true
+      console.warn('[sceneOrchestrator] Failed to release unused credit reservation (metering integrity)', error)
+    }
+    return
+  }
+
+  try {
+    const consumption = await consumeCredits(
+      event,
+      context.ownerId,
+      billing.chargedCredits - billing.reservedCredits,
+      SCENE_RUN_SETTLE_REASON,
+      {
+        sceneId: context.sceneId,
+        runId: context.runId,
+        chargedCredits: billing.chargedCredits,
+      },
+      { idempotencyKey: `scene-run-settle:${context.runId}` },
+    )
+    billing.settlementLedgerId = consumption.ledgerId
+  }
+  catch (error) {
+    // The user already has the result: a failed top-up is a metering-integrity problem
+    // for the operator, never a reason to fail a call that succeeded upstream.
+    billing.settleFailed = true
+    console.warn('[sceneOrchestrator] Credit settlement top-up failed (metering integrity)', error)
+  }
+}
+
+/** Returns the unused hold of a run that never produced a settlement. */
+async function releaseSceneRunCredits(
+  event: H3Event,
+  reservation: SceneRunCreditReservation,
+  failureCode: string,
+): Promise<void> {
+  const { billing, context } = reservation
+  const remaining = billing.reservedCredits - billing.chargedCredits - billing.releasedCredits
+  if (remaining <= 0)
+    return
+
+  try {
+    const released = await releaseConsumedCredits(event, context.ownerId, remaining, SCENE_RUN_RELEASE_REASON, {
+      sceneId: context.sceneId,
+      runId: context.runId,
+      failureCode,
+    }, { idempotencyKey: `scene-run-release:${context.runId}`, reservationLedgerId: billing.ledgerId ?? undefined })
+    billing.releasedCredits += released.amount
+  }
+  catch (error) {
+    console.warn('[sceneOrchestrator] Failed to release credit reservation', error)
+  }
+}
+
+async function throwRunError(
+  event: H3Event,
+  statusCode: number,
+  code: SceneRunErrorCode,
+  message: string,
+  run: SceneRunResult,
+): Promise<never> {
+  await finalizeSceneRun(event, run)
+  throw createRunError(statusCode, code, message, run)
+}
+
+export interface ResolvedSceneProviderCandidate {
+  provider: ProviderRegistryRecord
+  binding: SceneStrategyBindingRecord
+  capability: string
+  model: string | null
+  adapterKey: string
+}
+
+export interface SceneProviderResolution {
+  scene: SceneRegistryRecord
+  capability: string
+  candidates: ResolvedSceneProviderCandidate[]
+  trace: SceneRunTraceStep[]
+  fallbackTrail: SceneRunFallbackTrailItem[]
+}
+
+export function resolveCapabilitySceneId(capabilityId: string): string {
+  const capability = toRegistryCapabilityId(toRuntimeCapabilityId(capabilityId))
+  return `nexus.intelligence.${capability}`
+}
+
+export async function resolveSceneProviderCandidates(
+  event: H3Event,
+  options: {
+    sceneId: string
+    capability: string
+    ownerId: string
+    providerId?: string
+  },
+): Promise<SceneProviderResolution> {
+  const scene = await getSceneRegistryEntry(event, options.sceneId)
+  if (!scene || scene.status !== 'enabled') {
+    throw createError({ statusCode: 409, statusMessage: 'Scene is unavailable.' })
+  }
+
+  const capability = toRegistryCapabilityId(toRuntimeCapabilityId(options.capability))
+  const trace: SceneRunTraceStep[] = []
+  const fallbackTrail: SceneRunFallbackTrailItem[] = []
+  const candidates = await resolveCandidatesForCapability(
+    event,
+    scene,
+    capability,
+    options.ownerId,
+    new Map<string, ProviderRegistryRecord | null>(),
+    trace,
+    fallbackTrail,
+  )
+  const filtered = options.providerId
+    ? candidates.filter(candidate => candidate.provider.id === options.providerId)
+    : candidates
+  if (filtered.length === 0) {
+    throw createError({ statusCode: 409, statusMessage: `No configured provider is available for ${capability}.` })
+  }
+
+  return {
+    scene,
+    capability,
+    candidates: filtered.map(({ provider, binding }) => ({
+      provider,
+      binding,
+      capability,
+      model: binding.model,
+      adapterKey: resolveProviderSceneAdapterKey(provider)!,
+    })),
+    trace,
+    fallbackTrail,
+  }
+}
+
+export async function runSceneOrchestrator(
+  event: H3Event,
+  sceneId: string,
+  request: SceneRunInput = {},
+): Promise<SceneRunResult> {
+  const runId = `scene_run_${randomUUID()}`
+  const trace: SceneRunTraceStep[] = []
+  const fallbackTrail: SceneRunFallbackTrailItem[] = []
+  const selected: SceneRunSelection[] = []
+  const candidates: SceneRunCandidate[] = []
+  const capabilityPlans: CapabilityExecutionPlan[] = []
+  const usage: SceneRunUsage[] = []
+  const dryRun = readDryRun(request.dryRun)
+  const mode: SceneRunMode = dryRun ? 'dry_run' : 'execute'
+  const safeSceneId = readOptionalString(sceneId, 180)
+
+  if (!safeSceneId) {
+    throw createRunError(400, 'SCENE_NOT_FOUND', 'sceneId is required.')
+  }
+
+  const scene = await getSceneRegistryEntry(event, safeSceneId)
+  if (!scene) {
+    throw createRunError(404, 'SCENE_NOT_FOUND', 'Scene registry entry not found.')
+  }
+  addTrace(trace, 'scene.load', 'success', 'Loaded scene registry entry.', {
+    sceneId: scene.id,
+    status: scene.status,
+  })
+
+  const requestedCapabilities = resolveRequestedCapabilities(scene, request)
+  const baseRun: Omit<SceneRunResult, 'status' | 'output'> = {
+    runId,
+    sceneId: scene.id,
+    mode,
+    strategyMode: scene.strategyMode,
+    requestedCapabilities,
+    selected,
+    candidates,
+    fallbackTrail,
+    trace,
+    usage,
+  }
+
+  if (scene.status !== 'enabled') {
+    const run: SceneRunResult = {
+      ...baseRun,
+      status: 'failed',
+      output: null,
+      error: {
+        code: 'SCENE_DISABLED',
+        message: 'Scene is disabled.',
+      },
+    }
+    addTrace(trace, 'strategy.select', 'failed', 'Scene is disabled.')
+    await throwRunError(event, 409, 'SCENE_DISABLED', 'Scene is disabled.', run)
+  }
+
+  if (requestedCapabilities.length === 0) {
+    const run: SceneRunResult = {
+      ...baseRun,
+      status: 'failed',
+      output: null,
+      error: {
+        code: 'CAPABILITY_UNSUPPORTED',
+        message: 'Scene has no required capability or binding.',
+      },
+    }
+    addTrace(trace, 'strategy.select', 'failed', 'Scene has no required capability or binding.')
+    await throwRunError(event, 400, 'CAPABILITY_UNSUPPORTED', 'Scene has no required capability or binding.', run)
+  }
+
+  const providerCache = new Map<string, ProviderRegistryRecord | null>()
+  const requestedProviderId = readOptionalString(request.providerId, 160)
+  const ownerId = readOptionalString(request.ownerId, 180)
+
+  for (const capability of requestedCapabilities) {
+    const resolvedCandidates = await resolveCandidatesForCapability(event, scene, capability, ownerId, providerCache, trace, fallbackTrail)
+    candidates.push(...resolvedCandidates.map(item => item.candidate))
+
+    const scopedCandidates = requestedProviderId
+      ? resolvedCandidates.filter(item => item.provider.id === requestedProviderId)
+      : resolvedCandidates
+
+    const picked = scopedCandidates[0]
+    if (!picked) {
+      const run: SceneRunResult = {
+        ...baseRun,
+        status: 'failed',
+        output: null,
+        error: {
+          code: 'CAPABILITY_UNSUPPORTED',
+          message: `No enabled provider capability is available for ${capability}.`,
+        },
+      }
+      addTrace(trace, 'strategy.select', 'failed', `No enabled provider capability is available for ${capability}.`, {
+        capability,
+        requestedProviderId,
+      })
+      await throwRunError(event, 409, 'CAPABILITY_UNSUPPORTED', `No enabled provider capability is available for ${capability}.`, run)
+      continue
+    }
+
+    if (dryRun) {
+      selected.push(toSelection(picked.candidate, picked.provider))
+      fallbackTrail.push({
+        providerId: picked.provider.id,
+        capability,
+        status: 'selected',
+      })
+      const adapterConfig = resolveSceneAdapterMergedConfig(scene, picked.provider, picked.binding, capability)
+      addTrace(trace, 'adapter.dispatch', 'skipped', `Dry run selected provider adapter config for ${capability}.`, buildAdapterTraceMetadata(picked.provider.id, capability, adapterConfig))
+    }
+    capabilityPlans.push({ capability, candidates: scopedCandidates })
+  }
+
+  const plannedSelectionCount = capabilityPlans.length
+  addTrace(trace, 'strategy.select', 'success', `Selected ${plannedSelectionCount} provider capability path(s).`, {
+    strategyMode: scene.strategyMode,
+    selected: plannedSelectionCount,
+  })
+
+  if (dryRun) {
+    // A dry run calls no provider, so it holds and charges nothing: the credit
+    // reservation below is deliberately after this return.
+    addTrace(trace, 'adapter.dispatch', 'skipped', 'Dry run requested; provider adapters were not invoked.')
+    return await finalizeSceneRun(event, {
+      ...baseRun,
+      status: 'planned',
+      output: null,
+    })
+  }
+
+  // Same shape as an intelligence invoke: hold the estimated price of every capability
+  // before the provider is called, settle against the usage the provider reported and
+  // hand the unused part back. A dry run returned above and never reaches this block.
+  const creditContext = ownerId ? { ownerId, sceneId: scene.id, runId } : null
+  let reservation: SceneRunCreditReservation | null = null
+  if (creditContext) {
+    try {
+      reservation = await reserveSceneRunCredits(event, creditContext, {
+        capabilities: capabilityPlans.map(plan => plan.capability),
+        requestInput: request.input,
+      })
+    }
+    catch (error) {
+      if (!(error instanceof Error) || !Object.hasOwn(CREDITS_EXCEEDED_MESSAGES, error.message))
+        throw error
+      // A hold the caller cannot afford must be declined before the provider is called,
+      // otherwise the upstream cost is already spent.
+      const denied = error.message
+      addTrace(trace, 'adapter.dispatch', 'failed', 'Credit reservation was declined before provider dispatch.', {
+        capabilities: capabilityPlans.length,
+      })
+      const run: SceneRunResult = {
+        ...baseRun,
+        status: 'failed',
+        output: null,
+        error: {
+          code: 'CREDITS_EXCEEDED',
+          message: denied,
+        },
+      }
+      throw createError({
+        statusCode: 402,
+        statusMessage: 'CREDITS_EXCEEDED',
+        data: {
+          code: 'CREDITS_EXCEEDED',
+          reason: denied,
+          run,
+        },
+      })
+    }
+    // The result shares this object, so a release that lands after a failure run was
+    // built is still what the caller sees.
+    baseRun.billing = reservation.billing
+  }
+
+  try {
+    const outputs: Record<string, unknown> = {}
+    for (const plan of capabilityPlans) {
+      let completed = false
+      let selectedPlan: SceneRunSelection | null = null
+      let lastFailure: SceneRunFailure = {
+        statusCode: 500,
+        code: 'PROVIDER_UNAVAILABLE',
+        message: 'Selected provider path is incomplete.',
+      }
+
+      for (const { candidate, provider, binding } of plan.candidates) {
+        const selection = toSelection(candidate, provider)
+        const adapter = resolveAdapter(provider, plan.capability)
+        const adapterConfig = resolveSceneAdapterMergedConfig(scene, provider, binding, plan.capability)
+        fallbackTrail.push({
+          providerId: provider.id,
+          capability: plan.capability,
+          status: 'selected',
+        })
+
+        if (!adapter) {
+          const message = `No provider adapter registered for ${provider.vendor}:${plan.capability}.`
+          lastFailure = {
+            statusCode: 501,
+            code: 'PROVIDER_ADAPTER_UNAVAILABLE',
+            message,
+          }
+          fallbackTrail.push({
+            providerId: provider.id,
+            capability: plan.capability,
+            status: 'failed',
+            reason: 'provider_adapter_unavailable',
+          })
+          addTrace(trace, 'adapter.dispatch', 'failed', message, buildAdapterTraceMetadata(provider.id, plan.capability, adapterConfig))
+          if (scene.fallback !== 'enabled')
+            break
+          continue
+        }
+
+        try {
+          await assertIntelligenceProviderQuota(event, provider.id, plan.capability)
+          await recordIntelligenceProviderRequest(event, provider.id, plan.capability)
+          const adapterInput = buildCapabilityInput(plan.capability, request.input, outputs)
+          const result = await adapter({
+            event,
+            runId,
+            scene,
+            provider,
+            capability: plan.capability,
+            input: adapterInput,
+            originalInput: request.input,
+            outputs,
+            binding,
+            model: binding.model,
+            adapterConfig,
+          })
+          const assetResult = await uploadSceneAdapterAssets({
+            event,
+            runId,
+            ownerId: request.ownerId,
+            sceneId: scene.id,
+            providerId: provider.id,
+            capability: plan.capability,
+            output: result.output,
+            resultAssets: result.assets,
+            adapterConfig,
+          })
+          outputs[plan.capability] = assetResult.output
+          usage.push(...(result.usage ?? []))
+          addTrace(trace, 'adapter.dispatch', 'success', `Provider adapter completed ${plan.capability}.`, buildAdapterTraceMetadata(provider.id, plan.capability, adapterConfig, {
+            providerRequestId: result.providerRequestId ?? null,
+            latencyMs: result.latencyMs ?? null,
+            uploadedAssets: assetResult.uploadedAssets,
+          }))
+          selectedPlan = selection
+          completed = true
+          break
+        }
+        catch (error) {
+          const retrySafe = isRetrySafeProviderFailure(error)
+          lastFailure = {
+            statusCode: 502,
+            code: 'PROVIDER_ADAPTER_FAILED',
+            message: retrySafe
+              ? 'Provider rejected the request before acceptance.'
+              : 'Provider dispatch failed or acceptance is uncertain.',
+          }
+          fallbackTrail.push({
+            providerId: provider.id,
+            capability: plan.capability,
+            status: 'failed',
+            reason: retrySafe ? 'provider_rejected_pre_acceptance' : 'provider_failed_uncertain',
+          })
+          addTrace(trace, 'adapter.dispatch', 'failed', `Provider adapter failed ${plan.capability}.`, buildAdapterTraceMetadata(provider.id, plan.capability, adapterConfig, {
+            retrySafe,
+          }))
+          if (scene.fallback !== 'enabled' || !retrySafe)
+            break
+        }
+      }
+
+      if (!completed) {
+        const run = createFailedRun(baseRun, outputs, lastFailure)
+        await throwRunError(event, lastFailure.statusCode, lastFailure.code, lastFailure.message, run)
+      }
+      if (selectedPlan)
+        selected.push(selectedPlan)
+    }
+
+    if (reservation)
+      await settleSceneRunCredits(event, reservation, usage)
+
+    const firstCapability = requestedCapabilities[0]
+    return await finalizeSceneRun(event, {
+      ...baseRun,
+      status: 'completed',
+      output: requestedCapabilities.length === 1 && firstCapability ? outputs[firstCapability] : outputs,
+    })
+  }
+  catch (error) {
+    // The run failed after the hold: return it before projecting the failure. A run that
+    // was already settled releases nothing, so this is correct on every path.
+    if (reservation) {
+      const errorData = error && typeof error === 'object' && 'data' in error ? readRecord(error.data) : null
+      const failureCode = readOptionalString(errorData?.code, 60) ?? 'SCENE_RUN_UNSETTLED'
+      await releaseSceneRunCredits(event, reservation, failureCode)
+    }
+    throw error
+  }
+}

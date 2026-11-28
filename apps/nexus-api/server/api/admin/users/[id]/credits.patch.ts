@@ -1,0 +1,105 @@
+import { createError, defineEventHandler, getHeader, readBody } from 'h3'
+import { requireAdmin } from '../../../../utils/auth'
+import { getUserById } from '../../../../utils/authStore'
+import {
+  adjustUserCredits,
+  CreditDeductLimitError,
+  getCreditSummary,
+  getUserCreditAdjustLimits,
+  listCreditLedgerByUsers,
+  normalizeCreditIdempotencyKey,
+} from '../../../../utils/creditsStore'
+
+const MAX_CREDIT_ADJUSTMENT = 1_000_000_000
+
+export default defineEventHandler(async (event) => {
+  const { userId: adminId } = await requireAdmin(event)
+
+  const id = event.context.params?.id
+  if (!id)
+    throw createError({ statusCode: 400, statusMessage: 'User id is required.' })
+
+  const targetUser = await getUserById(event, id)
+  if (!targetUser)
+    throw createError({ statusCode: 404, statusMessage: 'User not found.' })
+  if (targetUser.status === 'merged')
+    throw createError({ statusCode: 400, statusMessage: 'Merged users cannot be updated.' })
+  if (targetUser.status === 'deletion_pending')
+    throw createError({ statusCode: 409, statusMessage: 'Users pending deletion cannot be updated.' })
+
+  const body = await readBody<{ amount?: number | string; direction?: string; reason?: string }>(event)
+  const amount = Math.round(Math.abs(Number(body?.amount ?? 0)))
+  if (!Number.isFinite(amount) || amount <= 0)
+    throw createError({ statusCode: 400, statusMessage: 'Invalid credit amount.' })
+  // Beyond this the balance and ledger stop round-tripping through float arithmetic.
+  if (amount > MAX_CREDIT_ADJUSTMENT)
+    throw createError({ statusCode: 400, statusMessage: 'Credit amount exceeds the maximum single adjustment.' })
+
+  const direction = String(body?.direction || 'add').trim().toLowerCase()
+  if (direction !== 'add' && direction !== 'subtract')
+    throw createError({ statusCode: 400, statusMessage: 'Invalid credit direction.' })
+
+  const reason = typeof body?.reason === 'string' && body.reason.trim()
+    ? body.reason.trim().slice(0, 120)
+    : `admin-${direction === 'add' ? 'credit' : 'debit'}`
+
+  const rawIdempotencyKey = event?.node?.req ? getHeader(event, 'x-idempotency-key') : undefined
+  let idempotencyKey: string | undefined
+  if (rawIdempotencyKey !== undefined && String(rawIdempotencyKey).trim() !== '') {
+    const normalized = normalizeCreditIdempotencyKey(rawIdempotencyKey)
+    if (!normalized)
+      throw createError({ statusCode: 400, statusMessage: 'Invalid X-Idempotency-Key header.' })
+    idempotencyKey = normalized
+  }
+
+  let adjustment
+  try {
+    const adjustmentMetadata = {
+      adminUserId: adminId,
+      source: 'admin-user-management',
+    }
+    adjustment = idempotencyKey
+      ? await adjustUserCredits(event, id, direction === 'add' ? amount : -amount, reason, adjustmentMetadata, {
+          idempotencyKey,
+        })
+      : await adjustUserCredits(event, id, direction === 'add' ? amount : -amount, reason, adjustmentMetadata)
+  }
+  catch (error) {
+    // A deduction past the floor wrote nothing, so there is nothing to audit.
+    // The limit it was refused against goes back for the drawer to show.
+    if (error instanceof CreditDeductLimitError) {
+      const { maxDeduct, planFloor, used } = error.limits
+      throw createError({
+        statusCode: 400,
+        statusMessage: error.message,
+        data: { errorCode: error.errorCode, maxDeduct, planFloor, used },
+      })
+    }
+    const message = error instanceof Error ? error.message : 'Failed to adjust credits.'
+    if (message === 'Credit idempotency conflict.')
+      throw createError({ statusCode: 409, statusMessage: message })
+    throw createError({ statusCode: 400, statusMessage: message })
+  }
+
+  const [summary, ledger, limits] = await Promise.all([
+    getCreditSummary(event, id),
+    listCreditLedgerByUsers(event, [id], { page: 1, limit: 10 }),
+    getUserCreditAdjustLimits(event, id),
+  ])
+
+  return {
+    adjustment,
+    summary,
+    // Read after the adjustment: what the next deduction is checked against.
+    limits,
+    ledger: {
+      entries: ledger.entries,
+      pagination: {
+        page: ledger.page,
+        limit: ledger.pageSize,
+        total: ledger.total,
+        totalPages: Math.ceil(ledger.total / ledger.pageSize),
+      },
+    },
+  }
+})

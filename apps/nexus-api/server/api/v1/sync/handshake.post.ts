@@ -1,0 +1,69 @@
+import type { paths } from '../../../../types/sync-api'
+import { requireAppAuth } from '../../../utils/auth'
+import {
+  countActiveDevices,
+  readDeviceId,
+  touchDevice,
+  readDeviceMetadata,
+  revokeInactiveDevicesAndCountActive,
+  revokeOldestDevices
+} from '../../../utils/authStore'
+import { createSyncError } from '../../../utils/syncErrors'
+import { getOrInitQuota, handshakeSyncSession, reconcileSyncBlobsV1 } from '../../../utils/syncStoreV1'
+
+type HandshakeResponse = paths['/api/v1/sync/handshake']['post']['responses']['200']['content']['application/json']
+
+const DEVICE_INACTIVE_DAYS = 30
+const DEVICE_INACTIVE_MS = 1000 * 60 * 60 * 24 * DEVICE_INACTIVE_DAYS
+
+export default defineEventHandler(async (event) => {
+  const { userId, deviceId: tokenDeviceId } = await requireAppAuth(event)
+  const deviceId = tokenDeviceId ?? readDeviceId(event)
+  if (!deviceId)
+    throw createSyncError('SYNC_INVALID_PAYLOAD', 400, 'Missing device id')
+
+  await touchDevice(event, userId, deviceId, readDeviceMetadata(event))
+
+  const quota = await getOrInitQuota(event, userId)
+  const inactive = await revokeInactiveDevicesAndCountActive(event, userId, {
+    inactiveBefore: new Date(Date.now() - DEVICE_INACTIVE_MS).toISOString(),
+    keepDeviceId: deviceId
+  })
+  const evictedDevices = [...inactive.evicted]
+  // Counted again only when the oldest devices were revoked; otherwise the count above still holds.
+  let finalDeviceCount = inactive.activeCount
+  if (inactive.activeCount > quota.limits.device_limit) {
+    evictedDevices.push(
+      ...(await revokeOldestDevices(event, userId, {
+        limit: quota.limits.device_limit,
+        keepDeviceId: deviceId
+      }))
+    )
+    finalDeviceCount = await countActiveDevices(event, userId)
+  }
+  if (finalDeviceCount > quota.limits.device_limit) {
+    throw createSyncError('QUOTA_DEVICE_EXCEEDED', 403, 'Device limit exceeded')
+  }
+
+  const session = await handshakeSyncSession(event, userId, deviceId)
+  try {
+    await reconcileSyncBlobsV1(event, userId)
+  } catch {
+    // Reconciliation is best-effort and must not prevent a device from syncing.
+  }
+
+  const response: HandshakeResponse = {
+    sync_token: session.syncToken,
+    sync_token_expires_at: session.expiresAt,
+    server_cursor: session.serverCursor,
+    device_id: deviceId,
+    quotas: quota,
+    evicted_devices: evictedDevices.map((device) => ({
+      device_id: device.id,
+      device_name: device.deviceName,
+      platform: device.platform,
+      last_seen_at: device.lastSeenAt
+    })),
+  }
+  return response
+})
