@@ -3,6 +3,7 @@ import type { Token, TokensList } from 'marked'
 import DOMPurify from 'dompurify'
 import { Marked } from 'marked'
 import { computed, ref, watch } from 'vue'
+import { hasWindow } from '../../../../utils/env'
 import { completeInlineMarkup } from '../../stream-markdown/src/complete-inline-markup'
 import { usePacedText } from './use-paced-text'
 
@@ -56,6 +57,8 @@ function fingerprintLinks(links: TokensList['links']): string {
 function renderThinkingToken(token: Token, links: TokensList['links']): string | null {
   if (token.type === 'space')
     return null
+  if (!hasWindow() || typeof DOMPurify?.sanitize !== 'function')
+    return ''
   const list = Object.assign([token], { links }) as TokensList
   return DOMPurify.sanitize(thinkingMarked.parser(list))
 }

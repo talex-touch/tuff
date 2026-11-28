@@ -671,7 +671,6 @@ export default {
       motionText: '文字',
       motionPhysics: '物理动效',
       motionInteraction: '悬停、指针与滚动',
-      motionToggles: '切换控件',
       motionTransitions: '转场',
       misc: '其他',
     },

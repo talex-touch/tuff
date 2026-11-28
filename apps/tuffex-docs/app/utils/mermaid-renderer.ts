@@ -1,8 +1,14 @@
 let mermaidInitPromise: Promise<typeof import('mermaid')['default'] | null> | null = null
 let lastAppliedTheme: 'dark' | 'default' | null = null
 
+function isClientRuntime(): boolean {
+  if (import.meta.server)
+    return false
+  return Boolean(import.meta.client) || (typeof window !== 'undefined' && typeof document !== 'undefined')
+}
+
 async function loadMermaid() {
-  if (!import.meta.client)
+  if (!isClientRuntime())
     return null
   if (!mermaidInitPromise) {
     mermaidInitPromise = import('mermaid')
@@ -16,8 +22,24 @@ async function loadMermaid() {
 }
 
 export async function renderMermaidInDocument(root: ParentNode = document): Promise<void> {
-  if (!import.meta.client)
+  if (!isClientRuntime())
     return
+
+  const isDark = document.documentElement.classList.contains('dark')
+    || document.documentElement.getAttribute('data-theme') === 'dark'
+  const theme: 'dark' | 'default' = isDark ? 'dark' : 'default'
+  const themeChanged = lastAppliedTheme !== null && lastAppliedTheme !== theme
+
+  if (themeChanged) {
+    for (const node of root.querySelectorAll<HTMLElement>('.mermaid[data-processed]')) {
+      node.removeAttribute('data-processed')
+    }
+    if (root !== document) {
+      for (const node of document.querySelectorAll<HTMLElement>('.mermaid[data-processed]')) {
+        node.removeAttribute('data-processed')
+      }
+    }
+  }
 
   const nodes = Array.from(root.querySelectorAll<HTMLElement>('.mermaid:not([data-processed="true"])'))
   if (!nodes.length)
@@ -27,14 +49,10 @@ export async function renderMermaidInDocument(root: ParentNode = document): Prom
   if (!mermaid)
     return
 
-  const isDark = document.documentElement.classList.contains('dark')
-    || document.documentElement.getAttribute('data-theme') === 'dark'
-  const theme: 'dark' | 'default' = isDark ? 'dark' : 'default'
-
   if (lastAppliedTheme !== theme) {
     mermaid.initialize({
       startOnLoad: false,
-      securityLevel: 'loose',
+      securityLevel: 'strict',
       theme,
     })
     lastAppliedTheme = theme

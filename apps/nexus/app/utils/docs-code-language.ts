@@ -75,9 +75,8 @@ export function formatDocsCodeLanguage(language?: string | null, fallback = 'Tex
   if (PLAIN_LANGUAGES.has(key))
     return fallback
 
-  const known = LANGUAGE_LABELS[key]
-  if (known)
-    return known
+  if (Object.hasOwn(LANGUAGE_LABELS, key))
+    return LANGUAGE_LABELS[key]!
 
   return sanitized.charAt(0).toUpperCase() + sanitized.slice(1).toLowerCase()
 }

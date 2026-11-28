@@ -307,7 +307,7 @@ function highlightMarkupTag(tagSource: string): string {
 }
 
 function highlightMarkupFragment(code: string): string {
-  const pattern = /<!--[\s\S]*?-->|<\/?[A-Za-z][\w:-]*(?:\s+(?:"[^"]*"|'[^']*'|[^>"'])*)?\s*\/?>/g
+  const pattern = /<!--[\s\S]*?-->|<\/?[A-Za-z][\w:-]*(?=\s|\/?>)(?:"[^"]*"|'[^']*'|[^><"'])*\/?>/g
   let html = ''
   let lastIndex = 0
 

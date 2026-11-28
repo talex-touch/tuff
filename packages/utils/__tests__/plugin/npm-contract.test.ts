@@ -386,6 +386,9 @@ describe('npm plugin contract', () => {
       expect(isAllowedNpmRegistryUrl('https://registry.npmjs.org#frag')).toBe(false)
       expect(isAllowedNpmRegistryUrl('file:///tmp/registry')).toBe(false)
       expect(isAllowedNpmRegistryUrl('not-a-url')).toBe(false)
+      expect(isAllowedNpmRegistryUrl('https://registry.npmjs.org/a&calc')).toBe(false)
+      expect(isAllowedNpmRegistryUrl('https://registry.npmjs.org/%TEMP%')).toBe(false)
+      expect(isAllowedNpmRegistryUrl('https://registry.npmjs.org/a|b')).toBe(false)
 
       expect(resolveNpmRegistryUrl([undefined, '', 'https://registry.npmmirror.com/'])).toBe(
         'https://registry.npmmirror.com',

@@ -42,4 +42,74 @@ describe('dev raw file loading', () => {
       await fs.remove(root)
     }
   })
+
+  it('blocks path traversal in resolveId, load, and the Vite ?raw HTTP middleware with 403', async () => {
+    const parent = await fs.mkdtemp(path.join(os.tmpdir(), 'tuff-dev-traversal-'))
+    const root = path.join(parent, 'plugin')
+    const secretFile = path.join(parent, 'secret.txt')
+    const previousCwd = process.cwd()
+
+    try {
+      await fs.ensureDir(root)
+      await createPlugin(root)
+      await fs.writeFile(secretFile, 'TOP_SECRET_DATA', 'utf-8')
+      process.chdir(root)
+
+      const plugin = TouchPluginExport.vite() as any
+      await plugin.buildStart?.call({})
+
+      // resolveId must reject traversal instead of mapping to a virtual raw module
+      expect(plugin.resolveId?.('/widgets/../../secret.txt?raw')).toBeNull()
+      expect(plugin.resolveId?.('widgets/../../secret.txt?raw')).toBeNull()
+
+      // Direct load() with a forged virtual traversal id must also fail closed
+      expect(await plugin.load?.('\0virtual:tuff-raw/widgets/../../secret.txt?raw')).toBeNull()
+
+      // Vite HTTP middleware must answer 403 (never fall through via next()) on traversal
+      const middlewares: Array<(req: any, res: any, next: () => void) => Promise<void> | void> = []
+      const fakeServer = {
+        watcher: { add() {}, on() {} },
+        moduleGraph: { getModuleById() { return null }, invalidateModule() {} },
+        ws: { send() {} },
+        middlewares: {
+          use(fnOrPath: any, maybeFn?: any) {
+            if (typeof fnOrPath === 'function')
+              middlewares.push(fnOrPath)
+            else if (typeof maybeFn === 'function')
+              middlewares.push(maybeFn)
+          },
+        },
+      }
+      plugin.configureServer?.(fakeServer)
+      const rawMiddleware = middlewares[0]!
+      expect(rawMiddleware).toBeTypeOf('function')
+
+      for (const badUrl of [
+        '/widgets/../../secret.txt?raw',
+        '/widgets/..%2F..%2Fsecret.txt?raw',
+        '/../../secret.txt?raw',
+      ]) {
+        let statusCode = 0
+        let body = ''
+        let nextCalled = false
+        await rawMiddleware(
+          { url: badUrl },
+          {
+            set statusCode(code: number) { statusCode = code },
+            get statusCode() { return statusCode },
+            setHeader() {},
+            end(chunk?: string) { body = String(chunk ?? '') },
+          },
+          () => { nextCalled = true },
+        )
+        expect(statusCode, badUrl).toBe(403)
+        expect(nextCalled, badUrl).toBe(false)
+        expect(body, badUrl).not.toContain('TOP_SECRET_DATA')
+      }
+    }
+    finally {
+      process.chdir(previousCwd)
+      await fs.remove(parent)
+    }
+  })
 })

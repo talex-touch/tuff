@@ -123,6 +123,28 @@ describe('txSearchPanel', () => {
     expect(wrapper.emitted('select')).toBeUndefined()
   })
 
+  it('does not highlight or select any row when all items are disabled', async () => {
+    const wrapper = mountPanel({
+      items: [
+        { id: 'a', label: 'Blocked A', disabled: true },
+        { id: 'b', label: 'Blocked B', disabled: true },
+      ],
+    })
+    const input = wrapper.find('.tx-bui-search-panel__input')
+    expect(wrapper.find('.tx-bui-search-panel__option.is-active').exists()).toBe(false)
+    expect(wrapper.findAll('.tx-bui-search-panel__option').every(el => el.attributes('aria-selected') === 'false')).toBe(true)
+    expect(input.attributes('aria-activedescendant')).toBeUndefined()
+
+    await input.trigger('keydown', { key: 'ArrowDown' })
+    await input.trigger('keydown', { key: 'End' })
+    await input.trigger('keydown', { key: 'Home' })
+    await input.trigger('keydown', { key: 'Enter' })
+
+    expect(wrapper.find('.tx-bui-search-panel__option.is-active').exists()).toBe(false)
+    expect(input.attributes('aria-activedescendant')).toBeUndefined()
+    expect(wrapper.emitted('select')).toBeUndefined()
+  })
+
   it('selects the active option on Enter and reports clicks, without rewriting the query', async () => {
     const wrapper = mountPanel()
     const input = wrapper.find('.tx-bui-search-panel__input')

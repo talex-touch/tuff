@@ -672,7 +672,6 @@ export default {
       motionText: 'Text',
       motionPhysics: 'Physics',
       motionInteraction: 'Hover, Cursor & Scroll',
-      motionToggles: 'Toggles',
       motionTransitions: 'Transitions',
       misc: 'Misc',
     },

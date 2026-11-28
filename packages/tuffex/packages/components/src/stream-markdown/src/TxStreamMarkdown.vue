@@ -16,6 +16,7 @@ import type {
 } from './types'
 import { Marked } from 'marked'
 import { computed, onBeforeUnmount, ref, shallowRef, toRaw, watch } from 'vue'
+import { hasWindow } from '../../../../utils/env'
 import { useReducedMotion } from '../../../../utils/use-reduced-motion'
 import { streamRevealDuration } from '../../stream-text/src/presets'
 import { segmentWords } from '../../stream-text/src/segment'
@@ -202,11 +203,17 @@ function onBodyClick(event: MouseEvent): void {
   else allowRemoteImageOnce(src)
 }
 
-const sanitizer = ref<null | ((html: string) => string)>(cachedSanitizer)
-const sanitizerReady = ref(cachedSanitizer !== null)
+const sanitizer = ref<null | ((html: string) => string)>(hasWindow() ? cachedSanitizer : null)
+const sanitizerReady = ref(hasWindow() && cachedSanitizer !== null)
 let sanitizerLoading = false
 
 async function ensureSanitizer(): Promise<void> {
+  if (!hasWindow()) {
+    sanitizer.value = null
+    sanitizerReady.value = true
+    return
+  }
+
   if (sanitizer.value || sanitizerLoading)
     return
 
@@ -220,8 +227,13 @@ async function ensureSanitizer(): Promise<void> {
   try {
     sanitizerLoadPromise ??= import('dompurify')
       .then((mod) => {
-        const dp = mod.default
-        return (html: string) => dp.sanitize(html)
+        const dp = (mod as { default?: { sanitize?: unknown } }).default ?? (mod as { sanitize?: unknown })
+        if (typeof dp?.sanitize !== 'function') {
+          sanitizerLoadPromise = null
+          return null
+        }
+        const sanitizeFn = dp.sanitize.bind(dp) as (html: string) => string
+        return (html: string) => sanitizeFn(html)
       })
       .catch(() => {
         sanitizerLoadPromise = null
@@ -230,9 +242,12 @@ async function ensureSanitizer(): Promise<void> {
     const resolved = await sanitizerLoadPromise
     if (resolved)
       cachedSanitizer = resolved
+    else
+      sanitizerLoadPromise = null
     sanitizer.value = resolved
   }
   catch {
+    sanitizerLoadPromise = null
     sanitizer.value = null
   }
   finally {

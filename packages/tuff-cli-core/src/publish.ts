@@ -588,25 +588,90 @@ export async function logout(): Promise<void> {
   }
 }
 
+const UNSAFE_CLI_ARG_RE = /[\0\r\n&|<>^%!"'`;$]/
+
 function assertSafeCliArg(value: string, label: string): string {
-  if (/[\0\r\n]/.test(value))
-    throw new Error(`Invalid ${label}: contains control characters.`)
+  if (UNSAFE_CLI_ARG_RE.test(value))
+    throw new Error(`Invalid ${label}: contains disallowed shell or control characters.`)
   return value
+}
+
+export interface NpmPublishInvocation {
+  command: string
+  args: string[]
+  shell: boolean
+}
+
+export function resolveNpmPublishInvocation(
+  args: readonly string[],
+  options: {
+    platform?: NodeJS.Platform
+    execPath?: string
+    npmExecPath?: string
+    existsSync?: (candidatePath: string) => boolean
+  } = {},
+): NpmPublishInvocation {
+  const safeArgs = args.map(arg => assertSafeCliArg(arg, 'npm argument'))
+  const platform = options.platform ?? process.platform
+
+  if (platform === 'win32') {
+    const existsSync = options.existsSync ?? fs.existsSync
+    const execPath = options.execPath ?? process.execPath
+    const npmExecPath = options.npmExecPath ?? process.env.npm_execpath
+
+    if (
+      npmExecPath
+      && /npm-cli\.c?js$/i.test(npmExecPath)
+      && existsSync(npmExecPath)
+    ) {
+      return {
+        command: execPath,
+        args: [npmExecPath, ...safeArgs],
+        shell: false,
+      }
+    }
+
+    const bundledNpmCli = path.win32.resolve(
+      path.win32.dirname(execPath),
+      'node_modules',
+      'npm',
+      'bin',
+      'npm-cli.js',
+    )
+    if (existsSync(bundledNpmCli)) {
+      return {
+        command: execPath,
+        args: [bundledNpmCli, ...safeArgs],
+        shell: false,
+      }
+    }
+
+    return {
+      command: 'npm.cmd',
+      args: safeArgs,
+      shell: true,
+    }
+  }
+
+  return {
+    command: 'npm',
+    args: safeArgs,
+    shell: false,
+  }
 }
 
 async function execNpmPublishDefault(
   input: NpmPublishExecutionInput,
 ): Promise<{ stdout: string, stderr: string }> {
-  const safeArgs = input.args.map(arg => assertSafeCliArg(arg, 'npm argument'))
-  const command = process.platform === 'win32' ? 'npm.cmd' : 'npm'
+  const invocation = resolveNpmPublishInvocation(input.args)
 
   return await new Promise((resolve, reject) => {
     execFile(
-      command,
-      safeArgs,
+      invocation.command,
+      invocation.args,
       {
         cwd: input.cwd,
-        shell: process.platform === 'win32',
+        shell: invocation.shell,
         maxBuffer: 10 * 1024 * 1024,
       },
       (error, stdout, stderr) => {

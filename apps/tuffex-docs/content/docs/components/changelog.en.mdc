@@ -133,7 +133,7 @@ Fixed brand-color surface lighting, voice-message playback, semantic data tables
 
 Motion primitives and the Motion suite, a hover bridge for hover panels, and a terminal display component.
 
-- **New components (16)**: [card-spread](/en/card-spread), [carousel-3d](/en/carousel-3d), [flip-book](/en/flip-book), [morph](/en/morph), [motion](/en/motion), [motion-button](/en/motion-button), [motion-control](/en/motion-control), [motion-dock](/en/motion-dock), [motion-form](/en/motion-form), [motion-loader](/en/motion-loader), [motion-metric](/en/motion-metric), [motion-text](/en/motion-text), [motion-toggle](/en/motion-toggle), [motion-transition](/en/motion-transition), [physics-motion](/en/physics-motion), [terminal](/en/terminal)
+- **New components (16)**: [card-spread](/en/card-spread), [carousel-3d](/en/carousel-3d), [flip-book](/en/flip-book), [morph](/en/morph), [motion](/en/motion), [motion-button](/en/motion-button), [motion-control](/en/motion-control), [motion-dock](/en/motion-dock), [motion-form](/en/motion-form), [motion-loader](/en/motion-loader), [motion-metric](/en/motion-metric), [motion-text](/en/motion-text), [motion-toggle](/en/motion-button), [motion-transition](/en/motion-transition), [physics-motion](/en/physics-motion), [terminal](/en/terminal)
 - **Updated components (18)**: [ai-elements](/en/ai-elements), [base-anchor](/en/base-anchor), [button](/en/button), [charts](/en/charts), [chat](/en/chat), [code-stream](/en/code-stream), [flat-dropdown](/en/flat-dropdown), [fusion-surface](/en/fusion-surface), [icon-chip](/en/icon-chip), [icon-morph](/en/icon-morph), [liquid](/en/liquid), [popover](/en/popover), [rating](/en/rating), [slider](/en/slider), [steps](/en/steps), [switch](/en/switch), [tooltip](/en/tooltip), [transition](/en/transition)
 - **Motion documentation suite**: navigation adds [Motion](/en/motion-suite), with individually resettable live specimens and bilingual category, sidebar, overview and demo registration
 - **Existing charts module additions**: [dither-chart](/en/dither-chart) in Motion and [mono-chart](/en/mono-chart) in Data, both exported through `@talex-touch/tuffex/charts`
@@ -361,7 +361,7 @@ Introduction versions and installation barrels for all 192 component modules. Do
 | [`motion-loader`](/en/motion-loader) | pro | 0.7.0 |
 | [`motion-metric`](/en/motion-metric) | pro | 0.7.0 |
 | [`motion-text`](/en/motion-text) | pro | 0.7.0 |
-| [`motion-toggle`](/en/motion-toggle) | pro | 0.7.0 |
+| [`motion-toggle`](/en/motion-button) | pro | 0.7.0 |
 | [`motion-transition`](/en/motion-transition) | pro | 0.7.0 |
 | [`nav-bar`](/en/nav-bar) | base | 0.3.4 |
 | [`no-data`](/en/no-data) | base | 0.3.4 |

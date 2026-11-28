@@ -53,7 +53,7 @@ export function normalizeShikiLang(raw?: string | null): string {
   if (!raw || typeof raw !== 'string')
     return 'text'
   const key = raw.trim().toLowerCase()
-  return LANG_ALIASES[key] ?? 'text'
+  return Object.hasOwn(LANG_ALIASES, key) ? LANG_ALIASES[key]! : 'text'
 }
 
 export function escapeCodeHtml(value: string): string {

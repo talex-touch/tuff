@@ -34,7 +34,7 @@ defineSlots<{
 
 const inputRef = ref<HTMLInputElement | null>(null)
 const bodyRef = ref<HTMLElement | null>(null)
-const activeIndex = ref(0)
+const activeIndex = ref(-1)
 const composing = ref(false)
 const uid = useId()
 const listId = computed(() => `${uid}-list`)
@@ -86,12 +86,13 @@ const results = computed(() => {
 const showEmpty = computed(() => query.value.length >= props.emptyThreshold && results.value.length === 0)
 
 const activeOptionId = computed(() =>
-  results.value.length ? `${uid}-opt-${activeIndex.value}` : undefined,
+  activeIndex.value >= 0 && activeIndex.value < results.value.length
+    ? `${uid}-opt-${activeIndex.value}`
+    : undefined,
 )
 
 function firstEnabledIndex() {
-  const index = results.value.findIndex(item => !item.disabled)
-  return index === -1 ? 0 : index
+  return results.value.findIndex(item => !item.disabled)
 }
 
 // Arrow navigation steps over disabled rows so the highlight never parks
@@ -101,7 +102,7 @@ function moveActive(delta: number) {
   const count = list.length
   if (!count)
     return
-  let next = activeIndex.value
+  let next = activeIndex.value < 0 ? (delta > 0 ? -1 : count) : activeIndex.value
   for (let i = 0; i < count; i++) {
     next = (next + delta + count) % count
     if (!list[next]?.disabled) {
@@ -109,6 +110,7 @@ function moveActive(delta: number) {
       return
     }
   }
+  activeIndex.value = -1
 }
 
 function moveToEdge(edge: 'start' | 'end') {
@@ -119,10 +121,13 @@ function moveToEdge(edge: 'start' | 'end') {
     activeIndex.value = firstEnabledIndex()
     return
   }
-  const last = list.length - 1
-  activeIndex.value = last
-  if (list[last]?.disabled)
-    moveActive(-1)
+  for (let i = list.length - 1; i >= 0; i--) {
+    if (!list[i]?.disabled) {
+      activeIndex.value = i
+      return
+    }
+  }
+  activeIndex.value = -1
 }
 
 function onHover(index: number, item: SearchPanelItem) {
@@ -202,7 +207,7 @@ watch(
 
 watch(results, () => {
   activeIndex.value = firstEnabledIndex()
-})
+}, { immediate: true })
 
 function setQuery(value: string) {
   emit('update:modelValue', value)
@@ -265,8 +270,10 @@ function onKeydown(event: KeyboardEvent) {
       break
     case 'Enter': {
       event.preventDefault()
+      if (activeIndex.value < 0)
+        break
       const current = results.value[activeIndex.value]
-      if (current)
+      if (current && !current.disabled)
         selectItem(current)
       break
     }

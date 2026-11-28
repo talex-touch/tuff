@@ -35,6 +35,73 @@ function stripRequestSuffix(id: string): string {
   return suffixIndex === -1 ? id : id.slice(0, suffixIndex)
 }
 
+function getRequestSuffix(id: string): string {
+  const suffixIndex = id.search(/[?#]/)
+  return suffixIndex === -1 ? '' : id.slice(suffixIndex)
+}
+
+function isContainedPath(rootDir: string, candidatePath: string): boolean {
+  const resolvedRoot = path.resolve(rootDir)
+  const resolvedCandidate = path.resolve(candidatePath)
+  const rel = path.relative(resolvedRoot, resolvedCandidate)
+  return Boolean(rel)
+    && rel !== '.'
+    && rel !== '..'
+    && !rel.startsWith('../')
+    && !path.isAbsolute(rel)
+}
+
+type VirtualPathResolution
+  = | { kind: 'allowed', fileId: string, filePath: string }
+    | { kind: 'traversal' }
+    | { kind: 'unmatched' }
+
+function resolveAllowedVirtualFile(
+  projectRoot: string,
+  rawFileId: string,
+  filesToVirtualize: readonly string[],
+): VirtualPathResolution {
+  if (!rawFileId || rawFileId.includes('\0'))
+    return { kind: 'traversal' }
+
+  const normalizedSeparators = rawFileId.replace(/\\/g, '/')
+  const cleaned = normalizedSeparators.replace(/^\/+/, '')
+  if (!cleaned)
+    return { kind: 'unmatched' }
+
+  const segments = cleaned.split('/')
+  if (segments.includes('..'))
+    return { kind: 'traversal' }
+
+  const resolvedRoot = path.resolve(projectRoot)
+  const resolvedPath = path.resolve(resolvedRoot, cleaned)
+  if (!isContainedPath(resolvedRoot, resolvedPath))
+    return { kind: 'traversal' }
+
+  const normalizedRel = path.relative(resolvedRoot, resolvedPath).replace(/\\/g, '/')
+  const widgetsRoot = path.resolve(resolvedRoot, 'widgets')
+  const insideWidgets = isContainedPath(widgetsRoot, resolvedPath)
+
+  if (filesToVirtualize.includes(normalizedRel) || insideWidgets) {
+    return { kind: 'allowed', fileId: normalizedRel, filePath: resolvedPath }
+  }
+
+  return { kind: 'unmatched' }
+}
+
+async function isRealPathWithinRoot(projectRoot: string, targetPath: string): Promise<boolean> {
+  try {
+    const [realRoot, realTarget] = await Promise.all([
+      fs.realpath(projectRoot),
+      fs.realpath(targetPath),
+    ])
+    return isContainedPath(realRoot, realTarget)
+  }
+  catch {
+    return false
+  }
+}
+
 function hasRawRequestQuery(id: string): boolean {
   const queryIndex = id.indexOf('?')
   if (queryIndex === -1)
@@ -202,10 +269,11 @@ export default createUnplugin<Options | undefined>((options, meta) => {
     resolveId(id) {
       const normalizedId = id.startsWith('/') ? id.slice(1) : id
       const fileId = stripRequestSuffix(normalizedId)
+      const suffix = getRequestSuffix(normalizedId)
 
-      if (filesToVirtualize.includes(fileId) || fileId.startsWith('widgets/')) {
-        const resolvedId = VIRTUAL_PREFIX_RESOLVED + normalizedId
-        return resolvedId
+      const resolved = resolveAllowedVirtualFile(projectRoot, fileId, filesToVirtualize)
+      if (resolved.kind === 'allowed') {
+        return VIRTUAL_PREFIX_RESOLVED + resolved.fileId + suffix
       }
       return null
     },
@@ -214,10 +282,14 @@ export default createUnplugin<Options | undefined>((options, meta) => {
       if (id.startsWith(VIRTUAL_PREFIX_RESOLVED)) {
         const originalId = id.slice(VIRTUAL_PREFIX_RESOLVED.length)
         const fileId = stripRequestSuffix(originalId)
-        const filePath = path.join(projectRoot, fileId)
+        const resolved = resolveAllowedVirtualFile(projectRoot, fileId, filesToVirtualize)
+        if (resolved.kind !== 'allowed')
+          return null
+
+        const { fileId: safeFileId, filePath } = resolved
 
         // Special handling for virtual index.js when Prelude source is configured or detected
-        if (fileId === PRELUDE_OUTPUT_FILE && preludeConfig) {
+        if (safeFileId === PRELUDE_OUTPUT_FILE && preludeConfig) {
           const chalk = await getChalk()
           const bundledCode = await buildPreludeBundle(
             projectRoot,
@@ -232,13 +304,15 @@ export default createUnplugin<Options | undefined>((options, meta) => {
 
         try {
           await fs.access(filePath)
+          if (!await isRealPathWithinRoot(projectRoot, filePath))
+            return null
           const content = await fs.readFile(filePath, 'utf-8')
           if (hasRawRequestQuery(originalId)) {
             return `export default ${JSON.stringify(content)};`
           }
           return content
         }
-        catch (e) {
+        catch {
           const errorPayload = {
             status: 404,
             message: '[Tuff DevKit] File not found.',
@@ -339,34 +413,57 @@ export default createUnplugin<Options | undefined>((options, meta) => {
           if (!requestUrl.searchParams.has('raw'))
             return next()
 
+          // Inspect raw pathname BEFORE URL dot-segment normalization so requests like
+          // `/widgets/../../secret.txt?raw` are rejected with 403 instead of normalized to `/secret.txt`.
+          let rawDecodedPath: string
+          try {
+            rawDecodedPath = decodeURIComponent(stripRequestSuffix(req.url))
+          }
+          catch {
+            res.statusCode = 400
+            res.setHeader('Content-Type', 'text/plain; charset=utf-8')
+            res.end('[Tuff DevKit] Invalid request path.')
+            return
+          }
+
+          if (rawDecodedPath.includes('\0') || /(?:^|[\\/])\.\.(?:[\\/]|$)/.test(rawDecodedPath)) {
+            res.statusCode = 403
+            res.setHeader('Content-Type', 'text/plain; charset=utf-8')
+            res.end('[Tuff DevKit] Forbidden path.')
+            return
+          }
+
           let requestPath: string
           try {
             requestPath = decodeURIComponent(requestUrl.pathname).replace(/^\/+/, '')
           }
           catch {
-            return next()
+            res.statusCode = 400
+            res.setHeader('Content-Type', 'text/plain; charset=utf-8')
+            res.end('[Tuff DevKit] Invalid request path.')
+            return
           }
 
-          const fileId = path.normalize(requestPath)
-          if (
-            !fileId ||
-            fileId === '.' ||
-            fileId === '..' ||
-            fileId.startsWith('../') ||
-            path.isAbsolute(fileId)
-          ) {
-            return next()
+          const resolved = resolveAllowedVirtualFile(projectRoot, requestPath, filesToVirtualize)
+          if (resolved.kind === 'traversal') {
+            res.statusCode = 403
+            res.setHeader('Content-Type', 'text/plain; charset=utf-8')
+            res.end('[Tuff DevKit] Forbidden path.')
+            return
           }
 
-          if (!filesToVirtualize.includes(fileId) && !fileId.startsWith('widgets/'))
+          if (resolved.kind !== 'allowed')
             return next()
 
-          const filePath = path.resolve(projectRoot, fileId)
-          const relative = path.relative(projectRoot, filePath)
-          if (relative.startsWith('..') || path.isAbsolute(relative))
-            return next()
-
+          const { fileId, filePath } = resolved
           try {
+            await fs.access(filePath)
+            if (!await isRealPathWithinRoot(projectRoot, filePath)) {
+              res.statusCode = 403
+              res.setHeader('Content-Type', 'text/plain; charset=utf-8')
+              res.end('[Tuff DevKit] Forbidden path.')
+              return
+            }
             const content = await fs.readFile(filePath, 'utf-8')
             res.statusCode = 200
             res.setHeader('Content-Type', 'text/plain; charset=utf-8')

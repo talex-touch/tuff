@@ -8,7 +8,7 @@ import {
   statSync,
   writeFileSync,
 } from 'node:fs'
-import { dirname, join, relative, resolve } from 'node:path'
+import { basename, dirname, join, relative, resolve } from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 
@@ -524,7 +524,7 @@ function stripForbiddenBuildArtifacts(stageRoot) {
 
   // Remove any dump.*.sql files
   for (const file of walkFiles(stageRoot)) {
-    const base = file.split('/').pop() || ''
+    const base = basename(file)
     if (/^dump\..*\.sql$/i.test(base)) {
       rmSync(file, { force: true })
       removed.push(relative(stageRoot, file))

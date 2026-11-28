@@ -74,6 +74,9 @@ describe('auth credential store', () => {
 
     await expect(modeOf(tempDir)).resolves.toBe(0o700)
     await expect(modeOf(getAuthTokenPath())).resolves.toBe(0o600)
+    // Atomic temp-file write must leave no temporary sibling files behind.
+    const entries = await fs.readdir(tempDir)
+    expect(entries).toEqual(['auth.json'])
   })
 
   it('falls back to env token when stored base URL does not match', async () => {

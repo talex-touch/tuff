@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto'
 import os from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
@@ -111,8 +112,25 @@ export function createCliCredentialStore<T>(options: CliCredentialStoreOptions<T
     async write(value: T): Promise<CliCredentialWriteResult> {
       const dirPath = path.dirname(filePath)
       const directoryModeSecured = await secureDirectory(dirPath)
-      await fs.writeJson(filePath, value, { spaces: 2 })
-      const fileModeSecured = await secureFile(filePath)
+      const payload = `${JSON.stringify(value, null, 2)}\n`
+      const tempPath = path.join(
+        dirPath,
+        `.${path.basename(filePath)}.${process.pid}.${randomBytes(6).toString('hex')}.tmp`,
+      )
+      let fileModeSecured = false
+      try {
+        await fs.writeFile(tempPath, payload, {
+          encoding: 'utf8',
+          mode: isPosix() ? FILE_MODE : undefined,
+          flag: 'wx',
+        })
+        fileModeSecured = await secureFile(tempPath)
+        await fs.rename(tempPath, filePath)
+      }
+      catch (error) {
+        await fs.remove(tempPath).catch(() => {})
+        throw error
+      }
       const warning = getWindowsSecurityWarning(filePath)
       if (warning) {
         onWarning?.(warning)

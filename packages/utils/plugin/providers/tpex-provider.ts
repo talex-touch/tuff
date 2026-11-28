@@ -14,6 +14,73 @@ import { PluginProviderType } from './types'
 const DEFAULT_TPEX_API = NEXUS_BASE_URL
 const ALL_HTTP_STATUS = Array.from({ length: 500 }, (_, index) => index + 100)
 
+function sanitizeTpexFilenamePart(value: string, fallback: string): string {
+  const cleaned = value.replace(/[^a-z0-9._-]+/gi, '-').replace(/^[.-]+|[.-]+$/g, '')
+  return cleaned || fallback
+}
+
+function hasControlChar(value: string): boolean {
+  for (let i = 0; i < value.length; i += 1) {
+    const code = value.charCodeAt(i)
+    if (code <= 0x1F || code === 0x7F)
+      return true
+  }
+  return false
+}
+
+function resolveSafeHttpUrl(rawUrl: string, apiBase?: string): string {
+  const trimmed = rawUrl.trim()
+  if (!trimmed || hasControlChar(trimmed)) {
+    throw new Error(`Invalid TPEX download URL: ${rawUrl}`)
+  }
+
+  let parsed: URL
+  if (trimmed.startsWith('/')) {
+    if (trimmed.startsWith('//') || !apiBase) {
+      throw new Error(`Invalid TPEX download URL: ${rawUrl}`)
+    }
+    try {
+      parsed = new URL(trimmed, `${apiBase}/`)
+    }
+    catch {
+      throw new Error(`Invalid TPEX download URL: ${rawUrl}`)
+    }
+  }
+  else {
+    try {
+      parsed = new URL(trimmed)
+    }
+    catch {
+      throw new Error(`Invalid TPEX download URL: ${rawUrl}`)
+    }
+  }
+
+  if (
+    (parsed.protocol !== 'https:' && parsed.protocol !== 'http:')
+    || !parsed.hostname
+    || parsed.username
+    || parsed.password
+  ) {
+    throw new Error(`Disallowed TPEX download URL: ${rawUrl}`)
+  }
+
+  return parsed.toString()
+}
+
+async function writeTpexTempFile(
+  arrayBuffer: ArrayBuffer,
+  fileName: string,
+  tempDir?: string,
+): Promise<string> {
+  const path = await import('node:path')
+  const os = await import('node:os')
+  const fs = await import('node:fs/promises')
+  const resolvedDir = tempDir || await fs.mkdtemp(path.join(os.tmpdir(), 'tuff-tpex-'))
+  const filePath = path.join(resolvedDir, fileName)
+  await fs.writeFile(filePath, Buffer.from(arrayBuffer))
+  return filePath
+}
+
 /**
  * Check if source is a .tpex file path or URL
  */
@@ -25,7 +92,7 @@ function isTpexFile(source: string): boolean {
  * Check if source is a remote URL
  */
 function isRemoteUrl(source: string): boolean {
-  return /^https?:\/\//i.test(source)
+  return /^https?:\/\//i.test(source.trim())
 }
 
 export interface TpexPluginInfo {
@@ -144,20 +211,21 @@ export class TpexProvider implements PluginProvider {
     let arrayBuffer: ArrayBuffer | undefined
 
     if (isRemoteUrl(request.source)) {
+      const downloadUrl = resolveSafeHttpUrl(request.source)
       // Download remote .tpex file
       const downloadRes = await networkClient.request<ArrayBuffer>({
         method: 'GET',
-        url: request.source,
+        url: downloadUrl,
         responseType: 'arrayBuffer'
       })
       arrayBuffer = downloadRes.data
-      const tempDir = context?.tempDir ?? '/tmp'
-      const fileName = `tpex-${Date.now()}.tpex`
-      filePath = `${tempDir}/${fileName}`
+      const fileName = 'plugin.tpex'
 
       if (typeof process !== 'undefined') {
-        const fs = await import('node:fs/promises')
-        await fs.writeFile(filePath, Buffer.from(arrayBuffer))
+        filePath = await writeTpexTempFile(arrayBuffer, fileName, context?.tempDir)
+      }
+      else {
+        filePath = `${context?.tempDir ?? '/tmp'}/${fileName}`
       }
     }
 
@@ -189,7 +257,7 @@ export class TpexProvider implements PluginProvider {
 
     const detailRes = await networkClient.request<TpexDetailResponse>({
       method: 'GET',
-      url: `${this.apiBase}/api/store/plugins/${slug}`,
+      url: `${this.apiBase}/api/store/plugins/${encodeURIComponent(slug)}`,
       validateStatus: ALL_HTTP_STATUS
     })
     if (detailRes.status < 200 || detailRes.status >= 300) {
@@ -211,9 +279,7 @@ export class TpexProvider implements PluginProvider {
       throw new Error(`No downloadable version found for plugin: ${slug}`)
     }
 
-    const downloadUrl = targetVersion.packageUrl.startsWith('http')
-      ? targetVersion.packageUrl
-      : `${this.apiBase}${targetVersion.packageUrl}`
+    const downloadUrl = resolveSafeHttpUrl(targetVersion.packageUrl, this.apiBase)
 
     const downloadRes = await networkClient.request<ArrayBuffer>({
       method: 'GET',
@@ -221,14 +287,12 @@ export class TpexProvider implements PluginProvider {
       responseType: 'arrayBuffer'
     })
     const arrayBuffer = downloadRes.data
-    const tempDir = context?.tempDir ?? '/tmp'
-    const fileName = `${slug}-${targetVersion.version}.tpex`
-    const filePath = `${tempDir}/${fileName}`
-
-    if (typeof process !== 'undefined') {
-      const fs = await import('node:fs/promises')
-      await fs.writeFile(filePath, Buffer.from(arrayBuffer))
-    }
+    const safeSlug = sanitizeTpexFilenamePart(slug, 'plugin')
+    const safeVersion = sanitizeTpexFilenamePart(targetVersion.version, 'latest')
+    const fileName = `${safeSlug}-${safeVersion}.tpex`
+    const filePath = typeof process !== 'undefined'
+      ? await writeTpexTempFile(arrayBuffer, fileName, context?.tempDir)
+      : `${context?.tempDir ?? '/tmp'}/${fileName}`
 
     const manifest: IManifest | undefined = targetVersion.manifest
       ? {
@@ -282,9 +346,12 @@ export class TpexProvider implements PluginProvider {
    * Get plugin details by slug
    */
   async getPlugin(slug: string): Promise<TpexDetailResponse['plugin'] | null> {
+    const trimmed = slug.trim()
+    if (!trimmed)
+      return null
     const res = await networkClient.request<TpexDetailResponse>({
       method: 'GET',
-      url: `${this.apiBase}/api/store/plugins/${slug}`,
+      url: `${this.apiBase}/api/store/plugins/${encodeURIComponent(trimmed)}`,
       validateStatus: ALL_HTTP_STATUS
     })
     if (res.status < 200 || res.status >= 300) {

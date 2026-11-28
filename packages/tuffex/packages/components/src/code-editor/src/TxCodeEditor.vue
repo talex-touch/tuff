@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { CodeEditorEmits, CodeEditorProps, CodeEditorViewMode } from './types'
 import type { Component } from 'vue'
-import { onMounted, shallowRef } from 'vue'
+import { onBeforeUnmount, onMounted, shallowRef } from 'vue'
 
 defineOptions({
   name: 'TxCodeEditor',
@@ -45,8 +45,21 @@ type RuntimeEditorExpose = {
 const RuntimeEditor = shallowRef<Component | null>(null)
 const editorRef = shallowRef<RuntimeEditorExpose | null>(null)
 
-onMounted(async () => {
-  RuntimeEditor.value = (await import('./TxCodeEditorRuntime.vue')).default
+let isUnmounted = false
+
+onBeforeUnmount(() => {
+  isUnmounted = true
+})
+
+onMounted(() => {
+  void import('./TxCodeEditorRuntime.vue')
+    .then((mod) => {
+      if (!isUnmounted)
+        RuntimeEditor.value = mod.default
+    })
+    .catch(() => {
+      // Keep placeholder when dynamic runtime chunk fails to load.
+    })
 })
 
 function emitModelValue(value: string) {

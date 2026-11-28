@@ -192,9 +192,7 @@ function escapeNonPreVueText(value: string): string {
   const escaped = escapeHtmlText(value)
   if (!escaped.includes('{{') && !escaped.includes('}}'))
     return escaped
-  return escaped
-    .replace(/\{\{/g, '{{ \'{{\' }}')
-    .replace(/\}\}/g, '{{ \'}}\' }}')
+  return escaped.replace(/\{\{|\}\}/g, token => `{{ '${token}' }}`)
 }
 
 function escapeHtmlAttr(value: string): string {
@@ -256,7 +254,9 @@ function decodeBoundPropValue(raw: unknown, frontmatter: Record<string, unknown>
   // Match MDCRenderer's `evalInContext` behavior: first check dot-path in frontmatter, then JSON/destr parse.
   if (/^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*$/.test(trimmed)) {
     const lookedUp = trimmed.split('.').reduce<unknown>(
-      (cursor, key) => (cursor && typeof cursor === 'object' && !Array.isArray(cursor) ? (cursor as Record<string, unknown>)[key] : undefined),
+      (cursor, key) => (cursor && typeof cursor === 'object' && !Array.isArray(cursor) && Object.hasOwn(cursor, key)
+        ? (cursor as Record<string, unknown>)[key]
+        : undefined),
       frontmatter,
     )
     if (lookedUp !== undefined)
@@ -349,9 +349,8 @@ const SVG_PRESERVE_CASE_ATTRS = new Set([
 ])
 
 function hastPropToAttrName(prop: string, inSvg: boolean): string {
-  const mapped = HAST_HTML_ATTR_MAP[prop]
-  if (mapped)
-    return mapped
+  if (Object.hasOwn(HAST_HTML_ATTR_MAP, prop))
+    return HAST_HTML_ATTR_MAP[prop]!
   if (prop.startsWith('aria') && prop.length > 4 && /[A-Z]/.test(prop[4]!))
     return prop.replace(/([A-Z])/g, '-$1').toLowerCase()
   if (prop.startsWith('data') && prop.length > 4 && /[A-Z]/.test(prop[4]!))

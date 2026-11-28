@@ -75,6 +75,8 @@ function onSearchKeydown(event: KeyboardEvent) {
 }
 
 function onReplaceKeydown(event: KeyboardEvent) {
+  if (props.state.readOnly)
+    return
   if (event.key === 'Enter') {
     event.preventDefault()
     replaceNext(props.view)
@@ -94,10 +96,14 @@ function handleSelectAll() {
 }
 
 function handleReplaceNext() {
+  if (props.state.readOnly)
+    return
   replaceNext(props.view)
 }
 
 function handleReplaceAll() {
+  if (props.state.readOnly)
+    return
   replaceAll(props.view)
 }
 

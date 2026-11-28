@@ -208,6 +208,33 @@ describe('avatar editor binary codecs', () => {
     expect(rasterOut).toContain('clip-path="url(#tx-avatar-clip)"')
   })
 
+  it('blocks namespace-prefixed scripts, style, SMIL, control-char schemes, and fails closed on XML parsererror', () => {
+    const adversarialSvg = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:s="http://www.w3.org/2000/svg" xmlns:x="http://www.w3.org/1999/xlink" viewBox="0 0 64 64">
+      <s:script>alert(1)</s:script>
+      <style>@import url(https://evil.test/x.css);</style>
+      <set attributeName="href" to="javascript:alert(2)" />
+      <animate attributeName="x" from="0" to="10" />
+      <use x:href="java&#9;script:alert(3)" />
+      <image href="https://evil.test/track.png" width="10" height="10" />
+      <image href="data:image/png;base64,AAAA" width="10" height="10" />
+      <circle cx="32" cy="32" r="20" fill="#409eff" />
+    </svg>`
+    const parsed = parseAndSanitizeSvg(adversarialSvg)
+    expect(parsed).not.toBeNull()
+    expect(parsed!.innerMarkup).not.toContain('script')
+    expect(parsed!.innerMarkup).not.toContain('<style')
+    expect(parsed!.innerMarkup).not.toContain('<set')
+    expect(parsed!.innerMarkup).not.toContain('<animate')
+    expect(parsed!.innerMarkup).not.toContain('evil.test')
+    expect(parsed!.innerMarkup).toContain('data:image/png;base64,AAAA')
+    expect(parsed!.innerMarkup).toContain('<circle')
+    expect(parsed!.preservesRootStyling).toBe(false)
+
+    // Malformed XML triggering parsererror must fail closed (return null), never regex fallback.
+    const malformedSvg = '<svg viewBox="0 0 64 64"><circle cx="1" cy="1" r="1" & /><img src="x"onerror="alert(1)"/></svg>'
+    expect(parseAndSanitizeSvg(malformedSvg)).toBeNull()
+  })
+
   it('round-trips multi-frame animated GIF89a with transparency and large LZW streams', () => {
     const w = 16
     const h = 16

@@ -12,6 +12,7 @@ import {
   scanBuiltPluginPackage,
   SECURITY_WAIVERS_FILENAME,
 } from '../security-scan'
+import { readTpexSecurityScanInput } from '../tpex-security-reader'
 
 const TAR_BLOCK_SIZE = 512
 const fixtureRoots: string[] = []
@@ -98,6 +99,69 @@ describe('built plugin security scan', () => {
     )
     expect(rawRuntimeFinding?.location.path).toBe('index.js')
     expect(() => assertPluginSecurityScan(report)).toThrow('PLUGIN_SCAN_RAW_RUNTIME_ESCAPE')
+  })
+
+  it('validates raw tar entry paths before normalization and ignores nested sub/manifest.json overrides', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'tuff-tpex-policy-'))
+    fixtureRoots.push(root)
+
+    // 1. Archive with non-canonical tar paths (`./index.js`, `sub\\a.js`, `a//b.js`) must fail policy.
+    const indexSrc = 'export const ok = true'
+    const filesMap = { 'index.js': `sha256-${createHash('sha256').update(indexSrc).digest('hex')}` }
+    const rootManifest = {
+      id: 'com.tuffex.demo-plugin',
+      name: 'demo-plugin',
+      version: '1.0.0',
+      sdkapi: 260428,
+      category: 'utilities',
+      permissions: { required: [], optional: [] },
+      _files: filesMap,
+      _signature: createHash('md5').update(JSON.stringify(filesMap)).digest('base64'),
+    }
+
+    for (const badTarPath of ['./index.js', 'sub\\evil.js', 'a//b.js']) {
+      const badPkg = path.join(root, `bad-${badTarPath.replace(/[^a-z0-9]/gi, '_')}.tpex`)
+      const tarBytes = Buffer.concat([
+        createTarEntry(badTarPath, indexSrc),
+        createTarEntry('manifest.json', JSON.stringify(rootManifest)),
+        Buffer.alloc(TAR_BLOCK_SIZE * 2),
+      ])
+      await fs.writeFile(badPkg, tarBytes)
+      const scanned = readTpexSecurityScanInput(badPkg)
+      expect(scanned.policy.ok, badTarPath).toBe(false)
+      expect(scanned.policy.ok === false && scanned.policy.violations.some(v => v.code === 'PLUGIN_PACKAGE_ENTRY_PATH_INVALID'), badTarPath).toBe(true)
+    }
+
+    // 2. Nested sub/manifest.json after root manifest.json must NOT overwrite root manifest.
+    const nestedManifest = JSON.stringify({
+      id: 'com.evil.spoofed',
+      name: 'spoofed',
+      version: '9.9.9',
+      sdkapi: 260428,
+      category: 'utilities',
+      permissions: { required: [], optional: [] },
+      _files: {},
+    })
+    const nestedFiles = {
+      'index.js': `sha256-${createHash('sha256').update(indexSrc).digest('hex')}`,
+      'sub/manifest.json': `sha256-${createHash('sha256').update(nestedManifest).digest('hex')}`,
+    }
+    const validRootManifest = {
+      ...rootManifest,
+      _files: nestedFiles,
+      _signature: createHash('md5').update(JSON.stringify(nestedFiles)).digest('base64'),
+    }
+    const nestedPkg = path.join(root, 'nested-manifest.tpex')
+    await fs.writeFile(nestedPkg, Buffer.concat([
+      createTarEntry('manifest.json', JSON.stringify(validRootManifest)),
+      createTarEntry('index.js', indexSrc),
+      createTarEntry('sub/manifest.json', nestedManifest),
+      Buffer.alloc(TAR_BLOCK_SIZE * 2),
+    ]))
+    const nestedScanned = readTpexSecurityScanInput(nestedPkg)
+    expect((nestedScanned.manifest as { id?: string }).id).toBe('com.tuffex.demo-plugin')
+    expect(nestedScanned.policy.ok).toBe(true)
+    expect(nestedScanned.integrityPassed).toBe(true)
   })
 })
 

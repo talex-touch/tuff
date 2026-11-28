@@ -81,7 +81,7 @@ watch(
       query.value = next
   },
 )
-const activeIndex = ref(0)
+const activeIndex = ref(-1)
 const zIndex = ref(zIndexAllocator.get())
 const composing = ref(false)
 const focusReturn = createFocusReturn()
@@ -112,12 +112,13 @@ const listId = useId()
 // focus stays in the input, so screen readers announce each command as the user
 // moves through the (already-implemented) active-index navigation.
 const activeOptionId = computed(() =>
-  filteredCommands.value.length ? `${listId}-opt-${activeIndex.value}` : undefined,
+  activeIndex.value >= 0 && activeIndex.value < filteredCommands.value.length
+    ? `${listId}-opt-${activeIndex.value}`
+    : undefined,
 )
 
 function firstEnabledIndex() {
-  const idx = filteredCommands.value.findIndex(cmd => !cmd.disabled)
-  return idx === -1 ? 0 : idx
+  return filteredCommands.value.findIndex(cmd => !cmd.disabled)
 }
 
 // Arrow navigation skips disabled commands so the highlight never parks on an
@@ -127,7 +128,7 @@ function moveActive(delta: number) {
   const n = list.length
   if (!n)
     return
-  let next = activeIndex.value
+  let next = activeIndex.value < 0 ? (delta > 0 ? -1 : n) : activeIndex.value
   for (let i = 0; i < n; i++) {
     next = (next + delta + n) % n
     if (!list[next]?.disabled) {
@@ -135,7 +136,7 @@ function moveActive(delta: number) {
       return
     }
   }
-  // Every command is disabled — leave the highlight where it is.
+  activeIndex.value = -1
 }
 
 watch(
@@ -159,7 +160,7 @@ watch(
     if (query.value !== '')
       emit('update:query', '')
     query.value = ''
-    activeIndex.value = 0
+    activeIndex.value = -1
   },
   { immediate: true },
 )
@@ -389,8 +390,10 @@ function onKeydown(e: KeyboardEvent) {
   }
   if (e.key === 'Enter') {
     e.preventDefault()
+    if (activeIndex.value < 0)
+      return
     const current = filteredCommands.value[activeIndex.value]
-    if (current)
+    if (current && !current.disabled)
       selectItem(current)
   }
 }

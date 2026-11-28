@@ -2,7 +2,7 @@
 import type { TreeValue } from './tree-parser'
 import { computed } from 'vue'
 import TxCheckbox from '../../checkbox/src/TxCheckbox.vue'
-import { isCssColorValue } from './tree-parser'
+import { encodeTreePathKey, isCssColorValue } from './tree-parser'
 
 defineOptions({
   name: 'TxCodeEditorTreeNode',
@@ -16,10 +16,12 @@ const props = withDefaults(defineProps<{
   expandedPaths: ReadonlySet<string>
   selectedPathKey: string
   editable?: boolean
+  ancestors?: ReadonlySet<object>
 }>(), {
   nodeKey: null,
   depth: 0,
   editable: false,
+  ancestors: () => new Set<object>(),
 })
 
 const emit = defineEmits<{
@@ -28,15 +30,26 @@ const emit = defineEmits<{
   updateValue: [payload: { path: (string | number)[], value: TreeValue }]
 }>()
 
-const pathKey = computed(() => (props.path.length === 0 ? '$' : props.path.map(String).join('.')))
+const pathKey = computed(() => encodeTreePathKey(props.path))
 
+const isCycle = computed(() => props.value !== null && typeof props.value === 'object' && props.ancestors.has(props.value))
 const isArray = computed(() => Array.isArray(props.value))
 const isObject = computed(() => props.value !== null && typeof props.value === 'object' && !Array.isArray(props.value))
-const isBranch = computed(() => isArray.value || isObject.value)
-const isExpanded = computed(() => props.expandedPaths.has(pathKey.value))
+const isBranch = computed(() => !isCycle.value && (isArray.value || isObject.value))
+const isExpanded = computed(() => isBranch.value && props.expandedPaths.has(pathKey.value))
 const isSelected = computed(() => props.selectedPathKey === pathKey.value)
 
+const childAncestors = computed<ReadonlySet<object>>(() => {
+  if (props.value === null || typeof props.value !== 'object')
+    return props.ancestors
+  const next = new Set(props.ancestors)
+  next.add(props.value)
+  return next
+})
+
 const entries = computed<Array<{ key: string | number, value: TreeValue }>>(() => {
+  if (isCycle.value)
+    return []
   if (Array.isArray(props.value))
     return props.value.map((item, index) => ({ key: index, value: item }))
   if (props.value !== null && typeof props.value === 'object') {
@@ -114,6 +127,10 @@ function handleBooleanChange(next: boolean) {
         <span v-if="!isExpanded" class="tx-ce-nm">{{ isArray ? ']' : '}' }}</span>
       </template>
 
+      <template v-else-if="isCycle">
+        <span class="tx-ce-nv is-null">[Circular]</span>
+      </template>
+
       <template v-else-if="typeof value === 'boolean'">
         <span class="tx-ce-nv" @click.stop>
           <TxCheckbox
@@ -163,6 +180,7 @@ function handleBooleanChange(next: boolean) {
         :expanded-paths="expandedPaths"
         :selected-path-key="selectedPathKey"
         :editable="editable"
+        :ancestors="childAncestors"
         @toggle="emit('toggle', $event)"
         @select="emit('select', $event)"
         @update-value="emit('updateValue', $event)"

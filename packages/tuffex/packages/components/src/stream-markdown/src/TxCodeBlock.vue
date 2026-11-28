@@ -207,16 +207,25 @@ watch([canPreview, () => props.inlinePreview], ([allowed, inline]) => {
   if (!allowed || !inline) showPreview.value = false
 })
 
+const PREVIEW_CSP = 'default-src \'none\'; frame-src about:; style-src \'unsafe-inline\'; img-src data: blob:; font-src data:; script-src \'none\''
+
+function escapeAttribute(value: string): string {
+  return value.replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+}
+
 /**
  * `srcdoc` inside a sandboxed frame: no same-origin, so the preview cannot
  * reach the app's DOM, storage or IPC. Scripts stay off entirely — a rendered
- * preview is for looking at markup, not for running a program.
+ * preview is for looking at markup, not for running a program. The outer
+ * document carries a restrictive CSP inherited by the nested `srcdoc` frame so
+ * markup cannot make external network requests or beacon remote resources.
  */
-const previewDocument = computed(() =>
-  props.lang === 'svg' || props.lang === 'xml'
+const previewDocument = computed(() => {
+  const inner = props.lang === 'svg' || props.lang === 'xml'
     ? `<!doctype html><meta charset="utf-8"><body style="margin:0;display:grid;place-items:center">${props.code}</body>`
     : props.code
-)
+  return `<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${PREVIEW_CSP}"><style>html,body{margin:0;height:100%;background:#fff}iframe{display:block;width:100%;height:100%;border:0}</style><iframe sandbox="" srcdoc="${escapeAttribute(inner)}"></iframe>`
+})
 
 function togglePreview(): void {
   if (!props.inlinePreview) {
