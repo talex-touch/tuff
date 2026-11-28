@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { PixelFieldHandle, PixelFieldPreset } from '@talex-touch/tuffex/pixel-field'
 import { computed, ref } from 'vue'
-import { TxButton, TxPixelField } from '#components'
+import { TxButton, TxInput, TxPixelField, TxSlider } from '#components'
 
 const { locale } = useI18n()
 const zh = computed(() => locale.value === 'zh')
@@ -31,6 +31,14 @@ const preset = ref<PixelFieldPreset>('orb')
 const customText = ref('TUFF')
 const density = ref(1.05)
 const fieldRef = ref<PixelFieldHandle | null>(null)
+
+function formatDensity(value: number): string {
+  return value.toFixed(2)
+}
+
+function onCustomTextUpdate(value: string | number): void {
+  customText.value = String(value)
+}
 </script>
 
 <template>
@@ -45,17 +53,27 @@ const fieldRef = ref<PixelFieldHandle | null>(null)
       <TxButton size="sm" :variant="mode === 'text' ? 'primary' : 'secondary'" @click="mode = 'text'">
         {{ copy.modeText }}
       </TxButton>
-      <input
+      <TxInput
         v-if="mode === 'text'"
-        v-model="customText"
+        :model-value="customText"
         class="pf-play__input"
         maxlength="10"
         :placeholder="copy.textPlaceholder"
-      >
-      <label class="pf-play__density">
-        <span>{{ copy.density }} {{ density.toFixed(2) }}</span>
-        <input v-model.number="density" type="range" min="0.5" max="1.5" step="0.05">
-      </label>
+        @update:model-value="onCustomTextUpdate"
+      />
+      <div class="pf-play__density">
+        <span class="pf-play__density-label">{{ copy.density }}</span>
+        <TxSlider
+          v-model="density"
+          class="pf-play__slider"
+          :min="0.5"
+          :max="1.5"
+          :step="0.05"
+          :aria-label="copy.density"
+          show-value
+          :format-value="formatDensity"
+        />
+      </div>
       <TxButton size="sm" variant="secondary" @click="fieldRef?.pulse(0.5, 0.5)">
         {{ copy.pulse }}
       </TxButton>
@@ -93,28 +111,24 @@ const fieldRef = ref<PixelFieldHandle | null>(null)
 }
 
 .pf-play__input {
-  height: 32px;
-  padding: 0 10px;
-  border: 0;
-  border-radius: 8px;
-  background: var(--tx-bg-color);
-  box-shadow: inset 0 0 0 1px var(--tx-border-color);
-  color: var(--tx-text-color-primary);
-  font-size: 13px;
+  width: 148px;
 }
 
 .pf-play__density {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   font-size: 12px;
   color: var(--tx-text-color-regular);
 }
 
-.pf-play__density input {
-  width: 96px;
-  accent-color: var(--tx-color-primary);
-  cursor: pointer;
+.pf-play__density-label {
+  flex: none;
+  white-space: nowrap;
+}
+
+.pf-play__slider {
+  width: 156px;
 }
 
 .pf-play__stage {

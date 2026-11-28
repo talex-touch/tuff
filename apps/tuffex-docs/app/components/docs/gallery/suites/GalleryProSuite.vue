@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import './GalleryProSuite.css'
-import type { Component } from 'vue'
 import { hasDocument, hasWindow } from '@talex-touch/utils/env'
-import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, shallowRef } from 'vue'
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref } from 'vue'
 import { galleryText } from '../gallery-text'
 // Every `<ClientOnly>` below is this gate, not Nuxt's: each one sits directly
 // in a cell's stage. The gate mounts its specimen when the parent gallery's
@@ -19,14 +18,8 @@ const props = defineProps<{
 
 const { t } = useI18n()
 
-const galleryAmicroSpecimen = shallowRef<Component | null>(null)
 const GalleryDeviceMockup = defineAsyncComponent(() => import('../GalleryDeviceMockup.vue'))
 const GalleryEdgeMarquee = defineAsyncComponent(() => import('../GalleryEdgeMarquee.vue'))
-const GalleryFusion = defineAsyncComponent(() => import('../GalleryFusion.vue'))
-const GalleryFusionSurface = defineAsyncComponent(() => import('../GalleryFusionSurface.vue'))
-const GalleryLiquidMenu = defineAsyncComponent(() => import('../GalleryLiquidMenu.vue'))
-const GalleryTextMorph = defineAsyncComponent(() => import('../GalleryTextMorph.vue'))
-const GalleryTransitionLanes = defineAsyncComponent(() => import('../GalleryTransitionLanes.vue'))
 const GalleryVirtualList = defineAsyncComponent(() => import('../GalleryVirtualList.vue'))
 const GalleryImageGeneration = defineAsyncComponent(async () => {
   const { TxImageGeneration } = await import('@talex-touch/tuffex/image-generation')
@@ -41,18 +34,18 @@ const categoryMeta = computed<Record<ProCategoryKey, { label: string, desc: stri
   advanced: {
     label: t('docsSidebar.categories.advanced'),
     desc: props.localeKey === 'zh'
-      ? '编辑器、命令面板、搜索面板、终端、虚拟列表、设备样机与动效复合控件'
-      : 'Editors, command & search panels, terminal, virtual list, device mockup, and motion controls',
+      ? '版本胶囊、编辑器、命令面板、搜索面板、终端、虚拟列表与设备样机'
+      : 'Version capsule, editors, command & search panels, terminal, virtual list, and device mockup',
     icon: 'i-carbon-code',
-    count: 11,
+    count: 8,
   },
   effects: {
     label: t('docsSidebar.categories.effects'),
     desc: props.localeKey === 'zh'
-      ? '光效、液态金属、玻璃/触感表面、形态与文字变换及视觉过渡'
-      : 'Glow beams, glass & touch surfaces, shape/icon/text morphs, and visual transitions',
+      ? '扫光、流光边框、液态金属、语音光束、玻璃/触感表面与视觉材质层'
+      : 'Glow beams, liquid metal, glass & touch surfaces, borders, and visual shaders',
     icon: 'i-carbon-flash',
-    count: 27,
+    count: 14,
   },
   primitives: {
     label: t('docsSidebar.categories.primitives'),
@@ -104,10 +97,6 @@ function scrollToCategory(key: ProCategoryKey) {
 }
 
 onMounted(() => {
-  void import('../GalleryAmicroSpecimen.vue').then(({ default: component }) => {
-    galleryAmicroSpecimen.value = component
-  })
-
   if (!hasWindow() || !('IntersectionObserver' in window))
     return
   const keys: ProCategoryKey[] = ['advanced', 'effects', 'primitives']
@@ -159,41 +148,12 @@ const copy = computed(() => (props.localeKey === 'zh'
       virtualCount: (rendered: number, total: string) => `DOM 中 ${rendered} / ${total} 行`,
       aboutTitle: 'Tuffex 是什么？',
       aboutBody: '一套服务 Talex Touch 生态的 Vue 组件库。',
-      foldCardTitle: '角标折页',
-      foldCardHint: '悬停或点击右下角揭开',
-      foldUnderTitle: '底层已展开',
-      liquidToggle: '展开菜单',
-      liquidItems: ['收藏', '夜间', '音乐'] as [string, string, string],
       searching: '检索中',
-      next: '下一步',
-      online: '在线',
-      syncing: '同步中',
-      hoverMe: '悬停试试',
       dividerSection: '锚点触发',
       flowVariants: [
         { value: 'corners' as const, label: 'corners' },
         { value: 'rim' as const, label: 'rim' },
         { value: 'aurora' as const, label: 'aurora' },
-      ],
-      iconNext: '切换图标',
-      morphConnect: '连接设备',
-      textMorphCaption: '按位滚动 · spring="snappy"',
-      transformerStages: [
-        {
-          title: '正在同步 148 个文件',
-          desc: '支持多行自动换行与旧色残留模糊过渡，适合状态说明与摘要切换。',
-          tone: 'primary' as const,
-        },
-        {
-          title: 'v0.9.6 已发布就绪',
-          desc: '主题色随状态平滑切换，新旧两层按模糊曲线交叉淡入淡出。',
-          tone: 'success' as const,
-        },
-        {
-          title: '索引缓存接近上限',
-          desc: '长文案自动折行且不撑破容器，区别于单行逐字形变的 TextMorph。',
-          tone: 'warning' as const,
-        },
       ],
       touchBase: 'Base',
       touchGlass: 'Glass',
@@ -250,41 +210,12 @@ const copy = computed(() => (props.localeKey === 'zh'
       virtualCount: (rendered: number, total: string) => `${rendered} / ${total} rows in the DOM`,
       aboutTitle: 'What is Tuffex?',
       aboutBody: 'A Vue component library built for the Talex Touch ecosystem.',
-      foldCardTitle: 'Corner Peel',
-      foldCardHint: 'Hover or click corner to peel',
-      foldUnderTitle: 'Underlay unlocked',
-      liquidToggle: 'Toggle menu',
-      liquidItems: ['Favorite', 'Night mode', 'Music'] as [string, string, string],
       searching: 'Searching',
-      next: 'Next',
-      online: 'Online',
-      syncing: 'Syncing',
-      hoverMe: 'hover me',
       dividerSection: 'Anchor trigger',
       flowVariants: [
         { value: 'corners' as const, label: 'corners' },
         { value: 'rim' as const, label: 'rim' },
         { value: 'aurora' as const, label: 'aurora' },
-      ],
-      iconNext: 'Next icon',
-      morphConnect: 'Connect',
-      textMorphCaption: 'place-value · spring="snappy"',
-      transformerStages: [
-        {
-          title: 'Syncing 148 files',
-          desc: 'Multi-line blur crossfade with color preservation for status copy.',
-          tone: 'primary' as const,
-        },
-        {
-          title: 'Published v0.9.6',
-          desc: 'Old tone fades out softly while the new status blurs into focus.',
-          tone: 'success' as const,
-        },
-        {
-          title: 'Cache quota warning',
-          desc: 'Wraps across lines cleanly, unlike single-line glyph TextMorph.',
-          tone: 'warning' as const,
-        },
       ],
       touchBase: 'Base',
       touchGlass: 'Glass',
@@ -353,11 +284,7 @@ const paletteItems = computed(() => [
   { id: 'import', title: copy.value.importWorkflow, icon: 'i-carbon-download' },
 ])
 const searchPanelValue = ref('')
-const flipped = ref(false)
-const foldGalleryPeeled = ref(false)
 const resizeWide = ref(false)
-const flipTriggerRef = ref<{ $el?: HTMLElement } | null>(null)
-const flipTriggerEl = computed(() => flipTriggerRef.value?.$el ?? null)
 const autoSizerRef = ref<{
   size?: { width?: number, height?: number }
   action?: (fn: () => void) => Promise<unknown>
@@ -379,47 +306,12 @@ function toggleAutoSizer() {
   }
   autoSizerExpanded.value = !autoSizerExpanded.value
 }
-const laneStates = computed<[string, string]>(() => [copy.value.online, copy.value.syncing])
-const logoModes = computed(() => [
-  { value: 'once' as const, label: 'once' },
-  { value: 'breathe' as const, label: 'breathe' },
-  { value: 'hover' as const, label: copy.value.hoverMe },
-])
 
-/* ── Interactive Pro Effects & Primitives specimens ── */
-const morphIcons = ['menu', 'close', 'play', 'pause', 'check'] as const
-const morphIconIndex = ref(0)
-const activeMorphIcon = computed(() => morphIcons[morphIconIndex.value] ?? 'menu')
-function cycleMorphIcon() {
-  morphIconIndex.value = (morphIconIndex.value + 1) % morphIcons.length
-}
-
-const morphStates = ['idle', 'loading', 'done'] as const
-const morphStateIndex = ref(0)
-const activeMorphState = computed(() => morphStates[morphStateIndex.value] ?? 'idle')
-const activeMorphFill = computed(() => {
-  if (activeMorphState.value === 'loading')
-    return 'var(--tx-fill-color)'
-  if (activeMorphState.value === 'done')
-    return 'var(--tx-color-success)'
-  return 'var(--tx-color-primary)'
-})
-function cycleMorphState() {
-  morphStateIndex.value = (morphStateIndex.value + 1) % morphStates.length
-}
-
+/* ── Interactive Pro Primitives specimens ── */
 const baseSurfaceMode = ref<'refraction' | 'glass' | 'acrylic' | 'blur' | 'mask' | 'mica' | 'pure'>('refraction')
 const activeBaseSurfaceMeta = computed(() =>
   copy.value.baseSurfaceModes.find(item => item.value === baseSurfaceMode.value) ?? copy.value.baseSurfaceModes[0]!,
 )
-
-const textMorphTotal = ref(1204.5)
-const activeTextMorph = computed(() =>
-  `$${textMorphTotal.value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-)
-function stepTextMorph(delta: number) {
-  textMorphTotal.value = Math.max(0, Math.round((textMorphTotal.value + delta) * 100) / 100)
-}
 </script>
 
 <template>
@@ -439,7 +331,7 @@ function stepTextMorph(delta: number) {
       </a>
     </nav>
 
-    <!-- ── 1. Advanced (11) ── -->
+    <!-- ── 1. Advanced (8) ── -->
     <section id="pro-cat-advanced" class="docs-gallery__cat-section">
       <header class="docs-gallery__cat-head not-prose">
         <div class="docs-gallery__cat-meta">
@@ -452,48 +344,6 @@ function stepTextMorph(delta: number) {
         <span class="docs-gallery__cat-count">{{ copy.categoryCount(categoryMeta.advanced.count) }}</span>
       </header>
       <div class="docs-gallery__grid">
-        <section class="docs-gallery__cell">
-          <NuxtLink class="docs-gallery__label" :to="docPath('motion-form')">
-            {{ cellLabel('MotionForm', '动效表单') }}
-          </NuxtLink>
-          <div class="docs-gallery__stage not-prose">
-            <ClientOnly>
-              <component :is="galleryAmicroSpecimen" v-if="galleryAmicroSpecimen" kind="motion-form" />
-              <template #fallback>
-                <div class="docs-gallery__ph" />
-              </template>
-            </ClientOnly>
-          </div>
-        </section>
-
-        <section class="docs-gallery__cell">
-          <NuxtLink class="docs-gallery__label" :to="docPath('motion-control')">
-            {{ cellLabel('MotionControl', '复合控件') }}
-          </NuxtLink>
-          <div class="docs-gallery__stage not-prose">
-            <ClientOnly>
-              <component :is="galleryAmicroSpecimen" v-if="galleryAmicroSpecimen" kind="motion-control" />
-              <template #fallback>
-                <div class="docs-gallery__ph" />
-              </template>
-            </ClientOnly>
-          </div>
-        </section>
-
-        <section class="docs-gallery__cell">
-          <NuxtLink class="docs-gallery__label" :to="docPath('motion-metric')">
-            {{ cellLabel('MotionMetric', '复合指标') }}
-          </NuxtLink>
-          <div class="docs-gallery__stage not-prose">
-            <ClientOnly>
-              <component :is="galleryAmicroSpecimen" v-if="galleryAmicroSpecimen" kind="motion-metric" />
-              <template #fallback>
-                <div class="docs-gallery__ph" />
-              </template>
-            </ClientOnly>
-          </div>
-        </section>
-
         <section class="docs-gallery__cell">
           <NuxtLink class="docs-gallery__label" :to="docPath('version-capsule')">
             {{ cellLabel('VersionCapsule', '版本胶囊') }}
@@ -666,7 +516,7 @@ function stepTextMorph(delta: number) {
       </div>
     </section>
 
-    <!-- ── 2. Effects (27) ── -->
+    <!-- ── 2. Effects (14) ── -->
     <section id="pro-cat-effects" class="docs-gallery__cat-section">
       <header class="docs-gallery__cat-head not-prose">
         <div class="docs-gallery__cat-meta">
@@ -872,88 +722,6 @@ function stepTextMorph(delta: number) {
         </section>
 
         <section class="docs-gallery__cell">
-          <NuxtLink class="docs-gallery__label" :to="docPath('flip-overlay')">
-            {{ cellLabel('FlipOverlay', '翻转叠层') }}
-          </NuxtLink>
-          <div class="docs-gallery__stage not-prose">
-            <ClientOnly>
-              <TxButton ref="flipTriggerRef" @click="flipped = true">
-                {{ copy.aboutTitle }}
-              </TxButton>
-              <TxFlipOverlay
-                v-model="flipped"
-                :source="flipTriggerEl"
-                :header-title="copy.aboutTitle"
-                :card-style="{ width: 'min(92vw, 340px)' }"
-              >
-                <p class="docs-gallery__flip-body">
-                  {{ copy.aboutBody }}
-                </p>
-              </TxFlipOverlay>
-              <template #fallback>
-                <div class="docs-gallery__ph" />
-              </template>
-            </ClientOnly>
-          </div>
-        </section>
-
-        <section class="docs-gallery__cell">
-          <NuxtLink class="docs-gallery__label" :to="docPath('fold-page')">
-            {{ cellLabel('FoldPage', '折页') }}
-          </NuxtLink>
-          <div class="docs-gallery__stage not-prose" style="--docs-gallery-specimen: 150px">
-            <ClientOnly>
-              <div class="docs-gallery__fold">
-                <TxFoldCorner v-model="foldGalleryPeeled" corner="bottom-right" size="sm" :radius="14">
-                  <template #default>
-                    <div class="docs-gallery__fold-sheet">
-                      <span class="docs-gallery__fold-title">{{ copy.foldCardTitle }}</span>
-                      <span class="docs-gallery__fold-hint">{{ copy.foldCardHint }}</span>
-                    </div>
-                  </template>
-                  <template #under>
-                    <div class="docs-gallery__fold-under">
-                      <span class="docs-gallery__fold-title">{{ copy.foldUnderTitle }}</span>
-                    </div>
-                  </template>
-                </TxFoldCorner>
-              </div>
-              <template #fallback>
-                <div class="docs-gallery__ph" />
-              </template>
-            </ClientOnly>
-          </div>
-        </section>
-
-        <section class="docs-gallery__cell">
-          <NuxtLink class="docs-gallery__label" :to="docPath('fusion')">
-            {{ cellLabel('Fusion', '融合') }}
-          </NuxtLink>
-          <div class="docs-gallery__stage not-prose">
-            <ClientOnly>
-              <GalleryFusion />
-              <template #fallback>
-                <div class="docs-gallery__ph" />
-              </template>
-            </ClientOnly>
-          </div>
-        </section>
-
-        <section class="docs-gallery__cell">
-          <NuxtLink class="docs-gallery__label" :to="docPath('fusion-surface')">
-            {{ cellLabel('FusionSurface', '融合表面') }}
-          </NuxtLink>
-          <div class="docs-gallery__stage not-prose" style="--docs-gallery-specimen: 128px">
-            <ClientOnly>
-              <GalleryFusionSurface />
-              <template #fallback>
-                <div class="docs-gallery__ph" />
-              </template>
-            </ClientOnly>
-          </div>
-        </section>
-
-        <section class="docs-gallery__cell">
           <NuxtLink class="docs-gallery__label" :to="docPath('glass-surface')">
             {{ cellLabel('GlassSurface', '玻璃表面') }}
           </NuxtLink>
@@ -1052,127 +820,6 @@ function stepTextMorph(delta: number) {
         </section>
 
         <section class="docs-gallery__cell">
-          <NuxtLink class="docs-gallery__label" :to="docPath('icon-morph')">
-            {{ cellLabel('IconMorph', '图标形变') }}
-          </NuxtLink>
-          <div class="docs-gallery__stage not-prose">
-            <ClientOnly>
-              <div class="docs-gallery__stack docs-gallery__stack--center">
-                <button
-                  type="button"
-                  class="docs-gallery__morph-trigger"
-                  :aria-label="copy.iconNext"
-                  @click="cycleMorphIcon"
-                >
-                  <TxIconMorph :icon="activeMorphIcon" spring="snappy" :size="22" />
-                </button>
-                <TxButton size="sm" @click="cycleMorphIcon">
-                  {{ activeMorphIcon }}
-                </TxButton>
-              </div>
-              <template #fallback>
-                <div class="docs-gallery__ph" />
-              </template>
-            </ClientOnly>
-          </div>
-        </section>
-
-        <section class="docs-gallery__cell">
-          <NuxtLink class="docs-gallery__label" :to="docPath('morph')">
-            {{ cellLabel('Morph', '形态变换') }}
-          </NuxtLink>
-          <div class="docs-gallery__stage not-prose">
-            <ClientOnly>
-              <TxMorph
-                :morph-key="activeMorphState"
-                :radius="activeMorphState === 'idle' ? 10 : 19"
-                :fill="activeMorphFill"
-              >
-                <button
-                  type="button"
-                  class="docs-gallery__morph-btn"
-                  :class="{
-                    'is-compact': activeMorphState === 'loading',
-                    'is-done': activeMorphState === 'done',
-                  }"
-                  :aria-label="activeMorphState === 'done' ? 'Done' : activeMorphState === 'loading' ? 'Loading' : undefined"
-                  @click="cycleMorphState"
-                >
-                  <TxSpinner v-if="activeMorphState === 'loading'" :size="16" />
-                  <span v-else-if="activeMorphState === 'done'" class="i-carbon-checkmark" aria-hidden="true" />
-                  <span v-else>{{ copy.morphConnect }}</span>
-                </button>
-              </TxMorph>
-              <template #fallback>
-                <div class="docs-gallery__ph" />
-              </template>
-            </ClientOnly>
-          </div>
-        </section>
-
-        <section class="docs-gallery__cell">
-          <NuxtLink class="docs-gallery__label" :to="docPath('text-morph')">
-            {{ cellLabel('TextMorph', '文字形变') }}
-          </NuxtLink>
-          <div class="docs-gallery__stage not-prose">
-            <ClientOnly>
-              <div class="docs-gallery__stack docs-gallery__stack--center">
-                <div class="docs-gallery__text-morph-stage">
-                  <TxTextMorph :text="activeTextMorph" spring="snappy" />
-                </div>
-                <span class="docs-gallery__text-morph-caption">{{ copy.textMorphCaption }}</span>
-                <div class="docs-gallery__row">
-                  <TxButton size="sm" @click="stepTextMorph(-114.25)">
-                    -$114.25
-                  </TxButton>
-                  <TxButton size="sm" @click="stepTextMorph(114.25)">
-                    +$114.25
-                  </TxButton>
-                </div>
-              </div>
-              <template #fallback>
-                <div class="docs-gallery__ph" />
-              </template>
-            </ClientOnly>
-          </div>
-        </section>
-
-        <section class="docs-gallery__cell">
-          <NuxtLink class="docs-gallery__label" :to="docPath('keyframe-stroke-text')">
-            {{ cellLabel('KeyframeStrokeText', '描边文字') }}
-          </NuxtLink>
-          <div class="docs-gallery__stage not-prose">
-            <ClientOnly>
-              <TxKeyframeStrokeText
-                text="Talex Touch"
-                stroke-color="var(--tx-color-primary)"
-                fill-color="var(--tx-text-color-primary)"
-                :stroke-width="1.5"
-                :font-size="44"
-                :duration-ms="2400"
-              />
-              <template #fallback>
-                <div class="docs-gallery__ph" />
-              </template>
-            </ClientOnly>
-          </div>
-        </section>
-
-        <section class="docs-gallery__cell">
-          <NuxtLink class="docs-gallery__label" :to="docPath('liquid')">
-            {{ cellLabel('Liquid', '液态') }}
-          </NuxtLink>
-          <div class="docs-gallery__stage not-prose" style="--docs-gallery-specimen: 132px">
-            <ClientOnly>
-              <GalleryLiquidMenu :toggle-label="copy.liquidToggle" :item-labels="copy.liquidItems" />
-              <template #fallback>
-                <div class="docs-gallery__ph" />
-              </template>
-            </ClientOnly>
-          </div>
-        </section>
-
-        <section class="docs-gallery__cell">
           <NuxtLink class="docs-gallery__label" :to="docPath('outline-border')">
             {{ cellLabel('OutlineBorder', '描边边框') }}
           </NuxtLink>
@@ -1227,72 +874,6 @@ function stepTextMorph(delta: number) {
               <TxPrismGlow class="docs-gallery__prism-card">
                 {{ copy.searching }}…
               </TxPrismGlow>
-              <template #fallback>
-                <div class="docs-gallery__ph" />
-              </template>
-            </ClientOnly>
-          </div>
-        </section>
-
-        <section class="docs-gallery__cell">
-          <NuxtLink class="docs-gallery__label" :to="docPath('stagger')">
-            {{ cellLabel('Stagger', '错峰入场') }}
-          </NuxtLink>
-          <div class="docs-gallery__stage not-prose">
-            <ClientOnly>
-              <TxStagger class="docs-gallery__stagger" name="docs-gallery-stagger" :duration="420" :delay-step="70">
-                <div v-for="item in text.staggerItems" :key="item.icon" class="docs-gallery__tile docs-gallery__stagger-item">
-                  <span :class="item.icon" aria-hidden="true" />
-                  {{ item.label }}
-                </div>
-              </TxStagger>
-              <template #fallback>
-                <div class="docs-gallery__ph" />
-              </template>
-            </ClientOnly>
-          </div>
-        </section>
-
-        <section class="docs-gallery__cell">
-          <NuxtLink class="docs-gallery__label" :to="docPath('text-transformer')">
-            {{ cellLabel('TextTransformer', '文字变换') }}
-          </NuxtLink>
-          <div class="docs-gallery__stage not-prose">
-            <ClientOnly>
-              <GalleryTextMorph :stages="copy.transformerStages" :next-label="copy.next" />
-              <template #fallback>
-                <div class="docs-gallery__ph" />
-              </template>
-            </ClientOnly>
-          </div>
-        </section>
-
-        <section class="docs-gallery__cell">
-          <NuxtLink class="docs-gallery__label" :to="docPath('transition')">
-            {{ cellLabel('Transition', '过渡') }}
-          </NuxtLink>
-          <div class="docs-gallery__stage not-prose" style="--docs-gallery-specimen: 154px">
-            <ClientOnly>
-              <GalleryTransitionLanes :states="laneStates" />
-              <template #fallback>
-                <div class="docs-gallery__ph" />
-              </template>
-            </ClientOnly>
-          </div>
-        </section>
-
-        <section class="docs-gallery__cell">
-          <NuxtLink class="docs-gallery__label" :to="docPath('tuff-logo-stroke')">
-            {{ cellLabel('TuffLogoStroke', 'Logo 描边') }}
-          </NuxtLink>
-          <div class="docs-gallery__stage not-prose">
-            <ClientOnly>
-              <div class="docs-gallery__row docs-gallery__row--loose">
-                <div v-for="mode in logoModes" :key="mode.value" class="docs-gallery__meter">
-                  <TxTuffLogoStroke :size="64" :mode="mode.value" :aria-label="text.logoStroke" />
-                  <span class="docs-gallery__meter-text">{{ mode.label }}</span>
-                </div>
-              </div>
               <template #fallback>
                 <div class="docs-gallery__ph" />
               </template>

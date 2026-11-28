@@ -1,7 +1,7 @@
 ---
 title: "Stagger 依次进入"
 description: "按子节点顺序依次进入与离开的过渡组"
-category: Effects
+category: MotionTransitions
 status: beta
 since: 0.3.4
 tags: [transition, animation, stagger]

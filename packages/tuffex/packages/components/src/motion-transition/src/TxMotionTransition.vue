@@ -403,11 +403,26 @@ defineExpose({ replay, finish: () => finish(), close })
 }
 .tx-motion-transition__panel { min-width: 0; }
 .tx-motion-transition--card .tx-motion-transition__panel,
-.tx-motion-transition--modal .tx-motion-transition__panel,
-.tx-motion-transition--overlay .tx-motion-transition__panel { background: var(--tx-bg-color-overlay, #fff); border-radius: var(--tx-motion-transition-radius); box-shadow: inset 0 0 0 1px var(--tx-border-color, #dcdfe6); overflow: hidden; }
+.tx-motion-transition--modal .tx-motion-transition__panel {
+  background: var(--tx-bg-color-overlay, #fff);
+  border: 1px solid var(--tx-border-color, #dcdfe6);
+  border-radius: var(--tx-motion-transition-radius);
+  box-shadow: 2px 6px 18px color-mix(in srgb, var(--tx-text-color-primary, #303133) 7%, transparent);
+  overflow: hidden;
+}
+.tx-motion-transition--overlay .tx-motion-transition__panel {
+  background: var(--tx-bg-color-overlay, #fff);
+  border-radius: 0;
+  overflow: hidden;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
 .tx-motion-transition--modal .tx-motion-transition__panel { width: min(var(--tx-motion-transition-width, 640px), 100%); max-height: calc(100dvh - 40px); display: flex; flex-direction: column; }
-.tx-motion-transition--overlay .tx-motion-transition__panel { width: 100%; height: 100%; border-radius: 0; display: flex; flex-direction: column; }
 .tx-motion-transition__header, .tx-motion-transition__footer { display: flex; align-items: center; gap: 12px; padding: calc(var(--tx-motion-transition-pad) * .75) var(--tx-motion-transition-pad); flex: none; }
+.tx-motion-transition__header { border-bottom: 1px solid color-mix(in srgb, var(--tx-border-color, #dcdfe6) 65%, transparent); }
+.tx-motion-transition__footer { border-top: 1px solid color-mix(in srgb, var(--tx-border-color, #dcdfe6) 65%, transparent); }
 .tx-motion-transition__header h3 { font-size: 16px; font-weight: var(--tx-font-weight-semibold, 600); margin: 0; }
 .tx-motion-transition__close { margin-left: auto; display: grid; place-items: center; width: 32px; height: 32px; border: 0; border-radius: 50%; padding: 0; color: var(--tx-text-color-regular, #606266); background: var(--tx-fill-color-light, #f5f7fa); cursor: pointer; }
 .tx-motion-transition__close:hover { background: var(--tx-fill-color, #f0f2f5); }
@@ -423,20 +438,20 @@ defineExpose({ replay, finish: () => finish(), close })
 .tx-motion-transition__stage--perspective-flip-stage :deep(.tx-motion-transition__view) { box-shadow: inset 0 0 0 1px var(--tx-border-color, #dcdfe6); }
 .tx-motion-transition__effect, .tx-motion-transition__wave { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; overflow: hidden; }
 .tx-motion-transition__doors, .tx-motion-transition__columns { display: flex; perspective: inherit; }
-.tx-motion-transition__door, .tx-motion-transition__column { flex: 1; height: 100%; background: var(--tx-motion-transition-surface, var(--tx-bg-color-overlay, #fff)); box-shadow: inset -1px 0 var(--tx-border-color, #dcdfe6); }
+.tx-motion-transition__door, .tx-motion-transition__column { flex: 1; height: 100%; background: var(--tx-motion-transition-surface, var(--tx-fill-color-light, #f5f7fa)); box-shadow: inset -1px 0 var(--tx-border-color, #dcdfe6); }
 .tx-motion-transition__door { transform-origin: left; transform: translateX(-10%) rotateY(-85deg); }
-.tx-motion-transition__door:last-child { transform-origin: right; transform: translateX(10%) rotateY(85deg); }
+.tx-motion-transition__door:last-child { transform-origin: right; transform: translateX(10%) rotateY(85deg); box-shadow: inset 1px 0 var(--tx-border-color, #dcdfe6); }
 .tx-motion-transition__doors--french .tx-motion-transition__door { transform-origin: right; transform: rotateY(90deg); opacity: 0; }
 .tx-motion-transition__doors--french .tx-motion-transition__door:last-child { transform-origin: left; transform: rotateY(-90deg); }
-.tx-motion-transition__door-pane { display: block; margin: 10%; width: 80%; height: 80%; box-shadow: inset 0 0 0 1px var(--tx-border-color, #dcdfe6); background: var(--tx-fill-color-light, #f5f7fa); }
+.tx-motion-transition__door-pane { display: block; margin: 10%; width: 80%; height: 80%; box-shadow: inset 0 0 0 1px var(--tx-border-color, #dcdfe6); background: var(--tx-bg-color-overlay, #fff); }
 .tx-motion-transition__column { transform: translateY(-105%); }
-.tx-motion-transition__columns--glass .tx-motion-transition__column { background: color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 95%, transparent); backdrop-filter: blur(12px); }
+.tx-motion-transition__columns--glass .tx-motion-transition__column { background: color-mix(in srgb, var(--tx-fill-color-light, #f5f7fa) 88%, transparent); backdrop-filter: blur(12px); }
 // High contrast: the glass curtain's columns are opaque and frost nothing.
 .tx-motion-transition__columns--glass .tx-motion-transition__column { @include tx-when-high-contrast { background: var(--tx-bg-color-overlay, #fff); backdrop-filter: none; } }
-.tx-motion-transition__iris { clip-path: circle(0% at 50% 50%); background: var(--tx-motion-transition-surface, var(--tx-bg-color-overlay, #fff)); }
-.tx-motion-transition__wave-layer--1 { fill: var(--tx-fill-color-dark, #dcdfe6); opacity: .6; }
-.tx-motion-transition__wave-layer--2 { fill: var(--tx-fill-color, #f0f2f5); opacity: .85; }
-.tx-motion-transition__wave-layer--3 { fill: var(--tx-motion-transition-surface, var(--tx-bg-color-overlay, #fff)); }
+.tx-motion-transition__iris { clip-path: circle(0% at 50% 50%); background: var(--tx-motion-transition-surface, var(--tx-fill-color-dark, #e4e7ed)); }
+.tx-motion-transition__wave-layer--1 { fill: color-mix(in srgb, var(--tx-color-primary, #409eff) 24%, var(--tx-fill-color-dark, #dcdfe6)); opacity: .75; }
+.tx-motion-transition__wave-layer--2 { fill: var(--tx-fill-color, #f0f2f5); opacity: .9; }
+.tx-motion-transition__wave-layer--3 { fill: var(--tx-motion-transition-surface, var(--tx-fill-color-light, #f5f7fa)); }
 @supports (height: 100dvh) { .tx-motion-transition--overlay { bottom: auto; height: 100dvh; } }
 @media (prefers-reduced-motion: no-preference) {
   .tx-motion-transition-dialog-enter-active, .tx-motion-transition-dialog-leave-active { transition: opacity 180ms ease-out; }

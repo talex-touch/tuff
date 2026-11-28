@@ -91,7 +91,7 @@ import { createToastManager, useVibrate } from '@talex-touch/tuffex/utils'
 
 ## Component Inventory
 
-Current source-of-truth export modules: **198**.
+Current source-of-truth export modules: **197**.
 
 Every module ships in exactly one of three suites, each exposed as its own category entry:
 
@@ -121,10 +121,10 @@ Advanced interaction, visualization, effects and low-level primitives. Import fr
 - `Animated controls (3)`: `motion-control`, `motion-form`, `motion-metric`
 - `Visualization (6)`: `charts`, `spark-chart`, `allocation-bar`, `diff-table`, `signal-meter`, `device-mockup`
 - `Effects (27)`: `glass-surface`, `touch-surface`, `gradient-border`, `outline-border`, `border-beam`, `prism-glow`, `corner-overlay`, `gradual-blur`, `edge-fade-mask`, `glow-text`, `keyframe-stroke-text`, `tuff-logo-stroke`, `text-morph`, `icon-morph`, `morph`, `text-transformer`, `transition`, `stagger`, `fusion`, `fusion-surface`, `flow-light`, `liquid`, `flip-overlay`, `fold-page`, `image-generation`, `metal-fx`, `voice-beam`
-- `Motion (14)`: `card-spread`, `carousel-3d`, `distortion-wave`, `flip-book`, `motion`, `motion-button`, `motion-dock`, `motion-loader`, `motion-text`, `motion-toggle`, `motion-transition`, `physics-motion`, `pixel-field`, `voice-ring`
+- `Motion (13)`: `card-spread`, `carousel-3d`, `distortion-wave`, `flip-book`, `motion`, `motion-button`, `motion-dock`, `motion-loader`, `motion-text`, `motion-transition`, `physics-motion`, `pixel-field`, `voice-ring`
 - `Primitives (5)`: `base-surface`, `base-anchor`, `floating`, `auto-sizer`, `resize-box`
 
-Nexus presents the Motion family in its own documentation suite: Buttons, Card Spreads, 3D Carousels, Loaders, Dither Charts and additional text, physics, pointer, scroll, toggle and transition effects. Installation stays within `pro` or the component subpaths; there is no fourth suite installer. `TxMonoChart` and `TxDitherChart` use the existing `@talex-touch/tuffex/charts` SVG/d3 entry, with Mono documented under Data and Dither under Motion.
+Nexus presents the Motion family in its own documentation suite: Buttons, Controls & Forms, Card Spreads, 3D Carousels, Loaders, Motion Charts, Text & Stroke, Morph & Fluid, Physics, Hover/Pointer/Scroll, and Transitions. Installation stays within `pro` or the component subpaths; there is no fourth suite installer. `TxMonoChart` and `TxDitherChart` use the existing `@talex-touch/tuffex/charts` SVG/d3 entry, with Mono documented under Data and Dither under Motion.
 
 Motion content, chart data and business state come from the caller. Changing text reuses TextMorph and springs reuse the existing shared compiler/integrator. `useMotionActivity` is exported from `/utils` to gate playback on visibility, document activity, KeepAlive and reduced-motion preference; static content remains available while playback is suspended.
 

@@ -1,7 +1,7 @@
 ---
 title: "TuffLogoStroke Logo 描边"
 description: "Tuff Logo 的 SVG 描边动画"
-category: Effects
+category: MotionText
 status: beta
 since: 0.3.4
 tags: [logo, svg, animation]

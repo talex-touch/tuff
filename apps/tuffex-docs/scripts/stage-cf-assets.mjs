@@ -61,15 +61,16 @@ const CATEGORY_SUITE_MAP = {
   Flow: 'flow',
   MotionSuite: 'motion',
   MotionButtons: 'motion',
+  MotionControls: 'motion',
+  MotionTransitions: 'motion',
+  MotionMorph: 'motion',
+  MotionText: 'motion',
   MotionCards: 'motion',
   MotionCarousels: 'motion',
+  MotionInteraction: 'motion',
+  MotionPhysics: 'motion',
   MotionLoaders: 'motion',
   MotionCharts: 'motion',
-  MotionText: 'motion',
-  MotionPhysics: 'motion',
-  MotionInteraction: 'motion',
-  MotionToggles: 'motion',
-  MotionTransitions: 'motion',
 }
 
 function toPosix(value) {

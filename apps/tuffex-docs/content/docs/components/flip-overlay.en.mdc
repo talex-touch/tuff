@@ -1,7 +1,7 @@
 ---
 title: FlipOverlay
 description: A 3D overlay that flips open from its trigger.
-category: Effects
+category: MotionTransitions
 status: beta
 since: 0.3.4
 tags: [overlay, motion, transition]

@@ -32,11 +32,11 @@ Tuffex（`@talex-touch/tuffex`）是服务 CoreBox、插件界面与本文档站
 | [理念](/zh) | 安装、设计规则、概念手册与工具 | 27 | 纯文档 |
 | [模板](/zh/template-shell) | 应用框架 / 内容运营 / AI 应用 / 数据与流程 | 25 | 组合现有入口 |
 | [基础套件](/zh/base-suite) | 通用 / 表单 / 布局 / 导航 / 数据展示 / 反馈 / 状态占位 | 100 | `@talex-touch/tuffex/base` |
-| [进阶套件](/zh/pro-suite) | 高级交互 / 视觉效果 / 底层原语 | 43 | `@talex-touch/tuffex/pro` |
+| [进阶套件](/zh/pro-suite) | 高级交互 / 材质与光效 / 底层原语 | 27 | `@talex-touch/tuffex/pro` |
 | [AI 套件](/zh/ai-suite) | 对话 / 智能体 / 推理与生成 / 上下文与洞察 | 36 | `@talex-touch/tuffex/ai` |
 | [数据套件](/zh/data-suite) | 图表 / 可视化 | 12 | `@talex-touch/tuffex/pro` + `/charts` |
 | [流程套件](/zh/flow-suite) | 流程编排 | 1 | `@talex-touch/tuffex/ai` |
-| [动效套件](/zh/motion-suite) | 按钮、轮播、加载、文字、转场等 10 组 | 15 | `@talex-touch/tuffex/pro` + `/charts` |
+| [动效套件](/zh/motion-suite) | 按钮、控件、转场、形变流体、文字、卡片轮播、物理、图表等 11 组 | 30 | `@talex-touch/tuffex/pro` + `/charts` |
 
 - 页数按文档条目计，不含套件总览页，不等于导出组件数。
 - 套件入口只有 `base`、`pro`、`ai` 三个；数据、流程、动效是文档分类，图表另有 `@talex-touch/tuffex/charts`。
@@ -248,11 +248,8 @@ code: |
 - [VirtualList 虚拟列表](/zh/virtual-list)
 - [DeviceMockup 设备样机](/zh/device-mockup)
 - [VersionCapsule 版本胶囊](/zh/version-capsule)
-- [MotionForm 动效表单](/zh/motion-form)
-- [MotionControl 复合控件](/zh/motion-control)
-- [MotionMetric 复合指标](/zh/motion-metric)
 
-### 视觉效果
+### 材质与光效
 
 - [GlassSurface 玻璃拟态](/zh/glass-surface)
 - [TouchSurface 触摸表面](/zh/touch-surface)
@@ -264,20 +261,7 @@ code: |
 - [GradualBlur 渐变模糊](/zh/gradual-blur)
 - [EdgeFadeMask 边缘渐隐遮罩](/zh/edge-fade-mask)
 - [GlowText 扫光](/zh/glow-text)
-- [KeyframeStrokeText 关键帧描边](/zh/keyframe-stroke-text)
-- [TuffLogoStroke Logo 描边](/zh/tuff-logo-stroke)
-- [TextMorph 文本形变](/zh/text-morph)
-- [IconMorph 图标形变](/zh/icon-morph)
-- [Morph 形变容器](/zh/morph)
-- [TextTransformer 文本变换](/zh/text-transformer)
-- [Transition 动效](/zh/transition)
-- [Stagger 依次进入](/zh/stagger)
-- [Fusion 交融](/zh/fusion)
-- [FusionSurface 融合表面](/zh/fusion-surface)
 - [FlowLight 流光底](/zh/flow-light)
-- [Liquid 液态流体](/zh/liquid)
-- [FlipOverlay 翻转遮罩](/zh/flip-overlay)
-- [FoldPage 折页](/zh/fold-page)
 - [ImageGeneration 生图占位](/zh/image-generation)
 - [MetalFx 液态金属](/zh/metal-fx)
 - [VoiceBeam 语音光束](/zh/voice-beam)
@@ -377,6 +361,36 @@ code: |
 
 - [MotionButton 动效按钮](/zh/motion-button)
 
+### 复合控件与表单
+
+- [MotionControl 复合控件](/zh/motion-control)
+- [MotionForm 动效表单](/zh/motion-form)
+
+### 转场与入场
+
+- [MotionTransition 动效转场](/zh/motion-transition)
+- [DistortionWave 折射波转场](/zh/distortion-wave)
+- [Transition 动效](/zh/transition)
+- [Stagger 依次进入](/zh/stagger)
+- [FlipOverlay 翻转遮罩](/zh/flip-overlay)
+- [FoldPage 折页](/zh/fold-page)
+
+### 形变与流体
+
+- [Morph 形变容器](/zh/morph)
+- [IconMorph 图标形变](/zh/icon-morph)
+- [Liquid 液态流体](/zh/liquid)
+- [Fusion 交融](/zh/fusion)
+- [FusionSurface 融合表面](/zh/fusion-surface)
+
+### 文字与描边
+
+- [MotionText 文字动效](/zh/motion-text)
+- [TextMorph 文本形变](/zh/text-morph)
+- [TextTransformer 文本变换](/zh/text-transformer)
+- [KeyframeStrokeText 关键帧描边](/zh/keyframe-stroke-text)
+- [TuffLogoStroke Logo 描边](/zh/tuff-logo-stroke)
+
 ### 卡片展开
 
 - [CardSpread 卡片展开](/zh/card-spread)
@@ -386,37 +400,25 @@ code: |
 - [Carousel3D 三维轮播](/zh/carousel-3d)
 - [FlipBook 翻页书](/zh/flip-book)
 
-### 加载动效
+### 悬停、指针与滚动
 
-- [MotionLoader 加载动效](/zh/motion-loader)
-
-### 抖动图表
-
-- [DitherChart 抖动图表](/zh/dither-chart)
-
-### 文字
-
-- [MotionText 文字动效](/zh/motion-text)
+- [Motion 悬停与滚动](/zh/motion)
+- [MotionDock 动效 Dock](/zh/motion-dock)
+- [PixelField 像素粒子场](/zh/pixel-field)
+- [VoiceRing 语音光环](/zh/voice-ring)
 
 ### 物理动效
 
 - [PhysicsMotion 物理动效](/zh/physics-motion)
 
-### 悬停、指针与滚动
+### 加载动效
 
-- [MotionDock 动效 Dock](/zh/motion-dock)
-- [Motion 悬停与滚动](/zh/motion)
-- [PixelField 像素粒子场](/zh/pixel-field)
-- [VoiceRing 语音光环](/zh/voice-ring)
+- [MotionLoader 加载动效](/zh/motion-loader)
 
-### 切换控件
+### 动效图表与指标
 
-- [MotionToggle 动效切换](/zh/motion-toggle)
-
-### 转场
-
-- [MotionTransition 动效转场](/zh/motion-transition)
-- [DistortionWave 折射波转场](/zh/distortion-wave)
+- [DitherChart 抖动图表](/zh/dither-chart)
+- [MotionMetric 复合指标](/zh/motion-metric)
 
 ## 技术实现
 

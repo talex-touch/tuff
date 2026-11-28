@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+### ⚠️ 破坏性变更 (Breaking Changes)
+
+- 移除重复组件 `TxMotionToggle`（`@talex-touch/tuffex/motion-toggle`）：动效切换操作统一由 `TxMotionButton` 承接（新增 `count` 动态计数与 `burst` 粒子反馈），基础开关与分段控件继续使用 `TxSwitch` / `TxSegmentedSlider`。
+
+### ✨ 组件增强
+
+- `TxMotionButton` 新增 `count`（经 `TxTextMorph` 数字位平滑滚动）与 `burst`（选中激活径向微粒子爆发）属性，并优化选中态色温层次与边框细腻度。
+- `TxCardSpread` 与 `TxCarousel3D` 优化选中态高光与层级阴影，替换刺眼纯蓝粗框与裸按钮样式；`TxCarousel3D` Time Machine 时间轴滑块升级为 `TxSlider`。
+- 修复 `TxMotionTransition` 在 `mode="card"` 下子层背景遮挡父层内边框的问题，并增强门板与帘幕在浅色主题下的对比度。
+
 ## [0.9.6] - 2026-11-27
 
 ### 📦 组件变动 (Components)

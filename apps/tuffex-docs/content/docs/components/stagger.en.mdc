@@ -1,7 +1,7 @@
 ---
 title: "Stagger"
 description: "A transition group that enters and leaves children in sequence."
-category: Effects
+category: MotionTransitions
 status: beta
 since: 0.3.4
 tags: [transition, animation, stagger]

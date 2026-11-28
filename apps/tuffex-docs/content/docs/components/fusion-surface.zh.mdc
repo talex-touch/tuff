@@ -1,7 +1,7 @@
 ---
 title: "FusionSurface 融合表面"
 description: "边上长出凸起、凸起可拉断成水滴的圆角表面"
-category: Effects
+category: MotionMorph
 status: beta
 since: 0.6.0
 tags: [fusion, surface, split, svg, spring]

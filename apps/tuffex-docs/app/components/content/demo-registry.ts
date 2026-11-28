@@ -362,7 +362,6 @@ export const demoLoaders: Record<string, DemoLoader> = {
   MotionLoaderDemo: () => import('./demos/MotionLoaderDemo.vue'),
   MotionMetricDemo: () => import('./demos/MotionMetricDemo.vue'),
   MotionTextDemo: () => import('./demos/MotionTextDemo.vue'),
-  MotionToggleDemo: () => import('./demos/MotionToggleDemo.vue'),
   MotionTransitionDemo: () => import('./demos/MotionTransitionDemo.vue'),
   NavBarNavBarDemo: () => import('./demos/NavBarNavBarDemo.vue'),
   NoDataNoDataDemo: () => import('./demos/NoDataNoDataDemo.vue'),

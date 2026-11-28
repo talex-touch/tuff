@@ -1,6 +1,6 @@
 ---
 title: Pro Suite
-description: Advanced interactions, visual effects, and low-level primitives.
+description: Advanced interactions, materials & light effects, and low-level primitives.
 category: ProSuite
 status: beta
 since: 0.3.9
@@ -30,6 +30,6 @@ code: |
 
 Pro suite components import from `@talex-touch/tuffex/pro` and fall into three groups. Components from the Data and Motion suites also import from `/pro`; the chart family (including MonoChart and DitherChart) imports from `@talex-touch/tuffex/charts`.
 
-- **Interaction**: the command palette, code editor, Markdown editor, search panel, terminal, virtual list, device mockup, and version capsule, plus the motion form, control, and metric components.
-- **Effects**: border beams, glass and liquid surfaces, gradient borders, progressive blur, text and icon morphs, and outline and prism light.
+- **Interaction**: the command palette, code editor, Markdown editor, search panel, terminal, virtual list, device mockup, and version capsule.
+- **Materials & Light**: glass and touch surfaces, border beams, gradient and outline borders, progressive blur, corner overlays, edge fade masks, prism glow, flow light, glow text, liquid metal, voice beams, and image generation placeholders.
 - **Primitives**: auto-sizing, anchored positioning, background surfaces, pointer parallax, and resize transitions, the base layer other components often build on.

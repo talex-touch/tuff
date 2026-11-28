@@ -205,7 +205,6 @@ export const COMPAT_REGISTRY: readonly CompatEntry[] = Object.freeze([
   planned('motion-loader', 'pro', 'A'),
   planned('motion-metric', 'pro', 'A'),
   planned('motion-text', 'pro', 'A'),
-  planned('motion-toggle', 'pro', 'B'),
   tierD('motion-transition', 'pro', REASON_MOTION_PRIMITIVE),
   ready('nav-bar', 'base', 'B', ['TxNavBar']),
   ready('no-data', 'base', 'A', ['TxNoData']),

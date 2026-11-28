@@ -1,7 +1,7 @@
 ---
 title: "TuffLogoStroke"
 description: "An animated SVG stroke of the Tuff logo."
-category: Effects
+category: MotionText
 status: beta
 since: 0.3.4
 tags: [logo, svg, animation]

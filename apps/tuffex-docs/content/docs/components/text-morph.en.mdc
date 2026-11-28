@@ -1,7 +1,7 @@
 ---
 title: "TextMorph"
 description: "Text that animates only the segments that changed."
-category: Effects
+category: MotionText
 status: beta
 since: 0.6.0
 tags: [text, morph, number, spring, live-region]

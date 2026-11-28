@@ -129,7 +129,7 @@ code: |
 
 | 变量 | 默认值 | 说明 |
 | --- | --- | --- |
-| `--tx-motion-transition-surface` | `--tx-bg-color-overlay` | 门、光圈和最上层波的实色表面。 |
+| `--tx-motion-transition-surface` | `--tx-fill-color-light` | 门、光圈和最上层波的实色表面。 |
 | `--tx-motion-transition-pad` | 随 size 变化，md 为 `16px` | 内容、头部和底部间距。 |
 | `--tx-motion-transition-radius` | 随 size 变化，md 为 `16px` | card/modal 圆角。 |
 | `--tx-motion-transition-width` | 弹层模式的 `width` 属性 | modal 宽度。弹层优先用属性设置。 |

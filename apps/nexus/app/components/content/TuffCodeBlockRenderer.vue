@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { PackageManager } from '~/utils/docs-install-command'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { formatDocsCodeLanguage } from '~/utils/docs-code-language'
 import { formatInstallCommand, PACKAGE_MANAGERS, parseInstallCommand } from '~/utils/docs-install-command'
 import { highlightCodeToHtml } from '~/utils/highlight'
 
@@ -24,10 +25,10 @@ const mermaidRef = ref<HTMLElement | null>(null)
 
 const canCopy = computed(() => Boolean(props.code?.trim()))
 const resolvedTitle = computed(() => {
-  if (props.title)
-    return props.title
-  const lang = (props.lang || 'txt').toUpperCase()
-  return `EXAMPLE.${lang}`
+  const customTitle = props.title?.trim()
+  if (customTitle)
+    return customTitle
+  return formatDocsCodeLanguage(props.lang, locale.value === 'zh' ? '文本' : 'Text')
 })
 const copyLabel = computed(() => {
   const isZh = locale.value === 'zh'
@@ -142,6 +143,7 @@ async function handleCopyInstall() {
       <button
         type="button"
         class="tuff-code-block__copy tuff-install__copy"
+        :class="{ 'is-copied': copiedInstall }"
         :aria-label="copiedInstall ? installLabels.copied : installLabels.copy"
         :title="copiedInstall ? installLabels.copied : installLabels.copy"
         @click="handleCopyInstall"
@@ -157,23 +159,32 @@ async function handleCopyInstall() {
   <div v-else class="tuff-code-block" :class="{ 'tuff-code-block--embedded': props.embedded }">
     <div v-if="showHeader" class="tuff-code-block__header">
       <div class="tuff-code-block__meta">
-        <div class="tuff-code-block__dots" aria-hidden="true">
-          <span class="tuff-code-block__dot is-red" />
-          <span class="tuff-code-block__dot is-yellow" />
-          <span class="tuff-code-block__dot is-green" />
-        </div>
         <div class="tuff-code-block__title">
           {{ resolvedTitle }}
         </div>
       </div>
-      <button v-if="canCopy" type="button" class="tuff-code-block__copy" @click="handleCopy">
-        <span :class="copied ? 'i-carbon-checkmark' : 'i-carbon-copy'" />
-        {{ copyLabel }}
+      <button
+        v-if="canCopy"
+        type="button"
+        class="tuff-code-block__copy"
+        :class="{ 'is-copied': copied }"
+        :aria-label="copyLabel"
+        @click="handleCopy"
+      >
+        <span class="tuff-code-block__copy-icon" :class="copied ? 'i-carbon-checkmark' : 'i-carbon-copy'" aria-hidden="true" />
+        <span>{{ copyLabel }}</span>
       </button>
     </div>
-    <button v-if="props.embedded && canCopy" type="button" class="tuff-code-block__copy tuff-code-block__copy--floating" @click="handleCopy">
-      <span :class="copied ? 'i-carbon-checkmark' : 'i-carbon-copy'" />
-      {{ copyLabel }}
+    <button
+      v-if="props.embedded && canCopy"
+      type="button"
+      class="tuff-code-block__copy tuff-code-block__copy--floating"
+      :class="{ 'is-copied': copied }"
+      :aria-label="copyLabel"
+      @click="handleCopy"
+    >
+      <span class="tuff-code-block__copy-icon" :class="copied ? 'i-carbon-checkmark' : 'i-carbon-copy'" aria-hidden="true" />
+      <span>{{ copyLabel }}</span>
     </button>
     <component :is="isMermaid ? 'div' : 'pre'" class="tuff-code-block__pre" :class="{ 'tuff-code-block__pre--mermaid': isMermaid }">
       <div
@@ -194,34 +205,34 @@ async function handleCopyInstall() {
 
 <style scoped>
 /*
- * Every colour the block paints is one of these, so the install card, the
- * joined snippet and a demo's embedded code all follow the page theme: TuffEx's
- * light surface and ink by default, the warm near-black panel under .dark.
+ * Every chrome colour resolves from --tx-* tokens so standalone blocks, the
+ * install card, joined snippets and embedded demo code follow Light, Dark and
+ * High-Contrast themes automatically with concentric radii and an inset ring.
  */
 .tuff-code-block {
-  --tuff-code-surface: var(--tx-fill-color-light);
-  --tuff-code-face: var(--tx-fill-color-light);
+  --tuff-code-radius: 14px;
+  --tuff-code-surface: var(--tx-fill-color-lighter);
+  --tuff-code-face: var(--tx-fill-color-lighter);
   --tuff-code-face-hover: var(--tx-fill-color);
-  --tuff-code-header: var(--tx-fill-color);
+  --tuff-code-header: var(--tx-fill-color-light);
   --tuff-code-border: var(--tx-border-color-light);
   --tuff-code-hairline: var(--tx-border-color-lighter);
-  --tuff-code-shadow: 0 1px 2px rgba(16, 14, 12, 0.05);
   --tuff-code-ink: var(--tx-text-color-primary);
   --tuff-code-muted: var(--tx-text-color-secondary);
   --tuff-code-faint: var(--tx-text-color-placeholder);
-  --tuff-code-control: color-mix(in srgb, var(--tx-text-color-primary) 6%, transparent);
-  --tuff-code-control-hover: color-mix(in srgb, var(--tx-text-color-primary) 11%, transparent);
+  --tuff-code-control: transparent;
+  --tuff-code-control-hover: color-mix(in srgb, var(--tx-text-color-primary) 7%, transparent);
   --tuff-code-control-ink: var(--tx-text-color-regular);
   --tuff-code-control-ink-hover: var(--tx-text-color-primary);
+  --tuff-code-copied-ink: color-mix(in srgb, var(--tx-color-success) 55%, var(--tx-text-color-primary));
   --tuff-code-ring: var(--tx-border-color);
-  --tuff-code-dot-ring: rgba(16, 14, 12, 0.12);
   /* hljs tokens, GitHub light */
   --tuff-code-keyword: #d73a49;
   --tuff-code-title: #6f42c1;
   --tuff-code-attr: #005cc5;
   --tuff-code-string: #032f62;
   --tuff-code-builtin: #e36209;
-  --tuff-code-comment: #6a737d;
+  --tuff-code-comment: var(--tx-text-color-secondary);
   --tuff-code-tag: #22863a;
 
   position: relative;
@@ -229,97 +240,104 @@ async function handleCopyInstall() {
   max-width: 100%;
   min-width: 0;
   box-sizing: border-box;
-  border-radius: 18px;
+  border-radius: var(--tuff-code-radius);
   overflow: hidden;
-  border: 1px solid var(--tuff-code-border);
   background: var(--tuff-code-surface);
-  box-shadow: var(--tuff-code-shadow);
+}
+
+/* Inset ring drawn above the header and code surfaces so borders stay crisp
+   without fighting shadows or shifting box geometry. */
+.tuff-code-block::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1px var(--tuff-code-border);
+  pointer-events: none;
+  z-index: 2;
 }
 
 .tuff-code-block--embedded {
-  border-radius: 0 0 22px 22px;
-  border: none;
+  border-radius: 0;
   background: transparent;
-  box-shadow: none;
+}
+
+.tuff-code-block--embedded::after {
+  display: none;
 }
 
 .tuff-code-block__header {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 12px;
-  padding: 12px 16px;
+  min-height: 38px;
+  padding: 6px 8px 6px 14px;
   border-bottom: 1px solid var(--tuff-code-hairline);
   background: var(--tuff-code-header);
-  justify-content: space-between;
 }
 
 .tuff-code-block__meta {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
   min-width: 0;
 }
 
-.tuff-code-block__dots {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.tuff-code-block__dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 999px;
-  box-shadow: inset 0 0 0 1px var(--tuff-code-dot-ring);
-}
-
-.tuff-code-block__dot.is-red {
-  background: #ff5f57;
-}
-
-.tuff-code-block__dot.is-yellow {
-  background: #febc2e;
-}
-
-.tuff-code-block__dot.is-green {
-  background: #28c840;
-}
-
 .tuff-code-block__title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   text-align: left;
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
   color: var(--tuff-code-muted);
 }
 
 .tuff-code-block__copy--floating {
   position: absolute;
-  top: 14px;
-  right: 14px;
+  top: 10px;
+  right: 10px;
   z-index: 1;
+  background: var(--tuff-code-face);
+  box-shadow: inset 0 0 0 1px var(--tuff-code-border);
 }
 
+/* Concentric inner radius: 14px outer card minus 6px header inset = 8px. */
 .tuff-code-block__copy {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
+  gap: 5px;
+  height: 26px;
+  padding: 0 9px;
   border: 0;
-  border-radius: 999px;
+  border-radius: 8px;
   background: var(--tuff-code-control);
   color: var(--tuff-code-control-ink);
   cursor: pointer;
-  font-size: 0.72rem;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 500;
   line-height: 1;
-  padding: 0.38rem 0.62rem;
-  transition: background-color 0.16s ease, color 0.16s ease;
+  white-space: nowrap;
 }
 
 .tuff-code-block__copy:hover {
   background: var(--tuff-code-control-hover);
   color: var(--tuff-code-control-ink-hover);
+}
+
+.tuff-code-block__copy:focus-visible {
+  outline: 2px solid var(--tx-color-primary);
+  outline-offset: -2px;
+}
+
+.tuff-code-block__copy.is-copied {
+  color: var(--tuff-code-copied-ink);
+}
+
+.tuff-code-block__copy-icon {
+  flex: none;
+  font-size: 13px;
 }
 
 .tuff-code-block__pre {
@@ -330,6 +348,7 @@ async function handleCopyInstall() {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+  border-radius: 0;
   background: transparent;
   color: var(--tuff-code-ink);
   overflow-x: auto;
@@ -339,7 +358,7 @@ async function handleCopyInstall() {
 }
 
 .tuff-code-block__pre--mermaid {
-  padding: 20px 22px 22px;
+  padding: 16px;
 }
 
 /* The class puts this ahead of the docs page's inline `code` rule; at equal
@@ -351,10 +370,10 @@ async function handleCopyInstall() {
   box-sizing: border-box;
   background: transparent !important;
   border: none !important;
-  padding: 18px 22px 20px !important;
+  padding: 14px 16px !important;
   color: var(--tuff-code-ink) !important;
-  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 0.85rem;
+  font-family: var(--tx-font-family-mono, 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace);
+  font-size: 0.8125rem;
   line-height: 1.65;
   white-space: pre;
   tab-size: 2;
@@ -362,7 +381,7 @@ async function handleCopyInstall() {
 }
 
 .tuff-code-block--embedded .tuff-code-block__pre code.tuff-code-block__code {
-  padding-right: 88px !important;
+  padding-right: 84px !important;
 }
 
 .tuff-code-block__pre code .line {
@@ -384,33 +403,34 @@ async function handleCopyInstall() {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 8px 8px 8px 10px;
+  padding: 6px 8px 6px 10px;
   border-bottom: 1px solid var(--tuff-code-hairline);
+  background: var(--tuff-code-header);
 }
 
 .tuff-install__copy {
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
   padding: 0;
   justify-content: center;
   border-radius: 8px;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .tuff-install__command {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   min-width: 0;
   max-width: 100%;
   box-sizing: border-box;
-  padding: 16px 22px 18px;
+  padding: 12px 16px;
   overflow-x: auto;
   scrollbar-width: thin;
   color: var(--tuff-code-ink);
-  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 0.85rem;
-  line-height: 1.65;
+  font-family: var(--tx-font-family-mono, 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace);
+  font-size: 0.8125rem;
+  line-height: 1.6;
   white-space: nowrap;
   -webkit-font-smoothing: antialiased;
 }
@@ -423,29 +443,21 @@ async function handleCopyInstall() {
 /* Only variables change here, so the embedded variant's own overrides still hold. */
 :global(.dark .tuff-code-block),
 :global([data-theme='dark'] .tuff-code-block) {
-  --tuff-code-surface: linear-gradient(180deg, rgba(16, 14, 12, 0.96), rgba(10, 8, 6, 0.98));
-  --tuff-code-face: rgb(16, 14, 12);
-  --tuff-code-face-hover: rgb(36, 33, 30);
-  --tuff-code-header: linear-gradient(90deg, rgba(24, 20, 18, 0.96), rgba(18, 15, 13, 0.95));
-  --tuff-code-border: rgba(255, 255, 255, 0.08);
-  --tuff-code-hairline: rgba(255, 255, 255, 0.06);
-  --tuff-code-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
-  --tuff-code-ink: rgba(255, 255, 255, 0.96);
-  --tuff-code-muted: rgba(255, 255, 255, 0.55);
-  --tuff-code-faint: rgba(255, 255, 255, 0.32);
-  --tuff-code-control: rgba(255, 255, 255, 0.06);
-  --tuff-code-control-hover: rgba(255, 255, 255, 0.12);
-  --tuff-code-control-ink: rgba(255, 255, 255, 0.72);
-  --tuff-code-control-ink-hover: rgba(255, 255, 255, 0.92);
-  --tuff-code-ring: rgba(255, 255, 255, 0.14);
-  --tuff-code-dot-ring: rgba(255, 255, 255, 0.25);
+  --tuff-code-surface: color-mix(in srgb, var(--tx-bg-color-page) 64%, var(--tx-bg-color));
+  --tuff-code-face: color-mix(in srgb, var(--tx-bg-color-page) 64%, var(--tx-bg-color));
+  --tuff-code-face-hover: var(--tx-fill-color-light);
+  --tuff-code-header: var(--tx-fill-color-lighter);
+  --tuff-code-border: var(--tx-border-color-lighter);
+  --tuff-code-hairline: color-mix(in srgb, var(--tx-border-color-lighter) 70%, transparent);
+  --tuff-code-control-hover: color-mix(in srgb, var(--tx-text-color-primary) 9%, transparent);
+  --tuff-code-ring: var(--tx-border-color-light);
   /* hljs tokens, GitHub dark */
   --tuff-code-keyword: #ff7b72;
   --tuff-code-title: #d2a8ff;
   --tuff-code-attr: #79c0ff;
   --tuff-code-string: #a5d6ff;
   --tuff-code-builtin: #ffa657;
-  --tuff-code-comment: #8b949e;
+  --tuff-code-comment: var(--tx-text-color-secondary);
   --tuff-code-tag: #7ee787;
 }
 </style>
@@ -457,36 +469,54 @@ async function handleCopyInstall() {
  * page hydrates; every other pair of code blocks keeps its own card.
  */
 .tuff-code-block--install:has(+ .tuff-code-block) {
-  border-bottom: 0;
   border-bottom-left-radius: 0;
   border-bottom-right-radius: 0;
-  box-shadow: none;
+}
+
+.tuff-code-block.tuff-code-block--install:has(+ .tuff-code-block)::after {
+  inset: 0 0 -1px 0;
 }
 
 .tuff-code-block--install + .tuff-code-block {
   position: relative;
   margin-top: 0 !important;
-  border-top: 1px solid var(--tuff-code-hairline);
   border-top-left-radius: 0;
   border-top-right-radius: 0;
 }
 
+.tuff-code-block--install + .tuff-code-block::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 1px;
+  right: 1px;
+  height: 1px;
+  background: var(--tuff-code-hairline);
+  z-index: 2;
+  pointer-events: none;
+}
+
+.tuff-code-block--install + .tuff-code-block.tuff-code-block::after {
+  inset: -1px 0 0 0;
+}
+
 .tuff-code-block--install + .tuff-code-block .tuff-code-block__pre code.tuff-code-block__code {
-  padding-right: 52px !important;
+  padding-right: 48px !important;
 }
 
 /*
- * The joined snippet drops its window chrome. Its copy control floats beside
- * the first line, shaped like the install row's icon-only TxCopyButton, on an
- * opaque face so a long line under it never shows through; it appears with the
+ * The joined snippet drops its header bar. Its copy control floats beside
+ * the first line, shaped like the install row's icon-only button, on an opaque
+ * face so a long line under it never shows through; it appears with the
  * pointer or focus, and stays on devices that cannot hover.
  */
 .tuff-code-block--install + .tuff-code-block .tuff-code-block__header {
   position: absolute;
-  top: 14px;
+  top: 10px;
   right: 0;
   z-index: 1;
-  padding: 0 14px 0 0;
+  min-height: 0;
+  padding: 0 10px 0 0;
   border: 0;
   /* opaque to the card's edge, feathered on the left, so no code shows beside it */
   background: var(--tuff-code-face);
@@ -501,8 +531,8 @@ async function handleCopyInstall() {
 
 .tuff-code-block--install + .tuff-code-block .tuff-code-block__copy {
   justify-content: center;
-  width: 30px;
-  height: 30px;
+  width: 28px;
+  height: 28px;
   gap: 0;
   padding: 0;
   border-radius: 8px;
@@ -532,8 +562,12 @@ async function handleCopyInstall() {
   }
 }
 
-.tuff-code-block--install + .tuff-code-block .tuff-code-block__copy > span {
-  font-size: 14px;
+.tuff-code-block--install + .tuff-code-block .tuff-code-block__copy > span:first-child {
+  font-size: 13px;
+}
+
+.tuff-code-block--install + .tuff-code-block .tuff-code-block__copy > span:not(:first-child) {
+  display: none;
 }
 
 /*

@@ -87,7 +87,15 @@ const zh = {
 
   /* ── Base suite ── */
   switches: { sync: '自动同步', compact: '紧凑模式', backup: '云端备份' },
-  progress: { download: '下载进度', installed: '安装完成', failed: '同步失败', share: '各通道用户占比', loading: '加载中' },
+  progress: {
+    downloading: '下载更新包',
+    downloadAria: '下载进度',
+    installed: '依赖已就绪',
+    doneMeta: '已完成',
+    installedAria: '安装完成',
+    cache: '缓存占用',
+    cacheAria: '缓存占用进度',
+  },
   rating: { starLabel: (star: number) => `评 ${star} 星` } satisfies PropsOf<typeof TxRating>,
   tag: { closeAriaLabel: '移除标签' } satisfies PropsOf<typeof TxTag>,
   pagination: { ariaLabel: '分页', prevLabel: '上一页', nextLabel: '下一页' } satisfies PropsOf<typeof TxPagination>,
@@ -323,7 +331,15 @@ const en = {
 
   /* ── Base suite ── */
   switches: { sync: 'Auto sync', compact: 'Compact mode', backup: 'Cloud backup' },
-  progress: { download: 'Download progress', installed: 'Install complete', failed: 'Sync failed', share: 'Users by channel', loading: 'Loading' },
+  progress: {
+    downloading: 'Downloading bundle',
+    downloadAria: 'Download progress',
+    installed: 'Dependencies ready',
+    doneMeta: 'Done',
+    installedAria: 'Install complete',
+    cache: 'Cache usage',
+    cacheAria: 'Cache usage progress',
+  },
   rating: {} satisfies PropsOf<typeof TxRating>,
   tag: {} satisfies PropsOf<typeof TxTag>,
   pagination: {} satisfies PropsOf<typeof TxPagination>,

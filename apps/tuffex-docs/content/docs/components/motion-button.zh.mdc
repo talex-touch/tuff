@@ -145,7 +145,9 @@ const lastLabel = ref('')
 | `size` | `'xs' \| 'sm' \| 'md' \| 'lg'` | `md` | 高度分别为 24/30/36/42 px，沿用 TuffEx 尺寸词汇。 |
 | `disabled` | `boolean` | `false` | 原生按钮禁用，或移除链接地址和 Tab 停靠。焦点模糊模式会禁用所有条目。 |
 | `animated` | `boolean` | `true` | 共享生命周期允许时启用装饰动画。 |
-| `selected` | `boolean` | — | 调用方提供的目标图标状态，按钮同步 `aria-pressed`。不执行业务，也不确认成功。 |
+| `selected` | `boolean` | — | 调用方提供的目标图标状态，按钮同步 `aria-pressed` 并呈现柔和高亮边框。不执行业务，也不确认成功。 |
+| `count` | `number` | — | 可选的调用方计数，显示在标签右侧并经 `TxTextMorph` 按数字位平滑过渡；`iconOnly` 时隐藏。 |
+| `burst` | `boolean` | `false` | `selected` 切为 `true` 时在图标周围播放短暂的径向微粒子爆发，遵循减少动态效果与可见性门禁。 |
 | `href` | `string` | — | 渲染原生链接，代替按钮。 |
 | `target` | `string` | — | 原生链接目标窗口。 |
 | `rel` | `string` | `_blank` 时为 `noopener noreferrer` | 原生链接关系，显式值优先。 |

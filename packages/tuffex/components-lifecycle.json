@@ -1,7 +1,7 @@
 {
   "$schema": "./components-lifecycle.schema.json",
   "currentVersion": "0.9.6",
-  "totalComponents": 198,
+  "totalComponents": 197,
   "versions": [
     {
       "version": "0.9.6",
@@ -1125,11 +1125,6 @@
     },
     "motion-text": {
       "slug": "motion-text",
-      "since": "0.7.0",
-      "suite": "pro"
-    },
-    "motion-toggle": {
-      "slug": "motion-toggle",
       "since": "0.7.0",
       "suite": "pro"
     },

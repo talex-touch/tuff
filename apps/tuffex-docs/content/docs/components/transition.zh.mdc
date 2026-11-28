@@ -1,7 +1,7 @@
 ---
 title: "Transition 动效"
 description: "用于内容切换、列表与推入翻页的过渡封装"
-category: Effects
+category: MotionTransitions
 status: beta
 since: 0.3.4
 tags: [transition, motion, list, auto-size, navigation]

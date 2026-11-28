@@ -102,12 +102,12 @@ describe('tuffex-docs phase 1 scaffold', () => {
     expect(routes).toContain('/en/concepts/tds')
     expect(routes).toContain('/en/concepts/curvature')
     expect(routes).toContain('/en/composition')
-    expect(routes.length).toBeGreaterThanOrEqual(544)
+    expect(routes.length).toBeGreaterThanOrEqual(542)
 
     const enNav = buildTuffexNavigationFromDisk(join(appRoot, 'content/docs'), 'en')
     const zhNav = buildTuffexNavigationFromDisk(join(appRoot, 'content/docs'), 'zh')
-    expect(enNav.items.length).toBe(271)
-    expect(zhNav.items.length).toBe(271)
+    expect(enNav.items.length).toBe(270)
+    expect(zhNav.items.length).toBe(270)
     expect(enNav.suites.map(s => s.key)).toEqual([
       'concepts',
       'templates',
