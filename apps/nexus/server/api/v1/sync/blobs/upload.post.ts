@@ -2,9 +2,16 @@ import { getHeader, readFormData } from 'h3'
 import { randomUUID } from 'node:crypto'
 import type { paths } from '../../../../../types/sync-api'
 import { requireAppAuth } from '../../../../utils/auth'
-import { readDeviceId } from '../../../../utils/authStore'
+import { resolveBoundAppDeviceId } from '../../../../utils/syncDeviceAuth'
 import { createSyncError } from '../../../../utils/syncErrors'
-import { applyQuotaDelta, findExistingSyncBlob, getSyncSession, uploadSyncBlob, validateQuota } from '../../../../utils/syncStoreV1'
+import {
+  applyQuotaDelta,
+  findExistingSyncBlob,
+  getSyncSession,
+  rollbackUploadedSyncBlob,
+  uploadSyncBlob,
+  validateQuota,
+} from '../../../../utils/syncStoreV1'
 import { completeUploadGovernance, failUploadGovernance, startUploadGovernance } from '../../../../utils/uploadGovernance'
 
 type UploadResponse = paths['/api/v1/sync/blobs/upload']['post']['responses']['200']['content']['application/json']
@@ -40,10 +47,8 @@ function classifySyncBlobUploadFailure(error: unknown): string {
 }
 
 export default defineEventHandler(async (event) => {
-  const { userId } = await requireAppAuth(event)
-  const deviceId = readDeviceId(event)
-  if (!deviceId)
-    throw createSyncError('SYNC_INVALID_PAYLOAD', 400, 'Missing device id')
+  const { userId, deviceId: tokenDeviceId } = await requireAppAuth(event)
+  const deviceId = resolveBoundAppDeviceId(event, tokenDeviceId)
 
   const syncToken = getHeader(event, 'x-sync-token')
   if (!syncToken)
@@ -126,7 +131,14 @@ export default defineEventHandler(async (event) => {
       sizeBytes: expectedSizeBytes
     })
     if (!result.deduplicated) {
-      await applyQuotaDelta(event, userId, { storageDelta: result.sizeBytes, objectsDelta: 1 })
+      try {
+        await applyQuotaDelta(event, userId, { storageDelta: result.sizeBytes, objectsDelta: 1 })
+      }
+      catch (quotaError) {
+        // Concurrent upload beat us to the quota cap: remove the staged blob so we never leak R2 storage.
+        await rollbackUploadedSyncBlob?.(event, userId, result.blobId, result.objectKey).catch(() => {})
+        throw quotaError
+      }
     }
     await completeUploadGovernance(event, uploadAttempt, {
       resourceId: uploadResourceId,

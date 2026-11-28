@@ -1,7 +1,7 @@
 import { readBody } from 'h3'
 import type { paths } from '../../../../types/sync-api'
 import { requireAppAuth } from '../../../utils/auth'
-import { readDeviceId } from '../../../utils/authStore'
+import { resolveBoundAppDeviceId } from '../../../utils/syncDeviceAuth'
 import { createSyncError } from '../../../utils/syncErrors'
 import { registerKey } from '../../../utils/syncStoreV1'
 
@@ -9,10 +9,8 @@ type RegisterBody = paths['/api/v1/keys/register']['post']['requestBody']['conte
 type RegisterResponse = paths['/api/v1/keys/register']['post']['responses']['200']['content']['application/json']
 
 export default defineEventHandler(async (event) => {
-  const { userId } = await requireAppAuth(event)
-  const deviceId = readDeviceId(event)
-  if (!deviceId)
-    throw createSyncError('SYNC_INVALID_PAYLOAD', 400, 'Missing device id')
+  const { userId, deviceId: tokenDeviceId } = await requireAppAuth(event)
+  const deviceId = resolveBoundAppDeviceId(event, tokenDeviceId)
 
   const body = await readBody<RegisterBody>(event)
   const keyType = typeof body?.key_type === 'string' ? body.key_type.trim() : ''

@@ -623,8 +623,8 @@ export async function requireAuth(event: H3Event): Promise<AuthContext> {
   }
 }
 
-export async function requireVerifiedEmail(event: H3Event): Promise<AuthContext> {
-  const context = await requireAuth(event)
+export async function requireVerifiedEmail(event: H3Event, existingAuth?: AuthContext): Promise<AuthContext> {
+  const context = existingAuth ?? await requireAuth(event)
   const user = context.user ?? await getUserById(event, context.userId)
   if (!user || user.status !== 'active') {
     throw createError({ statusCode: 403, statusMessage: 'Account disabled.' })

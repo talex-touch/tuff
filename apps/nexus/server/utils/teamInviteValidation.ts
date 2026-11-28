@@ -4,7 +4,7 @@ import type { TeamInvite } from './teamStore'
 import type { AuthUser } from './authStore'
 import type { TeamRecord } from './creditsStore'
 import { createError } from 'h3'
-import { addTeamMember, countTeamMembers, getTeamById, isUserTeamMember, listUserTeams } from './creditsStore'
+import { addTeamMemberWithinSeatLimit, countTeamMembers, getTeamById, isUserTeamMember, listUserTeams, removeTeamMember } from './creditsStore'
 import { getUserById } from './authStore'
 import { getUserSubscription } from './subscriptionStore'
 import { getInviteByCode, getInviteById, getTeamQuota, updateTeamSeats, useInvite } from './teamStore'
@@ -15,6 +15,7 @@ export type InviteValidationReason =
   | 'revoked'
   | 'used_up'
   | 'email_mismatch'
+  | 'email_unverified'
   | 'already_member'
   | 'seat_full'
   | 'plan_locked'
@@ -44,6 +45,7 @@ function resolveValidationErrorMessage(reason: InviteValidationReason): string {
     revoked: 'Invite has been revoked',
     used_up: 'Invite has reached max uses',
     email_mismatch: 'Invite email does not match current account',
+    email_unverified: 'Verified email required to accept invite',
     already_member: 'You are already in a team',
     seat_full: 'Team seats are full',
     plan_locked: 'Team plan does not allow collaboration',
@@ -135,6 +137,10 @@ export async function validateInviteForUser(
     }
   }
 
+  if (currentUser.emailState !== 'verified') {
+    return fail('email_unverified')
+  }
+
   const organizationTeam = userTeams.find(item => item.type === 'organization')
   if (organizationTeam) {
     if (organizationTeam.id === team.id) {
@@ -184,8 +190,30 @@ export async function joinTeamWithInvite(
     })
   }
 
-  await useInvite(event, validation.invite.code)
-  await addTeamMember(event, validation.team.id, userId, validation.invite.role || 'member')
+  const seatOutcome = await addTeamMemberWithinSeatLimit(
+    event,
+    validation.team.id,
+    userId,
+    validation.invite.role || 'member',
+    validation.seatsLimit,
+  )
+  if (seatOutcome !== 'added') {
+    throw createError({
+      statusCode: 400,
+      statusMessage: resolveValidationErrorMessage(seatOutcome),
+      data: {
+        reason: seatOutcome,
+      },
+    })
+  }
+
+  try {
+    await useInvite(event, validation.invite.code)
+  }
+  catch (error) {
+    await removeTeamMember(event, validation.team.id, userId).catch(() => {})
+    throw error
+  }
 
   const nextSeatsUsed = await countTeamMembers(event, validation.team.id)
   await updateTeamSeats(event, validation.team.id, nextSeatsUsed)

@@ -92,90 +92,129 @@ export async function guardTelemetryIp(
     return { ip }
 
   const now = Date.now()
+  const normalizedWeight = Math.max(0, Math.min(Math.round(options.weight), 10_000))
+  const actionLabel = String(options.action || 'telemetry').slice(0, 64)
+
   let row: {
-    ip: string
-    window_start: number
     window_count: number
     violation_count: number
     blocked_until: number | null
     block_reason: string | null
-  } | undefined
+    updated_at: number
+  } | null = null
 
   try {
     await ensureSecuritySchema(db)
 
-    const { results } = await db.prepare(`
-      SELECT ip, window_start, window_count, violation_count, blocked_until, block_reason
-      FROM ${SECURITY_TABLE}
-      WHERE ip = ?1;
-    `).bind(ip).all<{
-      ip: string
-      window_start: number
+    // Atomic single-statement upsert prevents concurrent read-modify-write races on window_count
+    // and enforces exponential backoff directly in SQLite. Fails closed on D1 error.
+    // The `WHERE` predicate on `DO UPDATE` skips already-blocked rows without modifying them,
+    // returning `null` deterministically (even within the same millisecond) to signal 403 IP blocked.
+    row = await db.prepare(`
+      INSERT INTO ${SECURITY_TABLE} (
+        ip, window_start, window_count, violation_count, blocked_until, block_reason, created_at, updated_at
+      ) VALUES (
+        ?1,
+        ?2,
+        ?3,
+        CASE WHEN ?3 > ?4 THEN 1 ELSE 0 END,
+        CASE WHEN ?3 > ?4 THEN ?2 + ?5 ELSE NULL END,
+        CASE WHEN ?3 > ?4 THEN 'rate_limit:' || ?3 || '/' || ?6 || ' (' || ?7 || ')' ELSE NULL END,
+        ?2,
+        ?2
+      )
+      ON CONFLICT(ip) DO UPDATE SET
+        window_start = CASE
+          WHEN (?2 - ${SECURITY_TABLE}.window_start) >= ?6 THEN ?2
+          ELSE ${SECURITY_TABLE}.window_start
+        END,
+        window_count = CASE
+          WHEN (?2 - ${SECURITY_TABLE}.window_start) >= ?6 THEN ?3
+          ELSE ${SECURITY_TABLE}.window_count + ?3
+        END,
+        violation_count = CASE
+          WHEN (
+            CASE
+              WHEN (?2 - ${SECURITY_TABLE}.window_start) >= ?6 THEN ?3
+              ELSE ${SECURITY_TABLE}.window_count + ?3
+            END
+          ) > ?4
+            THEN ${SECURITY_TABLE}.violation_count + 1
+          ELSE ${SECURITY_TABLE}.violation_count
+        END,
+        blocked_until = CASE
+          WHEN (
+            CASE
+              WHEN (?2 - ${SECURITY_TABLE}.window_start) >= ?6 THEN ?3
+              ELSE ${SECURITY_TABLE}.window_count + ?3
+            END
+          ) > ?4
+            THEN ?2 + MIN(
+              ?5 * (1 << MIN(10, MAX(0, ${SECURITY_TABLE}.violation_count))),
+              ?8
+            )
+          ELSE NULL
+        END,
+        block_reason = CASE
+          WHEN (
+            CASE
+              WHEN (?2 - ${SECURITY_TABLE}.window_start) >= ?6 THEN ?3
+              ELSE ${SECURITY_TABLE}.window_count + ?3
+            END
+          ) > ?4
+            THEN 'rate_limit:' || (
+              CASE
+                WHEN (?2 - ${SECURITY_TABLE}.window_start) >= ?6 THEN ?3
+                ELSE ${SECURITY_TABLE}.window_count + ?3
+              END
+            ) || '/' || ?6 || ' (' || ?7 || ')'
+          ELSE NULL
+        END,
+        updated_at = ?2
+      WHERE ${SECURITY_TABLE}.blocked_until IS NULL OR ${SECURITY_TABLE}.blocked_until <= ?2
+      RETURNING
+        window_count,
+        violation_count,
+        blocked_until,
+        block_reason,
+        updated_at;
+    `).bind(
+      ip,
+      now,
+      normalizedWeight,
+      MAX_EVENTS_PER_WINDOW,
+      BASE_BLOCK_MS,
+      WINDOW_MS,
+      actionLabel,
+      MAX_BLOCK_MS,
+    ).first<{
       window_count: number
       violation_count: number
       blocked_until: number | null
       block_reason: string | null
+      updated_at: number
     }>()
-    row = results?.[0]
   }
   catch (error) {
     console.warn('IP security: D1 error', error)
-    return { ip }
+    throw createError({
+      statusCode: 503,
+      statusMessage: 'Telemetry security check unavailable',
+    })
   }
 
-  if (row?.blocked_until && row.blocked_until > now) {
+  // `ON CONFLICT ... DO UPDATE ... WHERE blocked_until IS NULL OR blocked_until <= ?2`
+  // yields zero rows only when the IP is already actively blocked.
+  if (!row) {
     throw createError({
       statusCode: 403,
       statusMessage: 'IP blocked',
     })
   }
 
-  const normalizedWeight = Math.max(0, Math.min(Math.round(options.weight), 10_000))
-  const lastWindowStart = row?.window_start ?? now
-  const isNewWindow = now - lastWindowStart >= WINDOW_MS
-  const nextWindowStart = isNewWindow ? now : lastWindowStart
-  const nextWindowCount = Math.max(0, (isNewWindow ? 0 : (row?.window_count ?? 0)) + normalizedWeight)
-
-  const prevViolationCount = row?.violation_count ?? 0
-  const exceeded = nextWindowCount > MAX_EVENTS_PER_WINDOW
-  const nextViolationCount = exceeded ? prevViolationCount + 1 : prevViolationCount
-  const exp = Math.min(10, Math.max(0, nextViolationCount - 1))
-  const blockMs = exceeded
-    ? Math.min(BASE_BLOCK_MS * 2 ** exp, MAX_BLOCK_MS)
-    : 0
-  const blockedUntil = exceeded ? now + blockMs : null
-  const blockReason = exceeded ? `rate_limit:${nextWindowCount}/${WINDOW_MS} (${options.action})` : null
-
-  try {
-    await db.prepare(`
-      INSERT INTO ${SECURITY_TABLE} (
-        ip, window_start, window_count, violation_count, blocked_until, block_reason, created_at, updated_at
-      ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
-      ON CONFLICT(ip) DO UPDATE SET
-        window_start = excluded.window_start,
-        window_count = excluded.window_count,
-        violation_count = excluded.violation_count,
-        blocked_until = excluded.blocked_until,
-        block_reason = excluded.block_reason,
-        updated_at = excluded.updated_at;
-    `).bind(
-      ip,
-      nextWindowStart,
-      nextWindowCount,
-      nextViolationCount,
-      blockedUntil,
-      blockReason,
-      now,
-      now,
-    ).run()
-  }
-  catch (error) {
-    console.warn('IP security: D1 error', error)
-    return { ip }
-  }
-
-  if (exceeded) {
+  if (row.blocked_until && row.blocked_until > now) {
     const bucket = Math.floor(now / (60 * 60_000))
+    const blockMs = Math.max(0, row.blocked_until - now)
     try {
       await recordTelemetryMessages(event, [{
         id: `ip-ban:${ip}:${bucket}`,
@@ -187,17 +226,17 @@ export async function guardTelemetryIp(
           ip,
           action: options.action,
           windowMs: WINDOW_MS,
-          windowCount: nextWindowCount,
+          windowCount: row.window_count,
           threshold: MAX_EVENTS_PER_WINDOW,
-          violationCount: nextViolationCount,
-          blockedUntil,
+          violationCount: row.violation_count,
+          blockedUntil: row.blocked_until,
           blockMs,
-          reason: blockReason,
+          reason: row.block_reason,
         },
         status: 'unread',
         isAnonymous: false,
         createdAt: now,
-      }])
+      }], { trustedSystem: true })
     }
     catch (error) {
       console.warn('Telemetry messages: D1 error', error)

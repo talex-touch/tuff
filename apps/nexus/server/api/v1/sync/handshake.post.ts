@@ -2,12 +2,12 @@ import type { paths } from '../../../../types/sync-api'
 import { requireAppAuth } from '../../../utils/auth'
 import {
   countActiveDevices,
-  readDeviceId,
   touchDevice,
   readDeviceMetadata,
   revokeInactiveDevicesAndCountActive,
   revokeOldestDevices
 } from '../../../utils/authStore'
+import { resolveBoundAppDeviceId } from '../../../utils/syncDeviceAuth'
 import { createSyncError } from '../../../utils/syncErrors'
 import { getOrInitQuota, handshakeSyncSession, reconcileSyncBlobsV1 } from '../../../utils/syncStoreV1'
 
@@ -18,9 +18,7 @@ const DEVICE_INACTIVE_MS = 1000 * 60 * 60 * 24 * DEVICE_INACTIVE_DAYS
 
 export default defineEventHandler(async (event) => {
   const { userId, deviceId: tokenDeviceId } = await requireAppAuth(event)
-  const deviceId = tokenDeviceId ?? readDeviceId(event)
-  if (!deviceId)
-    throw createSyncError('SYNC_INVALID_PAYLOAD', 400, 'Missing device id')
+  const deviceId = resolveBoundAppDeviceId(event, tokenDeviceId)
 
   await touchDevice(event, userId, deviceId, readDeviceMetadata(event))
 

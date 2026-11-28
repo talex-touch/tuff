@@ -2,16 +2,58 @@
  * CORS middleware for API routes
  * Enables cross-origin requests for the store API endpoints
  */
+function normalizeCorsPath(rawPath: string): { path: string, malformed: boolean } {
+  if (!rawPath)
+    return { path: '', malformed: false }
+
+  const [rawPathname = ''] = rawPath.split('?')
+  let malformed = false
+  const segments: string[] = []
+  for (const rawSegment of rawPathname.split('/')) {
+    if (!rawSegment)
+      continue
+    let decoded = rawSegment
+    try {
+      decoded = decodeURIComponent(rawSegment)
+    }
+    catch {
+      malformed = true
+      decoded = rawSegment.replace(/%[0-9a-fA-F]{2}/g, (match) => {
+        try {
+          return decodeURIComponent(match)
+        }
+        catch {
+          return match
+        }
+      })
+    }
+    for (const part of decoded.split('/')) {
+      if (!part || part === '.')
+        continue
+      if (part === '..') {
+        segments.pop()
+        continue
+      }
+      segments.push(part)
+    }
+  }
+
+  return { path: `/${segments.join('/')}`, malformed }
+}
+
 export default defineEventHandler((event) => {
-  const path = event.path
+  const { path, malformed } = normalizeCorsPath(event.path || event.node.req.url || '')
 
   // Only apply CORS to API routes
-  if (!path.startsWith('/api/')) {
+  if (path !== '/api' && !path.startsWith('/api/')) {
     return
   }
 
   const isControlPlanePath
-    = path.startsWith('/api/admin/')
+    = malformed
+      || path === '/api/admin'
+      || path.startsWith('/api/admin/')
+      || path === '/api/dashboard/intelligence'
       || path.startsWith('/api/dashboard/intelligence/')
   const requestOrigin = getHeader(event, 'origin') || ''
   const allowedOrigin = (useRuntimeConfig(event).auth?.origin as string | undefined) || ''

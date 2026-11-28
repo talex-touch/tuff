@@ -18,6 +18,7 @@ const syncStoreMocks = vi.hoisted(() => ({
   applyQuotaDelta: vi.fn(),
   findExistingSyncBlob: vi.fn(),
   getSyncSession: vi.fn(),
+  rollbackUploadedSyncBlob: vi.fn(),
   uploadSyncBlob: vi.fn(),
   validateQuota: vi.fn(),
 }))
@@ -63,12 +64,13 @@ function makeFile(name: string, type: string, bytes: Uint8Array): File {
 describe('/api/v1/sync/blobs/upload', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    authMocks.requireAppAuth.mockResolvedValue({ userId: 'sync-user@example.com' })
+    authMocks.requireAppAuth.mockResolvedValue({ userId: 'sync-user@example.com', deviceId: 'private-device-id' })
     authStoreMocks.readDeviceId.mockReturnValue('private-device-id')
     h3Mocks.getHeader.mockReturnValue('sync-token')
     syncStoreMocks.getSyncSession.mockResolvedValue({ syncToken: 'sync-token' })
     syncStoreMocks.findExistingSyncBlob.mockResolvedValue(null)
     syncStoreMocks.validateQuota.mockResolvedValue({ ok: true, code: null })
+    syncStoreMocks.rollbackUploadedSyncBlob.mockResolvedValue(undefined)
     syncStoreMocks.uploadSyncBlob.mockResolvedValue({
       blobId: 'blob-id',
       objectKey: 'sync-user@example.com/blob-id',
@@ -288,5 +290,36 @@ describe('/api/v1/sync/blobs/upload', () => {
         surface: 'sync-blob-upload',
       }),
     })
+  })
+
+  it('rejects mismatching x-device-id header with 403 DEVICE_NOT_AUTHORIZED', async () => {
+    authStoreMocks.readDeviceId.mockReturnValue('spoofed-device-id')
+
+    await expect(uploadBlobHandler(makeEvent('mismatch'))).rejects.toMatchObject({
+      statusCode: 403,
+      data: { errorCode: 'DEVICE_NOT_AUTHORIZED' },
+    })
+    expect(syncStoreMocks.uploadSyncBlob).not.toHaveBeenCalled()
+  })
+
+  it('rolls back staged blob when atomic quota update rejects under concurrency', async () => {
+    const marker = crypto.randomUUID()
+    const file = makeFile('race.bin', 'application/octet-stream', new Uint8Array([1, 2, 3, 4]))
+    const formData = new FormData()
+    formData.set('file', file)
+    h3Mocks.readFormData.mockResolvedValue(formData)
+    syncStoreMocks.applyQuotaDelta.mockRejectedValueOnce(
+      Object.assign(new Error('Quota storage exceeded'), { statusCode: 403, data: { errorCode: 'QUOTA_STORAGE_EXCEEDED' } }),
+    )
+
+    await expect(uploadBlobHandler(makeEvent(marker))).rejects.toMatchObject({
+      statusCode: 403,
+    })
+    expect(syncStoreMocks.rollbackUploadedSyncBlob).toHaveBeenCalledWith(
+      expect.anything(),
+      'sync-user@example.com',
+      'blob-id',
+      'sync-user@example.com/blob-id',
+    )
   })
 })

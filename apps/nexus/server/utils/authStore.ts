@@ -71,6 +71,7 @@ const AUTH_SCHEMA = defineD1Schema('auth', {
     `CREATE TABLE IF NOT EXISTS ${USERS_TABLE} (
         id TEXT PRIMARY KEY,
         email TEXT NOT NULL UNIQUE,
+        pending_email TEXT,
         name TEXT,
         image TEXT,
         email_verified TEXT,
@@ -106,6 +107,7 @@ const AUTH_SCHEMA = defineD1Schema('auth', {
         identifier TEXT NOT NULL,
         token TEXT NOT NULL,
         expires_at TEXT NOT NULL,
+        user_id TEXT,
         PRIMARY KEY (identifier, token)
       )`,
     `CREATE TABLE IF NOT EXISTS ${LOGIN_TOKEN_TABLE} (
@@ -227,6 +229,7 @@ const AUTH_SCHEMA = defineD1Schema('auth', {
         FOREIGN KEY (user_id) REFERENCES ${USERS_TABLE}(id) ON DELETE CASCADE
       )`,
     `CREATE INDEX IF NOT EXISTS idx_auth_users_email ON ${USERS_TABLE}(email)`,
+    `CREATE INDEX IF NOT EXISTS idx_auth_users_pending_email ON ${USERS_TABLE}(pending_email)`,
     `CREATE TABLE IF NOT EXISTS ${MERGE_LOGS_TABLE} (
         id TEXT PRIMARY KEY,
         source_user_id TEXT NOT NULL,
@@ -268,6 +271,7 @@ const AUTH_SCHEMA = defineD1Schema('auth', {
     {
       table: USERS_TABLE,
       columns: [
+        { name: 'pending_email', ddl: 'pending_email TEXT' },
         { name: 'status', ddl: "status TEXT NOT NULL DEFAULT 'active'" },
         { name: 'email_state', ddl: "email_state TEXT NOT NULL DEFAULT 'unverified'" },
         { name: 'merged_to_user_id', ddl: 'merged_to_user_id TEXT' },
@@ -283,6 +287,12 @@ const AUTH_SCHEMA = defineD1Schema('auth', {
         { name: 'deletion_scheduled_at', ddl: 'deletion_scheduled_at TEXT' },
         { name: 'deletion_cancelled_at', ddl: 'deletion_cancelled_at TEXT' },
         { name: 'deletion_terms_version', ddl: 'deletion_terms_version TEXT' },
+      ],
+    },
+    {
+      table: VERIFICATION_TABLE,
+      columns: [
+        { name: 'user_id', ddl: 'user_id TEXT' },
       ],
     },
     {
@@ -358,6 +368,7 @@ export type AuthLoginClientType = AuthClientType | 'web'
 export interface AuthUser {
   id: string
   email: string
+  pendingEmail?: string | null
   name: string | null
   image: string | null
   emailVerified: string | null
@@ -581,6 +592,7 @@ function mapUser(row: Record<string, any> | null): AuthUser | null {
   return {
     id: row.id,
     email: row.email,
+    pendingEmail: row.pending_email ?? null,
     name: row.name ?? null,
     image: row.image ?? null,
     emailVerified: row.email_verified ?? null,
@@ -655,6 +667,7 @@ export async function createUser(
   event: H3Event,
   data: {
     email: string
+    pendingEmail?: string | null
     name?: string | null
     image?: string | null
     locale?: string | null
@@ -668,16 +681,20 @@ export async function createUser(
   const id = crypto.randomUUID()
   const now = new Date().toISOString()
   const email = normalizeEmail(data.email)
+  const pendingEmail = typeof data.pendingEmail === 'string' && data.pendingEmail.trim()
+    ? normalizeEmail(data.pendingEmail)
+    : null
   const status: UserStatus = data.status ?? 'active'
   const emailVerified = data.emailVerified ?? null
   const emailState: EmailState = data.emailState ?? (emailVerified ? 'verified' : 'unverified')
   const locale = normalizeLocaleCode(data.locale ?? null)
   await db.prepare(`
-    INSERT INTO ${USERS_TABLE} (id, email, name, image, email_verified, email_state, role, locale, status, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, 'user', ?, ?, ?)
+    INSERT INTO ${USERS_TABLE} (id, email, pending_email, name, image, email_verified, email_state, role, locale, status, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, 'user', ?, ?, ?)
   `).bind(
     id,
     email,
+    pendingEmail,
     data.name ?? null,
     data.image ?? null,
     emailVerified,
@@ -689,6 +706,7 @@ export async function createUser(
   return {
     id,
     email,
+    pendingEmail,
     name: data.name ?? null,
     image: data.image ?? null,
     emailVerified,
@@ -728,7 +746,42 @@ export async function setEmailVerified(event: H3Event, userId: string): Promise<
   const db = requireDatabase(event)
   await ensureAuthSchema(db)
   const now = new Date().toISOString()
-  await db.prepare(`UPDATE ${USERS_TABLE} SET email_verified = ?, email_state = 'verified' WHERE id = ?`).bind(now, userId).run()
+  await db.prepare(`UPDATE ${USERS_TABLE} SET email_verified = ?, email_state = 'verified', pending_email = NULL WHERE id = ?`).bind(now, userId).run()
+}
+
+export async function setPendingUserEmail(event: H3Event, userId: string, email: string): Promise<AuthUser | null> {
+  const db = requireDatabase(event)
+  await ensureAuthSchema(db)
+  const row = await db.prepare(`
+    UPDATE ${USERS_TABLE}
+    SET pending_email = ?
+    WHERE id = ? AND status = 'active'
+    RETURNING *
+  `).bind(normalizeEmail(email), userId).first()
+  return mapUser(row as Record<string, any> | null)
+}
+
+export async function commitVerifiedPendingEmail(event: H3Event, userId: string, email: string): Promise<AuthUser | null> {
+  const db = requireDatabase(event)
+  await ensureAuthSchema(db)
+  const normalized = normalizeEmail(email)
+  const now = new Date().toISOString()
+  const row = await db.prepare(`
+    UPDATE ${USERS_TABLE}
+    SET email = ?1,
+        pending_email = NULL,
+        email_verified = ?2,
+        email_state = 'verified'
+    WHERE id = ?3
+      AND status = 'active'
+      AND (pending_email = ?1 OR email = ?1)
+      AND NOT EXISTS (
+        SELECT 1 FROM ${USERS_TABLE} other
+        WHERE other.email = ?1 AND other.id != ?3
+      )
+    RETURNING *
+  `).bind(normalized, now, userId).first()
+  return mapUser(row as Record<string, any> | null)
 }
 
 export async function setEmailState(event: H3Event, userId: string, emailState: EmailState): Promise<AuthUser | null> {
@@ -1598,6 +1651,17 @@ export async function deleteDeviceAuthRequest(event: H3Event, deviceCode: string
   await db.prepare(`DELETE FROM ${DEVICE_AUTH_TABLE} WHERE device_code = ?`).bind(deviceCode).run()
 }
 
+export async function claimApprovedDeviceAuthRequest(event: H3Event, deviceCode: string): Promise<DeviceAuthRequest | null> {
+  const db = requireDatabase(event)
+  await ensureAuthSchema(db)
+  const row = await db.prepare(`
+    DELETE FROM ${DEVICE_AUTH_TABLE}
+    WHERE device_code = ? AND status = 'approved' AND expires_at > ?
+    RETURNING *
+  `).bind(deviceCode, new Date().toISOString()).first()
+  return row ? mapDeviceAuthRow(row as Record<string, any>) : null
+}
+
 export async function cancelDeviceAuthRequest(event: H3Event, userCode: string): Promise<DeviceAuthRequest | null> {
   const db = requireDatabase(event)
   await ensureAuthSchema(db)
@@ -1673,35 +1737,50 @@ export function isDeviceAuthExpired(request: DeviceAuthRequest): boolean {
   return isExpiredAt(request.expiresAt)
 }
 
-export async function createVerificationToken(event: H3Event, email: string, ttlMs: number, tokenValue?: string): Promise<string> {
+export async function createVerificationToken(
+  event: H3Event,
+  email: string,
+  ttlMs: number,
+  tokenValue?: string,
+  userId?: string | null,
+): Promise<string> {
   const db = requireDatabase(event)
   await ensureAuthSchema(db)
   const token = tokenValue ?? generateToken(32)
   const expiresAt = new Date(Date.now() + ttlMs).toISOString()
   await db.prepare(`
-    INSERT INTO ${VERIFICATION_TABLE} (identifier, token, expires_at)
-    VALUES (?, ?, ?)
-  `).bind(normalizeEmail(email), token, expiresAt).run()
+    INSERT INTO ${VERIFICATION_TABLE} (identifier, token, expires_at, user_id)
+    VALUES (?, ?, ?, ?)
+  `).bind(normalizeEmail(email), token, expiresAt, userId ?? null).run()
   return token
 }
 
-export async function useVerificationToken(event: H3Event, email: string, token: string): Promise<{ identifier: string, token: string, expiresAt: string } | null> {
+export async function useVerificationToken(
+  event: H3Event,
+  email: string,
+  token: string,
+): Promise<{ identifier: string, token: string, expiresAt: string, userId: string | null } | null> {
   const db = requireDatabase(event)
   await ensureAuthSchema(db)
+  const normalized = normalizeEmail(email)
   const row = await db.prepare(`
-    SELECT expires_at FROM ${VERIFICATION_TABLE}
-    WHERE identifier = ? AND token = ?
-  `).bind(normalizeEmail(email), token).first()
+    DELETE FROM ${VERIFICATION_TABLE}
+    WHERE identifier = ? AND token = ? AND expires_at > ?
+    RETURNING identifier, token, expires_at, user_id
+  `).bind(normalized, token, new Date().toISOString()).first<{
+    identifier: string
+    token: string
+    expires_at: string
+    user_id?: string | null
+  }>()
   if (!row)
     return null
-  const expires = Date.parse(row.expires_at as string)
-  if (Number.isNaN(expires) || expires <= Date.now())
-    return null
-  await db.prepare(`
-    DELETE FROM ${VERIFICATION_TABLE}
-    WHERE identifier = ? AND token = ?
-  `).bind(normalizeEmail(email), token).run()
-  return { identifier: normalizeEmail(email), token, expiresAt: row.expires_at as string }
+  return {
+    identifier: row.identifier,
+    token: row.token,
+    expiresAt: row.expires_at,
+    userId: typeof row.user_id === 'string' && row.user_id.trim() ? row.user_id : null,
+  }
 }
 
 export async function createLoginToken(event: H3Event, userId: string, reason: string | null, ttlMs: number): Promise<string> {
@@ -2155,7 +2234,7 @@ export async function mergeUsers(event: H3Event, input: MergeUserInput): Promise
   // Optional-table existence is read up front since the batch is a fixed list.
   const [hasSyncItems, hasApiKeys, hasPlugins, hasPluginReviews, hasPluginRatings, hasActivationLogs, hasTelemetryEvents] = await Promise.all([
     tableExists(db, 'sync_items'),
-    tableExists(db, 'api_keys'),
+    tableExists(db, 'user_api_keys'),
     tableExists(db, 'plugins'),
     tableExists(db, 'plugin_reviews'),
     tableExists(db, 'plugin_ratings'),
@@ -2193,7 +2272,7 @@ export async function mergeUsers(event: H3Event, input: MergeUserInput): Promise
 
   if (hasApiKeys) {
     statements.push(db.prepare(`
-      UPDATE api_keys
+      UPDATE user_api_keys
       SET user_id = ?1
       WHERE user_id = ?2
     `).bind(input.targetUserId, input.sourceUserId))

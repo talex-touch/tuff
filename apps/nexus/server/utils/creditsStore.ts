@@ -634,6 +634,44 @@ export async function countTeamMembers(event: H3Event, teamId: string): Promise<
   return Number(row?.total ?? 0)
 }
 
+export async function addTeamMemberWithinSeatLimit(
+  event: H3Event,
+  teamId: string,
+  userId: string,
+  role: TeamMemberRole = 'member',
+  seatsLimit: number,
+): Promise<'added' | 'already_member' | 'seat_full'> {
+  const db = requireDatabase(event)
+  await ensureCreditsSchema(db)
+
+  const safeSeatsLimit = Math.max(1, Math.floor(seatsLimit))
+  const now = new Date().toISOString()
+
+  const result = await db.prepare(`
+    INSERT OR IGNORE INTO ${TEAM_MEMBERS_TABLE} (team_id, user_id, role, joined_at)
+    SELECT ?1, ?2, ?3, ?4
+    WHERE (SELECT COUNT(*) FROM ${TEAM_MEMBERS_TABLE} WHERE team_id = ?1) < ?5
+      AND NOT EXISTS (
+        SELECT 1
+        FROM ${TEAM_MEMBERS_TABLE} tm
+        INNER JOIN ${TEAMS_TABLE} t ON t.id = tm.team_id
+        WHERE tm.user_id = ?2 AND t.type = 'organization'
+      )
+  `).bind(teamId, userId, role, now, safeSeatsLimit).run()
+
+  const changes = Number((result.meta as { changes?: number } | undefined)?.changes ?? 0)
+  if (changes > 0)
+    return 'added'
+
+  const [alreadyInTeam, userTeams] = await Promise.all([
+    isUserTeamMember(event, teamId, userId),
+    listUserTeams(event, userId),
+  ])
+  if (alreadyInTeam || userTeams.some(team => team.type === 'organization'))
+    return 'already_member'
+  return 'seat_full'
+}
+
 export async function addTeamMember(
   event: H3Event,
   teamId: string,

@@ -1029,8 +1029,10 @@ export async function listStorageObjectKeys(
     event?: H3Event
     resourceType?: string
     externalStorage?: StorageObjectExternalConfig | null
+    prefix?: string
   } = {},
 ): Promise<string[]> {
+  const prefix = options.prefix ?? ''
   const backend = options.event
     ? await resolveObjectStorageBackend({
         event: options.event,
@@ -1046,12 +1048,18 @@ export async function listStorageObjectKeys(
         externalStorage: options.externalStorage ?? null,
       }
 
-  if (backend.externalStorage)
-    return await listExternalObjectKeys(backend.externalStorage)
+  if (backend.externalStorage) {
+    const keys = await listExternalObjectKeys(backend.externalStorage)
+    return prefix ? keys.filter(key => key.startsWith(prefix)) : keys
+  }
 
-  if (!backend.bucket)
-    return Array.from(memoryStorage.keys())
+  if (!backend.bucket) {
+    const keys = Array.from(memoryStorage.keys())
+    return prefix ? keys.filter(key => key.startsWith(prefix)) : keys
+  }
 
-  const list = await backend.bucket.list()
+  const list = prefix
+    ? await backend.bucket.list({ prefix })
+    : await backend.bucket.list()
   return list.objects.map(object => object.key)
 }

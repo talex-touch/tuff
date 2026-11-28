@@ -48,6 +48,8 @@ function resolveQuotaLimits(plan: SubscriptionPlan) {
 }
 
 const SYNC_TOKEN_TTL_MS = 1000 * 60 * 60 * 24 * 7
+export const MAX_CHUNKED_BLOB_CHUNKS = 128
+export const MAX_CHUNKED_BLOB_BYTES = 128 * 1024 * 1024 // 128 MiB
 const syncBlobMemoryStorage: StorageObjectMemory = new Map()
 
 export type SyncErrorCode =
@@ -412,6 +414,49 @@ export async function validateQuota(
 export async function applyQuotaDelta(event: H3Event, userId: string, payload: { storageDelta: number, objectsDelta: number }) {
   const db = requireDatabase(event)
   await ensureSyncSchemaV1(db)
+  const now = new Date().toISOString()
+
+  if (payload.storageDelta > 0 || payload.objectsDelta > 0) {
+    // Ensure the user's quota row exists before the atomic conditional update.
+    const quota = await getOrInitQuota(event, userId)
+    const result = await db.prepare(`
+      UPDATE ${SYNC_QUOTAS_TABLE}
+      SET used_storage_bytes = used_storage_bytes + ?1,
+          used_objects = used_objects + ?2,
+          updated_at = ?3
+      WHERE user_id = ?4
+        AND used_storage_bytes + ?1 <= storage_limit_bytes
+        AND used_objects + ?2 <= object_limit
+    `).bind(
+      payload.storageDelta,
+      payload.objectsDelta,
+      now,
+      userId,
+    ).run()
+    const changes = Number((result.meta as { changes?: number } | undefined)?.changes ?? 0)
+    if (changes < 1) {
+      const current = await db.prepare(`
+        SELECT storage_limit_bytes, object_limit, used_storage_bytes, used_objects
+        FROM ${SYNC_QUOTAS_TABLE}
+        WHERE user_id = ?
+      `).bind(userId).first<{
+        storage_limit_bytes: number
+        object_limit: number
+        used_storage_bytes: number
+        used_objects: number
+      }>()
+      const storageExceeded = current
+        ? Number(current.used_storage_bytes) + payload.storageDelta > Number(current.storage_limit_bytes)
+        : quota.usage.used_storage_bytes + payload.storageDelta > quota.limits.storage_limit_bytes
+      throw createSyncError(
+        storageExceeded ? 'QUOTA_STORAGE_EXCEEDED' : 'QUOTA_OBJECT_EXCEEDED',
+        403,
+        'Quota exceeded',
+      )
+    }
+    return
+  }
+
   await db.prepare(`
     UPDATE ${SYNC_QUOTAS_TABLE}
     SET used_storage_bytes = CASE
@@ -429,9 +474,34 @@ export async function applyQuotaDelta(event: H3Event, userId: string, payload: {
     payload.storageDelta,
     payload.objectsDelta,
     payload.objectsDelta,
-    new Date().toISOString(),
+    now,
     userId,
   ).run()
+}
+
+export async function rollbackUploadedSyncBlob(
+  event: H3Event,
+  userId: string,
+  blobId: string,
+  objectKey: string,
+): Promise<void> {
+  const db = requireDatabase(event)
+  await ensureSyncSchemaV1(db)
+  await db.prepare(`
+    DELETE FROM ${SYNC_BLOBS_TABLE}
+    WHERE user_id = ? AND blob_id = ? AND status = 'staged'
+  `).bind(userId, blobId).run()
+  const bucket = getSyncBlobBucket(event)
+  await deleteStorageObject({
+    event,
+    bucket,
+    memoryStorage: syncBlobMemoryStorage,
+    externalStorage: null,
+    key: objectKey,
+    resourceType: 'sync-blob',
+    governanceResourceId: `sync-blob:${blobId}`,
+    actorId: userId,
+  }).catch(() => {})
 }
 
 export async function handshakeSyncSession(event: H3Event, userId: string, deviceId: string) {
@@ -1537,6 +1607,10 @@ export async function prepareSyncBlobChunks(
     chunks: SyncBlobChunkDescriptor[]
   }
 ): Promise<SyncBlobChunkPrepareResult> {
+  if (options.chunks.length > MAX_CHUNKED_BLOB_CHUNKS || options.sizeBytes > MAX_CHUNKED_BLOB_BYTES) {
+    throw createSyncError('SYNC_INVALID_PAYLOAD', 400, 'Chunked blob exceeds maximum allowed size')
+  }
+
   const existing = await findExistingSyncBlob(event, userId, options.itemId, options.logicalVersion, {
     sha256: options.sha256,
     sizeBytes: options.sizeBytes
@@ -1554,6 +1628,15 @@ export async function prepareSyncBlobChunks(
     }
   }
 
+  const quotaCheck = await validateQuota(event, userId, {
+    storageDelta: options.sizeBytes,
+    objectsDelta: 1,
+    itemSize: options.sizeBytes,
+  })
+  if (!quotaCheck.ok) {
+    throw createSyncError(quotaCheck.code!, 403, 'Quota exceeded')
+  }
+
   const db = requireDatabase(event)
   await ensureSyncSchemaV1(db)
   const existingSession = await db.prepare(`
@@ -1563,40 +1646,68 @@ export async function prepareSyncBlobChunks(
     LIMIT 1
   `).bind(userId, options.itemId, options.logicalVersion, options.sha256).first<{ session_id: string }>()
   const sessionId = existingSession?.session_id ?? randomUUID()
-  await db.prepare(`
-    INSERT OR IGNORE INTO ${SYNC_BLOB_UPLOAD_SESSIONS_TABLE}
-      (user_id, session_id, item_id, logical_version, payload_sha256, size_bytes, chunk_size, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `).bind(
-    userId,
-    sessionId,
-    options.itemId,
-    options.logicalVersion,
-    options.sha256,
-    options.sizeBytes,
-    options.chunkSize,
-    new Date().toISOString()
-  ).run()
+
+  const uniqueHashes = Array.from(new Set(options.chunks.map(chunk => chunk.sha256)))
+  const storedResult = uniqueHashes.length
+    ? await db.prepare(`
+        SELECT chunk_id, sha256, size_bytes
+        FROM ${SYNC_BLOB_CHUNKS_TABLE}
+        WHERE user_id = ?1
+          AND status = 'ready'
+          AND sha256 IN (SELECT CAST(value AS TEXT) FROM json_each(?2))
+      `).bind(userId, JSON.stringify(uniqueHashes)).all<{ chunk_id: string, sha256: string, size_bytes: number }>()
+    : { results: [] }
+
+  const storedMap = new Map<string, string>()
+  for (const row of storedResult.results ?? []) {
+    storedMap.set(`${row.sha256}:${Number(row.size_bytes)}`, row.chunk_id)
+  }
 
   const missing: SyncBlobChunkDescriptor[] = []
-  for (const chunk of options.chunks) {
-    const stored = await db.prepare(`
-      SELECT chunk_id
-      FROM ${SYNC_BLOB_CHUNKS_TABLE}
-      WHERE user_id = ? AND sha256 = ? AND size_bytes = ? AND status = 'ready'
-      LIMIT 1
-    `).bind(userId, chunk.sha256, chunk.sizeBytes).first<{ chunk_id: string }>()
-    await db.prepare(`
+  const refRows = options.chunks.map((chunk) => {
+    const chunkId = storedMap.get(`${chunk.sha256}:${chunk.sizeBytes}`) ?? ''
+    if (!chunkId) missing.push(chunk)
+    return {
+      index: chunk.index,
+      chunkId,
+      sha256: chunk.sha256,
+      sizeBytes: chunk.sizeBytes,
+    }
+  })
+
+  await db.batch([
+    db.prepare(`
+      INSERT OR IGNORE INTO ${SYNC_BLOB_UPLOAD_SESSIONS_TABLE}
+        (user_id, session_id, item_id, logical_version, payload_sha256, size_bytes, chunk_size, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      userId,
+      sessionId,
+      options.itemId,
+      options.logicalVersion,
+      options.sha256,
+      options.sizeBytes,
+      options.chunkSize,
+      new Date().toISOString()
+    ),
+    db.prepare(`
       INSERT INTO ${SYNC_BLOB_UPLOAD_REFS_TABLE}
         (user_id, session_id, chunk_index, chunk_id, sha256, size_bytes)
-      VALUES (?, ?, ?, ?, ?, ?)
+      SELECT
+        ?1,
+        ?2,
+        CAST(json_extract(value, '$.index') AS INTEGER),
+        CAST(json_extract(value, '$.chunkId') AS TEXT),
+        CAST(json_extract(value, '$.sha256') AS TEXT),
+        CAST(json_extract(value, '$.sizeBytes') AS INTEGER)
+      FROM json_each(?3)
+      WHERE 1 = 1
       ON CONFLICT(user_id, session_id, chunk_index) DO UPDATE SET
         chunk_id = excluded.chunk_id,
         sha256 = excluded.sha256,
         size_bytes = excluded.size_bytes
-    `).bind(userId, sessionId, chunk.index, stored?.chunk_id ?? '', chunk.sha256, chunk.sizeBytes).run()
-    if (!stored) missing.push(chunk)
-  }
+    `).bind(userId, sessionId, JSON.stringify(refRows)),
+  ])
 
   return { action: 'upload', sessionId, missing }
 }
@@ -1635,6 +1746,14 @@ export async function uploadSyncBlobChunk(
   `).bind(userId, chunk.sha256, chunk.sizeBytes).first<{ chunk_id: string, object_key: string }>()
   let chunkId = existing?.chunk_id
   if (!chunkId) {
+    // Enforce user storage quota before writing uncached chunks to R2.
+    const quotaCheck = await validateQuota(event, userId, {
+      storageDelta: chunk.sizeBytes,
+      objectsDelta: 0,
+    })
+    if (!quotaCheck.ok) {
+      throw createSyncError(quotaCheck.code!, 403, 'Quota exceeded')
+    }
     chunkId = chunk.sha256
     const objectKey = `${userId}/sync-chunks/${chunk.sha256}`
     const bucket = getSyncBlobBucket(event)
@@ -1683,72 +1802,206 @@ export async function commitSyncBlobChunks(
     size_bytes: number
   }>()
   if (!session) throw createSyncError('SYNC_INVALID_PAYLOAD', 400, 'Upload session not found')
-  const refs = await db.prepare(`
-    SELECT r.chunk_index, r.chunk_id, r.sha256, r.size_bytes, c.object_key
-    FROM ${SYNC_BLOB_UPLOAD_REFS_TABLE} AS r
-    JOIN ${SYNC_BLOB_CHUNKS_TABLE} AS c
-      ON c.user_id = r.user_id AND c.chunk_id = r.chunk_id AND c.status = 'ready'
-    WHERE r.user_id = ? AND r.session_id = ?
-    ORDER BY r.chunk_index ASC
-  `).bind(userId, sessionId).all<{
-    chunk_index: number
-    chunk_id: string
-    sha256: string
-    size_bytes: number
-    object_key: string
-  }>()
-  if (!refs.results?.length) throw createSyncError('SYNC_INVALID_PAYLOAD', 400, 'No upload chunks are ready')
+
+  const expectedSizeBytes = Number(session.size_bytes)
+  if (!Number.isSafeInteger(expectedSizeBytes) || expectedSizeBytes <= 0 || expectedSizeBytes > MAX_CHUNKED_BLOB_BYTES) {
+    throw createSyncError('SYNC_INVALID_PAYLOAD', 400, 'Chunked blob exceeds maximum allowed size')
+  }
+
+  const [expectedRefCountRow, refs] = await Promise.all([
+    db.prepare(`
+      SELECT COUNT(*) AS total
+      FROM ${SYNC_BLOB_UPLOAD_REFS_TABLE}
+      WHERE user_id = ? AND session_id = ?
+    `).bind(userId, sessionId).first<{ total?: number | string }>(),
+    db.prepare(`
+      SELECT r.chunk_index, r.chunk_id, r.sha256, r.size_bytes, c.object_key
+      FROM ${SYNC_BLOB_UPLOAD_REFS_TABLE} AS r
+      JOIN ${SYNC_BLOB_CHUNKS_TABLE} AS c
+        ON c.user_id = r.user_id AND c.chunk_id = r.chunk_id AND c.status = 'ready'
+      WHERE r.user_id = ? AND r.session_id = ?
+      ORDER BY r.chunk_index ASC
+    `).bind(userId, sessionId).all<{
+      chunk_index: number
+      chunk_id: string
+      sha256: string
+      size_bytes: number
+      object_key: string
+    }>(),
+  ])
+  const readyRefs = refs.results ?? []
+  const expectedRefCount = Number(expectedRefCountRow?.total ?? 0)
+  if (
+    !readyRefs.length
+    || readyRefs.length > MAX_CHUNKED_BLOB_CHUNKS
+    || readyRefs.length !== expectedRefCount
+    || readyRefs.some((ref, idx) => Number(ref.chunk_index) !== idx)
+  ) {
+    throw createSyncError('SYNC_INVALID_PAYLOAD', 400, 'Not all upload chunks are ready')
+  }
+
+  const existingBeforeHash = await findExistingSyncBlob(event, userId, session.item_id, session.logical_version, {
+    sha256: session.payload_sha256,
+    sizeBytes: expectedSizeBytes
+  })
+  if (existingBeforeHash) {
+    await db.batch([
+      db.prepare(`DELETE FROM ${SYNC_BLOB_UPLOAD_REFS_TABLE} WHERE user_id = ? AND session_id = ?`).bind(userId, sessionId),
+      db.prepare(`DELETE FROM ${SYNC_BLOB_UPLOAD_SESSIONS_TABLE} WHERE user_id = ? AND session_id = ?`).bind(userId, sessionId),
+    ])
+    return existingBeforeHash
+  }
+
+  const quotaCheck = await validateQuota(event, userId, {
+    storageDelta: expectedSizeBytes,
+    objectsDelta: 1,
+    itemSize: expectedSizeBytes,
+  })
+  if (!quotaCheck.ok) {
+    throw createSyncError(quotaCheck.code!, 403, 'Quota exceeded')
+  }
 
   const bucket = getSyncBlobBucket(event)
   if (!bucket) throw new Error('R2 bucket is not available.')
-  const buffers: Buffer[] = []
-  for (const ref of refs.results) {
+
+  // Incrementally stream-hash every chunk so peak memory stays bounded to a single chunk
+  // instead of concatenating the entire blob in Cloudflare Workers' 128 MiB isolate.
+  const hasher = createHash('sha256')
+  let totalBytes = 0
+  for (const ref of readyRefs) {
     const object = await bucket.get(ref.object_key)
     if (!object) throw createSyncError('SYNC_INVALID_PAYLOAD', 400, 'Upload chunk is unavailable')
-    buffers.push(Buffer.from(await object.arrayBuffer()))
+
+    let chunkBytes = 0
+    if (object.body && typeof (object.body as ReadableStream<Uint8Array>).getReader === 'function') {
+      const reader = (object.body as ReadableStream<Uint8Array>).getReader()
+      try {
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+          if (value && value.byteLength > 0) {
+            hasher.update(value)
+            chunkBytes += value.byteLength
+            if (totalBytes + chunkBytes > expectedSizeBytes) {
+              await reader.cancel().catch(() => {})
+              throw createSyncError('SYNC_INVALID_PAYLOAD', 400, 'Chunked payload exceeds declared size')
+            }
+          }
+        }
+      }
+      finally {
+        reader.releaseLock()
+      }
+    }
+    else {
+      const chunkBuffer = new Uint8Array(await object.arrayBuffer())
+      hasher.update(chunkBuffer)
+      chunkBytes = chunkBuffer.byteLength
+    }
+
+    if (chunkBytes !== Number(ref.size_bytes)) {
+      throw createSyncError('SYNC_INVALID_PAYLOAD', 400, 'Upload chunk size mismatch')
+    }
+    totalBytes += chunkBytes
   }
-  const payload = Buffer.concat(buffers)
-  const payloadSha256 = createHash('sha256').update(payload).digest('hex')
-  if (payload.byteLength !== Number(session.size_bytes) || payloadSha256 !== session.payload_sha256) {
+
+  const payloadSha256 = hasher.digest('hex')
+  if (totalBytes !== expectedSizeBytes || payloadSha256 !== session.payload_sha256) {
     throw createSyncError('SYNC_INVALID_PAYLOAD', 400, 'Chunked payload does not match its manifest')
   }
 
   const existing = await findExistingSyncBlob(event, userId, session.item_id, session.logical_version, {
     sha256: session.payload_sha256,
-    sizeBytes: Number(session.size_bytes)
+    sizeBytes: expectedSizeBytes
   })
   if (existing) return existing
 
   const blobId = randomUUID()
   const nowIso = new Date().toISOString()
-  await db.prepare(`
-    INSERT INTO ${SYNC_BLOBS_TABLE}
-      (user_id, blob_id, object_key, sha256, size_bytes, content_type, created_at, status, item_id, logical_version)
-    VALUES (?, ?, ?, ?, ?, ?, ?, 'staged', ?, ?)
-  `).bind(
-    userId,
-    blobId,
-    `chunks:${blobId}`,
-    payloadSha256,
-    payload.byteLength,
-    'text/plain;charset=utf-8',
-    nowIso,
-    session.item_id,
-    session.logical_version
-  ).run()
-  for (const ref of refs.results) {
-    await db.prepare(`
+  const chunkRefPayload = JSON.stringify(
+    readyRefs.map(ref => ({ chunkIndex: ref.chunk_index, chunkId: ref.chunk_id })),
+  )
+
+  // Commit the blob, reserve quota, record chunk refs, and delete the upload session in one atomic batch.
+  const batchResults = await db.batch([
+    db.prepare(`
+      INSERT INTO ${SYNC_BLOBS_TABLE}
+        (user_id, blob_id, object_key, sha256, size_bytes, content_type, created_at, status, item_id, logical_version)
+      SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, 'staged', ?8, ?9
+      WHERE EXISTS (
+        SELECT 1 FROM ${SYNC_QUOTAS_TABLE}
+        WHERE user_id = ?1
+          AND used_storage_bytes + ?5 <= storage_limit_bytes
+          AND used_objects + 1 <= object_limit
+      )
+    `).bind(
+      userId,
+      blobId,
+      `chunks:${blobId}`,
+      payloadSha256,
+      totalBytes,
+      'text/plain;charset=utf-8',
+      nowIso,
+      session.item_id,
+      session.logical_version,
+    ),
+    db.prepare(`
+      UPDATE ${SYNC_QUOTAS_TABLE}
+      SET used_storage_bytes = used_storage_bytes + ?1,
+          used_objects = used_objects + 1,
+          updated_at = ?2
+      WHERE user_id = ?3
+        AND EXISTS (
+          SELECT 1 FROM ${SYNC_BLOBS_TABLE}
+          WHERE user_id = ?3 AND blob_id = ?4
+        )
+    `).bind(totalBytes, nowIso, userId, blobId),
+    db.prepare(`
       INSERT INTO ${SYNC_BLOB_CHUNK_REFS_TABLE} (user_id, blob_id, chunk_index, chunk_id)
-      VALUES (?, ?, ?, ?)
-    `).bind(userId, blobId, ref.chunk_index, ref.chunk_id).run()
+      SELECT
+        ?1,
+        ?2,
+        CAST(json_extract(value, '$.chunkIndex') AS INTEGER),
+        CAST(json_extract(value, '$.chunkId') AS TEXT)
+      FROM json_each(?3)
+      WHERE EXISTS (
+        SELECT 1 FROM ${SYNC_BLOBS_TABLE}
+        WHERE user_id = ?1 AND blob_id = ?2
+      )
+    `).bind(userId, blobId, chunkRefPayload),
+    db.prepare(`
+      DELETE FROM ${SYNC_BLOB_UPLOAD_REFS_TABLE}
+      WHERE user_id = ?1 AND session_id = ?2
+        AND EXISTS (
+          SELECT 1 FROM ${SYNC_BLOBS_TABLE}
+          WHERE user_id = ?1 AND blob_id = ?3
+        )
+    `).bind(userId, sessionId, blobId),
+    db.prepare(`
+      DELETE FROM ${SYNC_BLOB_UPLOAD_SESSIONS_TABLE}
+      WHERE user_id = ?1 AND session_id = ?2
+        AND EXISTS (
+          SELECT 1 FROM ${SYNC_BLOBS_TABLE}
+          WHERE user_id = ?1 AND blob_id = ?3
+        )
+    `).bind(userId, sessionId, blobId),
+  ])
+
+  const insertedBlob = Number((batchResults[0]?.meta as { changes?: number } | undefined)?.changes ?? 0)
+  if (insertedBlob < 1) {
+    const latestQuota = await validateQuota(event, userId, {
+      storageDelta: totalBytes,
+      objectsDelta: 1,
+      itemSize: totalBytes,
+    })
+    throw createSyncError(latestQuota.code ?? 'QUOTA_STORAGE_EXCEEDED', 403, 'Quota exceeded')
   }
-  await db.prepare(`DELETE FROM ${SYNC_BLOB_UPLOAD_REFS_TABLE} WHERE user_id = ? AND session_id = ?`).bind(userId, sessionId).run()
-  await db.prepare(`DELETE FROM ${SYNC_BLOB_UPLOAD_SESSIONS_TABLE} WHERE user_id = ? AND session_id = ?`).bind(userId, sessionId).run()
+
   return {
     blobId,
     objectKey: `chunks:${blobId}`,
     sha256: payloadSha256,
-    sizeBytes: payload.byteLength,
+    sizeBytes: totalBytes,
     storageChannel: 'r2-chunks',
     storageProvider: 'r2',
     uploadRetry: undefined,

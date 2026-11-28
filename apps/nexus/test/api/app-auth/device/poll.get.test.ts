@@ -19,6 +19,7 @@ const authMocks = vi.hoisted(() => ({
   createAppTokenPair: vi.fn(),
 }))
 const authStoreMocks = vi.hoisted(() => ({
+  claimApprovedDeviceAuthRequest: vi.fn(),
   deleteDeviceAuthRequest: vi.fn(),
   getDeviceAuthByDeviceCode: vi.fn(),
   getUserById: vi.fn(),
@@ -111,7 +112,9 @@ describe('/api/app-auth/device/poll', () => {
     { grantType: 'short' as const, refreshTtlSeconds: 60 * 60 * 24 * 30 },
     { grantType: 'long' as const, refreshTtlSeconds: 60 * 60 * 24 * 180 },
   ])('returns the $grantType access/refresh pair as a refreshable device grant', async ({ grantType, refreshTtlSeconds }) => {
-    authStoreMocks.getDeviceAuthByDeviceCode.mockResolvedValue(createApprovedRequest(grantType))
+    const approved = createApprovedRequest(grantType)
+    authStoreMocks.getDeviceAuthByDeviceCode.mockResolvedValue(approved)
+    authStoreMocks.claimApprovedDeviceAuthRequest.mockResolvedValue(approved)
 
     await expect(pollHandler(createRouteEvent())).resolves.toEqual({
       status: 'approved',
@@ -131,5 +134,30 @@ describe('/api/app-auth/device/poll', () => {
         emailVerified: true,
       },
     })
+  })
+
+  it('returns expired without minting tokens when a concurrent poll already claimed the approved request', async () => {
+    authStoreMocks.getDeviceAuthByDeviceCode.mockResolvedValue(createApprovedRequest('short'))
+    authStoreMocks.claimApprovedDeviceAuthRequest.mockResolvedValue(null)
+
+    await expect(pollHandler(createRouteEvent())).resolves.toEqual({ status: 'expired' })
+    expect(authMocks.createAppTokenPair).not.toHaveBeenCalled()
+  })
+
+  it('refuses minting tokens when the approved user is no longer active', async () => {
+    const approved = createApprovedRequest('short')
+    authStoreMocks.getDeviceAuthByDeviceCode.mockResolvedValue(approved)
+    authStoreMocks.claimApprovedDeviceAuthRequest.mockResolvedValue(approved)
+    authStoreMocks.getUserById.mockResolvedValue({
+      id: 'user-1',
+      email: 'user-1@example.test',
+      status: 'disabled',
+    })
+
+    await expect(pollHandler(createRouteEvent())).resolves.toMatchObject({
+      status: 'rejected',
+      reason: 'account_inactive',
+    })
+    expect(authMocks.createAppTokenPair).not.toHaveBeenCalled()
   })
 })

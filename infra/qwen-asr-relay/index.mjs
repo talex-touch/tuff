@@ -4,6 +4,10 @@ const MAX_DATA_URI_BYTES = 14 * 1024 * 1024
 const MAX_RESPONSE_BYTES = 2 * 1024 * 1024
 const REQUEST_TIMEOUT_MS = 120_000
 const GENERATION_PATH = '/services/aigc/multimodal-generation/generation'
+const ALLOWED_GENERATION_PATHS = new Set([
+  GENERATION_PATH,
+  `/api/v1${GENERATION_PATH}`,
+])
 
 function json(value, status = 200) {
   return new Response(JSON.stringify(value), {
@@ -31,12 +35,17 @@ function endpointBase(value) {
   }
 }
 
-function constantTimeEqual(left, right) {
-  if (left.length !== right.length)
-    return false
+async function constantTimeEqual(left, right) {
+  const encoder = new TextEncoder()
+  const [leftDigest, rightDigest] = await Promise.all([
+    crypto.subtle.digest('SHA-256', encoder.encode(left)),
+    crypto.subtle.digest('SHA-256', encoder.encode(right)),
+  ])
+  const leftBytes = new Uint8Array(leftDigest)
+  const rightBytes = new Uint8Array(rightDigest)
   let difference = 0
-  for (let index = 0; index < left.length; index += 1)
-    difference |= left.charCodeAt(index) ^ right.charCodeAt(index)
+  for (let index = 0; index < leftBytes.length; index += 1)
+    difference |= leftBytes[index] ^ rightBytes[index]
   return difference === 0
 }
 
@@ -46,7 +55,7 @@ async function authorized(request, secret) {
   const header = request.headers.get('authorization') || ''
   if (!header.startsWith('Bearer '))
     return false
-  return constantTimeEqual(header.slice(7), secret)
+  return await constantTimeEqual(header.slice(7), secret)
 }
 
 async function readBoundedJson(request) {
@@ -164,7 +173,7 @@ export default {
     const url = new URL(request.url)
     if (request.method === 'GET' && url.pathname === '/health')
       return json({ ok: true, service: 'qwen-asr-relay' })
-    if (request.method !== 'POST' || !url.pathname.endsWith(GENERATION_PATH))
+    if (request.method !== 'POST' || !ALLOWED_GENERATION_PATHS.has(url.pathname))
       return json({ error: 'RELAY_ROUTE_NOT_FOUND' }, 404)
     if (!(await authorized(request, env.RELAY_SHARED_SECRET)))
       return json({ error: 'RELAY_UNAUTHORIZED' }, 401)

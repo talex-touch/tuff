@@ -2,10 +2,14 @@ import { setHeader } from 'h3'
 import { requireAdmin } from '../../../utils/auth'
 import { listAdminAudits, logAdminAudit } from '../../../utils/adminAuditStore'
 
+const CSV_FORMULA_PREFIX_PATTERN = /^[\t\r ]*[=+\-@\t\r]/
+
 function escapeCsv(value: string) {
+  if (CSV_FORMULA_PREFIX_PATTERN.test(value))
+    value = `'${value}`
   if (value.includes('"'))
     value = value.replace(/"/g, '""')
-  if (/[",\n]/.test(value))
+  if (/[",\r\n]/.test(value))
     return `"${value}"`
   return value
 }

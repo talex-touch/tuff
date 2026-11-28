@@ -19,6 +19,7 @@ import { listCreditLedger, listUserTeams } from './creditsStore'
 import {
   deleteStorageObject,
   getStorageObject,
+  listStorageObjectKeys,
   putStorageObject,
   type StorageObjectMemory,
 } from './storageObjectStore'
@@ -1006,8 +1007,19 @@ export async function finalizeAccountDeletion(
       WHERE user_id = ?1 AND object_key IS NOT NULL
     `).bind(userId).all<{ object_key?: string | null }>()
     for (const row of results ?? []) {
-      if (row.object_key)
+      if (row.object_key && !row.object_key.startsWith('chunks:'))
         storageKeysToClean.push({ key: row.object_key, resourceType: 'sync-blob' })
+    }
+  }
+  if (existingTables.has('sync_blob_chunks_v1')) {
+    const { results } = await db.prepare(`
+      SELECT object_key, sha256 FROM sync_blob_chunks_v1
+      WHERE user_id = ?1
+    `).bind(userId).all<{ object_key?: string | null, sha256?: string | null }>()
+    for (const row of results ?? []) {
+      const chunkKey = row.object_key || (row.sha256 ? `${userId}/sync-chunks/${row.sha256}` : null)
+      if (chunkKey)
+        storageKeysToClean.push({ key: chunkKey, resourceType: 'sync-blob-chunk' })
     }
   }
 
@@ -1119,7 +1131,11 @@ export async function finalizeAccountDeletion(
   }
 
   const bucket = getExportBucket(event)
+  const deletedKeys = new Set<string>()
   for (const target of storageKeysToClean) {
+    if (deletedKeys.has(target.key))
+      continue
+    deletedKeys.add(target.key)
     await deleteStorageObject({
       event,
       bucket,
@@ -1128,6 +1144,50 @@ export async function finalizeAccountDeletion(
       key: target.key,
       resourceType: target.resourceType,
     }).catch(() => {})
+  }
+
+  // Also sweep any orphaned or uncommitted chunk objects under `${userId}/sync-chunks/`.
+  const chunkPrefix = `${userId}/sync-chunks/`
+  const deleteChunkKey = async (key: string) => {
+    if (!key.startsWith(chunkPrefix) || deletedKeys.has(key))
+      return
+    deletedKeys.add(key)
+    await deleteStorageObject({
+      event,
+      bucket,
+      memoryStorage,
+      externalStorage: null,
+      key,
+      resourceType: 'sync-blob-chunk',
+    }).catch(() => {})
+  }
+
+  if (bucket) {
+    let cursor: string | undefined
+    for (let page = 0; page < 50; page += 1) {
+      const listed = await bucket.list(cursor
+        ? { prefix: chunkPrefix, limit: 500, cursor }
+        : { prefix: chunkPrefix, limit: 500 },
+      ).catch(() => null)
+      if (!listed)
+        break
+      for (const object of listed.objects) {
+        await deleteChunkKey(object.key)
+      }
+      if (!listed.truncated || !('cursor' in listed) || !listed.cursor)
+        break
+      cursor = listed.cursor
+    }
+  }
+  else {
+    const keys = await listStorageObjectKeys(null, memoryStorage, {
+      event,
+      resourceType: 'sync-blob-chunk',
+      prefix: chunkPrefix,
+    }).catch(() => [] as string[])
+    for (const key of keys) {
+      await deleteChunkKey(key)
+    }
   }
 
   const counts: Record<string, number> = {}

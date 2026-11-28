@@ -1,7 +1,7 @@
 import { readBody } from 'h3'
 import type { paths } from '../../../../types/sync-api'
 import { requireAppAuth } from '../../../utils/auth'
-import { readDeviceId } from '../../../utils/authStore'
+import { resolveBoundAppDeviceId } from '../../../utils/syncDeviceAuth'
 import { createSyncError } from '../../../utils/syncErrors'
 import { upsertDeviceAttestation } from '../../../utils/deviceAttestStore'
 
@@ -9,10 +9,8 @@ type AttestBody = paths['/api/v1/devices/attest']['post']['requestBody']['conten
 type AttestResponse = paths['/api/v1/devices/attest']['post']['responses']['200']['content']['application/json']
 
 export default defineEventHandler(async (event) => {
-  const { userId } = await requireAppAuth(event)
-  const deviceId = readDeviceId(event)
-  if (!deviceId)
-    throw createSyncError('SYNC_INVALID_PAYLOAD', 400, 'Missing device id')
+  const { userId, deviceId: tokenDeviceId } = await requireAppAuth(event)
+  const deviceId = resolveBoundAppDeviceId(event, tokenDeviceId)
 
   const body = await readBody<AttestBody>(event)
   const machineCodeHash = typeof body?.machine_code_hash === 'string' ? body.machine_code_hash.trim() : ''

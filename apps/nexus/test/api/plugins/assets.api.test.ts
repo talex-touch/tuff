@@ -15,6 +15,7 @@ const storageMocks = vi.hoisted(() => ({ openPluginPackage: vi.fn() }))
 const pluginsMocks = vi.hoisted(() => ({
   findVersionByPackageKey: vi.fn(),
   buildPluginPackageGovernanceResourceId: vi.fn(() => 'plugin-package:v-1'),
+  getPluginVersionEligibility: vi.fn(() => ({ eligible: true, reason: null })),
 }))
 
 vi.mock('h3', async () => ({ ...(await vi.importActual<typeof import('h3')>('h3')), ...h3Mocks }))
@@ -33,9 +34,10 @@ beforeAll(async () => {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  pluginsMocks.getPluginVersionEligibility.mockReturnValue({ eligible: true, reason: null })
   pluginsMocks.findVersionByPackageKey.mockResolvedValue({
-    plugin: { id: 'plugin-1', userId: 'owner-1' },
-    version: { id: 'v-1', version: '1.2.0', channel: 'RELEASE' },
+    plugin: { id: 'plugin-1', userId: 'owner-1', status: 'approved' },
+    version: { id: 'v-1', version: '1.2.0', channel: 'RELEASE', status: 'approved', artifactState: 'verified' },
   })
 })
 
@@ -70,5 +72,22 @@ describe('GET /api/plugins/assets/:key', () => {
     storageMocks.openPluginPackage.mockResolvedValue(null)
 
     await expect(handler({ context: { params: { key: 'pkg.tpex' } } })).rejects.toMatchObject({ statusCode: 404 })
+  })
+
+  it('rejects quarantined artifacts for non-admin callers with 403', async () => {
+    pluginsMocks.findVersionByPackageKey.mockResolvedValue({
+      plugin: { id: 'plugin-1', userId: 'owner-1', status: 'approved' },
+      version: { id: 'v-1', version: '1.2.0', channel: 'RELEASE', status: 'approved', artifactState: 'quarantined' },
+    })
+
+    await expect(handler({ context: { params: { key: 'pkg.tpex' } } })).rejects.toMatchObject({ statusCode: 403 })
+    expect(storageMocks.openPluginPackage).not.toHaveBeenCalled()
+  })
+
+  it('rejects unapproved or ineligible versions for non-admin callers with 403', async () => {
+    pluginsMocks.getPluginVersionEligibility.mockReturnValue({ eligible: false, reason: 'version_not_approved' })
+
+    await expect(handler({ context: { params: { key: 'pkg.tpex' } } })).rejects.toMatchObject({ statusCode: 403 })
+    expect(storageMocks.openPluginPackage).not.toHaveBeenCalled()
   })
 })

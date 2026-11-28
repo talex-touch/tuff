@@ -213,7 +213,14 @@ const API_KEY_TOUCH_INTERVAL_MS = 5 * 60 * 1000
  * resolved: on a collision the SHA-256 match is required to be unique, then the legacy one, so a
  * collision can never pick the wrong user.
  */
-async function lookupApiKeyRow(db: D1Database, prefix: string, key: string): Promise<ApiKeyRow | null> {
+interface ApiKeyLookupResult {
+  row: ApiKeyRow
+  matchedLegacy: boolean
+  sha: string
+  legacy: string
+}
+
+async function lookupApiKeyRow(db: D1Database, prefix: string, key: string): Promise<ApiKeyLookupResult | null> {
   const sha = sha256Hex(key)
   const legacy = legacyHash(key)
   const { results } = await db.prepare(`
@@ -224,9 +231,9 @@ async function lookupApiKeyRow(db: D1Database, prefix: string, key: string): Pro
   const rows = results ?? []
   const shaRows = rows.filter(row => row.key_hash === sha)
   if (shaRows.length === 1)
-    return shaRows[0]!
+    return { row: shaRows[0]!, matchedLegacy: false, sha, legacy }
   const legacyRows = rows.filter(row => row.key_hash === legacy)
-  return legacyRows.length === 1 ? legacyRows[0]! : null
+  return legacyRows.length === 1 ? { row: legacyRows[0]!, matchedLegacy: true, sha, legacy } : null
 }
 
 export async function validateApiKey(event: H3Event, key: string): Promise<{ userId: string, scopes: string[] } | null> {
@@ -242,14 +249,24 @@ export async function validateApiKey(event: H3Event, key: string): Promise<{ use
   await ensureApiKeySchema(db)
 
   const prefix = `${key.substring(0, 12)}...`
-  const row = await lookupApiKeyRow(db, prefix, key)
-  if (!row) {
+  const lookup = await lookupApiKeyRow(db, prefix, key)
+  if (!lookup) {
     return null
   }
+  const { row, matchedLegacy, sha, legacy } = lookup
 
   // Check expiration
   if (row.expires_at && new Date(row.expires_at) < new Date()) {
     return null
+  }
+
+  // Transparently upgrade matched legacy 32-bit hashes to SHA-256 on first valid use.
+  if (matchedLegacy) {
+    await db.prepare(`
+      UPDATE ${API_KEYS_TABLE}
+      SET key_hash = ?1
+      WHERE id = ?2 AND key_hash = ?3;
+    `).bind(sha, row.id, legacy).run()
   }
 
   // "Last used" is a dashboard hint: refreshed at most every few minutes, after the response.

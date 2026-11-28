@@ -33,10 +33,17 @@ export function createD1Adapter(eventOrGetter: H3Event | (() => H3Event)) {
       const event = resolveEvent()
       const rawEmail = typeof data.email === 'string' ? data.email.trim().toLowerCase() : ''
       const hasEmail = rawEmail.length > 0
-      const email = hasEmail ? rawEmail : `missing+${crypto.randomUUID()}@tuff.local`
-      if (hasEmail) {
-        const existing = await getUserByEmail(event, email)
+      // Only mark an address verified when the provider itself proved mailbox control
+      // (Magic Link passes a Date `emailVerified`; verified OAuth providers set `oauthEmailVerified: true`).
+      // Providers like LinuxDO emit user-chosen unverified emails and must NEVER claim `auth_users.email`
+      // or auto-link onto an existing user, preventing both pre-reg takeover and email squatting DoS.
+      const isVerifiedEmail = hasEmail && (data.emailVerified instanceof Date || data.oauthEmailVerified === true)
+      if (isVerifiedEmail) {
+        const existing = await getUserByEmail(event, rawEmail)
         if (existing) {
+          if (existing.emailState !== 'verified') {
+            throw new Error('Cannot link to an unverified email account.')
+          }
           const restored = await restorePendingDeletionIfWithinWindow(event, existing.id)
           if (!isUserActive(restored)) {
             throw new Error('Account is disabled.')
@@ -44,15 +51,17 @@ export function createD1Adapter(eventOrGetter: H3Event | (() => H3Event)) {
           return toAdapterUser(restored)
         }
       }
-      const emailVerified = hasEmail
+      const email = isVerifiedEmail ? rawEmail : `missing+${crypto.randomUUID()}@tuff.local`
+      const emailVerified = isVerifiedEmail
         ? (data.emailVerified instanceof Date ? data.emailVerified.toISOString() : new Date().toISOString())
         : null
       const user = await createUser(event, {
         email,
+        pendingEmail: hasEmail && !isVerifiedEmail ? rawEmail : null,
         name: typeof data.name === 'string' ? data.name : null,
         image: typeof data.image === 'string' ? data.image : null,
         emailVerified,
-        emailState: hasEmail ? 'verified' : 'missing',
+        emailState: isVerifiedEmail ? 'verified' : 'missing',
       })
       await ensurePersonalTeam(event, user.id)
       return toAdapterUser(user)

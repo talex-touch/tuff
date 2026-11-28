@@ -1,9 +1,12 @@
 import { getHeader, readBody } from 'h3'
 import { requireAppAuth } from '../../../../utils/auth'
-import { readDeviceId } from '../../../../utils/authStore'
+import { resolveBoundAppDeviceId } from '../../../../utils/syncDeviceAuth'
 import { createSyncError } from '../../../../utils/syncErrors'
 import {
+  findExistingSyncBlob,
   getSyncSession,
+  MAX_CHUNKED_BLOB_BYTES,
+  MAX_CHUNKED_BLOB_CHUNKS,
   prepareSyncBlobChunks,
   reconcileSyncBlobsV1,
   validateQuota,
@@ -11,13 +14,12 @@ import {
 } from '../../../../utils/syncStoreV1'
 
 const CHUNK_SIZE = 1024 * 1024
-const MAX_CHUNKS = 2048
 
 export default defineEventHandler(async (event) => {
-  const { userId } = await requireAppAuth(event)
-  const deviceId = readDeviceId(event)
+  const { userId, deviceId: tokenDeviceId } = await requireAppAuth(event)
+  const deviceId = resolveBoundAppDeviceId(event, tokenDeviceId)
   const syncToken = getHeader(event, 'x-sync-token')
-  if (!deviceId || !syncToken)
+  if (!syncToken)
     throw createSyncError('SYNC_INVALID_PAYLOAD', 400, 'Missing sync session identity')
   await getSyncSession(event, userId, deviceId, syncToken)
 
@@ -38,7 +40,7 @@ export default defineEventHandler(async (event) => {
   })
   const indexes = new Set(chunks.map(chunk => chunk.index))
   const validChunks = chunks.length > 0
-    && chunks.length <= MAX_CHUNKS
+    && chunks.length <= MAX_CHUNKED_BLOB_CHUNKS
     && indexes.size === chunks.length
     && chunks.every((chunk, index) => (
       chunk.index === index
@@ -55,6 +57,7 @@ export default defineEventHandler(async (event) => {
     || !/^[a-f0-9]{64}$/.test(sha256)
     || !Number.isSafeInteger(sizeBytes)
     || sizeBytes <= 0
+    || sizeBytes > MAX_CHUNKED_BLOB_BYTES
     || chunkSize !== CHUNK_SIZE
     || !validChunks
     || chunks.reduce((sum, chunk) => sum + chunk.sizeBytes, 0) !== sizeBytes
@@ -63,6 +66,32 @@ export default defineEventHandler(async (event) => {
   }
 
   await reconcileSyncBlobsV1(event, userId)
+
+  const existing = await findExistingSyncBlob(event, userId, itemId, logicalVersion, {
+    sha256,
+    sizeBytes,
+  })
+  if (existing) {
+    return {
+      action: 'reuse' as const,
+      blob_id: existing.blobId,
+      object_key: existing.objectKey,
+      sha256: existing.sha256,
+      size_bytes: existing.sizeBytes,
+      session_id: undefined,
+      missing: [],
+    }
+  }
+
+  // Validate quota BEFORE persisting any upload session or chunk ref rows to D1.
+  const quotaCheck = await validateQuota(event, userId, {
+    storageDelta: sizeBytes,
+    objectsDelta: 1,
+    itemSize: sizeBytes,
+  })
+  if (!quotaCheck.ok)
+    throw createSyncError(quotaCheck.code!, 403, 'Quota exceeded')
+
   const result = await prepareSyncBlobChunks(event, userId, {
     itemId,
     logicalVersion,
@@ -71,15 +100,6 @@ export default defineEventHandler(async (event) => {
     chunkSize,
     chunks
   })
-  if (result.action === 'upload') {
-    const quotaCheck = await validateQuota(event, userId, {
-      storageDelta: sizeBytes,
-      objectsDelta: 1,
-      itemSize: sizeBytes
-    })
-    if (!quotaCheck.ok)
-      throw createSyncError(quotaCheck.code!, 403, 'Quota exceeded')
-  }
   return {
     action: result.action,
     blob_id: result.blob?.blobId,

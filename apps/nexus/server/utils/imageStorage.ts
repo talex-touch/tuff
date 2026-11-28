@@ -21,9 +21,27 @@ import {
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB
 const DEFAULT_CONTENT_TYPE = 'application/octet-stream'
-const ALLOWED_TYPES = [
-  'image/*',
-]
+export const IMAGE_STORAGE_PREFIX = 'images/'
+
+/**
+ * Explicit raster image MIME allowlist. Never use `image/*`: it admits `image/svg+xml`
+ * and arbitrary vendor subtypes that browsers can execute when served same-origin.
+ */
+export const SAFE_INLINE_IMAGE_TYPES = new Set<string>([
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+  'image/avif',
+  'image/bmp',
+  'image/x-icon',
+  'image/vnd.microsoft.icon',
+  'image/tiff',
+  'image/heic',
+  'image/heif',
+])
+
+const ALLOWED_TYPES = Array.from(SAFE_INLINE_IMAGE_TYPES)
 const ATTACHMENT_TYPES = [
   ...ALLOWED_TYPES,
   'application/pdf',
@@ -77,6 +95,10 @@ export const RESOURCE_ALLOWED_EXTENSIONS = [
   'bz2',
   'xz',
   'lz',
+  'pdf',
+  'json',
+  'txt',
+  'md',
 ]
 
 const MIME_EXTENSION_MAP: Record<string, string> = {
@@ -84,6 +106,13 @@ const MIME_EXTENSION_MAP: Record<string, string> = {
   'image/png': 'png',
   'image/gif': 'gif',
   'image/webp': 'webp',
+  'image/avif': 'avif',
+  'image/bmp': 'bmp',
+  'image/x-icon': 'ico',
+  'image/vnd.microsoft.icon': 'ico',
+  'image/tiff': 'tiff',
+  'image/heic': 'heic',
+  'image/heif': 'heif',
   'application/pdf': 'pdf',
   'application/zip': 'zip',
   'application/x-zip-compressed': 'zip',
@@ -100,6 +129,159 @@ const MIME_EXTENSION_MAP: Record<string, string> = {
   'application/json': 'json',
   'text/plain': 'txt',
   'text/markdown': 'md',
+}
+
+const IMAGE_EXTENSION_TO_MIMES: Record<string, ReadonlySet<string>> = {
+  jpg: new Set(['image/jpeg']),
+  jpeg: new Set(['image/jpeg']),
+  png: new Set(['image/png']),
+  gif: new Set(['image/gif']),
+  webp: new Set(['image/webp']),
+  ico: new Set(['image/x-icon', 'image/vnd.microsoft.icon']),
+  bmp: new Set(['image/bmp']),
+  avif: new Set(['image/avif']),
+  heic: new Set(['image/heic', 'image/heif']),
+  heif: new Set(['image/heif', 'image/heic']),
+  tif: new Set(['image/tiff']),
+  tiff: new Set(['image/tiff']),
+}
+
+const SAFE_IMAGE_KEY_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,254}$/
+
+export function normalizeMimeType(value: string | null | undefined): string {
+  if (typeof value !== 'string')
+    return ''
+  return value.split(';', 1)[0]?.trim().toLowerCase() ?? ''
+}
+
+export function isSafeInlineImageMime(contentType: string | null | undefined): boolean {
+  const normalized = normalizeMimeType(contentType)
+  return SAFE_INLINE_IMAGE_TYPES.has(normalized)
+}
+
+export function assertValidImageKey(key: unknown): string {
+  if (typeof key !== 'string' || !key) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: 'Invalid image key',
+    })
+  }
+  const trimmed = key.trim()
+  if (
+    !trimmed
+    || trimmed !== key
+    || trimmed.includes('/')
+    || trimmed.includes('\\')
+    || trimmed.includes('..')
+    || trimmed.includes('\0')
+    || trimmed.includes('%')
+    || !SAFE_IMAGE_KEY_PATTERN.test(trimmed)
+  ) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: 'Invalid image key',
+    })
+  }
+  return trimmed
+}
+
+function toPrefixedImageKey(key: string): string {
+  return `${IMAGE_STORAGE_PREFIX}${key}`
+}
+
+function stripImagePrefix(storageKey: string): string {
+  return storageKey.startsWith(IMAGE_STORAGE_PREFIX)
+    ? storageKey.slice(IMAGE_STORAGE_PREFIX.length)
+    : storageKey
+}
+
+/**
+ * Inspects file magic bytes to detect a supported raster image MIME type.
+ * Returns `null` for non-raster payloads (including SVG, HTML, XML, JS, or corrupted bytes).
+ */
+export function detectRasterImageMime(input: Uint8Array): string | null {
+  if (input.byteLength < 4)
+    return null
+
+  // Reject XML/HTML/SVG text prefixes even if disguised.
+  const headSlice = input.subarray(0, Math.min(input.byteLength, 64))
+  const headText = new TextDecoder('utf-8', { fatal: false }).decode(headSlice).replace(/^\uFEFF/, '').trimStart().toLowerCase()
+  if (
+    headText.startsWith('<svg')
+    || headText.startsWith('<?xml')
+    || headText.startsWith('<!doctype')
+    || headText.startsWith('<html')
+    || headText.startsWith('<script')
+  ) {
+    return null
+  }
+
+  // PNG: 89 50 4E 47 0D 0A 1A 0A
+  if (
+    input.byteLength >= 8
+    && input[0] === 0x89 && input[1] === 0x50 && input[2] === 0x4E && input[3] === 0x47
+    && input[4] === 0x0D && input[5] === 0x0A && input[6] === 0x1A && input[7] === 0x0A
+  ) {
+    return 'image/png'
+  }
+
+  // JPEG: FF D8 FF
+  if (input[0] === 0xFF && input[1] === 0xD8 && input[2] === 0xFF) {
+    return 'image/jpeg'
+  }
+
+  // GIF: GIF87a / GIF89a
+  if (
+    input.byteLength >= 6
+    && input[0] === 0x47 && input[1] === 0x49 && input[2] === 0x46 && input[3] === 0x38
+    && (input[4] === 0x37 || input[4] === 0x39) && input[5] === 0x61
+  ) {
+    return 'image/gif'
+  }
+
+  // WEBP: RIFF....WEBP
+  if (
+    input.byteLength >= 12
+    && input[0] === 0x52 && input[1] === 0x49 && input[2] === 0x46 && input[3] === 0x46
+    && input[8] === 0x57 && input[9] === 0x45 && input[10] === 0x42 && input[11] === 0x50
+  ) {
+    return 'image/webp'
+  }
+
+  // BMP: BM
+  if (input[0] === 0x42 && input[1] === 0x4D) {
+    return 'image/bmp'
+  }
+
+  // ICO / CUR: 00 00 01 00 or 00 00 02 00
+  if (input[0] === 0x00 && input[1] === 0x00 && (input[2] === 0x01 || input[2] === 0x02) && input[3] === 0x00) {
+    return 'image/x-icon'
+  }
+
+  // TIFF: II*\0 or MM\0*
+  if (
+    (input[0] === 0x49 && input[1] === 0x49 && input[2] === 0x2A && input[3] === 0x00)
+    || (input[0] === 0x4D && input[1] === 0x4D && input[2] === 0x00 && input[3] === 0x2A)
+  ) {
+    return 'image/tiff'
+  }
+
+  // ISO BMFF (AVIF / HEIC / HEIF): ....ftyp<brand>
+  if (
+    input.byteLength >= 12
+    && input[4] === 0x66 && input[5] === 0x74 && input[6] === 0x79 && input[7] === 0x70
+  ) {
+    const brandBytes = input.subarray(8, Math.min(input.byteLength, 32))
+    const brands = new TextDecoder('ascii', { fatal: false }).decode(brandBytes).toLowerCase()
+    if (brands.includes('avif') || brands.includes('avis'))
+      return 'image/avif'
+    if (brands.includes('heic') || brands.includes('heix') || brands.includes('hevc') || brands.includes('hevx'))
+      return 'image/heic'
+    if (brands.includes('mif1') || brands.includes('msf1') || brands.includes('heif'))
+      return 'image/heif'
+  }
+
+  return null
 }
 
 let hasLoggedImageStorageBinding = false
@@ -150,40 +332,79 @@ function getR2Bucket(event?: H3Event | null): R2Bucket | null {
  * 验证文件类型和大小
  */
 function matchesAllowedMime(type: string, allowedTypes: string[]): boolean {
-  const normalized = (type || '').toLowerCase()
+  const normalized = normalizeMimeType(type)
+  if (!normalized)
+    return false
 
-  return allowedTypes.some((allowed) => {
-    const value = allowed.toLowerCase()
-
-    if (value.endsWith('/*')) {
-      const prefix = value.slice(0, -1)
-      return normalized.startsWith(prefix)
-    }
-
-    return normalized === value
-  })
+  return allowedTypes.some(allowed => normalized === allowed.toLowerCase())
 }
 
-function validateFile(file: File, allowedTypes: string[], allowedExtensions: string[]): void {
+function validateRasterImagePayload(
+  bytes: Uint8Array,
+  extension: string,
+  declaredMime: string,
+): string {
+  const expectedMimes = IMAGE_EXTENSION_TO_MIMES[extension]
+  if (!expectedMimes) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: `Invalid image extension: ${extension}. Allowed: ${IMAGE_ALLOWED_EXTENSIONS.join(', ')}`,
+    })
+  }
+  const normalizedDeclared = normalizeMimeType(declaredMime)
+  if (!SAFE_INLINE_IMAGE_TYPES.has(normalizedDeclared) || !expectedMimes.has(normalizedDeclared)) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: 'Invalid image MIME type.',
+    })
+  }
+  const detectedMime = detectRasterImageMime(bytes)
+  if (!detectedMime || !SAFE_INLINE_IMAGE_TYPES.has(detectedMime) || !expectedMimes.has(detectedMime)) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: 'Invalid image content.',
+    })
+  }
+  return detectedMime
+}
+
+function validateFile(
+  file: File,
+  bytes: Uint8Array,
+  allowedTypes: string[],
+  allowedExtensions: string[],
+  requireRasterImage: boolean,
+): { extension: string, contentType: string } {
+  if (bytes.byteLength === 0 || file.size > MAX_FILE_SIZE || bytes.byteLength > MAX_FILE_SIZE) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: bytes.byteLength === 0 ? 'Empty file is not allowed.' : 'File size exceeds 5MB limit.',
+    })
+  }
+
   const normalizedExtensions = allowedExtensions.map(ext => ext.toLowerCase())
   const extension = sanitizeExtension(extractExtensionFromName(file.name))
+  const declaredMime = normalizeMimeType(file.type)
 
-  const isMimeAllowed = matchesAllowedMime(file.type, allowedTypes)
+  const isMimeAllowed = matchesAllowedMime(declaredMime, allowedTypes)
   const isExtensionAllowed = extension ? normalizedExtensions.includes(extension) : false
 
-  if (!(isMimeAllowed || isExtensionAllowed)) {
+  // Both MIME and extension must match the allowlist (previously `||`, which let a `.png`
+  // filename smuggle `application/javascript` or `application/pdf`).
+  if (!(isMimeAllowed && isExtensionAllowed) || !extension) {
     throw createError({
       statusCode: 400,
       statusMessage: 'Invalid file type.',
     })
   }
 
-  if (file.size > MAX_FILE_SIZE) {
-    throw createError({
-      statusCode: 400,
-      statusMessage: 'File size exceeds 5MB limit.',
-    })
+  const isImageExt = Object.hasOwn(IMAGE_EXTENSION_TO_MIMES, extension)
+  if (requireRasterImage || isImageExt || declaredMime.startsWith('image/')) {
+    const canonicalMime = validateRasterImagePayload(bytes, extension, declaredMime)
+    return { extension, contentType: canonicalMime }
   }
+
+  return { extension, contentType: declaredMime }
 }
 
 /**
@@ -287,27 +508,31 @@ export async function uploadImage(
 ): Promise<UploadResult> {
   const allowedTypes = options.allowedTypes ?? ALLOWED_TYPES
   const allowedExtensions = options.allowedExtensions ?? IMAGE_ALLOWED_EXTENSIONS
+  const requireRasterImage = !options.allowedTypes
   const uploadAttempt = await startImageUploadLifecycle(event, file, options)
 
   try {
-    validateFile(file, allowedTypes, allowedExtensions)
+    const arrayBuffer = await file.arrayBuffer()
+    const bytes = new Uint8Array(arrayBuffer)
+    const validated = validateFile(file, bytes, allowedTypes, allowedExtensions, requireRasterImage)
 
-    const ext = getFileExtension(file)
+    const ext = sanitizeExtension(MIME_EXTENSION_MAP[validated.contentType]) ?? validated.extension
     const key = `${randomUUID()}.${ext}`
+    const storageKey = toPrefixedImageKey(key)
     const bucket = getR2Bucket(event)
     const result = await putStorageObject({
       event,
       bucket,
       memoryStorage,
-      key,
-      data: await file.arrayBuffer(),
-      contentType: file.type,
+      key: storageKey,
+      data: arrayBuffer,
+      contentType: validated.contentType,
       actorId: options.actorId,
       resourceType: options.resourceType ?? 'image',
       defaultContentType: DEFAULT_CONTENT_TYPE,
     })
 
-    await completeImageUploadLifecycle(event, uploadAttempt, result, options)
+    await completeImageUploadLifecycle(event, uploadAttempt, { ...result, key }, options)
 
     return {
       url: `/api/images/${key}`,
@@ -329,17 +554,31 @@ export async function getImage(
   event: H3Event,
   key: string,
 ): Promise<{ data: Buffer | ArrayBuffer, contentType: string } | null> {
+  const validKey = assertValidImageKey(key)
   const bucket = getR2Bucket(event)
-  const object = await getStorageObject({
+  const prefixed = await getStorageObject({
     event,
     bucket,
     memoryStorage,
-    key,
+    key: toPrefixedImageKey(validKey),
     resourceType: 'image',
-    defaultContentType: 'image/jpeg',
+    defaultContentType: DEFAULT_CONTENT_TYPE,
   })
-  return object
-    ? { data: object.data, contentType: object.contentType }
+  if (prefixed) {
+    return { data: prefixed.data, contentType: prefixed.contentType }
+  }
+
+  // Backward-compatible read for legacy single-segment image keys uploaded before `images/` prefixing.
+  const legacy = await getStorageObject({
+    event,
+    bucket,
+    memoryStorage,
+    key: validKey,
+    resourceType: 'image',
+    defaultContentType: DEFAULT_CONTENT_TYPE,
+  })
+  return legacy
+    ? { data: legacy.data, contentType: legacy.contentType }
     : null
 }
 
@@ -347,12 +586,13 @@ export async function getImage(
  * 删除图片
  */
 export async function deleteImage(event: H3Event, key: string): Promise<void> {
+  const validKey = assertValidImageKey(key)
   const bucket = getR2Bucket(event)
   await deleteStorageObject({
     event,
     bucket,
     memoryStorage,
-    key,
+    key: toPrefixedImageKey(validKey),
     resourceType: 'image',
     defaultContentType: DEFAULT_CONTENT_TYPE,
   })
@@ -363,7 +603,8 @@ export async function deleteImage(event: H3Event, key: string): Promise<void> {
  */
 export async function listImages(event: H3Event): Promise<string[]> {
   const bucket = getR2Bucket(event)
-  return listStorageObjectKeys(bucket, memoryStorage)
+  const keys = await listStorageObjectKeys(bucket, memoryStorage, { prefix: IMAGE_STORAGE_PREFIX })
+  return keys.map(stripImagePrefix).filter(Boolean)
 }
 
 /** Keys per page of `GET /api/images/list?limit=`, when the caller names no limit. */
@@ -434,14 +675,18 @@ export function pageStorageKeys(keys: readonly string[], request: ImageListPageR
  */
 export async function listImagesPage(event: H3Event, request: ImageListPageRequest): Promise<ImageListPage> {
   const bucket = getR2Bucket(event)
-  if (!bucket)
-    return pageStorageKeys(Array.from(memoryStorage.keys()), request)
+  if (!bucket) {
+    const prefixedKeys = Array.from(memoryStorage.keys())
+      .filter(key => key.startsWith(IMAGE_STORAGE_PREFIX))
+      .map(stripImagePrefix)
+    return pageStorageKeys(prefixedKeys, request)
+  }
 
   const listed = await bucket.list(request.cursor
-    ? { limit: request.limit, cursor: request.cursor }
-    : { limit: request.limit })
+    ? { prefix: IMAGE_STORAGE_PREFIX, limit: request.limit, cursor: request.cursor }
+    : { prefix: IMAGE_STORAGE_PREFIX, limit: request.limit })
   return {
-    keys: listed.objects.map(object => object.key),
+    keys: listed.objects.map(object => stripImagePrefix(object.key)),
     cursor: listed.truncated ? listed.cursor : null,
     truncated: listed.truncated,
   }
@@ -477,28 +722,33 @@ export async function uploadImageFromBuffer(
     }
 
     // Validate size
-    if (buffer.length > MAX_FILE_SIZE) {
+    if (buffer.length === 0 || buffer.length > MAX_FILE_SIZE) {
       throw createError({
         statusCode: 400,
-        statusMessage: `File too large. Max size: ${MAX_FILE_SIZE / 1024 / 1024}MB`,
+        statusMessage: buffer.length === 0
+          ? 'Empty image buffer is not allowed.'
+          : `File too large. Max size: ${MAX_FILE_SIZE / 1024 / 1024}MB`,
       })
     }
 
+    const canonicalMime = validateRasterImagePayload(buffer, ext, mimeType)
+
     const key = `${randomUUID()}.${ext}`
+    const storageKey = toPrefixedImageKey(key)
     const bucket = getR2Bucket(event)
     const result = await putStorageObject({
       event,
       bucket,
       memoryStorage,
-      key,
+      key: storageKey,
       data: buffer,
-      contentType: mimeType,
+      contentType: canonicalMime,
       actorId: options.actorId,
       resourceType: options.resourceType ?? 'image',
       defaultContentType: DEFAULT_CONTENT_TYPE,
     })
 
-    await completeImageUploadLifecycle(event, uploadAttempt, result, options)
+    await completeImageUploadLifecycle(event, uploadAttempt, { ...result, key }, options)
 
     return {
       url: `/api/images/${key}`,

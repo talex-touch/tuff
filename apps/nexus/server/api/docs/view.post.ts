@@ -2,6 +2,7 @@ import { getHeader, setCookie } from 'h3'
 import { resolveRequestIp } from '../../utils/ipSecurityStore'
 import {
   createDocToken,
+  DOC_SECURITY_IP_BUCKET,
   ensureDocAnalyticsSchema,
   expirePendingSessions,
   isAllowedDocPathForSource,
@@ -80,20 +81,21 @@ export default defineEventHandler(async (event) => {
     if (ENFORCE_DOC_SECURITY) {
       const now = Date.now()
       // Batch the independent security-state lookup and overdue-session cleanup into one D1 round trip.
+      // Key both strictly by server-derived IP so rotating body.clientId cannot evade rate limits or blocks.
       const [securityResult, expiredResult] = await db.batch([
         db.prepare(
           'SELECT violation_count, risk_level, blocked_until FROM doc_analytics_security WHERE ip = ?1 AND client_id = ?2',
-        ).bind(ip, clientId),
+        ).bind(ip, DOC_SECURITY_IP_BUCKET),
         db.prepare(`
           UPDATE doc_engagement_sessions
           SET status = 'expired'
           WHERE session_id IN (
             SELECT session_id FROM doc_engagement_sessions
-            WHERE ip = ?1 AND client_id = ?2 AND status = 'pending' AND expect_report_at < ?3
+            WHERE ip = ?1 AND status = 'pending' AND expect_report_at < ?2
             LIMIT 20
           )
           RETURNING session_id;
-        `).bind(ip, clientId, now),
+        `).bind(ip, now),
       ])
 
       const securityRow = (securityResult?.results?.[0] ?? null) as {

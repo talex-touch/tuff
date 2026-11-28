@@ -23,13 +23,11 @@ describe('imageStorage', () => {
     const h3Event = event(marker)
     const resourceId = `plugin:${marker}:icon`
 
+    const pngHeader = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
     const result = await uploadImageFromBuffer(
       h3Event,
-      // A raster fixture: svg is no longer an accepted icon format (#896). This test is
-      // about upload lifecycle analytics, not about which formats are allowed.
-      // Seven bytes, matching the size assertions below. The contents do not need to be a
-      // real PNG — this test is about upload lifecycle analytics.
-      Buffer.from('fakepng'),
+      // Minimal valid PNG magic-byte header (8 bytes) matching magic-byte inspection.
+      pngHeader,
       'private customer icon.png',
       'image/png',
       {
@@ -68,7 +66,7 @@ describe('imageStorage', () => {
         metadata: expect.objectContaining({
           extension: 'png',
           pluginId: marker,
-          size: 7,
+          size: 8,
           source: 'plugin-version-publish',
           surface: 'plugin-icon-extract',
         }),
@@ -78,7 +76,7 @@ describe('imageStorage', () => {
         resourceId,
         channel: 'image/png',
         unit: 'byte',
-        quantity: 7,
+        quantity: 8,
         metadata: expect.objectContaining({
           extension: 'png',
           pluginId: marker,

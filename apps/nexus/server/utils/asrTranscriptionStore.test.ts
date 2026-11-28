@@ -290,7 +290,7 @@ describe('DashScope Filetrans adapter', () => {
           JSON.stringify({
             output: {
               task_status: 'SUCCEEDED',
-              results: [{ transcription_url: 'https://results.example.com/task-123.json' }],
+              results: [{ transcription_url: 'https://dashscope-result.oss-cn-beijing.aliyuncs.com/task-123.json' }],
             },
           }),
           { status: 200 },
@@ -319,8 +319,28 @@ describe('DashScope Filetrans adapter', () => {
     expect(JSON.stringify(result)).not.toContain(testApiKey)
     expect(requests).toEqual([
       { method: 'GET', url: 'https://dashscope.example.com/api/v1/tasks/task-123' },
-      { method: 'GET', url: 'https://results.example.com/task-123.json' },
+      { method: 'GET', url: 'https://dashscope-result.oss-cn-beijing.aliyuncs.com/task-123.json' },
     ])
+  })
+
+  it('rejects untrusted or private transcription_url hosts without issuing a second fetch (SSRF guard)', async () => {
+    const fetcher = vi.fn<typeof fetch>(async () => {
+      return new Response(
+        JSON.stringify({
+          output: {
+            task_status: 'SUCCEEDED',
+            results: [{ transcription_url: 'https://results.example.com/task-123.json' }],
+          },
+        }),
+        { status: 200 },
+      )
+    })
+
+    await expectDashScopeError(
+      () => createDashScopeFiletransAdapter({ fetch: fetcher }).getTask(createEvent(), dashScopeProvider(), 'task-123'),
+      { code: 'ASR_PROVIDER_RESPONSE_INVALID', accepted: true },
+    )
+    expect(fetcher).toHaveBeenCalledTimes(1)
   })
 
   it('reports a terminal failed task without fetching a transcript document', async () => {

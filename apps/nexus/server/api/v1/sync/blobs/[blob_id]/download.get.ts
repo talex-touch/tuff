@@ -1,14 +1,12 @@
 import { getHeader, sendStream, setResponseHeader } from 'h3'
 import { requireAppAuth } from '../../../../../utils/auth'
-import { readDeviceId } from '../../../../../utils/authStore'
+import { resolveBoundAppDeviceId } from '../../../../../utils/syncDeviceAuth'
 import { createSyncError } from '../../../../../utils/syncErrors'
 import { getSyncBlob, getSyncSession } from '../../../../../utils/syncStoreV1'
 
 export default defineEventHandler(async (event) => {
-  const { userId } = await requireAppAuth(event)
-  const deviceId = readDeviceId(event)
-  if (!deviceId)
-    throw createSyncError('SYNC_INVALID_PAYLOAD', 400, 'Missing device id')
+  const { userId, deviceId: tokenDeviceId } = await requireAppAuth(event)
+  const deviceId = resolveBoundAppDeviceId(event, tokenDeviceId)
 
   const syncToken = getHeader(event, 'x-sync-token')
   if (!syncToken)

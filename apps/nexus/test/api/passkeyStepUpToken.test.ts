@@ -112,6 +112,7 @@ describe('login token reason invariant', () => {
   const root = fileURLToPath(new URL('../../server/', import.meta.url))
 
   const STEP_UP_CONSUMERS = [
+    'api/devices/trust.post.ts',
     'api/team/invitations/[id]/accept.post.ts',
     'api/v1/keys/recover-device.post.ts',
     'api/v1/keys/issue-device.post.ts',

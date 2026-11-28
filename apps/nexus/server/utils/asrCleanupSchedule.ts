@@ -16,13 +16,17 @@ let scheduled = false
  * runs, and middlewares are evaluated on every cold isolate.
  */
 export async function runExpiredAsrResultCleanup(event: H3Event, reconcileSettlements?: () => Promise<unknown>) {
-  const store = await import('./asrTranscriptionStore')
+  const [store, realtimeStore] = await Promise.all([
+    import('./asrTranscriptionStore'),
+    import('./asrRealtimeSessionStore'),
+  ])
   await reconcileSettlements?.()
-  const [results, released] = await Promise.all([
+  const [results, released, realtimeExpired] = await Promise.all([
     store.cleanupExpiredAsrResultObjects(event),
     store.cleanupExpiredReleasedAsrRequests(event),
+    realtimeStore.expireStaleRealtimeAsrSessions(event),
   ])
-  return { results, released }
+  return { results, released, realtimeExpired }
 }
 
 /**

@@ -88,9 +88,10 @@ describe('openDocViewSession', () => {
 })
 
 describe('expirePendingSessions', () => {
-  it('expires only the client\'s overdue pending sessions, each counted once however many requests race', async () => {
+  it('expires overdue pending sessions for the IP (across clientId rotation), each counted once, without touching other IPs', async () => {
     const overdue = await Promise.all([1, 2, 3].map(() => store.openDocViewSession(d1 as any, opening)))
-    const other = await store.openDocViewSession(d1 as any, { ...opening, clientId: 'client-2' })
+    const rotatedClientSameIp = await store.openDocViewSession(d1 as any, { ...opening, clientId: 'client-rotated' })
+    const otherIp = await store.openDocViewSession(d1 as any, { ...opening, ip: '203.0.113.8', clientId: 'client-2' })
     const reported = await store.openDocViewSession(d1 as any, opening)
     await store.markDocSessionReported(d1 as any, reported.session.sessionId)
     const later = Date.now() + 600_001
@@ -100,10 +101,10 @@ describe('expirePendingSessions', () => {
       store.expirePendingSessions(d1 as any, { ip: opening.ip, clientId: 'client-1', now: later }),
     ])
 
-    expect(counts.reduce((sum, count) => sum + count, 0)).toBe(3)
-    for (const { session } of overdue)
+    expect(counts.reduce((sum, count) => sum + count, 0)).toBe(4)
+    for (const { session } of [...overdue, rotatedClientSameIp])
       expect((await store.getDocEngagementSession(d1 as any, session.sessionId))?.status).toBe('expired')
-    expect((await store.getDocEngagementSession(d1 as any, other.session.sessionId))?.status).toBe('pending')
+    expect((await store.getDocEngagementSession(d1 as any, otherIp.session.sessionId))?.status).toBe('pending')
     expect((await store.getDocEngagementSession(d1 as any, reported.session.sessionId))?.status).toBe('reported')
   })
 })

@@ -356,8 +356,9 @@ describe('telemetry atomic & idempotent lifecycle against real SQLite (#1788)', 
     const key = 'msg:66666666-7777-4888-8999-aaaaaaaaaaaa'
     const body = {
       messages: [
-        { id: 'm1', source: 'system', severity: 'warn', title: 'Perf', message: 'slow ipc' },
-        { id: 'm2', source: 'system', severity: 'error', title: '', message: 'invalid missing title' },
+        { id: 'm1', source: 'client', severity: 'warn', title: 'Perf', message: 'slow ipc', status: 'archived' },
+        { id: 'm2', source: 'client', severity: 'error', title: '', message: 'invalid missing title' },
+        { id: 'm-sys', source: 'system', severity: 'error', title: 'Spoofed', message: 'spoofed system alert' },
       ],
     }
 
@@ -374,7 +375,7 @@ describe('telemetry atomic & idempotent lifecycle against real SQLite (#1788)', 
     // Warm schema then verify concurrent duplicate replay writes once and reports honest accepted/rejected counts.
     await messagesHandler(makeEvent({
       idempotencyKey: 'msg:00000000-0000-4000-8000-000000000030',
-      body: { messages: [{ id: 'm0', source: 'system', severity: 'info', title: 'Warm', message: 'ok' }] },
+      body: { messages: [{ id: 'm0', source: 'client', severity: 'info', title: 'Warm', message: 'ok' }] },
     }))
     const beforeMessages = tableCount(db, 'telemetry_messages')
 
@@ -388,24 +389,30 @@ describe('telemetry atomic & idempotent lifecycle against real SQLite (#1788)', 
       expect(outcome).toMatchObject({
         success: true,
         accepted: 1,
-        rejected: 1,
+        rejected: 2,
         dropped: 0,
         processed: 1,
       })
     }
     expect(tableCount(db, 'telemetry_messages') - beforeMessages).toBe(1)
+    // Verify server assigned a fresh UUID and hardcoded status='unread' (ignored caller id/status & rejected source='system').
+    const persisted = db.sqlite.prepare(`SELECT id, source, status FROM telemetry_messages WHERE title = 'Perf'`).get() as { id: string, source: string, status: string }
+    expect(persisted.id).not.toBe('m1')
+    expect(persisted.source).toBe('client')
+    expect(persisted.status).toBe('unread')
+    expect(db.sqlite.prepare(`SELECT COUNT(*) AS count FROM telemetry_messages WHERE source = 'system'`).get()).toEqual({ count: 0 })
 
     // Conflicting payload on the same key fails with 409.
     await expect(messagesHandler(makeEvent({
       idempotencyKey: key,
-      body: { messages: [{ id: 'm3', source: 'system', severity: 'warn', title: 'Other', message: 'diff' }] },
+      body: { messages: [{ id: 'm3', source: 'client', severity: 'warn', title: 'Other', message: 'diff' }] },
     }))).rejects.toMatchObject({ statusCode: 409 })
 
     // Mid-batch trigger failure throws fail-closed and rolls back all rows in the request.
     db.sqlite.exec(`
       CREATE TRIGGER fail_second_message
       BEFORE INSERT ON telemetry_messages
-      WHEN NEW.id = 'm_fail_2'
+      WHEN NEW.title = 'B'
       BEGIN
         SELECT RAISE(ABORT, 'simulated message write failure');
       END;
@@ -414,8 +421,8 @@ describe('telemetry atomic & idempotent lifecycle against real SQLite (#1788)', 
       idempotencyKey: 'msg:77777777-8888-4999-8aaa-bbbbbbbbbbbb',
       body: {
         messages: [
-          { id: 'm_fail_1', source: 'system', severity: 'warn', title: 'A', message: 'ok' },
-          { id: 'm_fail_2', source: 'system', severity: 'warn', title: 'B', message: 'boom' },
+          { id: 'm_fail_1', source: 'client', severity: 'warn', title: 'A', message: 'ok' },
+          { id: 'm_fail_2', source: 'client', severity: 'warn', title: 'B', message: 'boom' },
         ],
       },
     }))).rejects.toThrow('simulated message write failure')

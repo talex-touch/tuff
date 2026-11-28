@@ -1,8 +1,10 @@
 import type { H3Event } from 'h3'
+import { Buffer } from 'node:buffer'
+import { timingSafeEqual } from 'node:crypto'
 import { createError, getHeader } from 'h3'
 import { useRuntimeConfig } from '#imports'
 import { requireAdmin } from './auth'
-import { consumeLoginToken } from './authStore'
+import { consumeLoginToken, getUserById } from './authStore'
 import { appendAdminBreakglassAudit, type AdminControlChannel } from './adminBreakglassAuditStore'
 import { consumeEmergencyJti, hashDeviceFingerprint, hashIpValue } from './adminEmergencyStore'
 import type { AdminRiskScope } from './adminEmergencyToken'
@@ -119,6 +121,59 @@ async function buildAdminActorId(event: H3Event, channel: AdminControlChannel, a
   return `${channel}:${adminId}:${ipHash}`
 }
 
+function constantTimeStringEqual(left: string, right: string): boolean {
+  const leftBuf = Buffer.from(left, 'utf8')
+  const rightBuf = Buffer.from(right, 'utf8')
+  if (leftBuf.byteLength !== rightBuf.byteLength)
+    return false
+  return timingSafeEqual(leftBuf, rightBuf)
+}
+
+function normalizeControlPlanePath(rawPath: string): { path: string, malformed: boolean } {
+  if (!rawPath)
+    return { path: '', malformed: false }
+  const [rawPathname = ''] = rawPath.split('?')
+  let malformed = false
+  const segments: string[] = []
+  for (const rawSegment of rawPathname.split('/')) {
+    if (!rawSegment)
+      continue
+    let decoded = rawSegment
+    try {
+      decoded = decodeURIComponent(rawSegment)
+    }
+    catch {
+      malformed = true
+      decoded = rawSegment.replace(/%[0-9a-fA-F]{2}/g, (match) => {
+        try {
+          return decodeURIComponent(match)
+        }
+        catch {
+          return match
+        }
+      })
+    }
+    for (const part of decoded.split('/')) {
+      if (!part || part === '.')
+        continue
+      if (part === '..') {
+        segments.pop()
+        continue
+      }
+      segments.push(part)
+    }
+  }
+  return { path: `/${segments.join('/')}`, malformed }
+}
+
+function resolveExpectedEmergencyIssuerVersion(event: H3Event): string {
+  const config = useRuntimeConfig(event)
+  const configured = typeof config.adminControl?.emergencyIssuerVersion === 'string'
+    ? config.adminControl.emergencyIssuerVersion.trim()
+    : ''
+  return configured || 'v1'
+}
+
 async function tryEmergencyChannel(
   event: H3Event,
   requiredScope: AdminRiskScope | undefined,
@@ -162,6 +217,22 @@ async function tryEmergencyChannel(
   ensureAllowedChannel('B', options)
   ensureScope(requiredScope, claims.scope)
 
+  const expectedIv = resolveExpectedEmergencyIssuerVersion(event)
+  if (!constantTimeStringEqual(claims.iv, expectedIv)) {
+    throw createError({
+      statusCode: 401,
+      statusMessage: 'Emergency token issuer version mismatch.',
+    })
+  }
+
+  const adminUser = await getUserById(event, claims.admin_id)
+  if (!adminUser || adminUser.status !== 'active' || adminUser.role !== 'admin') {
+    throw createError({
+      statusCode: 401,
+      statusMessage: 'Admin account is no longer active.',
+    })
+  }
+
   const deviceFingerprint = (getHeader(event, 'x-device-fingerprint') || '').trim()
   if (!deviceFingerprint) {
     throw createError({
@@ -170,7 +241,7 @@ async function tryEmergencyChannel(
     })
   }
   const currentHash = hashDeviceFingerprint(event, deviceFingerprint)
-  if (currentHash !== claims.dfp_hash) {
+  if (!constantTimeStringEqual(currentHash, claims.dfp_hash)) {
     throw createError({
       statusCode: 401,
       statusMessage: 'Emergency token device mismatch.',
@@ -212,6 +283,61 @@ async function tryEmergencyChannel(
   return context
 }
 
+function parseMtlsAdminMap(raw: unknown): Map<string, string> {
+  const result = new Map<string, string>()
+  if (typeof raw === 'string') {
+    for (const entry of raw.split(',')) {
+      const trimmed = entry.trim()
+      if (!trimmed)
+        continue
+      const idx = trimmed.indexOf('=')
+      if (idx <= 0 || idx === trimmed.length - 1)
+        continue
+      const fp = trimmed.slice(0, idx).trim().toLowerCase()
+      const adminId = trimmed.slice(idx + 1).trim()
+      if (fp && adminId)
+        result.set(fp, adminId)
+    }
+  }
+  else if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+    for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+      const fp = key.trim().toLowerCase()
+      const adminId = typeof value === 'string' ? value.trim() : ''
+      if (fp && adminId)
+        result.set(fp, adminId)
+    }
+  }
+  return result
+}
+
+async function resolveVerifiedOobAdminId(
+  event: H3Event,
+  mtlsFingerprint: string | null,
+): Promise<string | null> {
+  // Never trust client-asserted headers (e.g. x-admin-operator-id or unsigned cf-access-authenticated-user-email)
+  // for shared-token OOB attribution. Only attribute an admin ID from a server-configured,
+  // cryptographically verified per-admin mTLS client certificate mapping; otherwise leave adminId null.
+  if (!mtlsFingerprint)
+    return null
+  const config = useRuntimeConfig(event)
+  const adminControl = config.adminControl as Record<string, unknown> | undefined
+  if (!asBoolean(adminControl?.oobMtlsEnabled, false))
+    return null
+  const map = parseMtlsAdminMap(adminControl?.oobMtlsAdminMap)
+  const mappedAdminId = map.get(mtlsFingerprint.trim().toLowerCase())
+  if (!mappedAdminId)
+    return null
+
+  const user = await getUserById(event, mappedAdminId)
+  if (!user || user.status !== 'active' || user.role !== 'admin') {
+    throw createError({
+      statusCode: 403,
+      statusMessage: 'Invalid OOB operator admin identity.',
+    })
+  }
+  return user.id
+}
+
 async function requireOobChannel(
   event: H3Event,
   requiredScope: AdminRiskScope | undefined,
@@ -219,9 +345,10 @@ async function requireOobChannel(
 ): Promise<AdminControlContext> {
   ensureAllowedChannel('C', options)
   const oob = requireAdminOobAuth(event)
+  const operatorAdminId = await resolveVerifiedOobAdminId(event, oob.mtlsFingerprint)
   const scope = requiredScope ? [requiredScope] : [...ALL_RISK_SCOPES]
   const context: AdminControlContext = {
-    adminId: null,
+    adminId: operatorAdminId,
     actorId: oob.actorId,
     channel: 'C',
     scope,
@@ -229,12 +356,12 @@ async function requireOobChannel(
   }
 
   if (options?.applyWriteRateLimit !== false) {
-    await enforceAdminRiskWriteRateLimit(event, null, context.actorId)
+    await enforceAdminRiskWriteRateLimit(event, operatorAdminId, context.actorId)
   }
 
   await appendAdminBreakglassAudit(event, {
     actorId: context.actorId,
-    actorAdminId: null,
+    actorAdminId: operatorAdminId,
     channel: context.channel,
     action: options?.auditAction || 'admin.control.auth',
     scope: requiredScope ?? null,
@@ -300,7 +427,13 @@ export async function requireAdminControlPlaneAuth(
   requiredScope?: AdminRiskScope,
   options?: GuardOptions,
 ): Promise<AdminControlContext> {
-  const path = event.path || event.node.req.url || ''
+  const { path, malformed } = normalizeControlPlanePath(event.path || event.node.req.url || '')
+  if (malformed) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: 'Invalid request path encoding.',
+    })
+  }
   const shouldUseOob = path.startsWith('/api/admin/oob/risk/')
 
   if (isPreserveInExtremeEnabled(event) && await isExtremeMode(event)) {
