@@ -53,27 +53,29 @@ afterAll(() => {
 })
 
 describe('GET /api/images/list', () => {
-  it('answers a request without parameters exactly as before: every key and a total', async () => {
-    const bucket = createBucket({ objects: [{ key: 'a.png' }, { key: 'b.zip' }], truncated: false })
+  it('answers a request without parameters scoped to the images/ prefix', async () => {
+    const bucket = createBucket({
+      objects: [{ key: 'images/a.png' }, { key: 'images/b.webp' }],
+      truncated: false,
+    })
     const body = await (await load())(createEvent('/api/images/list', bucket))
 
-    // Called with no options at all: R2's own default page, as the old listing did.
     expect(bucket.list).toHaveBeenCalledTimes(1)
-    expect(bucket.list).toHaveBeenCalledWith()
+    expect(bucket.list).toHaveBeenCalledWith({ prefix: 'images/' })
     expect(body).toStrictEqual({
       images: [
         { key: 'a.png', url: '/api/images/a.png' },
-        { key: 'b.zip', url: '/api/images/b.zip' },
+        { key: 'b.webp', url: '/api/images/b.webp' },
       ],
       total: 2,
     })
   })
 
   it('pages with the default limit when only a cursor is given', async () => {
-    const bucket = createBucket({ objects: [{ key: 'c.png' }], truncated: false })
+    const bucket = createBucket({ objects: [{ key: 'images/c.png' }], truncated: false })
     const body = await (await load())(createEvent('/api/images/list?cursor=page-2', bucket))
 
-    expect(bucket.list).toHaveBeenCalledWith({ limit: IMAGE_LIST_DEFAULT_LIMIT, cursor: 'page-2' })
+    expect(bucket.list).toHaveBeenCalledWith({ prefix: 'images/', limit: IMAGE_LIST_DEFAULT_LIMIT, cursor: 'page-2' })
     expect(body).toStrictEqual({
       images: [{ key: 'c.png', url: '/api/images/c.png' }],
       cursor: null,
@@ -82,10 +84,10 @@ describe('GET /api/images/list', () => {
   })
 
   it('passes limit and cursor through and returns the next cursor while truncated', async () => {
-    const bucket = createBucket({ objects: [{ key: 'd.png' }, { key: 'e.png' }], truncated: true, cursor: 'page-3' })
+    const bucket = createBucket({ objects: [{ key: 'images/d.png' }, { key: 'images/e.png' }], truncated: true, cursor: 'page-3' })
     const body = await (await load())(createEvent('/api/images/list?limit=2&cursor=page-2', bucket))
 
-    expect(bucket.list).toHaveBeenCalledWith({ limit: 2, cursor: 'page-2' })
+    expect(bucket.list).toHaveBeenCalledWith({ prefix: 'images/', limit: 2, cursor: 'page-2' })
     expect(body).toStrictEqual({
       images: [
         { key: 'd.png', url: '/api/images/d.png' },
@@ -99,19 +101,19 @@ describe('GET /api/images/list', () => {
   it('asks for the first page without a cursor', async () => {
     const bucket = createBucket({ objects: [], truncated: false })
     await (await load())(createEvent('/api/images/list?limit=10', bucket))
-    expect(bucket.list).toHaveBeenCalledWith({ limit: 10 })
+    expect(bucket.list).toHaveBeenCalledWith({ prefix: 'images/', limit: 10 })
   })
 
   it('caps the page size and falls back to the default for a value that is not a page size', async () => {
     const handler = await load()
     const capped = createBucket({ objects: [], truncated: false })
     await handler(createEvent('/api/images/list?limit=500', capped))
-    expect(capped.list).toHaveBeenCalledWith({ limit: IMAGE_LIST_MAX_LIMIT })
+    expect(capped.list).toHaveBeenCalledWith({ prefix: 'images/', limit: IMAGE_LIST_MAX_LIMIT })
 
     for (const limit of ['0', '-5', 'abc', '2.5', '']) {
       const bucket = createBucket({ objects: [], truncated: false })
       await handler(createEvent(`/api/images/list?limit=${limit}`, bucket))
-      expect(bucket.list, `limit=${limit}`).toHaveBeenCalledWith({ limit: IMAGE_LIST_DEFAULT_LIMIT })
+      expect(bucket.list, `limit=${limit}`).toHaveBeenCalledWith({ prefix: 'images/', limit: IMAGE_LIST_DEFAULT_LIMIT })
     }
   })
 

@@ -35,6 +35,9 @@ export default defineEventHandler(async (event) => {
   if (!user?.email || !invite || normalizeEmail(invite.email) !== normalizeEmail(user.email)) {
     throw createError({ statusCode: 404, statusMessage: 'Invitation not found' })
   }
+  if (user.emailState !== 'verified') {
+    throw createError({ statusCode: 403, statusMessage: 'Verified email required.' })
+  }
 
   await requirePasskeyStepUp(event, userId)
 

@@ -180,7 +180,7 @@ export default defineEventHandler(async (event) => {
       slug,
       userId,
     })
-    throw createError({ statusCode: 500, statusMessage: `Failed to create plugin: ${errorMessage}` })
+    throw createError({ statusCode: 500, statusMessage: 'Failed to create plugin.' })
   }
 
   let initialVersionRecord = null
@@ -215,8 +215,8 @@ export default defineEventHandler(async (event) => {
       })
       if (err && typeof err === 'object' && 'statusCode' in err)
         throw err
-      const errorMessage = err instanceof Error ? err.message : String(err)
-      throw createError({ statusCode: 400, statusMessage: `Failed to initialize plugin version: ${errorMessage}` })
+      console.error('[plugins.post] Failed to initialize plugin version:', err)
+      throw createError({ statusCode: 400, statusMessage: 'Failed to initialize plugin version.' })
     }
   }
 

@@ -37,6 +37,9 @@ export function createD1Adapter(eventOrGetter: H3Event | (() => H3Event)) {
       if (hasEmail) {
         const existing = await getUserByEmail(event, email)
         if (existing) {
+          if (existing.emailState !== 'verified') {
+            throw new Error('Cannot link to an unverified email account.')
+          }
           const restored = await restorePendingDeletionIfWithinWindow(event, existing.id)
           if (!isUserActive(restored)) {
             throw new Error('Account is disabled.')
@@ -44,7 +47,11 @@ export function createD1Adapter(eventOrGetter: H3Event | (() => H3Event)) {
           return toAdapterUser(restored)
         }
       }
-      const emailVerified = hasEmail
+      // Only mark an address verified when the provider itself proved mailbox control
+      // (Magic Link passes a Date `emailVerified`; verified OAuth providers set `oauthEmailVerified: true`).
+      // Providers like LinuxDO emit user-chosen unverified emails and must start `'unverified'`.
+      const isVerifiedEmail = hasEmail && (data.emailVerified instanceof Date || data.oauthEmailVerified === true)
+      const emailVerified = isVerifiedEmail
         ? (data.emailVerified instanceof Date ? data.emailVerified.toISOString() : new Date().toISOString())
         : null
       const user = await createUser(event, {
@@ -52,7 +59,7 @@ export function createD1Adapter(eventOrGetter: H3Event | (() => H3Event)) {
         name: typeof data.name === 'string' ? data.name : null,
         image: typeof data.image === 'string' ? data.image : null,
         emailVerified,
-        emailState: hasEmail ? 'verified' : 'missing',
+        emailState: !hasEmail ? 'missing' : (isVerifiedEmail ? 'verified' : 'unverified'),
       })
       await ensurePersonalTeam(event, user.id)
       return toAdapterUser(user)

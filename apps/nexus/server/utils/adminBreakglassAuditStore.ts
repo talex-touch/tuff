@@ -97,7 +97,7 @@ async function maybeEmitAnchor(event: H3Event, latestHash: string) {
       status: 'unread',
       isAnonymous: false,
       createdAt: now,
-    }])
+    }], { trustedSystem: true })
   }
   catch {
     // noop

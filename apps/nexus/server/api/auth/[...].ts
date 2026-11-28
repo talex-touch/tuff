@@ -549,6 +549,16 @@ export function getAuthOptions(authSecret: string): AuthOptions {
             return profile
           },
         },
+        profile(profile: Record<string, any>) {
+          const email = typeof profile.email === 'string' && profile.email.trim() ? profile.email.trim() : null
+          return {
+            id: String(profile.id),
+            name: profile.name ?? profile.login ?? null,
+            email,
+            image: profile.avatar_url ?? null,
+            oauthEmailVerified: Boolean(email),
+          } as any
+        },
       }),
     )
   }
@@ -609,11 +619,13 @@ export function getAuthOptions(authSecret: string): AuthOptions {
         const avatarTemplate =
           typeof profile.avatar_template === 'string' ? profile.avatar_template.replace('{size}', '128') : null
         const image = profile.avatar_url ?? avatarTemplate ?? profile.avatar ?? profile.picture ?? null
+        const email = typeof profile.email === 'string' && profile.email.trim() ? profile.email.trim() : null
         return {
           id: id ? String(id) : '',
           name: profile.name ?? profile.username ?? null,
-          email: profile.email ?? null,
+          email,
           image,
+          oauthEmailVerified: Boolean(email) && oauthEmailProvesMailboxControl('linuxdo', profile as Profile),
         }
       },
     }
@@ -652,6 +664,9 @@ export function getAuthOptions(authSecret: string): AuthOptions {
           if (!email) return true
           const existing = await getUserByEmail(authEvent, email)
           if (!existing) return true
+          // Never auto-link onto an account whose email has not been verified (prevents
+          // pre-registration takeover where an attacker claimed an email before the real owner).
+          if (existing.emailState !== 'verified') return false
           // Checked before restoreForInteractiveSignIn, not after: that call un-deletes an
           // account inside its pending-deletion window, so letting an untrusted email reach
           // it would let a stranger resurrect someone else's account even when the sign-in
@@ -663,6 +678,8 @@ export function getAuthOptions(authSecret: string): AuthOptions {
           const address = user?.email
           if (!address) return false
           const existing = await getUserByEmail(authEvent, address)
+          // Refuse signing into or auto-linking an existing row whose email was never verified.
+          if (existing && existing.emailState !== 'verified') return false
           if (emailContext?.verificationRequest) {
             return !existing || existing.status === 'active' || existing.status === 'deletion_pending'
           }

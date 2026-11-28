@@ -2,16 +2,45 @@
  * CORS middleware for API routes
  * Enables cross-origin requests for the store API endpoints
  */
+function normalizeCorsPath(rawPath: string): string {
+  if (!rawPath)
+    return ''
+
+  const [rawPathname = ''] = rawPath.split('?')
+  let pathname = rawPathname
+  try {
+    pathname = decodeURIComponent(rawPathname)
+  }
+  catch {
+    // Keep raw pathname when percent-encoding is malformed so control-plane checks stay closed.
+  }
+
+  const segments: string[] = []
+  for (const segment of pathname.split('/')) {
+    if (!segment || segment === '.')
+      continue
+    if (segment === '..') {
+      segments.pop()
+      continue
+    }
+    segments.push(segment)
+  }
+
+  return `/${segments.join('/')}`
+}
+
 export default defineEventHandler((event) => {
-  const path = event.path
+  const path = normalizeCorsPath(event.path || event.node.req.url || '')
 
   // Only apply CORS to API routes
-  if (!path.startsWith('/api/')) {
+  if (path !== '/api' && !path.startsWith('/api/')) {
     return
   }
 
   const isControlPlanePath
-    = path.startsWith('/api/admin/')
+    = path === '/api/admin'
+      || path.startsWith('/api/admin/')
+      || path === '/api/dashboard/intelligence'
       || path.startsWith('/api/dashboard/intelligence/')
   const requestOrigin = getHeader(event, 'origin') || ''
   const allowedOrigin = (useRuntimeConfig(event).auth?.origin as string | undefined) || ''

@@ -9,60 +9,107 @@ export type WebhookUrlDecision =
   | { allowed: true, url: string }
   | { allowed: false, reason: WebhookUrlRejection }
 
+export interface EvaluateWebhookUrlOptions {
+  /**
+   * Whether loopback hosts (`localhost`, `127.0.0.1`, `[::1]`) are permitted.
+   * Defaults to `false` in production and Cloudflare Pages runtimes; local dev/tests may allow it.
+   */
+  allowLocalhost?: boolean
+}
+
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]'])
 
-/**
- * Hosts a server-side webhook must never be pointed at.
- *
- * 169.254.169.254 is the cloud instance-metadata address and the reason this matters most,
- * but the whole private and link-local space is refused: a webhook is an outbound call the
- * server makes on a stored address, so it is a ready-made probe of the network it runs in.
- */
-function isPrivateHost(hostname: string): boolean {
-  const host = hostname.replace(/^\[|\]$/g, '').toLowerCase()
-
-  if (host === '0.0.0.0' || host === '::' || host.endsWith('.internal') || host.endsWith('.local'))
+function isLoopbackHost(hostname: string): boolean {
+  const normalized = hostname.replace(/^\[|\]$/g, '').replace(/\.+$/, '').toLowerCase()
+  if (LOOPBACK_HOSTS.has(normalized) || normalized.endsWith('.localhost'))
     return true
-
-  const ipv4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(host)
-  if (ipv4) {
-    // Indexed directly rather than destructured: noUncheckedIndexedAccess types a slice's
-    // elements as possibly undefined, and the regex has already guaranteed both groups.
-    const a = Number(ipv4[1])
-    const b = Number(ipv4[2])
-    if (a === 10 || a === 127) return true
-    if (a === 169 && b === 254) return true
-    if (a === 172 && b >= 16 && b <= 31) return true
-    if (a === 192 && b === 168) return true
-    return false
-  }
-
-  // IPv6 unique-local (fc00::/7) and link-local (fe80::/10).
-  if (/^f[cd][0-9a-f]{2}:/.test(host) || /^fe[89ab][0-9a-f]:/.test(host))
+  if (normalized === '0:0:0:0:0:0:0:1')
     return true
+  return false
+}
 
+function isPrivateIpv4Tuple(a: number, b: number, c: number, d: number): boolean {
+  if (a < 0 || a > 255 || b < 0 || b > 255 || c < 0 || c > 255 || d < 0 || d > 255)
+    return true
+  if (a === 0 || a === 10 || a === 127)
+    return true
+  // Carrier-grade NAT (RFC 6598): 100.64.0.0/10
+  if (a === 100 && b >= 64 && b <= 127)
+    return true
+  // Link-local / cloud metadata: 169.254.0.0/16
+  if (a === 169 && b === 254)
+    return true
+  // Private RFC 1918: 172.16.0.0/12 and 192.168.0.0/16
+  if (a === 172 && b >= 16 && b <= 31)
+    return true
+  if (a === 192 && b === 168)
+    return true
+  // IETF protocol / benchmarking / multicast / reserved
+  if (a === 192 && b === 0 && c === 0)
+    return true
+  if (a === 198 && (b === 18 || b === 19))
+    return true
+  if (a >= 224)
+    return true
   return false
 }
 
 /**
- * Whether a stored webhook URL may be dispatched to.
+ * Hosts a server-side outbound URL must never be pointed at.
  *
- * The credential store accepted any non-empty string under 2048 characters — no parse, no
- * scheme check, no host rule — and the dispatcher passed it straight to the HTTP client. An
- * admin session could point it at http://169.254.169.254/latest/meta-data/ and every
- * notification became a request to that address; `validateStatus` accepts 100-599, so the
- * delivery record reported the status and worked as a probe oracle. Plain http also sent the
- * body and the X-Tuff-Signature HMAC in cleartext (#899).
- *
- * The scheme rule is the one `readHttpsRelayEndpoint` already applies in the dispatcher —
- * https, or http for loopback so local development still works — with the private-host
- * refusal added.
- *
- * Known limit: this checks the literal host. A DNS name that resolves to a private address
- * still passes, because the check happens before resolution. Closing that needs resolution
- * -time filtering in the HTTP client, which is a different change.
+ * Covers RFC 1918, loopback, CGNAT (100.64.0.0/10), unspecified (0.0.0.0/8), link-local/metadata
+ * (169.254.0.0/16), IPv4-mapped IPv6 (`::ffff:*` in both dotted and URL-normalized hex forms),
+ * IPv6 unique-local/link-local/multicast/loopback, and `.internal` / `.local` suffixes.
  */
-export function evaluateWebhookUrl(value: unknown): WebhookUrlDecision {
+export function isPrivateHost(hostname: string): boolean {
+  const host = hostname.replace(/^\[|\]$/g, '').replace(/\.+$/, '').toLowerCase()
+  if (!host)
+    return true
+
+  if (
+    host === '0.0.0.0'
+    || host === '::'
+    || host === '::1'
+    || host === 'localhost'
+    || host.endsWith('.localhost')
+    || host.endsWith('.internal')
+    || host.endsWith('.local')
+  ) {
+    return true
+  }
+
+  const ipv4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(host)
+  if (ipv4) {
+    return isPrivateIpv4Tuple(Number(ipv4[1]), Number(ipv4[2]), Number(ipv4[3]), Number(ipv4[4]))
+  }
+
+  if (host.includes(':')) {
+    // Reject all IPv4-mapped IPv6 addresses (`::ffff:*` and `0:0:0:0:0:ffff:*`) unconditionally
+    // so neither dotted (`[::ffff:169.254.169.254]`) nor normalized hex (`[::ffff:a9fe:a9fe]`) can bypass checks.
+    if (/(?:^|:)ffff:/i.test(host))
+      return true
+    // IPv4-compatible IPv6 (`::a.b.c.d`) or NAT64 (`64:ff9b::...`)
+    if (/^::\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host) || /^64:ff9b:/i.test(host))
+      return true
+    // Unspecified / loopback in expanded form (`0:0:0:0:0:0:0:0`, `0:0:0:0:0:0:0:1`)
+    if (/^(?:0+:){6,7}0*[01]$/.test(host))
+      return true
+    // IPv6 unique-local (fc00::/7), link-local (fe80::/10), multicast (ff00::/8)
+    if (/^f[cd][0-9a-f]{2}:/.test(host) || /^fe[89ab][0-9a-f]:/.test(host) || /^ff[0-9a-f]{2}:/.test(host))
+      return true
+  }
+
+  return false
+}
+
+function isLocalDevDefault(): boolean {
+  return process.env.NODE_ENV !== 'production' && process.env.NITRO_PRESET !== 'cloudflare-pages'
+}
+
+export function evaluateWebhookUrl(
+  value: unknown,
+  options?: EvaluateWebhookUrlOptions,
+): WebhookUrlDecision {
   const raw = typeof value === 'string' ? value.trim() : ''
   if (!raw) {
     return { allowed: false, reason: 'empty' }
@@ -80,13 +127,21 @@ export function evaluateWebhookUrl(value: unknown): WebhookUrlDecision {
     return { allowed: false, reason: 'unsupported-scheme' }
   }
 
-  const loopback = LOOPBACK_HOSTS.has(url.hostname.toLowerCase())
+  if (url.username || url.password) {
+    return { allowed: false, reason: 'unparseable' }
+  }
+
+  const allowLocalhost = options?.allowLocalhost ?? isLocalDevDefault()
+  const loopback = isLoopbackHost(url.hostname)
+
+  if (loopback && !allowLocalhost) {
+    return { allowed: false, reason: 'private-host' }
+  }
+
   if (url.protocol === 'http:' && !loopback) {
     return { allowed: false, reason: 'insecure-scheme' }
   }
 
-  // Loopback over http is the documented development case, so it is not a private-host
-  // rejection; anything else in private or link-local space is.
   if (!loopback && isPrivateHost(url.hostname)) {
     return { allowed: false, reason: 'private-host' }
   }

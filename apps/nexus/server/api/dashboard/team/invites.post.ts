@@ -35,7 +35,8 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: 'Invite target required' })
   }
 
-  const targetUser = target.includes('@')
+  const targetIsEmail = target.includes('@')
+  const targetUser = targetIsEmail
     ? await getUserByEmail(event, target)
     : await getUserById(event, target)
 
@@ -71,7 +72,7 @@ export default defineEventHandler(async (event) => {
   return {
     invite: {
       id: invite.id,
-      email: invite.email,
+      email: targetIsEmail ? invite.email : null,
       role: invite.role,
       status: invite.status,
       expiresAt: invite.expiresAt,

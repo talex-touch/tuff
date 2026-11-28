@@ -143,6 +143,9 @@ export default defineEventHandler(async (event) => {
       previousCounter: Number(passkey.counter ?? 0),
     })
     await updatePasskeyCounter(event, credential.id, verifyResult.counter)
+    if (verifyResult.userVerified !== true) {
+      return await failAndThrow()
+    }
   }
   catch {
     return await failAndThrow()

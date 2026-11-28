@@ -104,9 +104,21 @@ function resolveIntelligenceType(provider: ProviderRegistryRecord): string {
 
 function resolveModel(provider: ProviderRegistryRecord, input: Record<string, unknown>): string {
   const models = readStringArrayMetadata(provider.metadata, 'models')
-  const model = readString(input.model)
-    ?? readStringMetadata(provider.metadata, 'defaultModel')
-    ?? models[0]
+  const defaultModel = readStringMetadata(provider.metadata, 'defaultModel')
+  const allowedModels = defaultModel && !models.includes(defaultModel) ? [...models, defaultModel] : models
+  const requestedModel = readString(input.model)
+
+  if (requestedModel) {
+    if (allowedModels.length === 0 || !allowedModels.includes(requestedModel)) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: 'Requested model is not allowed for this provider.',
+      })
+    }
+    return requestedModel
+  }
+
+  const model = defaultModel ?? models[0]
 
   if (!model) {
     throw createError({

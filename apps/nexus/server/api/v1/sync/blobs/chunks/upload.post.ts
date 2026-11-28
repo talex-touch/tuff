@@ -1,16 +1,16 @@
 import { getHeader, readFormData } from 'h3'
 import { requireAppAuth } from '../../../../../utils/auth'
-import { readDeviceId } from '../../../../../utils/authStore'
+import { resolveBoundAppDeviceId } from '../../../../../utils/syncDeviceAuth'
 import { createSyncError } from '../../../../../utils/syncErrors'
 import { getSyncSession, uploadSyncBlobChunk, type SyncBlobChunkDescriptor } from '../../../../../utils/syncStoreV1'
 
 const isFile = (value: unknown): value is File => typeof File !== 'undefined' && value instanceof File
 
 export default defineEventHandler(async (event) => {
-  const { userId } = await requireAppAuth(event)
-  const deviceId = readDeviceId(event)
+  const { userId, deviceId: tokenDeviceId } = await requireAppAuth(event)
+  const deviceId = resolveBoundAppDeviceId(event, tokenDeviceId)
   const syncToken = getHeader(event, 'x-sync-token')
-  if (!deviceId || !syncToken)
+  if (!syncToken)
     throw createSyncError('SYNC_INVALID_PAYLOAD', 400, 'Missing sync session identity')
   await getSyncSession(event, userId, deviceId, syncToken)
 

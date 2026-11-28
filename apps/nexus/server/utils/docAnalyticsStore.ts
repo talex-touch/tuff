@@ -1,7 +1,7 @@
 import type { D1Database, D1PreparedStatement } from '@cloudflare/workers-types'
 import type { H3Event } from 'h3'
 import { Buffer } from 'node:buffer'
-import { createHash, randomBytes, randomUUID } from 'node:crypto'
+import { createHash, createHmac, hkdfSync, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto'
 import { readCloudflareBindings } from './cloudflare'
 import { assertRuntimeCredential, isLocalDevelopmentRuntime, selectRuntimeCredential } from './runtimeCredentialPolicy'
 import { defineD1Schema, ensureD1Schema } from './d1Schema'
@@ -248,6 +248,25 @@ function getDocTokenSecret(event: H3Event): string {
   return DEV_FALLBACK_DOC_TOKEN_SECRET
 }
 
+const DOC_TOKEN_HKDF_SALT = Buffer.from('tuff-nexus-doc-analytics-v1', 'utf8')
+const DOC_TOKEN_HKDF_INFO = Buffer.from('doc-token-hs256', 'utf8')
+
+/** Server-controlled bucket identifier so security state is keyed strictly by IP, never attacker-controlled clientId. */
+export const DOC_SECURITY_IP_BUCKET = '__ip__'
+
+function signDocTokenInput(event: H3Event, signingInput: string): string {
+  const secret = getDocTokenSecret(event)
+  const derivedKey = Buffer.from(
+    hkdfSync('sha256', Buffer.from(secret, 'utf8'), DOC_TOKEN_HKDF_SALT, DOC_TOKEN_HKDF_INFO, 32),
+  )
+  return createHmac('sha256', derivedKey)
+    .update(signingInput)
+    .digest('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/g, '')
+}
+
 export function createDocToken(event: H3Event, payload: Omit<DocTokenPayload, 'iat' | 'exp' | 'typ'>, now = Date.now()): string {
   const issuedAt = Math.floor(now / 1000)
   const exp = issuedAt + TOKEN_TTL_SECONDS
@@ -264,10 +283,7 @@ export function createDocToken(event: H3Event, payload: Omit<DocTokenPayload, 'i
   const header = base64UrlEncode(JSON.stringify({ alg: 'HS256', typ: 'JWT' }))
   const body = base64UrlEncode(JSON.stringify(tokenPayload))
   const signingInput = `${header}.${body}`
-  const signature = createHash('sha256').update(`${signingInput}.${getDocTokenSecret(event)}`).digest('base64')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/g, '')
+  const signature = signDocTokenInput(event, signingInput)
   return `${signingInput}.${signature}`
 }
 
@@ -283,13 +299,10 @@ export function verifyDocToken(event: H3Event, token: string): DocTokenPayload |
 
   try {
     const signingInput = `${headerPart}.${payloadPart}`
-    const expectedSignature = createHash('sha256').update(`${signingInput}.${getDocTokenSecret(event)}`).digest('base64')
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_')
-      .replace(/=+$/g, '')
-    if (signaturePart.length !== expectedSignature.length)
-      return null
-    if (signaturePart !== expectedSignature)
+    const expectedSignature = signDocTokenInput(event, signingInput)
+    const providedBuf = Buffer.from(signaturePart, 'utf8')
+    const expectedBuf = Buffer.from(expectedSignature, 'utf8')
+    if (providedBuf.byteLength !== expectedBuf.byteLength || !timingSafeEqual(providedBuf, expectedBuf))
       return null
 
     const payload = JSON.parse(base64UrlDecode(payloadPart)) as Partial<DocTokenPayload>
@@ -497,6 +510,7 @@ const DOC_ANALYTICS_SCHEMA = defineD1Schema('doc-analytics', {
     // `expirePendingSessions` looks sessions up by owner on every docs view; none of the indexes led
     // with it, so it read every session ever issued (2,022 rows a run in production, and growing).
     `CREATE INDEX IF NOT EXISTS idx_doc_session_pending_owner ON ${DOC_SESSION_TABLE}(ip, client_id, expect_report_at) WHERE status = 'pending'`,
+    `CREATE INDEX IF NOT EXISTS idx_doc_session_pending_ip ON ${DOC_SESSION_TABLE}(ip, expect_report_at) WHERE status = 'pending'`,
   ],
   columns: [
     {
@@ -560,10 +574,10 @@ export async function cleanupDocEngagementRecords(db: D1Database, now = Date.now
   return { sessions: changes(sessions), nonces: changes(nonces), challenges: changes(challenges) }
 }
 
-export async function getDocSecurityState(db: D1Database, ip: string, clientId: string): Promise<DocSecurityState | null> {
+export async function getDocSecurityState(db: D1Database, ip: string, _clientId?: string): Promise<DocSecurityState | null> {
   const row = await db.prepare(
     `SELECT violation_count, risk_level, blocked_until FROM ${DOC_SECURITY_TABLE} WHERE ip = ?1 AND client_id = ?2`,
-  ).bind(ip, clientId).first<{ violation_count?: number, risk_level?: number, blocked_until?: number | null }>()
+  ).bind(ip, DOC_SECURITY_IP_BUCKET).first<{ violation_count?: number, risk_level?: number, blocked_until?: number | null }>()
   if (!row)
     return null
   return {
@@ -575,10 +589,10 @@ export async function getDocSecurityState(db: D1Database, ip: string, clientId: 
 
 export async function recordDocViolation(
   db: D1Database,
-  params: { ip: string, clientId: string, weight: number },
+  params: { ip: string, clientId?: string, weight: number },
 ): Promise<DocSecurityState> {
   const now = Date.now()
-  const existing = await getDocSecurityState(db, params.ip, params.clientId)
+  const existing = await getDocSecurityState(db, params.ip, DOC_SECURITY_IP_BUCKET)
   const prevCount = existing?.violationCount ?? 0
   const nextCount = prevCount + Math.max(0, Math.round(params.weight))
   const riskLevel = resolveRiskLevel(nextCount)
@@ -592,29 +606,29 @@ export async function recordDocViolation(
       risk_level = excluded.risk_level,
       blocked_until = excluded.blocked_until,
       last_violation_at = excluded.last_violation_at;
-  `).bind(params.ip, params.clientId, nextCount, riskLevel, blockedUntil, now).run()
+  `).bind(params.ip, DOC_SECURITY_IP_BUCKET, nextCount, riskLevel, blockedUntil, now).run()
 
   return { violationCount: nextCount, riskLevel, blockedUntil }
 }
 
 /**
- * Expires up to 20 of the client's overdue pending sessions and says how many. One statement: it was a
- * read and then an update by id, so two requests at once could both count the same sessions.
+ * Expires up to 20 of the IP's overdue pending sessions and says how many. Keyed by IP rather than
+ * caller-supplied clientId so rotating clientId cannot evade overdue-session violation tracking.
  */
 export async function expirePendingSessions(
   db: D1Database,
-  params: { ip: string, clientId: string, now: number },
+  params: { ip: string, clientId?: string, now: number },
 ): Promise<number> {
   const { results } = await db.prepare(`
     UPDATE ${DOC_SESSION_TABLE}
     SET status = 'expired'
     WHERE session_id IN (
       SELECT session_id FROM ${DOC_SESSION_TABLE}
-      WHERE ip = ?1 AND client_id = ?2 AND status = 'pending' AND expect_report_at < ?3
+      WHERE ip = ?1 AND status = 'pending' AND expect_report_at < ?2
       LIMIT 20
     )
     RETURNING session_id;
-  `).bind(params.ip, params.clientId, params.now).all<{ session_id: string }>()
+  `).bind(params.ip, params.now).all<{ session_id: string }>()
 
   return results?.length ?? 0
 }

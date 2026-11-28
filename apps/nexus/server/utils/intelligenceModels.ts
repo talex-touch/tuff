@@ -1,4 +1,5 @@
 import { networkClient } from '@talex-touch/utils/network'
+import { evaluateWebhookUrl } from './webhookUrlPolicy'
 
 const DEFAULT_BASE_URLS: Record<string, string> = {
   openai: 'https://api.openai.com/v1',
@@ -56,8 +57,15 @@ export async function fetchProviderModels(options: {
   type: string
   baseUrl?: string | null
   apiKey?: string | null
+  allowLocalhost?: boolean
 }): Promise<string[]> {
   const resolvedBaseUrl = resolveProviderBaseUrl(options.type, options.baseUrl)
+  const allowLocalhost = options.allowLocalhost ?? (options.type === 'local' && process.env.NODE_ENV !== 'production')
+  const urlDecision = evaluateWebhookUrl(resolvedBaseUrl, { allowLocalhost })
+  if (!urlDecision.allowed) {
+    throw new Error(`Disallowed provider base URL (${urlDecision.reason}).`)
+  }
+
   const allStatus = Array.from({ length: 500 }, (_, index) => index + 100)
 
   if (options.type === 'local') {
@@ -85,8 +93,7 @@ export async function fetchProviderModels(options: {
       validateStatus: allStatus
     })
     if (res.status < 200 || res.status >= 300) {
-      const text = typeof res.data === 'string' ? res.data : JSON.stringify(res.data)
-      throw new Error(`Anthropic API returned ${res.status}: ${text.slice(0, 200)}`)
+      throw new Error(`Anthropic API returned HTTP ${res.status}.`)
     }
     const data = res.data as { data?: Array<{ id: string }> }
     return (data.data || []).map(model => model.id)
@@ -100,6 +107,10 @@ export async function fetchProviderModels(options: {
   let lastError: Error | null = null
 
   for (const endpoint of endpoints) {
+    const endpointDecision = evaluateWebhookUrl(endpoint, { allowLocalhost: false })
+    if (!endpointDecision.allowed) {
+      throw new Error(`Disallowed provider endpoint (${endpointDecision.reason}).`)
+    }
     try {
       const res = await networkClient.request<{ data?: Array<{ id: string }> } | string>({
         method: 'GET',
@@ -111,8 +122,7 @@ export async function fetchProviderModels(options: {
         validateStatus: allStatus
       })
       if (res.status < 200 || res.status >= 300) {
-        const text = typeof res.data === 'string' ? res.data : JSON.stringify(res.data)
-        throw new Error(`API returned ${res.status}: ${text.slice(0, 200)}`)
+        throw new Error(`Provider API returned HTTP ${res.status}.`)
       }
       const data = res.data as { data?: Array<{ id: string }> }
       return (data.data || []).map(model => model.id)

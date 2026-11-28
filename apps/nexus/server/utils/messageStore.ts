@@ -84,37 +84,102 @@ export interface TelemetryMessageBatchAck extends Record<string, unknown> {
   processed: number
 }
 
+const MAX_SOURCE_LENGTH = 64
+const MAX_SEVERITY_LENGTH = 32
+const MAX_TITLE_LENGTH = 256
+const MAX_MESSAGE_LENGTH = 4096
+const MAX_PLATFORM_LENGTH = 64
+const MAX_VERSION_LENGTH = 64
+const MAX_META_JSON_BYTES = 8192
+
 function buildMessageInsertStatements(
   db: D1Database,
   inputs: TelemetryMessageInput[],
+  options: { trustedSystem?: boolean } = {},
 ): { statements: D1PreparedStatement[], rejected: number } {
+  const trustedSystem = options.trustedSystem === true
   const statements: D1PreparedStatement[] = []
   let rejected = 0
   for (const input of inputs) {
-    if (!input.source || !input.severity || !input.title || !input.message) {
+    const source = typeof input?.source === 'string' ? input.source.trim() : ''
+    const severity = typeof input?.severity === 'string' ? input.severity.trim() : ''
+    const title = typeof input?.title === 'string' ? input.title.trim() : ''
+    const message = typeof input?.message === 'string' ? input.message.trim() : ''
+
+    if (!source || !severity || !title || !message) {
       rejected += 1
       continue
     }
+    if (!trustedSystem && source.toLowerCase() === 'system') {
+      rejected += 1
+      continue
+    }
+    if (
+      source.length > MAX_SOURCE_LENGTH
+      || severity.length > MAX_SEVERITY_LENGTH
+      || title.length > MAX_TITLE_LENGTH
+      || message.length > MAX_MESSAGE_LENGTH
+    ) {
+      rejected += 1
+      continue
+    }
+
+    const platform = typeof input.platform === 'string' ? input.platform.trim() : ''
+    const version = typeof input.version === 'string' ? input.version.trim() : ''
+    if (platform.length > MAX_PLATFORM_LENGTH || version.length > MAX_VERSION_LENGTH) {
+      rejected += 1
+      continue
+    }
+
+    let serializedMeta: string | null = null
+    if (input.meta !== undefined && input.meta !== null) {
+      if (typeof input.meta !== 'object' || Array.isArray(input.meta)) {
+        rejected += 1
+        continue
+      }
+      try {
+        serializedMeta = JSON.stringify(input.meta)
+      }
+      catch {
+        rejected += 1
+        continue
+      }
+      if (!trustedSystem && serializedMeta.length > MAX_META_JSON_BYTES) {
+        rejected += 1
+        continue
+      }
+    }
+
     if (input.createdAt && !Number.isFinite(new Date(input.createdAt).getTime())) {
       rejected += 1
       continue
     }
-    const id = input.id || crypto.randomUUID()
+
+    // Untrusted public ingestion always gets a server-generated UUID, `'unread'` status, and plain INSERT
+    // so anonymous callers can never overwrite or silence system alerts (`ip-ban:...`).
+    const id = trustedSystem && typeof input.id === 'string' && input.id.trim()
+      ? input.id.trim()
+      : crypto.randomUUID()
+    const status = trustedSystem && typeof input.status === 'string' && input.status.trim()
+      ? input.status.trim()
+      : 'unread'
     const createdAt = input.createdAt ? new Date(input.createdAt).toISOString() : new Date().toISOString()
+    const insertVerb = trustedSystem ? 'INSERT OR REPLACE INTO' : 'INSERT INTO'
+
     statements.push(db.prepare(`
-      INSERT OR REPLACE INTO ${MESSAGE_TABLE} (
+      ${insertVerb} ${MESSAGE_TABLE} (
         id, source, severity, title, message, meta, status, platform, version, is_anonymous, created_at
       ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11);
     `).bind(
       id,
-      input.source,
-      input.severity,
-      input.title,
-      input.message,
-      input.meta ? JSON.stringify(input.meta) : null,
-      input.status || 'unread',
-      input.platform || null,
-      input.version || null,
+      source,
+      severity,
+      title,
+      message,
+      serializedMeta,
+      status,
+      platform || null,
+      version || null,
       input.isAnonymous === false ? 0 : 1,
       createdAt,
     ))
@@ -233,6 +298,7 @@ export async function recordTelemetryMessagesAtomic(
 export async function recordTelemetryMessages(
   event: H3Event,
   inputs: TelemetryMessageInput[],
+  options: { trustedSystem?: boolean } = {},
 ): Promise<number> {
   const db = getD1Database(event)
   if (!db) {
@@ -248,7 +314,7 @@ export async function recordTelemetryMessages(
   try {
     await ensureMessageSchema(db)
 
-    const { statements } = buildMessageInsertStatements(db, inputs)
+    const { statements } = buildMessageInsertStatements(db, inputs, options)
 
     if (statements.length > 0)
       await db.batch(statements)

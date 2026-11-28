@@ -1,7 +1,42 @@
 import { createError, defineEventHandler, readBody } from 'h3'
 import { requireAppAuth } from '../../../../utils/auth'
-import { consumeCredits } from '../../../../utils/creditsStore'
+import {
+  claimRealtimeAsrSessionForSettlement,
+  getRealtimeAsrSession,
+  markRealtimeAsrSessionCreditsReleased,
+  markRealtimeAsrSessionExpired,
+  REALTIME_ASR_SETTLE_GRACE_MS,
+  type RealtimeAsrSessionRecord,
+} from '../../../../utils/asrRealtimeSessionStore'
+import { releaseConsumedCredits } from '../../../../utils/creditsStore'
 import { resolveSellableCreditPricingRule } from '../../../../utils/creditPricingStore'
+
+async function finishSessionRefund(
+  event: Parameters<typeof releaseConsumedCredits>[0],
+  session: RealtimeAsrSessionRecord,
+  chargedCredits: number,
+  meta: Record<string, unknown>,
+): Promise<number> {
+  if (session.creditsReleasedAt)
+    return Math.max(0, session.reservedCredits - chargedCredits)
+
+  const refundCredits = Math.max(0, session.reservedCredits - chargedCredits)
+  if (refundCredits > 0) {
+    await releaseConsumedCredits(
+      event,
+      session.userId,
+      refundCredits,
+      'asr-realtime-reservation-release',
+      meta,
+      {
+        idempotencyKey: `asr-rt-release:${session.id}:${chargedCredits}`,
+        reservationLedgerId: session.reservationLedgerId,
+      },
+    )
+  }
+  await markRealtimeAsrSessionCreditsReleased(event, session.id)
+  return refundCredits
+}
 
 export default defineEventHandler(async (event) => {
   const { userId } = await requireAppAuth(event)
@@ -20,42 +55,106 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: 'INVALID_USAGE_PARAMETERS' })
   }
 
-  const durationSeconds = Math.max(0, Math.ceil(durationMs / 1000))
+  const session = await getRealtimeAsrSession(event, userId, sessionId)
+  if (!session) {
+    throw createError({ statusCode: 404, statusMessage: 'ASR_SESSION_NOT_FOUND' })
+  }
+
+  if (session.status === 'released') {
+    throw createError({ statusCode: 409, statusMessage: 'ASR_SESSION_CLOSED' })
+  }
+
+  if (session.status === 'settled') {
+    const settledCharge = session.chargedCredits ?? session.reservedCredits
+    const refunded = await finishSessionRefund(event, session, settledCharge, {
+      sessionId,
+      requestId,
+      chargedCredits: settledCharge,
+      reservedCredits: session.reservedCredits,
+    })
+    return {
+      settled: true,
+      creditsCharged: settledCharge,
+      creditsRefunded: refunded,
+      ledgerId: session.reservationLedgerId,
+    }
+  }
+
+  const expiresAtMs = Date.parse(session.expiresAt)
+  if (session.status === 'expired' || (Number.isFinite(expiresAtMs) && Date.now() > expiresAtMs + REALTIME_ASR_SETTLE_GRACE_MS)) {
+    if (session.status === 'active') {
+      await markRealtimeAsrSessionExpired(event, userId, sessionId)
+    }
+    return {
+      settled: true,
+      creditsCharged: session.reservedCredits,
+      creditsRefunded: 0,
+      ledgerId: session.reservationLedgerId,
+    }
+  }
+
+  const createdAtMs = Date.parse(session.createdAt)
+  const elapsedSeconds = Number.isFinite(createdAtMs)
+    ? Math.max(0, Math.min(session.ttlSeconds, Math.floor((Date.now() - createdAtMs) / 1000)))
+    : session.ttlSeconds
+  const reportedSeconds = Math.min(session.ttlSeconds, Math.max(0, Math.ceil(durationMs / 1000)))
+  // Enforce a server-side wall-clock floor so a client cannot hold a token for minutes and report 0ms.
+  const effectiveDurationSeconds = Math.max(reportedSeconds, elapsedSeconds)
   const units = Number.isFinite(transcriptUnits) && transcriptUnits > 0 ? Math.ceil(transcriptUnits) : 0
 
-  const pricing = await resolveSellableCreditPricingRule(event, 'audio.stt')
+  const pricing = session.pricing ?? await resolveSellableCreditPricingRule(event, 'audio.stt')
   const creditsPerSecond = pricing.creditsPerUnit ?? 4
   const secondaryCreditsPerUnit = pricing.secondaryCreditsPerUnit ?? 1
   const minCredits = pricing.minCredits ?? 1
 
-  const baseCredits = Math.max(
-    durationSeconds * creditsPerSecond,
+  const rawCredits = Math.max(
+    effectiveDurationSeconds * creditsPerSecond,
     units * secondaryCreditsPerUnit,
-    durationMs > 0 ? minCredits : 0
+    (durationMs > 0 || effectiveDurationSeconds > 0 || units > 0) ? minCredits : 0,
   )
+  const chargedCredits = Math.min(session.reservedCredits, Math.max(0, Math.ceil(rawCredits)))
 
-  if (baseCredits <= 0) {
-    return { settled: true, creditsCharged: 0 }
+  const claimed = await claimRealtimeAsrSessionForSettlement(event, userId, sessionId, {
+    chargedCredits,
+    durationMs: Math.round(durationMs),
+    transcriptUnits: units,
+  })
+  if (!claimed) {
+    const current = await getRealtimeAsrSession(event, userId, sessionId)
+    if (!current || current.status === 'released') {
+      throw createError({ statusCode: 409, statusMessage: 'ASR_SESSION_CLOSED' })
+    }
+    const finalCharge = current.chargedCredits ?? current.reservedCredits
+    const refunded = current.status === 'settled'
+      ? await finishSessionRefund(event, current, finalCharge, {
+          sessionId,
+          requestId,
+          chargedCredits: finalCharge,
+          reservedCredits: current.reservedCredits,
+        })
+      : 0
+    return {
+      settled: true,
+      creditsCharged: finalCharge,
+      creditsRefunded: refunded,
+      ledgerId: current.reservationLedgerId,
+    }
   }
 
-  const result = await consumeCredits(
-    event,
-    userId,
-    baseCredits,
-    'asr:qwen-realtime',
-    {
-      sessionId,
-      durationMs,
-      durationSeconds,
-      transcriptUnits: units,
-      requestId,
-    },
-    { idempotencyKey: `asr-settle:${sessionId}` },
-  )
+  const creditsRefunded = await finishSessionRefund(event, claimed, chargedCredits, {
+    sessionId,
+    durationMs,
+    durationSeconds: effectiveDurationSeconds,
+    transcriptUnits: units,
+    requestId,
+    chargedCredits,
+    reservedCredits: claimed.reservedCredits,
+  })
 
   return {
     settled: true,
-    creditsCharged: baseCredits,
-    ledgerId: result.ledgerId,
+    creditsCharged: chargedCredits,
+    creditsRefunded,
+    ledgerId: claimed.reservationLedgerId,
   }
 })

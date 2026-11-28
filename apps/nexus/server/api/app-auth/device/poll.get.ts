@@ -1,6 +1,6 @@
 import { createError, getQuery } from 'h3'
 import { createAppTokenPair } from '../../../utils/auth'
-import { deleteDeviceAuthRequest, getDeviceAuthByDeviceCode, getUserById, isDeviceAuthExpired, logLoginAttempt } from '../../../utils/authStore'
+import { claimApprovedDeviceAuthRequest, deleteDeviceAuthRequest, getDeviceAuthByDeviceCode, getUserById, isDeviceAuthExpired, logLoginAttempt } from '../../../utils/authStore'
 import { normalizeLocaleCode } from '../../../utils/locale'
 
 export default defineEventHandler(async (event) => {
@@ -59,48 +59,65 @@ export default defineEventHandler(async (event) => {
     return { status: 'pending', expiresAt: request.expiresAt }
   }
 
-  const clientType = request.clientType ?? 'external'
-  const tokens = await createAppTokenPair(event, request.userId, {
-    deviceId: request.deviceId,
-    grantType: request.grantType,
+  // Atomically claim the approved request so concurrent polls cannot mint
+  // duplicate token pairs for the same device_code.
+  const claimed = await claimApprovedDeviceAuthRequest(event, deviceCode)
+  if (!claimed || !claimed.userId) {
+    return { status: 'expired' }
+  }
+
+  const clientType = claimed.clientType ?? 'external'
+  const user = await getUserById(event, claimed.userId)
+  if (!user || user.status !== 'active') {
+    await logLoginAttempt(event, {
+      userId: claimed.userId,
+      deviceId: claimed.deviceId,
+      success: false,
+      reason: 'account_inactive',
+      clientType,
+    }).catch(() => {})
+    return {
+      status: 'rejected',
+      reason: 'account_inactive',
+      message: 'Account is disabled.',
+      requestIp: claimed.requestIp ?? null,
+      currentIp: null,
+      rejectedAt: new Date().toISOString(),
+      expiresAt: claimed.expiresAt,
+    }
+  }
+
+  const tokens = await createAppTokenPair(event, claimed.userId, {
+    deviceId: claimed.deviceId,
+    grantType: claimed.grantType,
     deviceMeta: {
-      deviceName: request.deviceName ?? null,
-      platform: request.devicePlatform ?? null,
+      deviceName: claimed.deviceName ?? null,
+      platform: claimed.devicePlatform ?? null,
       clientType,
       reactivateRevoked: true,
     },
   })
-  // Independent statements: one round trip of latency instead of three.
-  const [, , user] = await Promise.all([
-    logLoginAttempt(event, {
-      userId: request.userId,
-      deviceId: request.deviceId,
-      success: true,
-      reason: 'device_auth',
-      clientType,
-    }),
-    deleteDeviceAuthRequest(event, deviceCode),
-    // Optional: once the delete commits this poll is the only way the tokens reach the app, so a failed read
-    // must not fail it. A null profile sends the app to `/me`.
-    getUserById(event, request.userId).catch(() => null),
-  ])
+  await logLoginAttempt(event, {
+    userId: claimed.userId,
+    deviceId: claimed.deviceId,
+    success: true,
+    reason: 'device_auth',
+    clientType,
+  })
   return {
     status: 'approved',
     ...tokens,
-    grantType: request.grantType,
+    grantType: claimed.grantType,
     refreshable: true,
     // The same profile `/api/v1/auth/me` returns, so the app can sign in without another round trip.
-    // Null when the account is not active; the app then asks `/me`, which refuses it.
-    user: user?.status === 'active'
-      ? {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          image: user.image,
-          role: user.role,
-          locale: normalizeLocaleCode(user.locale),
-          emailVerified: Boolean(user.emailVerified),
-        }
-      : null,
+    user: {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      image: user.image,
+      role: user.role,
+      locale: normalizeLocaleCode(user.locale),
+      emailVerified: Boolean(user.emailVerified),
+    },
   }
 })

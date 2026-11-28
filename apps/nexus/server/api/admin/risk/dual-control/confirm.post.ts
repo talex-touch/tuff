@@ -47,13 +47,19 @@ export default defineEventHandler(async (event) => {
     })
   }
 
+  if (!ctx.adminId || !operation.submitterAdminId) {
+    throw createError({
+      statusCode: 403,
+      statusMessage: 'Dual-control operation requires distinct attributed admin identities.',
+    })
+  }
   if (ctx.actorId === operation.submitterActorId) {
     throw createError({
       statusCode: 403,
       statusMessage: 'Submitter cannot confirm own operation.',
     })
   }
-  if (ctx.adminId && operation.submitterAdminId && ctx.adminId === operation.submitterAdminId) {
+  if (ctx.adminId === operation.submitterAdminId) {
     throw createError({
       statusCode: 403,
       statusMessage: 'Submitter cannot confirm own operation.',

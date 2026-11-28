@@ -28,6 +28,12 @@ export default defineEventHandler(async (event) => {
   const payload: RiskModeOverridePayload = { mode, reason }
   const requiresDual = dualControlEnabled(event) && shouldRequireDualControl('risk.mode.override', payload)
   if (requiresDual) {
+    if (!ctx.adminId) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: 'OOB operator identity required for dual-control operation.',
+      })
+    }
     const operation = await createPendingDualControlOperation(event, {
       action: 'risk.mode.override',
       payloadJson: JSON.stringify(payload),

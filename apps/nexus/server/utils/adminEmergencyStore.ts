@@ -1,5 +1,6 @@
 import type { D1Database } from '@cloudflare/workers-types'
-import { createHash, randomUUID } from 'node:crypto'
+import { Buffer } from 'node:buffer'
+import { createHash, randomUUID, timingSafeEqual } from 'node:crypto'
 import type { H3Event } from 'h3'
 import { createError } from 'h3'
 import { useRuntimeConfig } from '#imports'
@@ -339,21 +340,93 @@ export async function incrementEmergencySessionFailures(
   return failCount
 }
 
-export async function revokeAdminEmergencySession(event: H3Event, sessionId: string) {
+function constantTimeStringEqual(left: string, right: string): boolean {
+  const leftBuf = Buffer.from(left, 'utf8')
+  const rightBuf = Buffer.from(right, 'utf8')
+  if (leftBuf.byteLength !== rightBuf.byteLength)
+    return false
+  return timingSafeEqual(leftBuf, rightBuf)
+}
+
+export async function consumeEmergencyVerifyNonce(
+  event: H3Event,
+  sessionId: string,
+  verifyNonce: string,
+): Promise<{ ok: true, session: AdminEmergencySession } | { ok: false, reason: 'not_verified' | 'mismatch' | 'expired' }> {
   const db = requireDb(event)
   await ensureSchema(db)
-  await db
+  await expireOldSessions(db)
+
+  const session = await getAdminEmergencySession(event, sessionId)
+  if (!session || session.status !== 'verified' || !session.adminId || !session.verifyNonce) {
+    return { ok: false, reason: 'not_verified' }
+  }
+  if (Date.parse(session.expiresAt) <= Date.now()) {
+    return { ok: false, reason: 'expired' }
+  }
+  if (!constantTimeStringEqual(session.verifyNonce, verifyNonce)) {
+    return { ok: false, reason: 'mismatch' }
+  }
+
+  const now = nowIso()
+  const result = await db
     .prepare(
       `
     UPDATE ${SESSION_TABLE}
-    SET status = 'revoked',
-        revoked_at = ?2
+    SET verify_nonce = NULL
     WHERE session_id = ?1
-      AND status IN ('init', 'verified');
+      AND status = 'verified'
+      AND verify_nonce = ?2
+      AND expires_at > ?3;
   `,
     )
-    .bind(sessionId, nowIso())
+    .bind(sessionId, verifyNonce, now)
     .run()
+
+  const changes = Number((result as any)?.meta?.changes ?? 0)
+  if (changes !== 1) {
+    return { ok: false, reason: 'mismatch' }
+  }
+
+  return { ok: true, session: { ...session, verifyNonce: null } }
+}
+
+export async function revokeAdminEmergencySession(event: H3Event, sessionId: string) {
+  const db = requireDb(event)
+  await ensureSchema(db)
+  const now = nowIso()
+  const statements = [
+    db
+      .prepare(
+        `
+      UPDATE ${SESSION_TABLE}
+      SET status = 'revoked',
+          verify_nonce = NULL,
+          revoked_at = ?2
+      WHERE session_id = ?1
+        AND status IN ('init', 'verified');
+    `,
+      )
+      .bind(sessionId, now),
+    db
+      .prepare(
+        `
+      UPDATE ${JTI_TABLE}
+      SET used_at = COALESCE(used_at, ?2)
+      WHERE session_id = ?1
+        AND used_at IS NULL;
+    `,
+      )
+      .bind(sessionId, now),
+  ]
+
+  if (typeof db.batch === 'function') {
+    await db.batch(statements)
+  }
+  else {
+    for (const stmt of statements)
+      await stmt.run()
+  }
 }
 
 export async function createEmergencyJti(
@@ -385,7 +458,13 @@ export async function consumeEmergencyJti(event: H3Event, jti: string): Promise<
     SET used_at = ?2
     WHERE jti = ?1
       AND used_at IS NULL
-      AND expires_at > ?2;
+      AND expires_at > ?2
+      AND EXISTS (
+        SELECT 1 FROM ${SESSION_TABLE} s
+        WHERE s.session_id = ${JTI_TABLE}.session_id
+          AND s.status = 'verified'
+          AND s.expires_at > ?2
+      );
   `,
     )
     .bind(jti, now)

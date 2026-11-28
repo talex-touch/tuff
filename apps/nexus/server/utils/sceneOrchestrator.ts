@@ -46,6 +46,7 @@ export type SceneRunMode = 'dry_run' | 'execute'
 export type SceneRunTraceStatus = 'success' | 'skipped' | 'failed'
 export type SceneRunErrorCode =
   | 'SCENE_NOT_FOUND'
+  | 'SCENE_FORBIDDEN'
   | 'SCENE_DISABLED'
   | 'CAPABILITY_UNSUPPORTED'
   | 'PROVIDER_UNAVAILABLE'
@@ -447,11 +448,33 @@ function extractOpenAiResponsesUsage(data: unknown): SceneRunUsage {
   }
 }
 
+function resolveAllowedProviderModels(provider: ProviderRegistryRecord): string[] {
+  const declared = readMetadataStringArray(provider, 'models')
+  const defaultModel = readMetadataString(provider, 'defaultModel')
+  if (defaultModel && !declared.includes(defaultModel))
+    return [...declared, defaultModel]
+  return declared
+}
+
 function resolveOpenAiSceneModel(provider: ProviderRegistryRecord, input: unknown, bindingModel: string | null): string {
+  if (bindingModel)
+    return bindingModel
+
   const record = isRecord(input) ? input : {}
-  const model = bindingModel
-    ?? readString(record.model)
-    ?? readMetadataString(provider, 'defaultModel')
+  const requestedModel = readString(record.model)
+  const allowedModels = resolveAllowedProviderModels(provider)
+
+  if (requestedModel) {
+    if (allowedModels.length === 0 || !allowedModels.includes(requestedModel)) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: 'Requested model is not allowed for this provider.',
+      })
+    }
+    return requestedModel
+  }
+
+  const model = readMetadataString(provider, 'defaultModel')
     ?? readMetadataStringArray(provider, 'models')[0]
   if (!model) {
     throw createError({
@@ -2191,6 +2214,18 @@ export function resolveCapabilitySceneId(capabilityId: string): string {
   return `nexus.intelligence.${capability}`
 }
 
+function assertSceneOwnership(
+  scene: SceneRegistryRecord,
+  ownerId: string | null,
+): void {
+  if (scene.ownerScope === 'user' && (!ownerId || scene.ownerId !== ownerId)) {
+    throw createRunError(403, 'SCENE_FORBIDDEN', 'Scene access is forbidden.')
+  }
+  if (scene.ownerScope === 'workspace') {
+    throw createRunError(403, 'SCENE_FORBIDDEN', 'Scene workspace scope is unresolved.')
+  }
+}
+
 export async function resolveSceneProviderCandidates(
   event: H3Event,
   options: {
@@ -2208,6 +2243,7 @@ export async function resolveSceneProviderCandidates(
   if (!scene || scene.status !== 'enabled') {
     throw createError({ statusCode: 409, statusMessage: 'Scene is unavailable.' })
   }
+  assertSceneOwnership(scene, readOptionalString(options.ownerId, 180))
 
   const capability = toRegistryCapabilityId(toRuntimeCapabilityId(options.capability))
   const trace: SceneRunTraceStep[] = []
@@ -2271,6 +2307,8 @@ export async function runSceneOrchestrator(
   if (!scene) {
     throw createRunError(404, 'SCENE_NOT_FOUND', 'Scene registry entry not found.')
   }
+  const ownerId = readOptionalString(request.ownerId, 180)
+  assertSceneOwnership(scene, ownerId)
   addTrace(trace, 'scene.load', 'success', 'Loaded scene registry entry.', {
     sceneId: scene.id,
     status: scene.status,
@@ -2320,7 +2358,6 @@ export async function runSceneOrchestrator(
 
   const providerCache = new Map<string, ProviderRegistryRecord | null>()
   const requestedProviderId = readOptionalString(request.providerId, 160)
-  const ownerId = readOptionalString(request.ownerId, 180)
 
   for (const capability of requestedCapabilities) {
     const resolvedCandidates = await resolveCandidatesForCapability(event, scene, capability, ownerId, providerCache, trace, fallbackTrail)

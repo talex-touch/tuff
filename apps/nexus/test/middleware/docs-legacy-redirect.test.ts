@@ -105,6 +105,21 @@ describe('docs legacy redirect middleware', () => {
     }
   })
 
+  it('redirects legacy motion-toggle slugs to motion-button with 308', () => {
+    const cases: Array<[string, string]> = [
+      ['/en/docs/dev/components/motion-toggle', '/tuffex/en/motion-button'],
+      ['/zh/docs/dev/components/motion-toggle', '/tuffex/zh/motion-button'],
+      ['/docs/dev/components/motion-toggle?tab=api', '/tuffex/en/motion-button?tab=api'],
+      ['/en/docs/dev/components/motion-toggle.md', '/tuffex/en/motion-button.md'],
+      ['/tuffex/en/motion-toggle', '/tuffex/en/motion-button'],
+      ['/tuffex/zh/motion-toggle', '/tuffex/zh/motion-button'],
+    ]
+
+    for (const [from, location] of cases) {
+      expect(handler(createRequest(from)), from).toEqual({ location, status: 308 })
+    }
+  })
+
   it('leaves already-localized and non-docs paths alone', () => {
     expect(handler(createRequest('/en/docs/dev/api/box.md'))).toBeUndefined()
     expect(handler(createRequest('/pricing'))).toBeUndefined()

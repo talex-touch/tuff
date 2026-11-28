@@ -2,7 +2,11 @@ import { createError, send, sendStream, setResponseHeader } from 'h3'
 import { getOptionalAuth } from '../../../utils/auth'
 import { openPluginPackage } from '../../../utils/pluginPackageStorage'
 import { getUserById } from '../../../utils/authStore'
-import { buildPluginPackageGovernanceResourceId, findVersionByPackageKey } from '../../../utils/pluginsStore'
+import {
+  buildPluginPackageGovernanceResourceId,
+  findVersionByPackageKey,
+  getPluginVersionEligibility,
+} from '../../../utils/pluginsStore'
 import { resolvePluginStoreAudience } from '../../../utils/pluginStoreAccess'
 
 export default defineEventHandler(async (event) => {
@@ -26,24 +30,20 @@ export default defineEventHandler(async (event) => {
 
   if (optionalAuth) {
     viewerId = optionalAuth.userId
-    const user = await getUserById(event, optionalAuth.userId)
-    viewerIsAdmin = user?.role === 'admin'
+    const user = optionalAuth.user ?? await getUserById(event, optionalAuth.userId)
+    viewerIsAdmin = Boolean(user && user.status === 'active' && user.role === 'admin')
   }
 
-  const canAccessBeta = () => {
-    if (audience === 'beta')
-      return true
-    if (version.channel !== 'BETA')
-      return true
-    if (viewerIsAdmin)
-      return true
-    if (viewerId === plugin.userId)
-      return true
-    return false
-  }
+  if (!viewerIsAdmin) {
+    if (version.artifactState === 'quarantined') {
+      throw createError({ statusCode: 403, statusMessage: 'Plugin artifact is quarantined.' })
+    }
 
-  if (!canAccessBeta()) {
-    throw createError({ statusCode: 403, statusMessage: 'You are not allowed to download this package.' })
+    const effectiveAudience = viewerId && viewerId === plugin.userId ? 'owner' : audience
+    const eligibility = getPluginVersionEligibility(plugin, version, effectiveAudience)
+    if (!eligibility.eligible) {
+      throw createError({ statusCode: 403, statusMessage: 'You are not allowed to download this package.' })
+    }
   }
 
   // Streamed: a package (up to 30 MB) is no longer read whole into the isolate on its way through.

@@ -2,7 +2,8 @@ import { getHeader, readBody } from 'h3'
 import type { H3Event } from 'h3'
 import type { paths } from '../../../../types/sync-api'
 import { requireAppAuth } from '../../../utils/auth'
-import { consumeLoginToken, evaluateRecoveryRateLimit, getDevice, listPasskeys, readDeviceId, recordDeviceAuthAudit } from '../../../utils/authStore'
+import { consumeLoginToken, evaluateRecoveryRateLimit, getDevice, listPasskeys, recordDeviceAuthAudit } from '../../../utils/authStore'
+import { resolveBoundAppDeviceId } from '../../../utils/syncDeviceAuth'
 import { createSyncError } from '../../../utils/syncErrors'
 import { recoverKeyrings } from '../../../utils/syncStoreV1'
 
@@ -28,10 +29,8 @@ async function requireStepUpIfPasskeyEnabled(event: H3Event, userId: string, dev
 }
 
 export default defineEventHandler(async (event) => {
-  const { userId } = await requireAppAuth(event)
-  const deviceId = readDeviceId(event)
-  if (!deviceId)
-    throw createSyncError('SYNC_INVALID_PAYLOAD', 400, 'Missing device id')
+  const { userId, deviceId: tokenDeviceId } = await requireAppAuth(event)
+  const deviceId = resolveBoundAppDeviceId(event, tokenDeviceId)
 
   await requireStepUpIfPasskeyEnabled(event, userId, deviceId)
 

@@ -57,6 +57,12 @@ export default defineEventHandler(async (event) => {
   const payload = parsePayload(body)
   const requiresDual = dualControlEnabled(event) && shouldRequireDualControl('risk.case.review', payload)
   if (requiresDual) {
+    if (!ctx.adminId) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: 'OOB operator identity required for dual-control operation.',
+      })
+    }
     const operation = await createPendingDualControlOperation(event, {
       action: 'risk.case.review',
       payloadJson: JSON.stringify(payload),

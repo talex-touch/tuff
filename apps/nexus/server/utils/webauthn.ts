@@ -2,6 +2,8 @@ import { Buffer } from 'node:buffer'
 import crypto from 'uncrypto'
 
 const CHALLENGE_BYTES = 32
+const MAX_CBOR_DEPTH = 32
+const MAX_CBOR_ITEMS = 1024
 const FLAG_UP = 0x01
 const FLAG_UV = 0x04
 const FLAG_AT = 0x40
@@ -102,23 +104,32 @@ interface CborResult<T = any> {
   offset: number
 }
 
-function decodeCbor(data: Uint8Array, offset = 0): CborResult {
+function decodeCbor(data: Uint8Array, offset = 0, depth = 0): CborResult {
+  if (depth > MAX_CBOR_DEPTH)
+    throw new Error('CBOR: max nesting depth exceeded')
   if (offset >= data.length)
     throw new Error('CBOR: unexpected end')
   const initial = data[offset++] ?? 0
   const major = initial >> 5
-  let additional = initial & 0x1f
+  const additional = initial & 0x1f
   const readLength = () => {
     if (additional < 24)
       return additional
-    if (additional === 24)
+    if (additional === 24) {
+      if (offset + 1 > data.length)
+        throw new Error('CBOR: unexpected end')
       return data[offset++] ?? 0
+    }
     if (additional === 25) {
+      if (offset + 2 > data.length)
+        throw new Error('CBOR: unexpected end')
       const value = ((data[offset] ?? 0) << 8) | (data[offset + 1] ?? 0)
       offset += 2
       return value
     }
     if (additional === 26) {
+      if (offset + 4 > data.length)
+        throw new Error('CBOR: unexpected end')
       const value = ((data[offset] ?? 0) << 24)
         | ((data[offset + 1] ?? 0) << 16)
         | ((data[offset + 2] ?? 0) << 8)
@@ -140,21 +151,27 @@ function decodeCbor(data: Uint8Array, offset = 0): CborResult {
     }
     case 2: {
       const length = readLength()
+      if (offset + length > data.length)
+        throw new Error('CBOR: unexpected end')
       const value = data.slice(offset, offset + length)
       offset += length
       return { value, offset }
     }
     case 3: {
       const length = readLength()
+      if (offset + length > data.length)
+        throw new Error('CBOR: unexpected end')
       const value = Buffer.from(data.slice(offset, offset + length)).toString('utf8')
       offset += length
       return { value, offset }
     }
     case 4: {
       const length = readLength()
+      if (length > MAX_CBOR_ITEMS)
+        throw new Error('CBOR: collection too large')
       const items = []
       for (let i = 0; i < length; i++) {
-        const res = decodeCbor(data, offset)
+        const res = decodeCbor(data, offset, depth + 1)
         items.push(res.value)
         offset = res.offset
       }
@@ -162,11 +179,13 @@ function decodeCbor(data: Uint8Array, offset = 0): CborResult {
     }
     case 5: {
       const length = readLength()
+      if (length > MAX_CBOR_ITEMS)
+        throw new Error('CBOR: collection too large')
       const map = new Map<any, any>()
       for (let i = 0; i < length; i++) {
-        const keyRes = decodeCbor(data, offset)
+        const keyRes = decodeCbor(data, offset, depth + 1)
         offset = keyRes.offset
-        const valueRes = decodeCbor(data, offset)
+        const valueRes = decodeCbor(data, offset, depth + 1)
         offset = valueRes.offset
         map.set(keyRes.value, valueRes.value)
       }
@@ -187,10 +206,10 @@ function parseAuthenticatorData(authData: Uint8Array) {
     throw new Error('Invalid authenticator data.')
   const rpIdHash = authData.slice(0, 32)
   const flags = authData[32] ?? 0
-  const counter = ((authData[33] ?? 0) << 24)
+  const counter = (((authData[33] ?? 0) << 24)
     | ((authData[34] ?? 0) << 16)
     | ((authData[35] ?? 0) << 8)
-    | (authData[36] ?? 0)
+    | (authData[36] ?? 0)) >>> 0
   let offset = 37
   let credentialId: Uint8Array | null = null
   let cosePublicKey: Uint8Array | null = null
@@ -316,11 +335,11 @@ export async function verifyAssertionResponse(params: {
   }
   if (!verified)
     throw new Error('Invalid signature.')
-  const currentCounter = parsed.counter
-  const previousCounter = params.previousCounter
-  const shouldCheckCounter = currentCounter > 0 && previousCounter > 0
-  if (shouldCheckCounter && currentCounter <= previousCounter)
+  const currentCounter = parsed.counter >>> 0
+  const previousCounter = params.previousCounter >>> 0
+  // Per WebAuthn Level 2 §7.2: if either stored or returned signCount is non-zero,
+  // a non-increasing counter (including a reset to 0) indicates a cloned authenticator.
+  if ((currentCounter > 0 || previousCounter > 0) && currentCounter <= previousCounter)
     throw new Error('Authenticator counter did not increase.')
-  const nextCounter = currentCounter === 0 && previousCounter > 0 ? previousCounter : currentCounter
-  return { counter: nextCounter, userVerified: Boolean(parsed.flags & FLAG_UV) }
+  return { counter: currentCounter, userVerified: Boolean(parsed.flags & FLAG_UV) }
 }

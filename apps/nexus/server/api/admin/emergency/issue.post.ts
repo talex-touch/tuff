@@ -2,14 +2,15 @@ import { randomUUID } from 'node:crypto'
 import { createError, readBody } from 'h3'
 import { useRuntimeConfig } from '#imports'
 import {
+  consumeEmergencyVerifyNonce,
   createEmergencyJti,
-  getAdminEmergencySession,
   hashIpValue,
   recordEmergencyAttempt,
 } from '../../../utils/adminEmergencyStore'
 import type { AdminRiskScope } from '../../../utils/adminEmergencyToken'
 import { signAdminEmergencyToken } from '../../../utils/adminEmergencyToken'
 import { enforceAdminRateLimit } from '../../../utils/adminRateLimitStore'
+import { getUserById } from '../../../utils/authStore'
 import { resolveRequestIp } from '../../../utils/ipSecurityStore'
 
 const TOKEN_TTL_SECONDS = 10 * 60
@@ -63,25 +64,28 @@ export default defineEventHandler(async (event) => {
     windowMs: 10 * 60_000,
   })
 
-  const session = await getAdminEmergencySession(event, sessionId)
-  if (!session || session.status !== 'verified' || !session.adminId) {
+  const consumed = await consumeEmergencyVerifyNonce(event, sessionId, verifyNonce)
+  if (!consumed.ok) {
+    if (consumed.reason === 'mismatch') {
+      throw createError({
+        statusCode: 401,
+        statusMessage: 'Emergency session verification mismatch.',
+      })
+    }
     throw createError({
       statusCode: 400,
-      statusMessage: 'Emergency session not verified.',
+      statusMessage: consumed.reason === 'expired'
+        ? 'Emergency session expired.'
+        : 'Emergency session not verified.',
     })
   }
+  const { session } = consumed
 
-  if (session.verifyNonce !== verifyNonce) {
+  const adminUser = session.adminId ? await getUserById(event, session.adminId) : null
+  if (!adminUser || adminUser.status !== 'active' || adminUser.role !== 'admin') {
     throw createError({
-      statusCode: 401,
-      statusMessage: 'Emergency session verification mismatch.',
-    })
-  }
-
-  if (Date.parse(session.expiresAt) <= Date.now()) {
-    throw createError({
-      statusCode: 400,
-      statusMessage: 'Emergency session expired.',
+      statusCode: 403,
+      statusMessage: 'Admin account is no longer active.',
     })
   }
 
@@ -93,7 +97,7 @@ export default defineEventHandler(async (event) => {
     : 'v1'
 
   const token = signAdminEmergencyToken(event, {
-    admin_id: session.adminId,
+    admin_id: adminUser.id,
     scope: scopeRequest,
     dfp_hash: session.dfpHash,
     nonce: randomUUID(),

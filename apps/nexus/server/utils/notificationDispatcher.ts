@@ -411,25 +411,25 @@ function hasBotTokenCredential(credential: NotificationCredentialPayload): crede
   return 'token' in credential && typeof credential.token === 'string' && credential.token.length > 0
 }
 
-function readHttpsRelayEndpoint(config: PlatformGovernanceConfig): string | null {
+function readHttpsRelayEndpoint(config: PlatformGovernanceConfig): {
+  url: string | null
+  rejected: NotificationSendResult | null
+} {
   const endpoint = readConfigString(config, 'endpoint', 2048)
     ?? readConfigString(config, 'relayUrl', 2048)
     ?? readConfigString(config, 'url', 2048)
   if (!endpoint)
-    return null
+    return { url: null, rejected: null }
 
-  try {
-    const url = new URL(endpoint)
-    if (url.protocol === 'https:')
-      return url.toString()
-    if (url.protocol === 'http:' && (url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname === '::1'))
-      return url.toString()
-  }
-  catch {
-    return null
+  const decision = evaluateWebhookUrl(endpoint)
+  if (!decision.allowed) {
+    return {
+      url: null,
+      rejected: createSendResult(`webhook-url-rejected:${decision.reason}`, null),
+    }
   }
 
-  return null
+  return { url: decision.url, rejected: null }
 }
 
 function resolveBotWebhookUrl(adapter: string, credential: NotificationCredentialPayload): string | null {
@@ -531,9 +531,13 @@ async function sendSendgridNotification(
   if (!from)
     return createSendResult('sender-missing')
 
+  const relay = readHttpsRelayEndpoint(delivery.config)
+  if (relay.rejected)
+    return relay.rejected
+
   const response = await networkClient.request({
     method: 'POST',
-    url: readHttpsRelayEndpoint(delivery.config) ?? 'https://api.sendgrid.com/v3/mail/send',
+    url: relay.url ?? 'https://api.sendgrid.com/v3/mail/send',
     timeoutMs: readConfigNumber(delivery.config, 'timeoutMs', 10000, 1000, 30000),
     validateStatus: Array.from({ length: 500 }, (_, index) => index + 100),
     headers: {
@@ -584,7 +588,10 @@ async function sendMailgunNotification(
   const baseUrl = readProviderRegion(delivery.config) === 'eu'
     ? 'https://api.eu.mailgun.net'
     : 'https://api.mailgun.net'
-  const endpoint = readHttpsRelayEndpoint(delivery.config)
+  const relay = readHttpsRelayEndpoint(delivery.config)
+  if (relay.rejected)
+    return relay.rejected
+  const endpoint = relay.url
     ?? `${baseUrl}/v3/${encodeURIComponent(domain)}/messages`
   const body = new URLSearchParams()
   body.set('from', from)
@@ -628,9 +635,13 @@ async function sendPostmarkNotification(
   if (!from)
     return createSendResult('sender-missing')
 
+  const relay = readHttpsRelayEndpoint(delivery.config)
+  if (relay.rejected)
+    return relay.rejected
+
   const response = await networkClient.request({
     method: 'POST',
-    url: readHttpsRelayEndpoint(delivery.config) ?? 'https://api.postmarkapp.com/email',
+    url: relay.url ?? 'https://api.postmarkapp.com/email',
     timeoutMs: readConfigNumber(delivery.config, 'timeoutMs', 10000, 1000, 30000),
     validateStatus: Array.from({ length: 500 }, (_, index) => index + 100),
     headers: {
@@ -747,7 +758,10 @@ async function sendSmtpRelayNotification(
   if (!hasSmtpCredential(credential))
     return createSendResult('credential-type-mismatch')
 
-  const endpoint = readHttpsRelayEndpoint(delivery.config)
+  const relay = readHttpsRelayEndpoint(delivery.config)
+  if (relay.rejected)
+    return relay.rejected
+  const endpoint = relay.url
   if (!endpoint)
     return createSendResult('relay-endpoint-missing')
 
@@ -851,6 +865,10 @@ async function sendBotWebhookNotification(
   const url = resolveBotWebhookUrl(delivery.adapter, credential)
   if (!url)
     return createSendResult('credential-type-mismatch')
+
+  const rejected = assertDispatchableWebhookUrl(url)
+  if (rejected)
+    return rejected
 
   const response = await networkClient.request({
     method: 'POST',

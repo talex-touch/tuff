@@ -12,6 +12,14 @@ const ACTIVATION_LOGS_TABLE = 'activation_logs'
 /** Lowest tier first; `PLAN_CATALOG` holds what each includes. */
 export type SubscriptionPlan = 'FREE' | 'PLUS' | 'PRO' | 'TEAM' | 'ENTERPRISE'
 
+const PLAN_TIER_RANK: Record<SubscriptionPlan, number> = {
+  FREE: 0,
+  PLUS: 1,
+  PRO: 2,
+  TEAM: 3,
+  ENTERPRISE: 4,
+}
+
 interface D1ActivationCodeRow {
   id: string
   code: string
@@ -74,6 +82,7 @@ const SUBSCRIPTION_SCHEMA = defineD1Schema('subscriptions', {
         expires_at TEXT NOT NULL
       )`,
     `CREATE INDEX IF NOT EXISTS idx_activation_user ON ${ACTIVATION_LOGS_TABLE}(user_id)`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_activation_logs_code_user ON ${ACTIVATION_LOGS_TABLE}(code_id, user_id)`,
   ],
 })
 
@@ -250,39 +259,81 @@ export async function activateCode(
     throw createError({ statusCode: 400, statusMessage: 'Code has reached max uses' })
   }
 
-  // Calculate subscription expiry
-  const now = new Date()
-  const expiresAt = new Date(now.getTime() + activationCode.durationDays * 24 * 60 * 60 * 1000).toISOString()
+  const [existingUse, currentSubscription] = await Promise.all([
+    db.prepare(`
+      SELECT id FROM ${ACTIVATION_LOGS_TABLE}
+      WHERE code_id = ?1 AND user_id = ?2
+      LIMIT 1;
+    `).bind(activationCode.id, userId).first<{ id: string }>(),
+    getUserSubscription(event, userId),
+  ])
 
-  // Atomically claim one use of the code via compare-and-swap on the `uses`
-  // count we read above. A concurrent activation that already incremented
-  // `uses` makes this match zero rows, so a single-use code can't be redeemed
-  // twice under D1's concurrent execution.
-  const newUses = activationCode.uses + 1
-  const newStatus = newUses >= activationCode.maxUses ? 'exhausted' : 'active'
-
-  const claim = await db.prepare(`
-    UPDATE ${ACTIVATION_CODES_TABLE}
-    SET uses = ?1, status = ?2
-    WHERE id = ?3 AND status = 'active' AND uses = ?4;
-  `).bind(newUses, newStatus, activationCode.id, activationCode.uses).run()
-
-  if (Number((claim as any)?.meta?.changes ?? 0) < 1) {
-    throw createError({ statusCode: 409, statusMessage: 'Code was already used' })
+  if (existingUse) {
+    throw createError({ statusCode: 409, statusMessage: 'You have already redeemed this activation code' })
   }
 
-  // Log activation only after the code use is successfully claimed.
-  await db.prepare(`
-    INSERT INTO ${ACTIVATION_LOGS_TABLE} (id, code_id, user_id, activated_at, plan, expires_at)
-    VALUES (?1, ?2, ?3, ?4, ?5, ?6);
-  `).bind(
-    randomUUID(),
-    activationCode.id,
-    userId,
-    now.toISOString(),
-    activationCode.plan,
-    expiresAt,
-  ).run()
+  if (
+    currentSubscription.isActive
+    && (PLAN_TIER_RANK[currentSubscription.plan] ?? 0) > (PLAN_TIER_RANK[activationCode.plan] ?? 0)
+  ) {
+    throw createError({
+      statusCode: 409,
+      statusMessage: 'Cannot activate a lower-tier code while a higher-tier subscription is active',
+    })
+  }
+
+  // Calculate subscription expiry: stack onto remaining duration for same-tier active subscriptions.
+  const now = new Date()
+  const currentExpiresMs = currentSubscription.isActive
+    && currentSubscription.plan === activationCode.plan
+    && currentSubscription.expiresAt
+    ? Date.parse(currentSubscription.expiresAt)
+    : Number.NaN
+  const baseMs = Number.isFinite(currentExpiresMs) && currentExpiresMs > now.getTime()
+    ? currentExpiresMs
+    : now.getTime()
+  const expiresAt = new Date(baseMs + activationCode.durationDays * 24 * 60 * 60 * 1000).toISOString()
+
+  // Atomically log per-user redemption and increment code uses in a single D1 batch transaction.
+  // `idx_activation_logs_code_user` prevents the same user from exhausting a multi-use code,
+  // while the compare-and-swap on `uses` prevents concurrent over-redemption.
+  const newUses = activationCode.uses + 1
+  const newStatus = newUses >= activationCode.maxUses ? 'exhausted' : 'active'
+  const logId = randomUUID()
+  const activatedAt = now.toISOString()
+
+  let batchResults: Awaited<ReturnType<D1Database['batch']>>
+  try {
+    batchResults = await db.batch([
+      db.prepare(`
+        INSERT INTO ${ACTIVATION_LOGS_TABLE} (id, code_id, user_id, activated_at, plan, expires_at)
+        SELECT ?1, ?2, ?3, ?4, ?5, ?6
+        WHERE EXISTS (
+          SELECT 1 FROM ${ACTIVATION_CODES_TABLE}
+          WHERE id = ?2 AND status = 'active' AND uses = ?7 AND uses < max_uses
+        );
+      `).bind(logId, activationCode.id, userId, activatedAt, activationCode.plan, expiresAt, activationCode.uses),
+      db.prepare(`
+        UPDATE ${ACTIVATION_CODES_TABLE}
+        SET uses = ?1, status = ?2
+        WHERE id = ?3 AND status = 'active' AND uses = ?4
+          AND EXISTS (SELECT 1 FROM ${ACTIVATION_LOGS_TABLE} WHERE id = ?5);
+      `).bind(newUses, newStatus, activationCode.id, activationCode.uses, logId),
+    ])
+  }
+  catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error)
+    if (/UNIQUE constraint failed/i.test(message)) {
+      throw createError({ statusCode: 409, statusMessage: 'You have already redeemed this activation code' })
+    }
+    throw error
+  }
+
+  const inserted = Number((batchResults[0] as any)?.meta?.changes ?? 0)
+  const claimed = Number((batchResults[1] as any)?.meta?.changes ?? 0)
+  if (inserted < 1 || claimed < 1) {
+    throw createError({ statusCode: 409, statusMessage: 'Code was already used' })
+  }
 
   return {
     plan: activationCode.plan,
@@ -321,15 +372,29 @@ interface LatestActivationRow {
   expires_at: string
 }
 
-/** The statement that reads a user's latest plan activation; `mapLatestActivation` reads its row. */
-export function prepareLatestActivationQuery(db: D1Database, userId: string): D1PreparedStatement {
+/**
+ * The statement that reads a user's effective plan activation; `mapLatestActivation` reads its row.
+ * Prefers active (unexpired) activations ranked by highest plan tier, then longest expiry, so a
+ * shorter or lower-tier activation can never downgrade an active higher-tier subscription.
+ */
+export function prepareLatestActivationQuery(db: D1Database, userId: string, nowIso = new Date().toISOString()): D1PreparedStatement {
   return db.prepare(`
     SELECT plan, activated_at, expires_at
     FROM ${ACTIVATION_LOGS_TABLE}
     WHERE user_id = ?1
-    ORDER BY activated_at DESC
+    ORDER BY
+      CASE WHEN expires_at IS NULL OR expires_at > ?2 THEN 1 ELSE 0 END DESC,
+      CASE plan
+        WHEN 'ENTERPRISE' THEN 4
+        WHEN 'TEAM' THEN 3
+        WHEN 'PRO' THEN 2
+        WHEN 'PLUS' THEN 1
+        ELSE 0
+      END DESC,
+      expires_at DESC,
+      activated_at DESC
     LIMIT 1;
-  `).bind(userId)
+  `).bind(userId, nowIso)
 }
 
 export function mapLatestActivation(row: LatestActivationRow | null | undefined): UserSubscription {

@@ -1,8 +1,10 @@
 import type { H3Event } from 'h3'
+import { Buffer } from 'node:buffer'
+import { timingSafeEqual } from 'node:crypto'
 import { createError, getHeader } from 'h3'
 import { useRuntimeConfig } from '#imports'
 import { requireAdmin } from './auth'
-import { consumeLoginToken } from './authStore'
+import { consumeLoginToken, getUserByEmail, getUserById } from './authStore'
 import { appendAdminBreakglassAudit, type AdminControlChannel } from './adminBreakglassAuditStore'
 import { consumeEmergencyJti, hashDeviceFingerprint, hashIpValue } from './adminEmergencyStore'
 import type { AdminRiskScope } from './adminEmergencyToken'
@@ -119,6 +121,46 @@ async function buildAdminActorId(event: H3Event, channel: AdminControlChannel, a
   return `${channel}:${adminId}:${ipHash}`
 }
 
+function constantTimeStringEqual(left: string, right: string): boolean {
+  const leftBuf = Buffer.from(left, 'utf8')
+  const rightBuf = Buffer.from(right, 'utf8')
+  if (leftBuf.byteLength !== rightBuf.byteLength)
+    return false
+  return timingSafeEqual(leftBuf, rightBuf)
+}
+
+function normalizeControlPlanePath(rawPath: string): string {
+  if (!rawPath)
+    return ''
+  const [rawPathname = ''] = rawPath.split('?')
+  let pathname = rawPathname
+  try {
+    pathname = decodeURIComponent(rawPathname)
+  }
+  catch {
+    // Keep raw pathname if malformed percent-encoding.
+  }
+  const segments: string[] = []
+  for (const segment of pathname.split('/')) {
+    if (!segment || segment === '.')
+      continue
+    if (segment === '..') {
+      segments.pop()
+      continue
+    }
+    segments.push(segment)
+  }
+  return `/${segments.join('/')}`
+}
+
+function resolveExpectedEmergencyIssuerVersion(event: H3Event): string {
+  const config = useRuntimeConfig(event)
+  const configured = typeof config.adminControl?.emergencyIssuerVersion === 'string'
+    ? config.adminControl.emergencyIssuerVersion.trim()
+    : ''
+  return configured || 'v1'
+}
+
 async function tryEmergencyChannel(
   event: H3Event,
   requiredScope: AdminRiskScope | undefined,
@@ -162,6 +204,22 @@ async function tryEmergencyChannel(
   ensureAllowedChannel('B', options)
   ensureScope(requiredScope, claims.scope)
 
+  const expectedIv = resolveExpectedEmergencyIssuerVersion(event)
+  if (!constantTimeStringEqual(claims.iv, expectedIv)) {
+    throw createError({
+      statusCode: 401,
+      statusMessage: 'Emergency token issuer version mismatch.',
+    })
+  }
+
+  const adminUser = await getUserById(event, claims.admin_id)
+  if (!adminUser || adminUser.status !== 'active' || adminUser.role !== 'admin') {
+    throw createError({
+      statusCode: 401,
+      statusMessage: 'Admin account is no longer active.',
+    })
+  }
+
   const deviceFingerprint = (getHeader(event, 'x-device-fingerprint') || '').trim()
   if (!deviceFingerprint) {
     throw createError({
@@ -170,7 +228,7 @@ async function tryEmergencyChannel(
     })
   }
   const currentHash = hashDeviceFingerprint(event, deviceFingerprint)
-  if (currentHash !== claims.dfp_hash) {
+  if (!constantTimeStringEqual(currentHash, claims.dfp_hash)) {
     throw createError({
       statusCode: 401,
       statusMessage: 'Emergency token device mismatch.',
@@ -212,6 +270,34 @@ async function tryEmergencyChannel(
   return context
 }
 
+async function resolveOobOperatorAdminId(event: H3Event): Promise<string | null> {
+  const operatorId = (getHeader(event, 'x-admin-operator-id') || '').trim()
+  if (operatorId) {
+    const user = await getUserById(event, operatorId)
+    if (!user || user.status !== 'active' || user.role !== 'admin') {
+      throw createError({
+        statusCode: 403,
+        statusMessage: 'Invalid OOB operator admin identity.',
+      })
+    }
+    return user.id
+  }
+
+  const accessEmail = (getHeader(event, 'cf-access-authenticated-user-email') || '').trim()
+  if (accessEmail) {
+    const user = await getUserByEmail(event, accessEmail)
+    if (!user || user.status !== 'active' || user.role !== 'admin') {
+      throw createError({
+        statusCode: 403,
+        statusMessage: 'Invalid OOB operator admin identity.',
+      })
+    }
+    return user.id
+  }
+
+  return null
+}
+
 async function requireOobChannel(
   event: H3Event,
   requiredScope: AdminRiskScope | undefined,
@@ -219,9 +305,10 @@ async function requireOobChannel(
 ): Promise<AdminControlContext> {
   ensureAllowedChannel('C', options)
   const oob = requireAdminOobAuth(event)
+  const operatorAdminId = await resolveOobOperatorAdminId(event)
   const scope = requiredScope ? [requiredScope] : [...ALL_RISK_SCOPES]
   const context: AdminControlContext = {
-    adminId: null,
+    adminId: operatorAdminId,
     actorId: oob.actorId,
     channel: 'C',
     scope,
@@ -229,12 +316,12 @@ async function requireOobChannel(
   }
 
   if (options?.applyWriteRateLimit !== false) {
-    await enforceAdminRiskWriteRateLimit(event, null, context.actorId)
+    await enforceAdminRiskWriteRateLimit(event, operatorAdminId, context.actorId)
   }
 
   await appendAdminBreakglassAudit(event, {
     actorId: context.actorId,
-    actorAdminId: null,
+    actorAdminId: operatorAdminId,
     channel: context.channel,
     action: options?.auditAction || 'admin.control.auth',
     scope: requiredScope ?? null,
@@ -300,7 +387,7 @@ export async function requireAdminControlPlaneAuth(
   requiredScope?: AdminRiskScope,
   options?: GuardOptions,
 ): Promise<AdminControlContext> {
-  const path = event.path || event.node.req.url || ''
+  const path = normalizeControlPlanePath(event.path || event.node.req.url || '')
   const shouldUseOob = path.startsWith('/api/admin/oob/risk/')
 
   if (isPreserveInExtremeEnabled(event) && await isExtremeMode(event)) {

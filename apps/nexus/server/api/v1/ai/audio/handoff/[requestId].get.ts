@@ -1,4 +1,4 @@
-import { createError, getQuery, getRouterParam, setResponseHeader } from 'h3'
+import { createError, getQuery, getRouterParam, send, setResponseHeader } from 'h3'
 import { getAsrHandoffObject } from '../../../../../utils/asrTranscriptionStore'
 
 export default defineEventHandler(async (event) => {
@@ -16,4 +16,5 @@ export default defineEventHandler(async (event) => {
   setResponseHeader(event, 'Cache-Control', 'private, no-store, max-age=0')
   setResponseHeader(event, 'X-Content-Type-Options', 'nosniff')
   setResponseHeader(event, 'Content-Length', handoff.data.byteLength)
+  return send(event, handoff.data)
 })

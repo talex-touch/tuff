@@ -10,15 +10,24 @@ const TUFFEX_EXACT_REDIRECTS: Readonly<Record<string, string>> = {
   '/docs/dev/concepts': '/tuffex/en/concepts',
   '/en/docs/dev/getting-started/tuffex-composition': '/tuffex/en/composition',
   '/zh/docs/dev/getting-started/tuffex-composition': '/tuffex/zh/composition',
+  '/tuffex/en/motion-toggle': '/tuffex/en/motion-button',
+  '/tuffex/zh/motion-toggle': '/tuffex/zh/motion-button',
+  '/tuffex/motion-toggle': '/tuffex/en/motion-button',
   '/llms.txt': '/tuffex/llms.txt',
 }
 
-const TUFFEX_PREFIX_REDIRECTS: ReadonlyArray<{ prefix: string, targetPrefix: string }> = [
-  { prefix: '/en/docs/dev/components/', targetPrefix: '/tuffex/en/' },
-  { prefix: '/zh/docs/dev/components/', targetPrefix: '/tuffex/zh/' },
+const TUFFEX_COMPONENT_SLUG_REDIRECTS: Readonly<Record<string, string>> = {
+  'motion-toggle': 'motion-button',
+  'motion-toggle/': 'motion-button',
+  'motion-toggle.md': 'motion-button.md',
+}
+
+const TUFFEX_PREFIX_REDIRECTS: ReadonlyArray<{ prefix: string, targetPrefix: string, isComponent?: boolean }> = [
+  { prefix: '/en/docs/dev/components/', targetPrefix: '/tuffex/en/', isComponent: true },
+  { prefix: '/zh/docs/dev/components/', targetPrefix: '/tuffex/zh/', isComponent: true },
   { prefix: '/en/docs/dev/concepts/', targetPrefix: '/tuffex/en/concepts/' },
   { prefix: '/zh/docs/dev/concepts/', targetPrefix: '/tuffex/zh/concepts/' },
-  { prefix: '/docs/dev/components/', targetPrefix: '/tuffex/en/' },
+  { prefix: '/docs/dev/components/', targetPrefix: '/tuffex/en/', isComponent: true },
   { prefix: '/docs/dev/concepts/', targetPrefix: '/tuffex/en/concepts/' },
 ]
 
@@ -28,8 +37,13 @@ function resolveTuffexRedirectTarget(pathname: string): string | null {
     return exact
 
   for (const rule of TUFFEX_PREFIX_REDIRECTS) {
-    if (pathname.startsWith(rule.prefix))
-      return `${rule.targetPrefix}${pathname.slice(rule.prefix.length)}`
+    if (pathname.startsWith(rule.prefix)) {
+      const rest = pathname.slice(rule.prefix.length)
+      const mapped = rule.isComponent && Object.hasOwn(TUFFEX_COMPONENT_SLUG_REDIRECTS, rest)
+        ? TUFFEX_COMPONENT_SLUG_REDIRECTS[rest]
+        : rest
+      return `${rule.targetPrefix}${mapped}`
+    }
   }
 
   return null

@@ -2,6 +2,7 @@ import type { H3Event } from 'h3'
 import { createError } from 'h3'
 import type { ProviderRegistryRecord } from './providerRegistryStore'
 import { getProviderCredential } from './providerCredentialStore'
+import { evaluateWebhookUrl } from './webhookUrlPolicy'
 import { Buffer } from 'node:buffer'
 
 const FILETRANS_MODEL = 'qwen-audio-3.0-asr-flash-filetrans'
@@ -14,6 +15,8 @@ export const QWEN_AUDIO_ASR_MAX_RAW_BYTES =
 export const QWEN_AUDIO_ASR_MAX_DURATION_SECONDS = 5 * 60
 const QWEN_AUDIO_ASR_DEFAULT_TIMEOUT_MS = 120_000
 const QWEN_AUDIO_ASR_MAX_TIMEOUT_MS = 5 * 60 * 1000
+const DASHSCOPE_DEFAULT_TIMEOUT_MS = 30_000
+const DASHSCOPE_MAX_RESPONSE_BYTES = 4 * 1024 * 1024 // 4 MiB
 
 export type DashScopeAsrTransport = 'filetrans' | typeof QWEN_AUDIO_ASR_TRANSPORT
 
@@ -190,12 +193,85 @@ function resolveTaskUrl(baseUrl: URL, path: string): string {
   return url.toString()
 }
 
-async function readJson(response: Response): Promise<RecordValue | null> {
+async function fetchWithTimeout(
+  fetcher: typeof fetch,
+  input: string,
+  init: RequestInit = {},
+  timeoutMs = DASHSCOPE_DEFAULT_TIMEOUT_MS,
+): Promise<Response> {
+  const controller = new AbortController()
+  const upstreamSignal = init.signal
+  const onAbort = () => controller.abort()
+  if (upstreamSignal) {
+    if (upstreamSignal.aborted)
+      controller.abort()
+    else
+      upstreamSignal.addEventListener('abort', onAbort, { once: true })
+  }
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
   try {
-    return asRecord(await response.json())
-  } catch {
+    return await fetcher(input, { ...init, signal: controller.signal })
+  }
+  finally {
+    clearTimeout(timer)
+    upstreamSignal?.removeEventListener('abort', onAbort)
+  }
+}
+
+async function readJson(response: Response, maxBytes = DASHSCOPE_MAX_RESPONSE_BYTES): Promise<RecordValue | null> {
+  try {
+    const contentLength = Number(response.headers?.get?.('content-length') ?? '')
+    if (Number.isFinite(contentLength) && contentLength > maxBytes) {
+      await response.body?.cancel?.().catch(() => {})
+      return null
+    }
+
+    if (response.body && typeof response.body.getReader === 'function') {
+      const reader = response.body.getReader()
+      const chunks: Uint8Array[] = []
+      let total = 0
+      try {
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+          if (!value || value.byteLength === 0) continue
+          total += value.byteLength
+          if (total > maxBytes) {
+            await reader.cancel().catch(() => {})
+            return null
+          }
+          chunks.push(value)
+        }
+      }
+      finally {
+        reader.releaseLock()
+      }
+      const text = Buffer.concat(chunks, total).toString('utf8')
+      return asRecord(JSON.parse(text))
+    }
+
+    const text = await response.text()
+    if (Buffer.byteLength(text, 'utf8') > maxBytes)
+      return null
+    return asRecord(JSON.parse(text))
+  }
+  catch {
     return null
   }
+}
+
+function isAllowedDashScopeResultHost(hostname: string, providerBaseUrl: URL): boolean {
+  const host = hostname.replace(/\.+$/, '').toLowerCase()
+  const providerHost = providerBaseUrl.hostname.replace(/\.+$/, '').toLowerCase()
+  if (!host)
+    return false
+  if (host === providerHost)
+    return true
+  if (host === 'aliyuncs.com' || host.endsWith('.aliyuncs.com'))
+    return true
+  if (host === 'aliyun.com' || host.endsWith('.aliyun.com'))
+    return true
+  return false
 }
 
 function extractTaskId(body: RecordValue | null): string | null {
@@ -208,15 +284,19 @@ function extractTaskStatus(body: RecordValue | null): string | null {
   return readString(asRecord(body?.output)?.task_status, 64)?.toUpperCase() ?? null
 }
 
-function extractResultUrl(body: RecordValue | null): string | null {
+function extractResultUrl(body: RecordValue | null, providerBaseUrl: URL): string | null {
   const output = asRecord(body?.output)
   const results = Array.isArray(output?.results) ? output.results : []
   const first = asRecord(results[0])
   const value = readString(first?.transcription_url, 2048)
   if (!value) return null
+  const decision = evaluateWebhookUrl(value, { allowLocalhost: false })
+  if (!decision.allowed) return null
   try {
-    const url = new URL(value)
-    return url.protocol === 'https:' ? url.toString() : null
+    const url = new URL(decision.url)
+    if (url.protocol !== 'https:' || url.username || url.password) return null
+    if (!isAllowedDashScopeResultHost(url.hostname, providerBaseUrl)) return null
+    return url.toString()
   } catch {
     return null
   }
@@ -486,19 +566,24 @@ export class DashScopeFiletransAdapter {
     const baseUrl = resolveDashScopeBaseUrl(provider)
     const credential = await getProviderCredential(event, provider.authRef!)
     const apiKey = readProviderApiKey(credential)
-    const response = await this.fetcher(resolveTaskUrl(baseUrl, 'services/audio/asr/transcription'), {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-        'X-DashScope-Async': 'enable',
+    const response = await fetchWithTimeout(
+      this.fetcher,
+      resolveTaskUrl(baseUrl, 'services/audio/asr/transcription'),
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+          'X-DashScope-Async': 'enable',
+        },
+        body: JSON.stringify({
+          model: FILETRANS_MODEL,
+          input: { file_urls: [sourceUrl] },
+          parameters: { channel_id: [0] },
+        }),
       },
-      body: JSON.stringify({
-        model: FILETRANS_MODEL,
-        input: { file_urls: [sourceUrl] },
-        parameters: { channel_id: [0] },
-      }),
-    }).catch(() => {
+      DASHSCOPE_DEFAULT_TIMEOUT_MS,
+    ).catch(() => {
       throw new DashScopeAsrError('ASR_PROVIDER_UNAVAILABLE', false)
     })
 
@@ -514,12 +599,17 @@ export class DashScopeFiletransAdapter {
     const baseUrl = resolveDashScopeBaseUrl(provider)
     const credential = await getProviderCredential(event, provider.authRef!)
     const apiKey = readProviderApiKey(credential)
-    const taskResponse = await this.fetcher(resolveTaskUrl(baseUrl, `tasks/${encodeURIComponent(taskId)}`), {
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
+    const taskResponse = await fetchWithTimeout(
+      this.fetcher,
+      resolveTaskUrl(baseUrl, `tasks/${encodeURIComponent(taskId)}`),
+      {
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
       },
-    }).catch(() => {
+      DASHSCOPE_DEFAULT_TIMEOUT_MS,
+    ).catch(() => {
       throw new DashScopeAsrError('ASR_PROVIDER_UNAVAILABLE', true)
     })
     const taskBody = await readJson(taskResponse)
@@ -530,9 +620,14 @@ export class DashScopeFiletransAdapter {
     if (status === 'FAILED') return { status: 'failed' }
     if (status !== 'SUCCEEDED') throw new DashScopeAsrError('ASR_PROVIDER_RESPONSE_INVALID', true)
 
-    const transcriptionUrl = extractResultUrl(taskBody)
+    const transcriptionUrl = extractResultUrl(taskBody, baseUrl)
     if (!transcriptionUrl) throw new DashScopeAsrError('ASR_PROVIDER_RESPONSE_INVALID', true)
-    const transcriptionResponse = await this.fetcher(transcriptionUrl).catch(() => {
+    const transcriptionResponse = await fetchWithTimeout(
+      this.fetcher,
+      transcriptionUrl,
+      {},
+      DASHSCOPE_DEFAULT_TIMEOUT_MS,
+    ).catch(() => {
       throw new DashScopeAsrError('ASR_PROVIDER_UNAVAILABLE', true)
     })
     const transcriptionBody = await readJson(transcriptionResponse)
@@ -577,18 +672,26 @@ export async function createDashScopeEphemeralToken(
   const tokenUrl = new URL(resolveTaskUrl(baseUrl, 'tokens'))
   tokenUrl.searchParams.set('expire_in_seconds', String(Math.max(60, Math.min(1800, expireInSeconds))))
 
-  const response = await fetcher(tokenUrl.toString(), {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
+  const safeFetcher: typeof fetch = (input, init) => fetcher(input, init)
+  const response = await fetchWithTimeout(
+    safeFetcher,
+    tokenUrl.toString(),
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+      },
     },
+    DASHSCOPE_DEFAULT_TIMEOUT_MS,
+  ).catch(() => {
+    throw new DashScopeAsrError('ASR_PROVIDER_UNAVAILABLE', false)
   })
 
   if (!response.ok) {
     throw new DashScopeAsrError('ASR_PROVIDER_REJECTED', false)
   }
 
-  const payload = (await response.json()) as Record<string, unknown>
+  const payload = await readJson(response, 64 * 1024)
   if (!payload || typeof payload.token !== 'string' || typeof payload.expires_at !== 'number') {
     throw new DashScopeAsrError('ASR_PROVIDER_RESPONSE_INVALID', false)
   }

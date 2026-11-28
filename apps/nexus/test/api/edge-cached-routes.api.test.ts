@@ -29,7 +29,10 @@ vi.mock('../../server/utils/dashboardStore', () => dashboard)
 vi.mock('../../server/utils/updateAssetStorage', () => updateAssets)
 vi.mock('../../server/utils/pluginsStore', () => plugins)
 vi.mock('../../server/utils/pluginStoreAccess', () => storeAccess)
-vi.mock('../../server/utils/imageStorage', () => images)
+vi.mock('../../server/utils/imageStorage', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../server/utils/imageStorage')>()),
+  getImage: images.getImage,
+}))
 vi.mock('../../server/utils/auth', () => auth)
 vi.mock('../../server/utils/speechCatalogStore', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../server/utils/speechCatalogStore')>()),
