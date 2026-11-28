@@ -209,9 +209,25 @@ describe('widget sandbox browser containment', () => {
   it.each([
     ['eval', 'eval("2 + 2")'],
     ['Function', 'Function("return 2")'],
+    ['AsyncFunction', 'AsyncFunction("return 2")'],
+    ['GeneratorFunction', 'GeneratorFunction("yield 1")'],
     ['dynamic import', 'import("plugin")'],
     ['WebAssembly', 'WebAssembly.compile(bytes)'],
-    ['constructor escape', '({}).constructor("return 2")']
+    ['constructor escape', '({}).constructor("return 2")'],
+    ['template literal bracket escape', '({})[`constructor`]'],
+    ['hex escape bracket escape', "({})['\\x63onstructor']"],
+    ['unicode escape bracket escape', "({})['\\u0063onstructor']"],
+    ['codepoint escape bracket escape', "({})['\\u{63}onstructor']"],
+    ['string concat bracket escape', "({})['con' + 'structor']"],
+    ['template interpolation escape', "({})[`con${'structor'}`]"],
+    ['array join escape', "({})[['con', 'structor'].join('')]"],
+    ['ownerDocument DOM escape', 'el.ownerDocument.defaultView.alert(1)'],
+    ['contentWindow DOM escape', 'frame.contentWindow.postMessage("x", "*")'],
+    ['Object.getPrototypeOf escape', 'Object.getPrototypeOf(() => {})'],
+    ['Reflect.get escape', 'Reflect.get(obj, prop)'],
+    ['String.fromCharCode obfuscation', 'String.fromCharCode(99, 111, 110)'],
+    ['setTimeout string eval', 'setTimeout("alert(1)", 0)'],
+    ['setInterval template eval', 'setInterval(`alert(1)`, 10)']
   ])('rejects %s dynamic source before widget evaluation', (_name, source) => {
     const { widgetId } = createPolicy()
 
@@ -221,6 +237,21 @@ describe('widget sandbox browser containment', () => {
     } catch (error) {
       expect(error).toMatchObject({ code: 'WIDGET_SANDBOX_DYNAMIC_CODE_BLOCKED' })
     }
+  })
+
+  it('allows legitimate widget source with function timer callbacks and normal strings', () => {
+    const { widgetId } = createPolicy()
+    expect(() =>
+      assertWidgetDynamicSource(
+        widgetId,
+        [
+          'const { h, ref } = require("vue")',
+          'const label = `hello ${"world"}`',
+          'setTimeout(() => console.log(label), 50)',
+          'module.exports = { setup: () => () => h("div", label) }'
+        ].join('\n')
+      )
+    ).not.toThrow()
   })
 
   it('prevents anchor and form navigation before it reaches the host browser', () => {

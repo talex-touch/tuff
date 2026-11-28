@@ -1,64 +1,59 @@
 import { isLocalhostUrl } from '@talex-touch/utils'
 import { useAppSdk } from '@talex-touch/utils/renderer'
-import { useTuffTransport } from '@talex-touch/utils/transport'
-import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { confirmExternalLinkOpen } from './confirm-external-link'
 
-export async function useUrlProcessor(): Promise<void> {
-  const transport = useTuffTransport()
+function isAllowedExternalProtocol(protocol: string): boolean {
+  return protocol === 'https:' || protocol === 'http:'
+}
+
+export async function useUrlProcessor(): Promise<() => void> {
   const appSdk = useAppSdk()
-  const urlOpenEvent = defineRawEvent<string, boolean>('url:open')
 
   function directListener(event: Event): void {
-    const target = event.target as HTMLElement
+    const rawTarget = event.target
+    if (!(rawTarget instanceof Element)) return
 
-    if (target.nodeName.toLocaleLowerCase() === 'a') {
-      if (target.getAttribute('ignoreSafeCheck') === 'true') return
+    const anchor = rawTarget.closest('a[href]')
+    if (!anchor) return
+    if (anchor.getAttribute('ignoreSafeCheck') === 'true') return
 
-      const url = target.getAttribute('href')
+    const rawHref = anchor.getAttribute('href')?.trim()
+    if (!rawHref || rawHref.startsWith('#')) return
 
-      if (!url) return
-
+    let parsed: URL
+    try {
+      parsed = new URL(rawHref, window.location.href)
+    } catch {
       event.preventDefault()
-
-      const isExternal =
-        !isLocalhostUrl(url) && !url.startsWith(window.location.origin) && !url.startsWith('/')
-
-      if (isExternal) {
-        void appSdk.openExternal(url)
-      } else {
-        void transport.send(urlOpenEvent, url)
-      }
-
-      // if(/^\//.test(target)) {
-      //   // Relative to this website url
-      //   return true
-      // }
-
-      // const isSafe = undefined !== whiteDomList.find(item=>{
-      //   return target.indexOf(item) !== -1
-      // })
-
-      // if(!isSafe) {
-      //   window.open(`${window.location.host}/direct?target=${target}`, '_blank')
-      // window.open(`${safeLink}${target}`, '_blank')
-      // }
-
-      // window.open(`${url}`, "_blank");
+      return
     }
+
+    const isRelativeRootPath =
+      rawHref.startsWith('/') && !rawHref.startsWith('//') && !rawHref.startsWith('/\\')
+    const isSameOriginOrLocal =
+      isRelativeRootPath || parsed.origin === window.location.origin || isLocalhostUrl(parsed.href)
+
+    if (isSameOriginOrLocal) {
+      return
+    }
+
+    event.preventDefault()
+
+    if (!isAllowedExternalProtocol(parsed.protocol)) {
+      return
+    }
+
+    void confirmExternalLinkOpen(parsed.href)
+      .then((allowed) => {
+        if (!allowed) return
+        return appSdk.openExternal(parsed.href)
+      })
+      .catch(() => {})
   }
 
   document.body.addEventListener('click', directListener)
 
-  transport.on(urlOpenEvent, async (url) => {
-    if (typeof url !== 'string') {
-      return false
-    }
-
-    if (isLocalhostUrl(url)) {
-      return false
-    }
-
-    return await confirmExternalLinkOpen(url)
-  })
+  return () => {
+    document.body.removeEventListener('click', directListener)
+  }
 }

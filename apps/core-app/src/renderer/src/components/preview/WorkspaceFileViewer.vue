@@ -38,6 +38,10 @@ import { toast } from 'vue-sonner'
 import { SHELL_MENU_CARD } from '~/components/shell/shell-menu-panel'
 import { basenameOfPath } from '~/modules/browser-workspace/preview-url'
 import {
+  revokeBlobUrls,
+  rewriteInlineScriptsToBlobs
+} from '~/modules/widget-sandbox/inline-script-blobs'
+import {
   buildTdsDomProbeScript,
   computeTdsContentDigest,
   runStaticTdsLint,
@@ -399,19 +403,41 @@ function escapeAttribute(value: string): string {
 /**
  * Outer-CSP sandboxed srcdoc wrapper (matching TxCodeStream): gives the opened HTML/SVG an opaque
  * origin (no `allow-same-origin`) with zero network exfiltration while letting interactive pure-HTML
- * prototypes (forms, inline scripts, dialogs) work cleanly.
+ * prototypes (forms, inline scripts rewritten to `blob:` URLs, dialogs) work cleanly under
+ * CoreApp's inherited parent CSP (`script-src 'self' 'unsafe-eval' blob:`, no `'unsafe-inline'`).
  */
-const sandboxedHtmlSrcdoc = computed(() => {
-  const source = data.value?.text ?? ''
-  if (!source) return ''
-  const inner = isSvg.value
-    ? `<!doctype html><meta charset="utf-8"><body style="margin:0;min-height:100vh;display:grid;place-items:center;background:#fff">${source}</body>`
-    : source
-  const csp =
-    "default-src 'none'; frame-src about:; img-src data: blob:; media-src data: blob:; font-src data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'"
-  const innerSandbox = isHtml.value ? 'allow-scripts allow-forms allow-modals' : ''
-  return `<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${csp}"><style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#fff}iframe{display:block;width:100%;height:100%;border:0}</style><iframe sandbox="${innerSandbox}" srcdoc="${escapeAttribute(inner)}"></iframe>`
-})
+const sandboxedHtmlSrcdoc = ref('')
+let previewScriptBlobUrls: string[] = []
+
+function revokePreviewScriptBlobs(): void {
+  if (previewScriptBlobUrls.length === 0) return
+  revokeBlobUrls(previewScriptBlobUrls)
+  previewScriptBlobUrls = []
+}
+
+watch(
+  [() => data.value?.text ?? '', isHtml, isSvg],
+  ([source, htmlMode, svgMode]) => {
+    revokePreviewScriptBlobs()
+    if (!source || (!htmlMode && !svgMode)) {
+      sandboxedHtmlSrcdoc.value = ''
+      return
+    }
+    let inner = svgMode
+      ? `<!doctype html><meta charset="utf-8"><body style="margin:0;min-height:100vh;display:grid;place-items:center;background:#fff">${source}</body>`
+      : source
+    if (htmlMode) {
+      const rewritten = rewriteInlineScriptsToBlobs(inner)
+      inner = rewritten.html
+      previewScriptBlobUrls = rewritten.blobUrls
+    }
+    const csp =
+      "default-src 'none'; frame-src about:; img-src data: blob:; media-src data: blob:; font-src data:; style-src 'unsafe-inline'; script-src blob:"
+    const innerSandbox = htmlMode ? 'allow-scripts allow-forms allow-modals' : ''
+    sandboxedHtmlSrcdoc.value = `<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${csp}"><style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#fff}iframe{display:block;width:100%;height:100%;border:0}</style><iframe sandbox="${innerSandbox}" srcdoc="${escapeAttribute(inner)}"></iframe>`
+  },
+  { immediate: true }
+)
 
 const formattedJson = computed(() => {
   if (!isJson.value || !data.value?.text) return data.value?.text ?? ''
@@ -3122,6 +3148,7 @@ onBeforeUnmount(() => {
   disposeReviewListener?.()
   disposeReviewListener = null
   revokePdfUrl()
+  revokePreviewScriptBlobs()
   document.removeEventListener('pointerdown', onDocumentPointerDown, true)
   document.removeEventListener('keydown', onDocumentKeyDown)
 })

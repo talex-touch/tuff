@@ -315,15 +315,18 @@ const failureText = computed(() => {
     : t('localAiCliPanel.failed', { code })
 })
 
+let taskGeneration = 0
+
 async function run(): Promise<void> {
   if (!canRun.value || !provider.value) return
   cleanupTask()
+  const gen = ++taskGeneration
   phase.value = 'running'
   output.value = ''
   errorCode.value = ''
   approval.value = null
   try {
-    streamController = await sdk.streamTask(
+    const controller = await sdk.streamTask(
       {
         provider: provider.value,
         prompt: prompt.value,
@@ -334,19 +337,30 @@ async function run(): Promise<void> {
         persistent: provider.value === 'pi'
       },
       {
-        onData: handleChunk,
+        onData: (chunk) => {
+          if (gen !== taskGeneration) return
+          handleChunk(chunk)
+        },
         onError: (error) => {
+          if (gen !== taskGeneration) return
           log.error('Local AI CLI task stream failed')
           errorCode.value = stableTaskErrorCode(error, 'PROCESS_EXITED')
           if (phase.value === 'running') phase.value = 'failed'
         },
         onEnd: () => {
+          if (gen !== taskGeneration) return
           streamController = null
           if (phase.value === 'running') phase.value = output.value ? 'done' : 'failed'
         }
       }
     )
+    if (gen !== taskGeneration) {
+      controller.cancel()
+      return
+    }
+    streamController = controller
   } catch (error) {
+    if (gen !== taskGeneration) return
     log.error('Failed to start local AI CLI task')
     errorCode.value = stableTaskErrorCode(error, 'PROCESS_START_FAILED')
     phase.value = 'failed'
@@ -354,6 +368,7 @@ async function run(): Promise<void> {
 }
 
 function cleanupTask(): void {
+  taskGeneration += 1
   streamController?.cancel()
   streamController = null
 }
@@ -371,6 +386,9 @@ async function resolveApproval(decision: 'allow-once' | 'deny'): Promise<void> {
       handleTerminalInput(decision === 'allow-once' ? 'y\r' : 'n\r')
     }
     await sdk.resolveApproval({ approvalId: current.approvalId, decision })
+  } catch (error) {
+    log.error('Failed to resolve local AI CLI approval', error)
+    toast.error(t('localAiCliPanel.failedNoReason'))
   } finally {
     approval.value = null
   }
@@ -379,8 +397,13 @@ async function resolveApproval(decision: 'allow-once' | 'deny'): Promise<void> {
 async function copyResult(): Promise<void> {
   const text = output.value.trim()
   if (!text) return
-  await navigator.clipboard.writeText(text)
-  toast.success(t('localAiCliPanel.copied'))
+  try {
+    await navigator.clipboard.writeText(text)
+    toast.success(t('localAiCliPanel.copied'))
+  } catch (error) {
+    log.error('Failed to copy local AI CLI result', error)
+    toast.error(t('corebox.omniPanel.aiCopyFailed'))
+  }
 }
 
 async function pasteBack(): Promise<void> {
@@ -388,23 +411,33 @@ async function pasteBack(): Promise<void> {
   const text = output.value.trim()
   if (!capsule?.appName?.trim() || !text) return
   emit('paste-back-started')
-  const result = await sdk.pasteBack({
-    text,
-    appName: capsule.appName.trim(),
-    windowTitle: capsule.windowTitle?.trim() || undefined,
-    capturedAt: capsule.capturedAt
-  })
-  if (result.success) {
-    toast.success(t('localAiCliPanel.pastedBack'))
-    await reset()
-    return
+  try {
+    const result = await sdk.pasteBack({
+      text,
+      appName: capsule.appName.trim(),
+      windowTitle: capsule.windowTitle?.trim() || undefined,
+      capturedAt: capsule.capturedAt
+    })
+    if (result.success) {
+      toast.success(t('localAiCliPanel.pastedBack'))
+      await reset()
+      return
+    }
+    toast.error(t(`localAiCliPanel.pasteBackReasons.${result.reason ?? 'target-unavailable'}`))
+  } catch (error) {
+    log.error('Failed to paste back local AI CLI result', error)
+    toast.error(t('localAiCliPanel.pasteBackReasons.target-unavailable'))
   }
-  toast.error(t(`localAiCliPanel.pasteBackReasons.${result.reason ?? 'target-unavailable'}`))
 }
 
 async function openSettings(): Promise<void> {
   emit('settings-opened')
-  await sdk.openSettings()
+  try {
+    await sdk.openSettings()
+  } catch (error) {
+    log.error('Failed to open local AI CLI settings', error)
+    toast.error(t('localAiCliPanel.failures.statusFailed'))
+  }
 }
 
 function displayTerminalOutput(data: string): Promise<void> {
@@ -441,13 +474,15 @@ async function runSharedPiPrompt(value: string): Promise<void> {
     writeTerminalOutput('> ')
     return
   }
+  cleanupTask()
+  const gen = ++taskGeneration
   phase.value = 'running'
   output.value = ''
   errorCode.value = ''
   approval.value = null
   prompt.value = ''
   try {
-    streamController = await sdk.streamTask(
+    const controller = await sdk.streamTask(
       {
         provider: provider.value,
         prompt: promptText,
@@ -458,20 +493,31 @@ async function runSharedPiPrompt(value: string): Promise<void> {
         persistent: provider.value === 'pi'
       },
       {
-        onData: handleChunk,
+        onData: (chunk) => {
+          if (gen !== taskGeneration) return
+          handleChunk(chunk)
+        },
         onError: (error) => {
+          if (gen !== taskGeneration) return
           log.error('Shared Pi terminal task stream failed')
           errorCode.value = stableTaskErrorCode(error, 'PROCESS_EXITED')
           if (phase.value === 'running') phase.value = 'failed'
         },
         onEnd: () => {
+          if (gen !== taskGeneration) return
           streamController = null
           if (phase.value === 'running') phase.value = output.value ? 'done' : 'failed'
           if (terminalVisible.value) writeTerminalOutput('\r\n> ')
         }
       }
     )
+    if (gen !== taskGeneration) {
+      controller.cancel()
+      return
+    }
+    streamController = controller
   } catch (error) {
+    if (gen !== taskGeneration) return
     log.error('Failed to start shared Pi terminal task')
     errorCode.value = stableTaskErrorCode(error, 'PROCESS_START_FAILED')
     phase.value = 'failed'
@@ -716,7 +762,9 @@ onBeforeUnmount(() => {
   disposeTerminalExit()
 })
 
-defineExpose({ open, reset, newTask })
+const isOpen = computed(() => visible.value)
+
+defineExpose({ open, reset, newTask, isOpen })
 </script>
 
 <template>

@@ -1,5 +1,5 @@
 import { onBeforeUnmount, readonly, ref, watch, type Ref } from 'vue'
-import { buildWidgetSandboxDocument, WIDGET_SANDBOX_MESSAGE } from './sandbox-document'
+import { createWidgetSandboxDocument, WIDGET_SANDBOX_MESSAGE } from './sandbox-document'
 // The arrow runtime as text, not as a module: the sandbox is a separate
 // document with an opaque origin and cannot reach anything in this bundle.
 // Served by `widgetSandboxRuntimePlugin` in electron.vite.config.ts — a virtual
@@ -56,6 +56,14 @@ export function useWidgetSandbox(
   const height = ref(MIN_HEIGHT)
   const srcdoc = ref('')
   let readyTimer: ReturnType<typeof setTimeout> | null = null
+  let revokeBootstrap: (() => void) | null = null
+
+  function revokeActiveBootstrap(): void {
+    if (!revokeBootstrap) return
+    const dispose = revokeBootstrap
+    revokeBootstrap = null
+    dispose()
+  }
 
   function clearReadyTimer(): void {
     if (readyTimer === null) return
@@ -65,6 +73,7 @@ export function useWidgetSandbox(
 
   function fail(reason: WidgetSandboxFailure): void {
     clearReadyTimer()
+    revokeActiveBootstrap()
     status.value = 'failed'
     failure.value = reason
   }
@@ -80,6 +89,7 @@ export function useWidgetSandbox(
 
     if (type === WIDGET_SANDBOX_MESSAGE.ready) {
       clearReadyTimer()
+      revokeActiveBootstrap()
       status.value = 'ready'
       return
     }
@@ -100,13 +110,16 @@ export function useWidgetSandbox(
     source,
     (value) => {
       clearReadyTimer()
+      revokeActiveBootstrap()
       status.value = 'loading'
       failure.value = null
       height.value = MIN_HEIGHT
-      srcdoc.value = buildWidgetSandboxDocument({
+      const built = createWidgetSandboxDocument({
         source: value,
         runtimeSource: arrowRuntimeSource
       })
+      revokeBootstrap = built.revoke
+      srcdoc.value = built.srcdoc
       // A frame that never reports back is indistinguishable from one still
       // working; after this it is treated as broken so the reader sees the
       // tool's own output instead of an empty box forever.
@@ -121,6 +134,7 @@ export function useWidgetSandbox(
 
   onBeforeUnmount(() => {
     clearReadyTimer()
+    revokeActiveBootstrap()
     window.removeEventListener('message', onMessage)
   })
 

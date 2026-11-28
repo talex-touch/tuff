@@ -687,4 +687,41 @@ describe('useAgentWorkspace frames cannot outrank Main admission or durable term
       view.workspace.adapter.messages.map(({ id, content, status }) => ({ id, content, status }))
     ).toEqual([{ id: 'right-answer', content: 'right visible answer +live', status: 'streaming' }])
   })
+
+  it('drops a stale prefetch that resolves after a newer prefetch or navigation', async () => {
+    const staleLeft = hostState('left', leftSettings)
+    staleLeft.messages[0]!.content = 'stale left snapshot'
+    const freshLeft = hostState('left', leftSettings)
+    freshLeft.revision = 2
+    freshLeft.messages[0]!.content = 'fresh left snapshot'
+    const right = hostState('right', rightSettings, 'project-right')
+
+    const main = host([freshLeft, right])
+    const slowPrefetch = Promise.withResolvers<ConversationWorkspaceState | null>()
+    let leftGets = 0
+    vi.spyOn(main.sdk, 'get').mockImplementation(async (id) => {
+      if (id === 'left') {
+        leftGets += 1
+        return leftGets === 1 ? slowPrefetch.promise : freshLeft
+      }
+      return right
+    })
+    cleanup.push(() => slowPrefetch.resolve(staleLeft))
+
+    const view = mounted(main.sdk, null)
+    const pLeft = view.workspace.prefetch('left')
+    await view.workspace.prefetch('right')
+    view.id.value = 'right'
+    await nextTick()
+    expectRightVisible(view.workspace, 'right')
+
+    // Late resolution of the older `prefetch('left')` must NOT overwrite the cache for 'left'
+    slowPrefetch.resolve(staleLeft)
+    await pLeft
+
+    view.id.value = 'left'
+    await nextTick()
+    await view.workspace.reload()
+    expect(view.workspace.adapter.messages.map((m) => m.content)).toEqual(['fresh left snapshot'])
+  })
 })

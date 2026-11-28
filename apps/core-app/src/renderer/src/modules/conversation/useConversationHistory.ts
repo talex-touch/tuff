@@ -43,20 +43,27 @@ export function createConversationId(): string {
  */
 const conversations = ref<ConversationRecord[]>([])
 const loading = ref(false)
+let refreshSeq = 0
 
 let conversationChangeCleanup: (() => void) | null = null
 export function useConversationHistory(): UseConversationHistoryReturn {
   const sdk = createConversationSdk(useTuffTransport())
 
   async function refresh(): Promise<void> {
+    const seq = ++refreshSeq
     loading.value = true
     try {
-      conversations.value = await sdk.list()
-    } catch {
-      // The sidebar degrades to empty rather than blocking the conversation surface behind it.
-      conversations.value = []
+      const next = await sdk.list()
+      if (seq !== refreshSeq) return
+      conversations.value = next
+    } catch (error) {
+      if (seq !== refreshSeq) return
+      // Preserve the last good list on transient IPC failures rather than wiping the sidebar.
+      conversationHistoryLog.warn('Failed to refresh conversation history', error)
     } finally {
-      loading.value = false
+      if (seq === refreshSeq) {
+        loading.value = false
+      }
     }
   }
 

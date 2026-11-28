@@ -571,9 +571,13 @@ const lastCheckedText = computed(() => {
   return t('settings.settingEverything.hoursAgo', { hours })
 })
 
+let isUnmounted = false
+
 onMounted(async () => {
   await checkStatus(true)
+  if (isUnmounted) return
   await checkInstallStatus()
+  if (isUnmounted) return
 
   statusCheckInterval = setInterval(() => {
     checkStatus()
@@ -581,6 +585,7 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  isUnmounted = true
   if (statusCheckInterval) {
     clearInterval(statusCheckInterval)
     statusCheckInterval = null

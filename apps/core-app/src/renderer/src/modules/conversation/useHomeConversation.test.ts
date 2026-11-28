@@ -1446,4 +1446,44 @@ describe('opening lead', () => {
       }
     ])
   })
+
+  it('aborts cleanly if stopped while awaiting attachment encoding without leaking streaming state', async () => {
+    const fetchEntered = Promise.withResolvers<void>()
+    const fetchResponse = Promise.withResolvers<Response>()
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => {
+      fetchEntered.resolve()
+      return fetchResponse.promise
+    })
+
+    try {
+      const double = createSdkDouble()
+      const conversation = useHomeConversation({ sdk: double.sdk })
+      const blobImage: AiAttachment = {
+        kind: 'image',
+        id: 'att-slow',
+        url: 'blob:app://home/slow.png',
+        name: 'slow.png'
+      }
+
+      const turn = conversation.send('describe this', [blobImage])
+      await fetchEntered.promise
+
+      expect(conversation.isStreaming.value).toBe(true)
+      conversation.stop()
+      expect(conversation.isStreaming.value).toBe(false)
+
+      fetchResponse.resolve(
+        new Response(new Blob([new Uint8Array([1, 2, 3])], { type: 'image/png' }))
+      )
+      await turn
+
+      expect(double.streamPayloads).toHaveLength(0)
+      expect(double.chatPayloads).toHaveLength(0)
+      expect(conversation.isStreaming.value).toBe(false)
+      expect(conversation.messages.value).toHaveLength(1)
+      expect(conversation.messages.value[0]?.role).toBe('user')
+    } finally {
+      fetchSpy.mockRestore()
+    }
+  })
 })

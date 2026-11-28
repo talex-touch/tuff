@@ -23,6 +23,10 @@ const PUBLIC_FAILURE_KEYS: Record<string, string> = {
 
 /** One of the sentences above in the interface language; any other text is returned as it is. */
 export function describePublicFailure(text: string, t: PublicFailureTranslate): string {
-  const key = PUBLIC_FAILURE_KEYS[text.trim()]
+  const trimmed = text.trim()
+  if (!Object.hasOwn(PUBLIC_FAILURE_KEYS, trimmed)) {
+    return text
+  }
+  const key = PUBLIC_FAILURE_KEYS[trimmed]
   return key ? t(`common.failures.${key}`) : text
 }

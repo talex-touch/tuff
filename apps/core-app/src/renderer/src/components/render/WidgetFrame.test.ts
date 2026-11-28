@@ -1,7 +1,10 @@
 // @vitest-environment jsdom
+/* eslint-disable vue/one-component-per-file */
 import type { WidgetSandboxEvidence } from '@talex-touch/utils/plugin/widget'
 import { mount } from '@vue/test-utils'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { defineComponent, h, nextTick } from 'vue'
+import { registerCustomRenderer, unregisterCustomRenderer } from '~/modules/box/custom-render'
 import WidgetFrame from './WidgetFrame.vue'
 
 // WidgetFrame calls useI18n() in setup, and mounting it without an installed
@@ -131,5 +134,65 @@ describe('WidgetFrame navigation containment', () => {
       ])
     )
     wrapper.unmount()
+  })
+
+  it('recovers shadow mode after a render error and syncs styles safely for special rendererIds', async () => {
+    const brokenId = 'widget-frame-broken::1'
+    const validId = 'widget"special\\id::2'
+    const brokenUnmounted = vi.fn()
+
+    registerCustomRenderer(
+      brokenId,
+      defineComponent({
+        name: 'BrokenShadowWidget',
+        setup() {
+          return () => {
+            throw new Error('boom inside shadow')
+          }
+        },
+        unmounted: brokenUnmounted
+      })
+    )
+    registerCustomRenderer(
+      validId,
+      defineComponent({
+        name: 'HealthyShadowWidget',
+        setup() {
+          return () => h('div', { class: 'healthy-shadow-content' }, 'Shadow recovered')
+        }
+      })
+    )
+
+    const styleEl = document.createElement('style')
+    styleEl.dataset.widgetId = validId
+    styleEl.textContent = '.healthy-shadow-content { color: teal; }'
+    document.head.appendChild(styleEl)
+
+    try {
+      const wrapper = mount(WidgetFrame, {
+        props: { rendererId: brokenId, renderMode: 'shadow' }
+      })
+      await nextTick()
+
+      expect(wrapper.find('.WidgetFrame-Error').exists()).toBe(true)
+      expect(wrapper.text()).toContain('boom inside shadow')
+      expect(wrapper.find('.WidgetFrame-ShadowHost').exists()).toBe(false)
+
+      await wrapper.setProps({ rendererId: validId })
+      await nextTick()
+      await nextTick()
+
+      expect(wrapper.find('.WidgetFrame-Error').exists()).toBe(false)
+      const shadowHost = wrapper.find('.WidgetFrame-ShadowHost').element as HTMLElement
+      expect(shadowHost.shadowRoot).toBeTruthy()
+      expect(shadowHost.shadowRoot?.textContent).toContain('Shadow recovered')
+      expect(shadowHost.shadowRoot?.querySelector('style')?.textContent).toContain('color: teal')
+
+      wrapper.unmount()
+    } finally {
+      unregisterCustomRenderer(brokenId)
+      unregisterCustomRenderer(validId)
+      styleEl.remove()
+    }
   })
 })

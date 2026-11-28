@@ -1,7 +1,7 @@
 import type { StreamMarkdownCodePreview } from '@talex-touch/tuffex/stream-markdown'
 import type { Ref } from 'vue'
 import { hasWindow } from '@talex-touch/utils/env'
-import { computed, ref, watch } from 'vue'
+import { computed, getCurrentScope, onScopeDispose, ref, watch } from 'vue'
 import { basenameOfPath } from '~/modules/browser-workspace/preview-url'
 
 export type SidePanelWorkspaceKind =
@@ -785,8 +785,11 @@ export function useHomeSidePanel(
     writeStoredWidth(panelWidth.value)
   }
 
+  let stopActiveResize: (() => void) | null = null
+
   function startResize(event: PointerEvent): void {
     if (!hasWindow()) return
+    stopActiveResize?.()
     event.preventDefault()
     isResizing.value = true
 
@@ -820,22 +823,36 @@ export function useHomeSidePanel(
       }
     }
 
-    const onEnd = (endEvent: PointerEvent): void => {
+    const cleanupListeners = (): void => {
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onEnd)
       window.removeEventListener('pointercancel', onEnd)
       if (frame !== null) cancelAnimationFrame(frame)
       frame = null
       pendingX = null
+      isResizing.value = false
+      if (stopActiveResize === cleanupListeners) {
+        stopActiveResize = null
+      }
+    }
+
+    const onEnd = (endEvent: PointerEvent): void => {
+      cleanupListeners()
       const delta = startX - endEvent.clientX
       panelWidth.value = clampSidePanelWidth(startWidth + delta, resolveContainerWidth())
-      isResizing.value = false
       writeStoredWidth(panelWidth.value)
     }
 
+    stopActiveResize = cleanupListeners
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', onEnd)
     window.addEventListener('pointercancel', onEnd)
+  }
+
+  if (getCurrentScope()) {
+    onScopeDispose(() => {
+      stopActiveResize?.()
+    })
   }
 
   watch(

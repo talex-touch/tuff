@@ -45,9 +45,18 @@ export function useVisibility(options: UseVisibilityOptions) {
   let lastVisibleState: boolean | null = null
   let hasNativeVisibilitySignal = false
   let nativeVisibilityVersion = 0
+  let visibilityGeneration = 0
+  let disposed = false
+  let focusTimer: ReturnType<typeof setTimeout> | null = null
+
+  function clearFocusTimer(): void {
+    if (focusTimer === null) return
+    clearTimeout(focusTimer)
+    focusTimer = null
+  }
 
   const applyVisibility = (visible: boolean): void => {
-    if (lastVisibleState === visible) return
+    if (disposed || lastVisibleState === visible) return
     lastVisibleState = visible
     setRendererActivity(visible)
     if (visible) {
@@ -58,10 +67,11 @@ export function useVisibility(options: UseVisibilityOptions) {
   }
 
   const unregisterShortcutTrigger = transport.on(CoreBoxEvents.ui.shortcutTriggered, () => {
+    if (disposed) return
     wasTriggeredByShortcut.value = true
   })
   const unregisterCoreBoxTrigger = transport.on(CoreBoxEvents.ui.trigger, (payload) => {
-    if (!payload || typeof payload !== 'object' || !('show' in payload)) return
+    if (disposed || !payload || typeof payload !== 'object' || !('show' in payload)) return
     const show = payload.show
     if (typeof show !== 'boolean') return
     hasNativeVisibilitySignal = true
@@ -74,7 +84,7 @@ export function useVisibility(options: UseVisibilityOptions) {
   void transport
     .send(CoreBoxEvents.ui.getVisibility)
     .then((response) => {
-      if (nativeVisibilityVersion !== visibilityRequestVersion) return
+      if (disposed || nativeVisibilityVersion !== visibilityRequestVersion) return
       if (typeof response?.visible !== 'boolean') return
       hasNativeVisibilitySignal = true
       applyVisibility(response.visible)
@@ -82,6 +92,8 @@ export function useVisibility(options: UseVisibilityOptions) {
     .catch(() => {})
 
   function onHide(): void {
+    visibilityGeneration += 1
+    clearFocusTimer()
     boxOptions.lastHidden = Date.now()
     wasTriggeredByShortcut.value = false
     clearImplicitClipboardState(clipboardOptions)
@@ -115,14 +127,19 @@ export function useVisibility(options: UseVisibilityOptions) {
   }
 
   async function onShow(): Promise<void> {
+    const showGeneration = ++visibilityGeneration
+    const triggeredByShortcut = wasTriggeredByShortcut.value
+    wasTriggeredByShortcut.value = false
+    clearFocusTimer()
     checkAutoClear()
 
     if (clipboardOptions.activeClipboardSource !== 'manual') {
       const clipboard = await getLatestClipboard({ refresh: true })
+      if (disposed || showGeneration !== visibilityGeneration || lastVisibleState !== true) return
       if (clipboard?.content || clipboard?.thumbnail || clipboard?.type === 'files') {
         const canAutoPaste =
           !isClipboardDismissed(clipboard, clipboardOptions) &&
-          wasTriggeredByShortcut.value &&
+          triggeredByShortcut &&
           isClipboardFreshForAutoPaste(clipboard, appSetting.tools.autoPaste)
 
         if (canAutoPaste) {
@@ -134,17 +151,23 @@ export function useVisibility(options: UseVisibilityOptions) {
         clearImplicitClipboardState(clipboardOptions)
       }
     }
-    wasTriggeredByShortcut.value = false
 
-    setTimeout(() => {
-      nextTick(() => boxInputRef.value?.focus?.())
+    if (disposed || showGeneration !== visibilityGeneration || lastVisibleState !== true) return
+    clearFocusTimer()
+    focusTimer = setTimeout(() => {
+      focusTimer = null
+      if (disposed || showGeneration !== visibilityGeneration || lastVisibleState !== true) return
+      void nextTick(() => {
+        if (disposed || showGeneration !== visibilityGeneration || lastVisibleState !== true) return
+        boxInputRef.value?.focus?.()
+      })
     }, 120)
   }
 
   watch(
     () => visibility.value,
     (visible) => {
-      if (!hasNativeVisibilitySignal) applyVisibility(visible === 'visible')
+      if (!disposed && !hasNativeVisibilitySignal) applyVisibility(visible === 'visible')
     }
   )
 
@@ -152,6 +175,9 @@ export function useVisibility(options: UseVisibilityOptions) {
     visibility,
     checkAutoClear,
     cleanup: () => {
+      disposed = true
+      visibilityGeneration += 1
+      clearFocusTimer()
       unregisterShortcutTrigger?.()
       unregisterCoreBoxTrigger?.()
     }

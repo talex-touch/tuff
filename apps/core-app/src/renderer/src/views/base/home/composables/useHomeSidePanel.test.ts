@@ -301,4 +301,24 @@ describe('useHomeSidePanel', () => {
     expect(panel.tabs.value.map((t) => t.kind)).toEqual(['canvas'])
     expect(panel.activeTabId.value).toBe('side-canvas')
   })
+
+  it('cleans up active window resize listeners when the enclosing effectScope is disposed mid-drag', async () => {
+    const { effectScope } = await import('vue')
+    const removeSpy = vi.spyOn(window, 'removeEventListener')
+    const scope = effectScope()
+    const panel = scope.run(() =>
+      useHomeSidePanel(ref<string | null>('conv-resize'), {
+        getAvailableWidth: () => 1200
+      })
+    )!
+
+    panel.startResize(new MouseEvent('pointerdown', { clientX: 600 }) as PointerEvent)
+    expect(panel.isResizing.value).toBe(true)
+
+    scope.stop()
+    expect(panel.isResizing.value).toBe(false)
+    expect(removeSpy).toHaveBeenCalledWith('pointermove', expect.any(Function))
+    expect(removeSpy).toHaveBeenCalledWith('pointerup', expect.any(Function))
+    expect(removeSpy).toHaveBeenCalledWith('pointercancel', expect.any(Function))
+  })
 })

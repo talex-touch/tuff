@@ -35,6 +35,7 @@ import {
   recordWidgetFailure,
   recordWidgetSandboxEvidence
 } from './widget-diagnostics'
+import { PRIVILEGED_PLUGIN_NAMES } from '../../../../shared/privileged-plugins'
 import {
   WIDGET_SANDBOX_AUDIT_MAX_ENTRIES,
   WIDGET_SANDBOX_QUOTA_MAX_CALLS,
@@ -42,6 +43,7 @@ import {
   assertWidgetDynamicSource,
   createWidgetSandboxPolicy,
   disposeWidgetSandboxPolicy,
+  recordWidgetSandboxDenial,
   setWidgetSandboxWindow,
   type WidgetSandboxPolicyContext
 } from './widget-sandbox-policy'
@@ -55,7 +57,36 @@ export { getWidgetSandboxAuditLog } from './widget-sandbox-policy'
 
 const widgetRegistryLog = createRendererLogger('WidgetRegistry')
 const injectedStyles = new Map<string, HTMLStyleElement>()
+const activeWidgetTimers = new Map<string, { timeouts: Set<number>; intervals: Set<number> }>()
+const TRUSTED_IN_PROCESS_WIDGET_PLUGINS = new Set<string>(PRIVILEGED_PLUGIN_NAMES)
 const widgetSetupStatePatchLogCache = new Set<string>()
+
+export function isTrustedInProcessWidgetPlugin(pluginName: string | undefined): boolean {
+  return typeof pluginName === 'string' && TRUSTED_IN_PROCESS_WIDGET_PLUGINS.has(pluginName)
+}
+
+function getWidgetTimers(widgetId: string) {
+  let bucket = activeWidgetTimers.get(widgetId)
+  if (!bucket) {
+    bucket = { timeouts: new Set(), intervals: new Set() }
+    activeWidgetTimers.set(widgetId, bucket)
+  }
+  return bucket
+}
+
+function clearWidgetTimers(widgetId: string): void {
+  const bucket = activeWidgetTimers.get(widgetId)
+  if (!bucket) return
+  for (const id of bucket.timeouts) {
+    window.clearTimeout(id)
+  }
+  for (const id of bucket.intervals) {
+    window.clearInterval(id)
+  }
+  bucket.timeouts.clear()
+  bucket.intervals.clear()
+  activeWidgetTimers.delete(widgetId)
+}
 const transport = useTuffTransport()
 const widgetRegisterEvent = PluginEvents.widget.register
 const widgetUpdateEvent = PluginEvents.widget.update
@@ -698,6 +729,46 @@ function createSandboxWindow(
   const localTarget = Object.create(null) as Record<PropertyKey, unknown>
   const boundMethodCache = new Map<PropertyKey, Function>()
   const safeProperties = new Set<PropertyKey>(WIDGET_SANDBOX_SAFE_GLOBALS)
+  const timers = getWidgetTimers(widgetId)
+
+  const safeSetTimeout = ((handler: TimerHandler, timeout?: number, ...args: unknown[]) => {
+    if (typeof handler !== 'function') {
+      throw policy.deny('dynamicExecution', 'setTimeout requires a function callback')
+    }
+    const id = window.setTimeout(
+      (...cbArgs: unknown[]) => {
+        timers.timeouts.delete(id)
+        ;(handler as (...fnArgs: unknown[]) => unknown)(...cbArgs)
+      },
+      timeout,
+      ...args
+    )
+    timers.timeouts.add(id)
+    return id
+  }) as typeof window.setTimeout
+
+  const safeClearTimeout = ((id?: number) => {
+    if (id !== undefined) {
+      timers.timeouts.delete(id)
+      window.clearTimeout(id)
+    }
+  }) as typeof window.clearTimeout
+
+  const safeSetInterval = ((handler: TimerHandler, timeout?: number, ...args: unknown[]) => {
+    if (typeof handler !== 'function') {
+      throw policy.deny('dynamicExecution', 'setInterval requires a function callback')
+    }
+    const id = window.setInterval(handler, timeout, ...args)
+    timers.intervals.add(id)
+    return id
+  }) as typeof window.setInterval
+
+  const safeClearInterval = ((id?: number) => {
+    if (id !== undefined) {
+      timers.intervals.delete(id)
+      window.clearInterval(id)
+    }
+  }) as typeof window.clearInterval
 
   return new Proxy(localTarget, {
     get(target, prop, receiver) {
@@ -742,6 +813,10 @@ function createSandboxWindow(
           throw policy.deny('window.open', 'host window close is blocked')
         }
       }
+      if (prop === 'setTimeout') return safeSetTimeout
+      if (prop === 'clearTimeout') return safeClearTimeout
+      if (prop === 'setInterval') return safeSetInterval
+      if (prop === 'clearInterval') return safeClearInterval
       if (prop === 'addEventListener') return policy.addEventListener
       if (prop === 'removeEventListener') return policy.removeEventListener
       if (prop === 'dispatchEvent') return policy.dispatchEvent
@@ -1659,18 +1734,135 @@ function evaluateWidgetComponent(
   return exported
 }
 
+function decodeCssEscapesForCheck(css: string): string {
+  const normalized = css.replaceAll('\u0000', '').replace(/\r\n?|\f/g, '\n')
+  const withDelimiters = normalized.replace(/\/\*[\s\S]*?\*\//g, '\u0000')
+  return withDelimiters
+    .replace(/\\([0-9a-fA-F]{1,6})[ \t\n]?/g, (_match, hex: string) => {
+      const codePoint = Number.parseInt(hex, 16)
+      if (!Number.isFinite(codePoint) || codePoint <= 0 || codePoint > 0x10ffff) return ''
+      return String.fromCodePoint(codePoint)
+    })
+    .replace(/\\([^\n])/g, '$1')
+    .replaceAll('\u0000', '')
+}
+
+function escapeCssAttributeValue(value: string): string {
+  return value
+    .replace(/\\/g, '\\\\')
+    .replace(/"/g, '\\"')
+    .replace(/[\n\r\f]/g, '')
+}
+
+function hasBalancedCssBraces(css: string): boolean {
+  let depth = 0
+  let inSingle = false
+  let inDouble = false
+  let inComment = false
+  for (let i = 0; i < css.length; i += 1) {
+    const ch = css[i]!
+    const next = css[i + 1]
+    if (inComment) {
+      if (ch === '*' && next === '/') {
+        inComment = false
+        i += 1
+      }
+      continue
+    }
+    if (inSingle) {
+      if (ch === '\\') {
+        i += 1
+      } else if (ch === "'") {
+        inSingle = false
+      }
+      continue
+    }
+    if (inDouble) {
+      if (ch === '\\') {
+        i += 1
+      } else if (ch === '"') {
+        inDouble = false
+      }
+      continue
+    }
+    if (ch === '/' && next === '*') {
+      inComment = true
+      i += 1
+      continue
+    }
+    if (ch === "'") {
+      inSingle = true
+      continue
+    }
+    if (ch === '"') {
+      inDouble = true
+      continue
+    }
+    if (ch === '{') {
+      depth += 1
+    } else if (ch === '}') {
+      depth -= 1
+      if (depth < 0) return false
+    }
+  }
+  return !inComment && !inSingle && !inDouble && depth === 0
+}
+
+export function sanitizeWidgetCss(styles: string): string {
+  const normalized = (styles ?? '').replaceAll('\u0000', '').trim()
+  if (!normalized) return ''
+  if (!hasBalancedCssBraces(normalized)) return ''
+  const decoded = decodeCssEscapesForCheck(normalized).toLowerCase()
+  if (
+    decoded.includes('</style') ||
+    decoded.includes('<script') ||
+    decoded.includes('</script') ||
+    /@import\b/i.test(decoded) ||
+    /\b(?:expression|image-set|cross-fade)\s*\(/i.test(decoded) ||
+    decoded.includes('-moz-binding') ||
+    decoded.includes('behavior:')
+  ) {
+    return ''
+  }
+  // Reject any `url(...)` except safe inline raster `data:image/...;base64,...` data URIs.
+  const urlPattern = /url\s*\(([^)]*)\)/gi
+  for (const match of decoded.matchAll(urlPattern)) {
+    const rawTarget = (match[1] ?? '')
+      .trim()
+      .replace(/^['"]|['"]$/g, '')
+      .trim()
+    if (
+      !/^data:image\/(?:png|jpeg|jpg|gif|webp|avif|bmp);base64,[a-z0-9+/=\s]+$/i.test(rawTarget)
+    ) {
+      return ''
+    }
+  }
+  return normalized
+}
+
+function scopeWidgetCss(widgetId: string, styles: string): string {
+  const sanitized = sanitizeWidgetCss(styles)
+  if (!sanitized) return ''
+  const escapedId = escapeCssAttributeValue(widgetId)
+  return `@scope ([data-widget-scope="${escapedId}"]) {\n${sanitized}\n}`
+}
+
 function injectStyles(widgetId: string, styles: string): void {
-  if (!styles) return
+  const scoped = scopeWidgetCss(widgetId, styles)
+  if (!scoped) {
+    removeInjectedStyles(widgetId)
+    return
+  }
 
   const existing = injectedStyles.get(widgetId)
   if (existing) {
-    existing.textContent = styles
+    existing.textContent = scoped
     return
   }
 
   const style = document.createElement('style')
   style.dataset.widgetId = widgetId
-  style.textContent = styles
+  style.textContent = scoped
   document.head.appendChild(style)
   injectedStyles.set(widgetId, style)
 }
@@ -1686,6 +1878,7 @@ function clearRegisteredWidgetRuntime(widgetId: string): void {
   registeredWidgetHashes.delete(widgetId)
   unregisterCustomRenderer(widgetId)
   removeInjectedStyles(widgetId)
+  clearWidgetTimers(widgetId)
   disposeWidgetSandboxPolicy(widgetId)
 }
 
@@ -1723,6 +1916,18 @@ function recordWidgetRuntimeFailure(
   recordWidgetFailure(failure)
 }
 
+function assertTrustedInProcessWidgetPlugin(payload: WidgetRegistrationPayload): void {
+  if (isTrustedInProcessWidgetPlugin(payload.pluginName)) {
+    return
+  }
+  throw recordWidgetSandboxDenial(
+    payload.widgetId,
+    payload.pluginName,
+    'dynamicExecution',
+    'untrusted-plugin-in-process-widget-blocked'
+  )
+}
+
 export async function handleWidgetRegister(payload: WidgetRegistrationPayload): Promise<void> {
   if (
     registeredWidgetHashes.get(payload.widgetId) === payload.hash &&
@@ -1740,6 +1945,7 @@ export async function handleWidgetRegister(payload: WidgetRegistrationPayload): 
     clearWidgetSandboxEvidence(payload.widgetId)
     sandboxEvidence = buildWidgetSandboxEvidence(payload)
     recordWidgetSandboxEvidence(sandboxEvidence)
+    assertTrustedInProcessWidgetPlugin(payload)
     if (isDev) {
       devLog(
         `[WidgetRegistry] register widget ${payload.widgetId} (${payload.pluginName}:${payload.featureId})`
@@ -1797,6 +2003,7 @@ export async function handleWidgetUpdate(payload: WidgetRegistrationPayload): Pr
     clearWidgetSandboxEvidence(payload.widgetId)
     sandboxEvidence = buildWidgetSandboxEvidence(payload)
     recordWidgetSandboxEvidence(sandboxEvidence)
+    assertTrustedInProcessWidgetPlugin(payload)
     if (isDev) {
       devLog(
         `[WidgetRegistry] update widget ${payload.widgetId} (${payload.pluginName}:${payload.featureId})`

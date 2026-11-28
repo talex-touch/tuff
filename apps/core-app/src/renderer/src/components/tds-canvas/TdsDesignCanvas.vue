@@ -14,6 +14,7 @@ import {
   type DevicePreset
 } from '../preview/tds-devices'
 import TdsDeviceFrame from '../preview/TdsDeviceFrame.vue'
+import { revokeBlobUrls } from '../../modules/widget-sandbox/inline-script-blobs'
 import {
   arrangeFramesGrid,
   buildSandboxedFrameSrcdoc,
@@ -1371,7 +1372,56 @@ onMounted(() => {
   }
 })
 
+const frameSrcdocCache = new Map<
+  string,
+  { signature: string; srcdoc: string; blobUrls: string[] }
+>()
+
+function resolveCanvasFrameSrcdoc(
+  cacheKey: string,
+  source: string,
+  kind: TdsCanvasFrame['kind'],
+  themeCss?: string
+): string {
+  const signature = `${kind}\0${themeCss ?? ''}\0${source}`
+  const cached = frameSrcdocCache.get(cacheKey)
+  if (cached && cached.signature === signature) {
+    return cached.srcdoc
+  }
+  if (cached) {
+    revokeBlobUrls(cached.blobUrls)
+  }
+  const blobUrls: string[] = []
+  const srcdoc = buildSandboxedFrameSrcdoc(source, kind, themeCss, {
+    rewriteInlineScripts: true,
+    onBlobUrl: (url) => blobUrls.push(url)
+  })
+  frameSrcdocCache.set(cacheKey, { signature, srcdoc, blobUrls })
+  return srcdoc
+}
+
+function clearCanvasFrameSrcdocCache(): void {
+  for (const entry of frameSrcdocCache.values()) {
+    revokeBlobUrls(entry.blobUrls)
+  }
+  frameSrcdocCache.clear()
+}
+
+watch(
+  () => props.frames.map((frame) => frame.id),
+  (frameIds) => {
+    const activeKeys = new Set(frameIds.map((id) => `frame:${id}`))
+    for (const [key, entry] of frameSrcdocCache.entries()) {
+      if (key.startsWith('frame:') && !activeKeys.has(key)) {
+        revokeBlobUrls(entry.blobUrls)
+        frameSrcdocCache.delete(key)
+      }
+    }
+  }
+)
+
 onBeforeUnmount(() => {
+  clearCanvasFrameSrcdocCache()
   clearPendingShieldDrag()
   cancelViewportSpring()
   themeObserver?.disconnect()
@@ -1690,7 +1740,8 @@ onBeforeUnmount(() => {
                 :sandbox="getFrameIframeSandbox(compareBeforeFrame.kind)"
                 :title="`${compareBeforeFrame.title} (${labels.compareBefore})`"
                 :srcdoc="
-                  buildSandboxedFrameSrcdoc(
+                  resolveCanvasFrameSrcdoc(
+                    'compare:before',
                     compareBeforeFrame.source,
                     compareBeforeFrame.kind,
                     props.themeCss
@@ -1721,7 +1772,8 @@ onBeforeUnmount(() => {
                 :sandbox="getFrameIframeSandbox(compareTargetFrame.kind)"
                 :title="`${compareTargetFrame.title} (${labels.compareAfter})`"
                 :srcdoc="
-                  buildSandboxedFrameSrcdoc(
+                  resolveCanvasFrameSrcdoc(
+                    'compare:after',
                     compareTargetFrame.source,
                     compareTargetFrame.kind,
                     props.themeCss
@@ -1956,7 +2008,14 @@ onBeforeUnmount(() => {
                 :class="{ 'is-blocked': isFrameIframeBlocked(frame.id) }"
                 :sandbox="getFrameIframeSandbox(frame.kind)"
                 :title="frame.title"
-                :srcdoc="buildSandboxedFrameSrcdoc(frame.source, frame.kind, props.themeCss)"
+                :srcdoc="
+                  resolveCanvasFrameSrcdoc(
+                    `frame:${frame.id}`,
+                    frame.source,
+                    frame.kind,
+                    props.themeCss
+                  )
+                "
                 :data-testid="`tds-canvas-frame-iframe-${frame.id}`"
               />
             </TdsDeviceFrame>

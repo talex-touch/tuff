@@ -164,6 +164,9 @@ function normalizeUrlCandidate(value: unknown): string {
 function isRepositoryUrl(url: string): boolean {
   try {
     const parsed = new URL(url)
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+      return false
+    }
     const hostname = parsed.hostname.toLowerCase()
     return ['github.com', 'gitlab.com', 'bitbucket.org', 'gitee.com'].includes(hostname)
   } catch {

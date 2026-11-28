@@ -396,6 +396,8 @@ describe('WorkspaceFileViewer', () => {
     expect(defaultIframe.attributes('sandbox')).toBe('allow-scripts allow-forms allow-modals')
     expect(defaultIframe.attributes('srcdoc')).toContain('Content-Security-Policy')
     expect(defaultIframe.attributes('srcdoc')).toContain("default-src 'none'")
+    expect(defaultIframe.attributes('srcdoc')).toContain('script-src blob:')
+    expect(defaultIframe.attributes('srcdoc')).not.toMatch(/script-src[^;"]*'unsafe-inline'/)
 
     // Open viewport picker, search with Chinese keyword, pick iPhone 17 Pro
     await wrapper.get('[data-testid="file-viewer-viewport-trigger"]').trigger('click')

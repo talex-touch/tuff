@@ -193,6 +193,10 @@ export function useDrag(sessionId: string, initialX: number = 100, initialY: num
    */
   onUnmounted(() => {
     if (isDragging.value) {
+      isDragging.value = false
+      showDockHint.value = false
+      dockHintPosition.value = undefined
+      store.setDraggingSession(null)
       document.removeEventListener('mousemove', handleDragMove)
       document.removeEventListener('mouseup', handleDragEnd)
     }

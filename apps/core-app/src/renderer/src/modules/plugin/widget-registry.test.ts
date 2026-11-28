@@ -10,11 +10,14 @@ const transportState = vi.hoisted(() => ({
   secureValues: new Map<string, string | null>()
 }))
 let handleWidgetRegister: typeof import('./widget-registry').handleWidgetRegister
+let handleWidgetUpdate: typeof import('./widget-registry').handleWidgetUpdate
 let handleWidgetFailed: typeof import('./widget-registry').handleWidgetFailed
 let handleWidgetUnregister: typeof import('./widget-registry').handleWidgetUnregister
 let buildWidgetSandboxEvidence: typeof import('./widget-registry').buildWidgetSandboxEvidence
 let getWidgetFailure: typeof import('./widget-registry').getWidgetFailure
 let getWidgetSandboxEvidence: typeof import('./widget-registry').getWidgetSandboxEvidence
+let isTrustedInProcessWidgetPlugin: typeof import('./widget-registry').isTrustedInProcessWidgetPlugin
+let sanitizeWidgetCss: typeof import('./widget-registry').sanitizeWidgetCss
 
 vi.mock('@talex-touch/utils/transport', () => ({
   useTuffTransport: () => ({
@@ -57,18 +60,22 @@ vi.mock('../../utils/renderer-log', () => ({
   })
 }))
 
-function makePayload(runtime: 'vue' | 'webcomponent' | 'arrow', code: string) {
+function makePayload(
+  runtime: 'vue' | 'webcomponent' | 'arrow',
+  code: string,
+  pluginName = 'touch-intelligence'
+) {
   return {
     code,
     dependencies: runtime === 'arrow' ? ['@arrow-js/core'] : runtime === 'vue' ? ['vue'] : [],
     featureId: `${runtime}.feature`,
     filePath: `/plugin/widgets/${runtime}.js`,
     hash: `${runtime}-hash`,
-    pluginName: 'test-plugin',
+    pluginName,
     runtime,
     runtimeStage: runtime === 'vue' ? 'stable' : 'beta',
     styles: '',
-    widgetId: `test-plugin::${runtime}`
+    widgetId: `${pluginName}::${runtime}`
   } as const
 }
 
@@ -103,7 +110,10 @@ describe('widget-registry runtime hosts', () => {
       getWidgetSandboxEvidence,
       handleWidgetFailed,
       handleWidgetRegister,
-      handleWidgetUnregister
+      handleWidgetUpdate,
+      handleWidgetUnregister,
+      isTrustedInProcessWidgetPlugin,
+      sanitizeWidgetCss
     } = await import('./widget-registry'))
     // 30s, not 10s. This import pulls a large graph and takes ~4.5s on its own, but the
     // hook runs while the rest of the 636-file suite is being transformed concurrently,
@@ -577,10 +587,9 @@ describe('widget-registry runtime hosts', () => {
           'localStorage.setItem("token", "plugin-a-token")',
           'document.cookie = "sid=plugin-a-cookie"',
           'module.exports = { setup: () => () => h("span", "writer") }'
-        ].join('\n')
-      ),
-      pluginName: 'plugin-a',
-      widgetId: 'plugin-a::vue'
+        ].join('\n'),
+        'touch-intelligence'
+      )
     }
     const reader = {
       ...makePayload(
@@ -589,10 +598,9 @@ describe('widget-registry runtime hosts', () => {
           'const { h } = require("vue")',
           'const seen = localStorage.getItem("token") || document.cookie || "isolated"',
           'module.exports = { setup: () => () => h("span", seen) }'
-        ].join('\n')
-      ),
-      pluginName: 'plugin-b',
-      widgetId: 'plugin-b::vue'
+        ].join('\n'),
+        'touch-translation'
+      )
     }
 
     await handleWidgetRegister(writer)
@@ -609,7 +617,7 @@ describe('widget-registry runtime hosts', () => {
 
   it('filters IndexedDB database names to the widget plugin namespace', async () => {
     const hostDatabases = vi.fn(async () => [
-      { name: 'test-plugin::private', version: 1 },
+      { name: 'touch-intelligence::private', version: 1 },
       { name: 'other-plugin::foreign', version: 2 }
     ])
     vi.stubGlobal('indexedDB', { databases: hostDatabases })
@@ -655,7 +663,7 @@ describe('widget-registry runtime hosts', () => {
     })
     const hostCaches = {
       open: vi.fn(async () => hostCache),
-      keys: vi.fn(async () => ['test-plugin::owned', 'other-plugin::foreign']),
+      keys: vi.fn(async () => ['touch-intelligence::owned', 'other-plugin::foreign']),
       match: hostCacheMatch
     }
     vi.stubGlobal('caches', hostCaches)
@@ -686,12 +694,12 @@ describe('widget-registry runtime hosts', () => {
     await mountRenderer(renderer, { widgetId: payload.widgetId })
     await cacheMatchesFinished
 
-    expect(hostCaches.open).toHaveBeenCalledWith('test-plugin::owned')
+    expect(hostCaches.open).toHaveBeenCalledWith('touch-intelligence::owned')
     expect(hostCaches.keys).toHaveBeenCalledTimes(2)
     expect(hostCacheMatch).toHaveBeenCalledTimes(2)
     expect(hostCacheMatch.mock.calls).toEqual([
-      ['/entry', expect.objectContaining({ cacheName: 'test-plugin::owned' })],
-      ['/entry', expect.objectContaining({ cacheName: 'test-plugin::owned' })]
+      ['/entry', expect.objectContaining({ cacheName: 'touch-intelligence::owned' })],
+      ['/entry', expect.objectContaining({ cacheName: 'touch-intelligence::owned' })]
     ])
     expect(hostCacheAdd).not.toHaveBeenCalled()
     expect(hostCacheAddAll).not.toHaveBeenCalled()
@@ -729,7 +737,7 @@ describe('widget-registry runtime hosts', () => {
       ].join('\n')
     )
 
-    expect(channelNames).toEqual(['test-plugin::updates'])
+    expect(channelNames).toEqual(['touch-intelligence::updates'])
     expect(hostPostMessage).toHaveBeenCalledWith({ type: 'widget-update' })
     expect(getWidgetSandboxAuditLog(payload.widgetId)).toEqual(
       expect.arrayContaining([
@@ -843,5 +851,102 @@ describe('widget-registry runtime hosts', () => {
     app.unmount()
     await nextTick()
     expect(hostAction).toHaveBeenCalledWith({ actionId: 'widget-cleanup' })
+  })
+
+  it('fail-closed rejects untrusted third-party plugins before evaluating widget code', async () => {
+    expect(isTrustedInProcessWidgetPlugin('touch-intelligence')).toBe(true)
+    expect(isTrustedInProcessWidgetPlugin('touch-translation')).toBe(true)
+    expect(isTrustedInProcessWidgetPlugin('third-party-plugin')).toBe(false)
+    expect(isTrustedInProcessWidgetPlugin('Touch-Intelligence')).toBe(false)
+    expect(isTrustedInProcessWidgetPlugin(undefined)).toBe(false)
+
+    const consoleLog = vi.spyOn(console, 'log').mockImplementation(() => undefined)
+    const untrusted = makePayload(
+      'vue',
+      'console.log("should-never-run"); module.exports = { setup: () => () => null }',
+      'third-party-plugin'
+    )
+
+    await expect(handleWidgetRegister(untrusted)).rejects.toThrow(
+      'untrusted-plugin-in-process-widget-blocked'
+    )
+    await expect(handleWidgetUpdate(untrusted)).rejects.toThrow(
+      'untrusted-plugin-in-process-widget-blocked'
+    )
+    expect(consoleLog).not.toHaveBeenCalled()
+    expect(await getRenderer(untrusted.widgetId)).toBeUndefined()
+    expect(getWidgetSandboxAuditLog(untrusted.widgetId)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          operation: 'dynamicExecution',
+          decision: 'denied',
+          reason: 'untrusted-plugin-in-process-widget-blocked'
+        })
+      ])
+    )
+  })
+
+  it('rejects non-function setTimeout/setInterval callbacks at runtime and cleans up active timers on unregister', async () => {
+    vi.useFakeTimers()
+    try {
+      const fired = vi.fn()
+      ;(window as unknown as Record<string, unknown>).__timerCallbackProbe = fired
+      const payload = await register(
+        'vue',
+        [
+          'const { h } = require("vue")',
+          'let blockedTimeout = false',
+          'let blockedInterval = false',
+          'const badCode = String("1+1")',
+          'try { setTimeout(badCode, 0) } catch { blockedTimeout = true }',
+          'try { setInterval(badCode, 10) } catch { blockedInterval = true }',
+          'setInterval(() => { globalThis.__shouldNeverFire = true }, 50)',
+          'module.exports = { setup: () => () => h("span", `${blockedTimeout}:${blockedInterval}`) }'
+        ].join('\n')
+      )
+
+      const renderer = await getRenderer(payload.widgetId)
+      const { root } = await mountRenderer(renderer, { widgetId: payload.widgetId })
+      expect(root.textContent).toContain('true:true')
+
+      handleWidgetUnregister({ widgetId: payload.widgetId })
+      expect(vi.getTimerCount()).toBe(0)
+      expect(fired).not.toHaveBeenCalled()
+    } finally {
+      delete (window as unknown as Record<string, unknown>).__timerCallbackProbe
+      vi.useRealTimers()
+    }
+  })
+
+  it('scopes injected widget CSS and strips exfiltration, breakout, and dangerous directives', async () => {
+    expect(sanitizeWidgetCss('@import url("https://evil.invalid/x.css");')).toBe('')
+    expect(sanitizeWidgetCss('body { background: \\75 rl(https://evil.invalid/p.png); }')).toBe('')
+    expect(
+      sanitizeWidgetCss('body { background: \\75\r\nrl(https://evil.invalid/leak.png); }')
+    ).toBe('')
+    expect(sanitizeWidgetCss('@\\69\r\nmport "https://evil.invalid/x.css";')).toBe('')
+    expect(sanitizeWidgetCss('body { background: cross-\\66/*c*/ade(a, b, 50%); }')).toBe('')
+    expect(sanitizeWidgetCss('body { width: exp\\72/*c*/ession(alert(1)); }')).toBe('')
+    expect(
+      sanitizeWidgetCss('body { background: image-\\73/*c*/et("https://evil.invalid/a.png" 1x); }')
+    ).toBe('')
+    expect(sanitizeWidgetCss('body { \\62/*c*/ehavior: xss.htc; }')).toBe('')
+    expect(sanitizeWidgetCss('.x { color: red; } } body { display: none } .y {')).toBe('')
+    expect(sanitizeWidgetCss('.ok { color: red; } /* unclosed')).toBe('')
+    expect(
+      sanitizeWidgetCss('.ok { background: url(data:image/png;base64,iVBORw0KGgo=); }')
+    ).toContain('data:image/png;base64,')
+
+    const payload = {
+      ...makePayload(
+        'vue',
+        'const { h } = require("vue"); module.exports = { setup: () => () => h("span", "styled") }'
+      ),
+      styles: '.card { color: green; }'
+    }
+    await handleWidgetRegister(payload)
+    const styleEl = document.head.querySelector(`style[data-widget-id="${payload.widgetId}"]`)
+    expect(styleEl?.textContent).toContain(`@scope ([data-widget-scope="${payload.widgetId}"])`)
+    expect(styleEl?.textContent).toContain('.card { color: green; }')
   })
 })

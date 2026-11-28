@@ -1938,6 +1938,15 @@ export function useSearch(
       const feature = resolvePluginEntityRunnableFeature(pluginEntity)
       if (feature) return handleExecute(feature)
     }
+
+    // Cancel any active search stream and invalidate its session before clearing results or
+    // activating a plugin feature so late deferred chunks / completion cannot overwrite state.
+    const cancelableDebounced = debouncedSearch as unknown as { cancel?: () => void }
+    cancelableDebounced.cancel?.()
+    cancelActiveSearchStream()
+    searchSequence += 1
+    currentSearchId.value = null
+
     const eventId = crypto.randomUUID()
 
     // Clipboard-history recommendation items have no execute provider in the
@@ -2272,9 +2281,11 @@ export function useSearch(
         activeActivations.value?.filter(
           (activation) => activation.id !== CONTEXT_ACTIONS_PROVIDER_ID
         ) ?? null
-      void transport.send(CoreBoxEvents.provider.deactivate, {
-        id: CONTEXT_ACTIONS_PROVIDER_ID
-      })
+      void transport
+        .send(CoreBoxEvents.provider.deactivate, {
+          id: CONTEXT_ACTIONS_PROVIDER_ID
+        })
+        .catch(() => {})
     }
 
     if (boxOptions.mode === BoxMode.INPUT || boxOptions.mode === BoxMode.COMMAND) {
@@ -2357,7 +2368,9 @@ export function useSearch(
 
   const unregSetQuery = transport.on(CoreBoxEvents.input.setQuery, ({ value, context }) => {
     contextActionRequest.value = null
-    void transport.send(CoreBoxEvents.provider.deactivate, { id: CONTEXT_ACTIONS_PROVIDER_ID })
+    void transport
+      .send(CoreBoxEvents.provider.deactivate, { id: CONTEXT_ACTIONS_PROVIDER_ID })
+      .catch(() => {})
     const nextValue = typeof value === 'string' ? value : ''
     programmaticQueryValue = nextValue
     oneShotQueryContext = context
@@ -2370,9 +2383,16 @@ export function useSearch(
 
   onMounted(() => {
     startIndexCommitStream()
-    transport.send(CoreBoxEvents.provider.getActivated).then((providers) => {
-      activeActivations.value = toActivations(providers as ActivationState | IProviderActivate[])
-    })
+    const mountSearchSequence = searchSequence
+    void transport
+      .send(CoreBoxEvents.provider.getActivated)
+      .then((providers) => {
+        if (searchDisposed) return
+        if (searchSequence !== mountSearchSequence) return
+        if (activeActivations.value && activeActivations.value.length > 0) return
+        activeActivations.value = toActivations(providers as ActivationState | IProviderActivate[])
+      })
+      .catch(() => {})
 
     const divisionSessionId = windowState.divisionBox?.sessionId
     if (isDetachedDivisionMode() && divisionSessionId) {

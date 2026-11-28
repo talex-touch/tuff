@@ -84,8 +84,7 @@ function handlePaste(): void {
       :disabled="isUIMode"
     >
       <template #completion>
-        <!-- eslint-disable-next-line vue/no-v-html -->
-        <div class="text-sm truncate" v-html="completionDisplay" />
+        <div class="text-sm truncate">{{ completionDisplay }}</div>
       </template>
     </BoxInput>
 

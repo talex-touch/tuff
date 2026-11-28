@@ -168,6 +168,8 @@ function failInitialState(reason: unknown): void {
 
 // State change listener cleanup
 let stateChangeCleanup: (() => void) | null = null
+let unmounted = false
+let receivedLiveState = false
 const transport = useTuffTransport()
 
 // Lifecycle
@@ -176,24 +178,20 @@ onMounted(() => {
   isLoading.value = true
 
   // Listen for state changes from main process
-  const handleStateChange = (data: DivisionBoxStateChangedPayload) => {
-    if (data.sessionId === props.sessionId) {
-      const oldState = currentState.value
-      currentState.value = data.newState
+  const handleStateChange = (data: DivisionBoxStateChangedPayload | null | undefined) => {
+    if (unmounted || !data || data.sessionId !== props.sessionId) return
+    receivedLiveState = true
+    const oldState = currentState.value
+    currentState.value = data.newState
 
-      devLog(`[DivisionBox ${props.sessionId}] State changed: ${oldState} -> ${data.newState}`)
+    devLog(`[DivisionBox ${props.sessionId}] State changed: ${oldState} -> ${data.newState}`)
 
-      // Update loading state based on new state
-      if (data.newState === 'active') {
-        isLoading.value = false
-      } else if (data.newState === 'prepare' || data.newState === 'attach') {
-        isLoading.value = true
-      }
+    // Update loading state based on new state
+    isLoading.value = data.newState === 'prepare' || data.newState === 'attach'
 
-      // Hide component when destroyed
-      if (data.newState === 'destroy') {
-        isVisible.value = false
-      }
+    // Hide component when destroyed
+    if (data.newState === 'destroy') {
+      isVisible.value = false
     }
   }
 
@@ -205,6 +203,7 @@ onMounted(() => {
   transport
     .send(DivisionBoxEvents.getState, { sessionId: props.sessionId })
     .then((response) => {
+      if (unmounted || receivedLiveState) return
       if (!response?.success) {
         // A non-success response is as terminal as a rejection: no stateChanged event for this
         // session will follow, so leaving the shell in `prepare` means the overlay never lifts.
@@ -212,19 +211,24 @@ onMounted(() => {
         return
       }
       const state = (response.data as { state?: string } | null | undefined)?.state
-      if (state) {
-        currentState.value = state
+      if (!state) {
+        failInitialState('Initial state response omitted state')
+        return
       }
-      if (state === 'active') {
-        isLoading.value = false
+      currentState.value = state
+      isLoading.value = state === 'prepare' || state === 'attach'
+      if (state === 'destroy') {
+        isVisible.value = false
       }
     })
     .catch((error: Error) => {
+      if (unmounted || receivedLiveState) return
       failInitialState(error)
     })
 })
 
 onUnmounted(() => {
+  unmounted = true
   // Cleanup state change listener
   if (stateChangeCleanup) {
     stateChangeCleanup()

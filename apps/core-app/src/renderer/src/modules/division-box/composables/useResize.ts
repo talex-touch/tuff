@@ -9,6 +9,7 @@
  */
 
 import type { SizePreset } from '../types'
+import { hasWindow } from '@talex-touch/utils/env'
 import { onUnmounted, ref } from 'vue'
 import { createRendererLogger } from '~/utils/renderer-log'
 import { useDivisionBoxStore } from '../store/division-box'
@@ -26,9 +27,13 @@ export type ResizeHandle = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw'
 const MIN_WIDTH = 300
 const MIN_HEIGHT = 200
 
-// Maximum dimensions
-const MAX_WIDTH = window.innerWidth
-const MAX_HEIGHT = window.innerHeight
+function getMaxWidth(): number {
+  return Math.max(MIN_WIDTH, hasWindow() ? window.innerWidth : MIN_WIDTH)
+}
+
+function getMaxHeight(): number {
+  return Math.max(MIN_HEIGHT, hasWindow() ? window.innerHeight : MIN_HEIGHT)
+}
 
 export function useResize(sessionId: string, initialSize: SizePreset) {
   const store = useDivisionBoxStore()
@@ -90,8 +95,8 @@ export function useResize(sessionId: string, initialSize: SizePreset) {
     }
 
     // Apply constraints
-    newWidth = Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, newWidth))
-    newHeight = Math.max(MIN_HEIGHT, Math.min(MAX_HEIGHT, newHeight))
+    newWidth = Math.max(MIN_WIDTH, Math.min(getMaxWidth(), newWidth))
+    newHeight = Math.max(MIN_HEIGHT, Math.min(getMaxHeight(), newHeight))
 
     dimensions.value = {
       width: newWidth,
@@ -123,8 +128,8 @@ export function useResize(sessionId: string, initialSize: SizePreset) {
    */
   const setDimensions = (newDimensions: Dimensions) => {
     dimensions.value = {
-      width: Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, newDimensions.width)),
-      height: Math.max(MIN_HEIGHT, Math.min(MAX_HEIGHT, newDimensions.height))
+      width: Math.max(MIN_WIDTH, Math.min(getMaxWidth(), newDimensions.width)),
+      height: Math.max(MIN_HEIGHT, Math.min(getMaxHeight(), newDimensions.height))
     }
     saveDimensions()
   }
@@ -152,6 +157,8 @@ export function useResize(sessionId: string, initialSize: SizePreset) {
    */
   onUnmounted(() => {
     if (isResizing.value) {
+      isResizing.value = false
+      store.setResizingSession(null)
       document.removeEventListener('mousemove', handleResizeMove)
       document.removeEventListener('mouseup', handleResizeEnd)
     }

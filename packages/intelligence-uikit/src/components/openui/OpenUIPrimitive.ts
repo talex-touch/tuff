@@ -69,18 +69,49 @@ const colors: Record<string, string> = {
   pink: '--openui-danger',
 }
 
+const SAFE_HEX_COLOR_RE = /^#(?:[0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/i
+const SAFE_FUNC_COLOR_RE = /^(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch)\(\s*[0-9.+%\s,/a-z-]+\)$/i
+const SAFE_COLOR_KEYWORDS = new Set(['transparent', 'currentcolor'])
+const SAFE_CSS_LENGTH_RE = /^(?:0|auto|inherit|initial|unset|fit-content|max-content|min-content|-?(?:\d+|\d*\.\d+)(?:px|%|em|rem|vh|vw|vmin|vmax|ch|ex))$/i
+
 function color(value: unknown): string | undefined {
   if (typeof value !== 'string')
     return undefined
-  return colors[value] ? `var(${colors[value]})` : value
+  const trimmed = value.trim()
+  if (!trimmed)
+    return undefined
+  if (Object.hasOwn(colors, trimmed))
+    return `var(${colors[trimmed]})`
+  const lowered = trimmed.toLowerCase()
+  if (
+    lowered.includes('url(')
+    || lowered.includes('image-set(')
+    || lowered.includes('var(')
+    || lowered.includes(';')
+    || lowered.includes('\\')
+    || lowered.includes('{')
+    || lowered.includes('}')
+  ) {
+    return undefined
+  }
+  if (SAFE_COLOR_KEYWORDS.has(lowered) || SAFE_HEX_COLOR_RE.test(trimmed) || SAFE_FUNC_COLOR_RE.test(trimmed))
+    return trimmed
+  return undefined
 }
 
 function length(value: unknown): string | undefined {
-  return typeof value === 'number' ? `${value}px` : typeof value === 'string' ? value : undefined
+  if (typeof value === 'number' && Number.isFinite(value))
+    return `${value}px`
+  if (typeof value === 'string') {
+    const trimmed = value.trim()
+    if (SAFE_CSS_LENGTH_RE.test(trimmed))
+      return trimmed
+  }
+  return undefined
 }
 
 function space(value: unknown): string | undefined {
-  return typeof value === 'number' ? `${Math.max(0, value) * 4}px` : undefined
+  return typeof value === 'number' && Number.isFinite(value) ? `${Math.max(0, value) * 4}px` : undefined
 }
 
 const radii: Record<string, string> = {
@@ -92,7 +123,9 @@ const radii: Record<string, string> = {
 }
 
 function radius(value: unknown): string | undefined {
-  return radii[String(value)] ?? length(value)
+  if (typeof value === 'string' && Object.hasOwn(radii, value))
+    return radii[value]
+  return length(value)
 }
 
 const badgeTones: Record<string, 'primary' | 'error' | 'success' | 'warning' | 'default'> = {
@@ -158,13 +191,13 @@ export default defineComponent({
         const style = {
           gap: space(p.gap),
           padding: space(p.padding),
-          alignItems: alignments[String(p.align)],
-          justifyContent: alignments[String(p.justify)],
+          alignItems: typeof p.align === 'string' && Object.hasOwn(alignments, p.align) ? alignments[p.align] : undefined,
+          justifyContent: typeof p.justify === 'string' && Object.hasOwn(alignments, p.justify) ? alignments[p.justify] : undefined,
           flexWrap: p.wrap ? 'wrap' : undefined,
           width: length(p.width),
           height: length(p.height),
           flex: typeof p.flex === 'number' ? `${p.flex} 1 0%` : undefined,
-          background: color(p.background),
+          backgroundColor: color(p.background),
           borderRadius: radius(p.radius),
           boxShadow: p.border ? 'inset 0 0 0 1px var(--openui-border-light)' : undefined,
           flexDirection: name === 'Box' && p.direction === 'row' ? 'row' : undefined,
