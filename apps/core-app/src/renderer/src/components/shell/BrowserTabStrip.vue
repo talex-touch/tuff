@@ -34,6 +34,7 @@ import { type HerdrProjectedSession, useHerdrRuntime } from '~/modules/herdr/use
 import { type HerdrStageViewMode, useHerdrStageControl } from '~/modules/herdr/useHerdrStageControl'
 import { useShellStageActions } from '~/modules/layout/useShellStageActions'
 import { useShellTerminal } from '~/modules/layout/useShellTerminal'
+import { vTdsLiveAnimation } from '~/modules/style/live-animation-clock'
 import {
   attachBrowserTabToSpace,
   BROWSER_SCOPE_KEY,
@@ -1566,6 +1567,7 @@ onBeforeUnmount(() => {
           @click="activeStageActions.branch?.()"
         >
           <span
+            v-tds-live-animation="stageBranching ? 'spin' : false"
             :class="
               stageBranching ? 'i-ri-loader-4-line BrowserTabStrip-Spin' : 'i-ri-git-branch-line'
             "
@@ -1871,13 +1873,27 @@ onBeforeUnmount(() => {
 }
 
 .BrowserTabStrip-Spin {
-  animation: browser-tabstrip-spin 0.9s linear infinite;
+  animation: browser-tabstrip-spin 1080ms steps(12, end) infinite;
 }
 
 @keyframes browser-tabstrip-spin {
-  to {
-    transform: rotate(360deg);
+  from {
+    rotate: 0deg;
   }
+  to {
+    rotate: 360deg;
+  }
+}
+
+html[data-live-anim-clock='active'] .BrowserTabStrip-Spin,
+html.tds-reduced-motion .BrowserTabStrip-Spin,
+html[data-live-anim-state='suppressed'] .BrowserTabStrip-Spin {
+  animation: none;
+}
+
+html.is-window-moving .BrowserTabStrip-Spin,
+html[data-live-anim-state='paused'] .BrowserTabStrip-Spin {
+  animation-play-state: paused;
 }
 
 @media (prefers-reduced-motion: reduce) {

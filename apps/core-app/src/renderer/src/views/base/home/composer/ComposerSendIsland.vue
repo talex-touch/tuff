@@ -741,9 +741,10 @@ defineExpose({ launch })
 
 @media (prefers-reduced-motion: no-preference) {
   // Paused rather than removed outside the running states: a removed spin would snap the wheel
-  // back to 0° in the middle of the fade-out.
+  // back to 0° in the middle of the fade-out. Stepped onto ~90-100ms ticks to match CoreApp's
+  // low-frequency live animation clock over translucent/refraction surfaces.
   .ComposerSendIsland-RingConic {
-    animation: composer-ring-spin var(--composer-ring-turn) linear infinite;
+    animation: composer-ring-spin var(--composer-ring-turn) steps(24, end) infinite;
     animation-play-state: paused;
   }
 
@@ -757,11 +758,43 @@ defineExpose({ launch })
   }
 
   .ComposerSendIsland[data-state='waiting'] .ComposerSendIsland-RingPulse {
-    animation: composer-ring-breathe var(--composer-ring-breathe) ease-in-out infinite;
+    animation: composer-ring-breathe var(--composer-ring-breathe) steps(16, end) infinite;
   }
 
   .ComposerSendIsland[data-state='waiting'].is-bloomed .ComposerSendIsland-Square {
-    animation: composer-square-breathe var(--composer-ring-breathe) ease-in-out infinite;
+    animation: composer-square-breathe var(--composer-ring-breathe) steps(16, end) infinite;
+  }
+
+  html.is-window-moving .ComposerSendIsland[data-state] .ComposerSendIsland-RingConic,
+  html[data-live-anim-state='paused'] .ComposerSendIsland[data-state] .ComposerSendIsland-RingConic,
+  html.is-window-moving .ComposerSendIsland[data-state='waiting'] .ComposerSendIsland-RingPulse,
+  html[data-live-anim-state='paused']
+    .ComposerSendIsland[data-state='waiting']
+    .ComposerSendIsland-RingPulse,
+  html.is-window-moving
+    .ComposerSendIsland[data-state='waiting'].is-bloomed
+    .ComposerSendIsland-Square,
+  html[data-live-anim-state='paused']
+    .ComposerSendIsland[data-state='waiting'].is-bloomed
+    .ComposerSendIsland-Square {
+    animation-play-state: paused;
+  }
+
+  html.tds-reduced-motion .ComposerSendIsland[data-state] .ComposerSendIsland-RingConic,
+  html[data-live-anim-state='suppressed']
+    .ComposerSendIsland[data-state]
+    .ComposerSendIsland-RingConic,
+  html.tds-reduced-motion .ComposerSendIsland[data-state='waiting'] .ComposerSendIsland-RingPulse,
+  html[data-live-anim-state='suppressed']
+    .ComposerSendIsland[data-state='waiting']
+    .ComposerSendIsland-RingPulse,
+  html.tds-reduced-motion
+    .ComposerSendIsland[data-state='waiting'].is-bloomed
+    .ComposerSendIsland-Square,
+  html[data-live-anim-state='suppressed']
+    .ComposerSendIsland[data-state='waiting'].is-bloomed
+    .ComposerSendIsland-Square {
+    animation: none;
   }
 }
 

@@ -1,15 +1,23 @@
 <script lang="ts" name="TdsLintPopover" setup>
 import type { TdsLintIssue, TdsLintSeverity } from '~/modules/tds-lint'
 import { TxPopover } from '@talex-touch/tuffex/popover'
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { SHELL_MENU_CARD } from '~/components/shell/shell-menu-panel'
-import { formatLintIssuesForAi, summarizeLintIssues } from '~/modules/tds-lint'
+import {
+  buildTdsAutoFixTracker,
+  formatLintIssuesForAi,
+  summarizeLintIssues
+} from '~/modules/tds-lint'
 
 const props = withDefaults(
   defineProps<{
     issues: readonly TdsLintIssue[]
     antiSlop?: boolean
+    autoFix?: boolean
+    autoFixOnError?: boolean
+    contentDigest?: string
+    frameId?: string
     displayPath?: string
     aiActionsEnabled?: boolean
     sending?: boolean
@@ -18,6 +26,10 @@ const props = withDefaults(
   }>(),
   {
     antiSlop: true,
+    autoFix: undefined,
+    autoFixOnError: undefined,
+    contentDigest: '',
+    frameId: '',
     displayPath: '',
     aiActionsEnabled: false,
     sending: false,
@@ -28,14 +40,26 @@ const props = withDefaults(
 
 const emit = defineEmits<{
   (event: 'update:antiSlop', value: boolean): void
+  (event: 'update:autoFix', value: boolean): void
+  (event: 'update:autoFixOnError', value: boolean): void
   (event: 'update:open', value: boolean): void
-  (event: 'send-to-ai', payload: { prompt: string; issues: TdsLintIssue[] }): void
+  (
+    event: 'send-to-ai',
+    payload: { prompt: string; issues: TdsLintIssue[]; autoFix?: boolean; contentDigest?: string }
+  ): void
+  (
+    event: 'auto-fix',
+    payload: { prompt: string; issues: TdsLintIssue[]; contentDigest: string }
+  ): void
   (event: 'select-issue', issue: TdsLintIssue): void
 }>()
 
 const { t } = useI18n()
 
 const internalOpen = ref(false)
+const internalAutoFix = ref(false)
+const autoFixTracker = buildTdsAutoFixTracker()
+
 const popoverOpen = computed<boolean>({
   get: () => (props.open !== undefined ? props.open : internalOpen.value),
   set: (value) => {
@@ -43,6 +67,18 @@ const popoverOpen = computed<boolean>({
     emit('update:open', value)
   }
 })
+
+const effectiveAutoFix = computed<boolean>(() => {
+  if (props.autoFix !== undefined) return props.autoFix
+  if (props.autoFixOnError !== undefined) return props.autoFixOnError
+  return internalAutoFix.value
+})
+
+const normalizedContentDigest = computed<string>(() => props.contentDigest.trim())
+
+const showAutoFixToggle = computed<boolean>(
+  () => props.aiActionsEnabled && Boolean(normalizedContentDigest.value)
+)
 
 const counts = computed(() => summarizeLintIssues(props.issues))
 
@@ -84,6 +120,50 @@ function severityIcon(severity: TdsLintSeverity): string {
 function toggleAntiSlop(): void {
   emit('update:antiSlop', !props.antiSlop)
 }
+
+function toggleAutoFix(): void {
+  if (!showAutoFixToggle.value) return
+  const next = !effectiveAutoFix.value
+  internalAutoFix.value = next
+  emit('update:autoFix', next)
+  emit('update:autoFixOnError', next)
+}
+
+watch(
+  [
+    effectiveAutoFix,
+    () => props.aiActionsEnabled,
+    normalizedContentDigest,
+    () => props.issues,
+    () => props.sending,
+    () => props.frameId,
+    () => props.displayPath
+  ],
+  () => {
+    if (!props.aiActionsEnabled || !effectiveAutoFix.value || !normalizedContentDigest.value) return
+    const decision = autoFixTracker.consume({
+      enabled: true,
+      contentDigest: normalizedContentDigest.value,
+      issues: props.issues,
+      frameId: props.frameId,
+      displayPath: props.displayPath,
+      inFlight: props.sending
+    })
+    if (!decision.shouldTrigger) return
+    emit('auto-fix', {
+      prompt: decision.prompt,
+      issues: decision.errorIssues,
+      contentDigest: decision.digest
+    })
+    emit('send-to-ai', {
+      prompt: decision.prompt,
+      issues: decision.errorIssues,
+      autoFix: true,
+      contentDigest: decision.digest
+    })
+  },
+  { immediate: true }
+)
 
 function handleSendToAi(): void {
   if (props.sending || props.issues.length === 0) return
@@ -157,7 +237,7 @@ function handleSelectIssue(issue: TdsLintIssue): void {
         <button
           type="button"
           role="switch"
-          class="TdsLintPopover-AntiSlopBtn"
+          class="TdsLintPopover-SwitchBtn TdsLintPopover-AntiSlopBtn"
           :class="{ 'is-checked': antiSlop }"
           :aria-checked="antiSlop"
           data-testid="tds-lint-antislop-toggle"
@@ -165,6 +245,30 @@ function handleSelectIssue(issue: TdsLintIssue): void {
         >
           <span class="TdsLintPopover-SwitchLabel">
             {{ t('home.tdsLint.antiSlopToggle', 'Anti-AI-slop rules') }}
+          </span>
+          <span class="TdsLintPopover-SwitchTrack" aria-hidden="true">
+            <span class="TdsLintPopover-SwitchThumb" />
+          </span>
+        </button>
+
+        <button
+          v-if="showAutoFixToggle"
+          type="button"
+          role="switch"
+          class="TdsLintPopover-SwitchBtn TdsLintPopover-AutoFixBtn"
+          :class="{ 'is-checked': effectiveAutoFix }"
+          :aria-checked="effectiveAutoFix"
+          :title="
+            t(
+              'home.tdsLint.autoFixHint',
+              'Automatically sends one repair pass per frame change when errors appear'
+            )
+          "
+          data-testid="tds-lint-autofix-toggle"
+          @click="toggleAutoFix"
+        >
+          <span class="TdsLintPopover-SwitchLabel">
+            {{ t('home.tdsLint.autoFixToggle', 'Auto-fix errors (1-pass)') }}
           </span>
           <span class="TdsLintPopover-SwitchTrack" aria-hidden="true">
             <span class="TdsLintPopover-SwitchThumb" />
@@ -350,7 +454,7 @@ function handleSelectIssue(issue: TdsLintIssue): void {
   }
 }
 
-.TdsLintPopover-AntiSlopBtn {
+.TdsLintPopover-SwitchBtn {
   display: flex;
   gap: 8px;
   align-items: center;
@@ -393,7 +497,7 @@ function handleSelectIssue(issue: TdsLintIssue): void {
   background: var(--shell-border-strong);
   box-sizing: border-box;
 
-  .TdsLintPopover-AntiSlopBtn.is-checked & {
+  .TdsLintPopover-SwitchBtn.is-checked & {
     background: var(--shell-primary);
   }
 }
@@ -406,7 +510,7 @@ function handleSelectIssue(issue: TdsLintIssue): void {
   transform: translateX(0);
   transition: transform var(--shell-duration-fast) var(--shell-ease-out);
 
-  .TdsLintPopover-AntiSlopBtn.is-checked & {
+  .TdsLintPopover-SwitchBtn.is-checked & {
     transform: translateX(12px);
   }
 

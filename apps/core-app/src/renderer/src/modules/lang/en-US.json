@@ -3385,7 +3385,14 @@
       "canvasMockupExportPrintHtml": "Print / Save PDF",
       "canvasMockupExporting": "Exporting…",
       "canvasMockupExportFailed": "Export failed. Please try again.",
-      "canvasMockupExportPngFailed": "PNG export failed: could not rasterize board image."
+      "canvasMockupExportPngFailed": "PNG export failed: could not rasterize board image.",
+      "canvasSessionLoading": "Loading saved canvas…",
+      "canvasSessionLoadFailed": "Could not load the saved canvas session. Autosave is paused to protect existing data.",
+      "canvasSessionSaveFailed": "Could not save canvas changes. Please retry.",
+      "canvasSessionSaveTooLarge": "Canvas exceeds the storage size limit and was not saved. Remove unused frames or history snapshots, then try again.",
+      "canvasSessionSaveFrameLimit": "Canvas exceeds the maximum of {max} frames and was not saved. Remove frames to resume saving.",
+      "canvasFrameLimitReached": "Board limit reached ({max} frames). Remove a frame before adding another.",
+      "canvasSessionRetry": "Retry"
     },
     "tdsLint": {
       "title": "TDS Visual Lint",
@@ -3399,7 +3406,9 @@
       "severityError": "Error",
       "severityWarning": "Warning",
       "severityInfo": "Info",
-      "sendToAi": "Send to AI to fix"
+      "sendToAi": "Send to AI to fix",
+      "autoFixToggle": "Auto-fix errors (1-pass)",
+      "autoFixHint": "Automatically sends one repair pass per frame change when errors appear"
     }
   },
   "settingsNav": {

@@ -57,7 +57,11 @@ import type {
 } from './worktree'
 import type { WorkflowExecutionContext } from './intelligence-workflow-service'
 import { createHash, randomUUID } from 'node:crypto'
-import { openUIPrompt } from '@talex-touch/intelligence-uikit/openui-prompt'
+import {
+  openUIPrompt,
+  shouldInjectTdsDesignPrompt,
+  tdsDesignArtifactPrompt
+} from '@talex-touch/intelligence-uikit/openui-prompt'
 import { realpath } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import process from 'node:process'
@@ -2041,7 +2045,8 @@ export class AiCliOrchestrator {
           systemPrompt: [
             profile.systemPrompt,
             importedSystemPrompt,
-            workspace ? openUIPrompt() : ''
+            workspace ? openUIPrompt() : '',
+            workspace && shouldInjectTdsDesignPrompt(run.objective) ? tdsDesignArtifactPrompt : ''
           ]
             .filter(Boolean)
             .join('\n\n')

@@ -32,6 +32,9 @@ function createTempFixtureRepo() {
     'buiTokensScss',
     'baseSurfaceVue',
     'themePresetsTs',
+    'rendererThemePresetsTs',
+    'tuffexReactStylesScss',
+    'tuffexWcStylesScss',
   ]) {
     const src = path.join(REPO_ROOT, RELATIVE_PATHS[key])
     const dst = path.join(dir, RELATIVE_PATHS[key])
@@ -58,6 +61,7 @@ afterEach(() => {
 
 describe('scripts/tds-tokens-sync.mjs', () => {
   it('passes cleanly on the live repository and produces a compact markdown parity report', () => {
+    expect(RELATIVE_PATHS.themePresetsTs).toBe('packages/utils/tds-theme/presets.ts')
     const result = verifyTdsTokensSync({ rootDir: REPO_ROOT })
 
     expect(result.errors).toEqual([])
@@ -66,12 +70,30 @@ describe('scripts/tds-tokens-sync.mjs', () => {
     expect(result.summary.corePrimitives.documented).toBe(36)
     expect(result.summary.themePacks).toHaveLength(8)
     expect(result.summary.themePacks.every(row => row.passed)).toBe(true)
+    expect(result.summary.multiFrameworkParity).toHaveLength(2)
+    expect(result.summary.multiFrameworkParity.every(row => row.passed)).toBe(true)
 
     const report = formatMarkdownReport(result)
     expect(report).toContain('# TDS Token Parity & Contrast Report')
     expect(report).toContain('Status: **PASS**')
     expect(report).toContain('`tds-apple-neutral`')
     expect(report).toContain('`tds-graphite-emerald`')
+  })
+
+  it('catches multi-framework token root drift and renderer theme pack delegation drift', () => {
+    const result = verifyTdsTokensSync({
+      rootDir: REPO_ROOT,
+      overrides: {
+        rendererThemePresetsTs: 'export const TDS_APPLE_NEUTRAL_PACK: TdsThemePack = { meta: { id: "tds-apple-neutral" }, tokens: { light: {}, dark: {} } }',
+        tuffexReactStylesScss: ':root { --tx-bg-color: #fafafa; }\n',
+        tuffexWcStylesScss: '.dark { --tx-bg-color: #000000; }\n',
+      },
+    })
+
+    expect(result.ok).toBe(false)
+    expect(result.errors.some(err => err.scope === 'theme-pack-delegation')).toBe(true)
+    expect(result.errors.some(err => err.scope === 'multi-framework-tokens' && err.package === 'tuffex-react')).toBe(true)
+    expect(result.errors.some(err => err.scope === 'multi-framework-tokens' && err.package === 'tuffex-wc')).toBe(true)
   })
 
   it('catches shell-tokens.scss value drift deterministically', () => {

@@ -676,3 +676,117 @@ describe('conversation deletion clears only its own native pointer', () => {
     expect(await countPointers(`id = 'ptr-remote-kept'`)).toBe(1)
   })
 })
+
+describe('conversation deletion cascades to tds_canvas_sessions and fences late saves', () => {
+  let disposeCascade: (() => void) | null = null
+
+  async function seedCanvasSession(conversationId: string): Promise<string> {
+    const { hashCanvasConversationId } = await import('../tds-capture/canvas-session-cascade')
+    const keyHash = hashCanvasConversationId(conversationId)!
+    await client.execute({
+      sql: 'INSERT INTO tds_canvas_sessions (key_hash, envelope, updated_at) VALUES (?, ?, ?)',
+      args: [
+        keyHash,
+        '{"v":1,"backend":"local-secret","alg":"A256GCM","kid":"k","n":"n","c":"c","t":"t"}',
+        1000
+      ]
+    })
+    return keyHash
+  }
+
+  async function countCanvasSessions(keyHash: string): Promise<number> {
+    const res = await client.execute({
+      sql: 'SELECT COUNT(*) AS n FROM tds_canvas_sessions WHERE key_hash = ?',
+      args: [keyHash]
+    })
+    return Number(res.rows[0]?.n ?? 0)
+  }
+
+  beforeEach(async () => {
+    tempDir = await mkdtemp(join(tmpdir(), 'conversation-canvas-cascade-'))
+    client = createClient({ url: `file:${join(tempDir, 'test.db')}` })
+    db = drizzle(client)
+    await migrate(db, { migrationsFolder })
+  })
+
+  afterEach(async () => {
+    disposeCascade?.()
+    disposeCascade = null
+    client.close()
+    await rm(tempDir, { recursive: true, force: true })
+  })
+
+  it('local delete removes tds_canvas_sessions atomically and notifies cascade tombstone handler', async () => {
+    const { registerTdsCanvasSessionCascadeHandler } =
+      await import('../tds-capture/canvas-session-cascade')
+    const marked: string[] = []
+    const cleared: string[] = []
+    const deletedViaCascade: string[] = []
+    disposeCascade = registerTdsCanvasSessionCascadeHandler({
+      markConversationDeleted: (id) => marked.push(id),
+      clearConversationDeletedTombstone: (id) => cleared.push(id),
+      deleteForDeletedConversation: async (id) => {
+        deletedViaCascade.push(id)
+      }
+    })
+
+    const { deleteConversation, saveConversation } = await loadStore()
+    await saveConversation({ id: 'conv-canvas-1', projectId: null, title: 'c1', messages: [] })
+    await saveConversation({ id: 'conv-canvas-2', projectId: null, title: 'c2', messages: [] })
+    const hash1 = await seedCanvasSession('conv-canvas-1')
+    const hash2 = await seedCanvasSession('conv-canvas-2')
+
+    await deleteConversation('conv-canvas-1')
+
+    expect(await countCanvasSessions(hash1)).toBe(0)
+    expect(await countCanvasSessions(hash2)).toBe(1)
+    expect(marked).toEqual(['conv-canvas-1'])
+    expect(deletedViaCascade).toEqual(['conv-canvas-1'])
+
+    // Recreating the same conversation ID clears its deletion tombstone.
+    await saveConversation({
+      id: 'conv-canvas-1',
+      projectId: null,
+      title: 'recreated',
+      messages: []
+    })
+    expect(cleared).toContain('conv-canvas-1')
+  })
+
+  it('sync delete cascades Home canvas sessions but preserves local project canvas sessions', async () => {
+    const { registerTdsCanvasSessionCascadeHandler } =
+      await import('../tds-capture/canvas-session-cascade')
+    const marked: string[] = []
+    const deletedViaCascade: string[] = []
+    disposeCascade = registerTdsCanvasSessionCascadeHandler({
+      markConversationDeleted: (id) => marked.push(id),
+      clearConversationDeletedTombstone: () => {},
+      deleteForDeletedConversation: async (id) => {
+        deletedViaCascade.push(id)
+      }
+    })
+
+    await seedProject('proj-canvas')
+    const { applyConversationSyncDeletion, saveConversation } = await loadStore()
+    await saveConversation({ id: 'sync-home', projectId: null, title: 'home', messages: [] })
+    await saveConversation({
+      id: 'sync-project',
+      projectId: 'proj-canvas',
+      title: 'project',
+      messages: []
+    })
+    const homeHash = await seedCanvasSession('sync-home')
+    const projectHash = await seedCanvasSession('sync-project')
+
+    await applyConversationSyncDeletion('sync-home', 5000)
+    expect(await countCanvasSessions(homeHash)).toBe(0)
+    expect(marked).toEqual(['sync-home'])
+    expect(deletedViaCascade).toEqual(['sync-home'])
+
+    // Local project thread is excluded from sync deletion -> canvas session and tombstone untouched.
+    await applyConversationSyncDeletion('sync-project', 5001)
+    expect(await countCanvasSessions(projectHash)).toBe(1)
+    expect(marked).toEqual(['sync-home'])
+    expect(deletedViaCascade).toEqual(['sync-home'])
+  })
+})

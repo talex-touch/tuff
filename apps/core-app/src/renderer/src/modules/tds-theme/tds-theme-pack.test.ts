@@ -601,5 +601,85 @@ describe('TDS Theme Pack protocol, WCAG 2.1 AA validator & runtime', () => {
       expect(store.activePackId.value).toBe('custom-pack-0')
       expect(document.getElementById(TDS_THEME_PACK_STYLE_ID)?.textContent).toContain('#1e5b3f')
     })
+
+    it('retains legacy v1 custom packs failing Refraction 0.85 across hydration and preset switches so users can export and repair them', () => {
+      // #757575 on #ffffff clears opaque WCAG AA (4.61:1 >= 4.5:1)
+      // but falls below 4.5:1 under Refraction 0.85 translucency over #e8e8ec (~4.47:1).
+      const legacyPack = makeCustomValidPack({
+        meta: {
+          id: 'legacy-borderline-pack',
+          name: 'Legacy Borderline',
+          description: 'Stored under v1 before Refraction 0.85 contrast checks existed.',
+          version: '1.0.0',
+          author: 'Upgrading User'
+        }
+      })
+      legacyPack.tokens.light.bg = '#ffffff'
+      legacyPack.tokens.light.surface = '#ffffff'
+      legacyPack.tokens.light.textRegular = '#757575'
+
+      expect(validateTdsThemePack(legacyPack, { checkRefraction: false }).valid).toBe(true)
+      expect(validateTdsThemePack(legacyPack).valid).toBe(false)
+
+      window.localStorage.setItem(
+        TDS_THEME_PACK_STORAGE_KEY,
+        JSON.stringify({
+          version: 1,
+          activePackId: legacyPack.meta.id,
+          customPacks: [legacyPack]
+        })
+      )
+
+      // Hydration falls back to default theme for active selection because the legacy pack
+      // fails strict Refraction checks, while keeping the legacy pack in customPacksRef.
+      const hydrated = hydrateTdsThemePack(document)
+      const store = useTdsThemePack()
+      expect(hydrated.meta.id).toBe(TDS_DEFAULT_THEME_PACK_ID)
+      expect(store.activePackId.value).toBe(TDS_DEFAULT_THEME_PACK_ID)
+      expect(document.getElementById(TDS_THEME_PACK_STYLE_ID)).toBeNull()
+      expect(store.customPacks.value.map((pack) => pack.meta.id)).toEqual([
+        'legacy-borderline-pack'
+      ])
+
+      // Attempting to activate the unrepaired legacy pack fails closed without overwriting state
+      expect(store.selectPack('legacy-borderline-pack', { doc: document })).toBe(false)
+      expect(store.activePackId.value).toBe(TDS_DEFAULT_THEME_PACK_ID)
+
+      // Selecting a built-in preset persists the new activePackId without erasing the legacy pack
+      expect(store.selectPack('tds-obsidian-cobalt', { doc: document })).toBe(true)
+      expect(store.activePackId.value).toBe('tds-obsidian-cobalt')
+      expect(store.customPacks.value.map((pack) => pack.meta.id)).toEqual([
+        'legacy-borderline-pack'
+      ])
+
+      const persistedRaw = window.localStorage.getItem(TDS_THEME_PACK_STORAGE_KEY)
+      expect(persistedRaw).not.toBeNull()
+      const persisted = JSON.parse(persistedRaw!) as {
+        activePackId: string
+        customPacks: TdsThemePack[]
+      }
+      expect(persisted.activePackId).toBe('tds-obsidian-cobalt')
+      expect(persisted.customPacks.map((pack) => pack.meta.id)).toEqual(['legacy-borderline-pack'])
+
+      // Legacy pack remains exportable for user inspection and repair
+      const exported = store.exportPackJson('legacy-borderline-pack')
+      expect(exported).not.toBeNull()
+      const exportedPack = JSON.parse(exported!) as TdsThemePack
+      expect(exportedPack.meta.id).toBe('legacy-borderline-pack')
+      expect(exportedPack.tokens.light.textRegular).toBe('#757575')
+
+      // Strict Refraction check still rejects re-importing the unrepaired pack
+      const unrepairedImport = store.importPackJson(exported!, { doc: document })
+      expect(unrepairedImport.valid).toBe(false)
+      expect(unrepairedImport.errors.some((err) => err.includes('refraction(0.85)'))).toBe(true)
+
+      // Repairing the exported pack and re-importing succeeds and replaces it in place
+      exportedPack.tokens.light.textRegular = '#354059'
+      const repairedImport = store.importPackJson(JSON.stringify(exportedPack), { doc: document })
+      expect(repairedImport.valid).toBe(true)
+      expect(store.activePackId.value).toBe('legacy-borderline-pack')
+      expect(store.customPacks.value).toHaveLength(1)
+      expect(document.getElementById(TDS_THEME_PACK_STYLE_ID)?.textContent).toContain('#354059')
+    })
   })
 })

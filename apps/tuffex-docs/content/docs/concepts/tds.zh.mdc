@@ -1,0 +1,83 @@
+---
+title: TDS 设计体系（Tuff Design System）
+description: 单一真相源令牌、Refraction 对比度规范、主题包与 36 个核心原语
+---
+
+# TDS（Tuff Design System）设计体系
+
+Tuff Design System（TDS）是 CoreApp 桌面端、Nexus 文档站、TuffEx 组件库、AIUI（OpenUI）与沙箱设计画布共享的视觉工程契约。全部色板、材质参数、动效节拍与核心原语清单均由同一份可机检目录驱动，而非手工维护的多份样式文档。
+
+## 单一真相源
+
+全部语义令牌以 `docs/design/tds/tokens.json` 为单一真相源，统一约束三层令牌落点：
+
+| 层级 | 前缀 | 适用范围 | 权威实现 |
+| --- | --- | --- | --- |
+| CoreApp 壳层 | `--shell-*` | 桌面主窗体、工作区面板、画布宿主 | `apps/core-app/src/renderer/src/styles/shell-tokens.scss` |
+| TuffEx 组件库 | `--tx-*` | Vue 3 / Web Component / React 组件 | `packages/tuffex/packages/components/style/variables.scss` |
+| AI 套件（BUI） | `--tx-bui-*` | AI 对话、推理流与智能体界面 | `packages/tuffex/packages/components/style/bui-tokens.scss` |
+
+- `scripts/tds-tokens-sync.mjs`（`pnpm tds:check`）在 CI 中校验 `tokens.json`、`shell-tokens.scss`、`variables.scss`、`bui-tokens.scss`、`TxBaseSurface.vue`、36 个核心原语目录以及全部 51 组 WCAG 2.1 对比度配对零漂移。
+- 业务页面仅消费 `--shell-*` 或 `--tx-*` 令牌，禁止写死十六进制/rgba 色值或编写页面级自定义覆盖样式。
+
+## #141414 暗色基底与 Refraction 默认材质
+
+TDS 将经过光学标定的中性暗灰底板与物理琉光折射材质结合为默认视觉基线：
+
+- **`#141414` 中性暗底，严禁纯黑 `#000000`**：纯黑会导致 OLED 滚动紫色拖尾并抹平投影层次。CoreApp 与 TuffEx 统一以 `#141414` 作为 L0 画布底板、`#1c1c1e` / `#1d1e1f` 作为 L1 容器层、`#2c2c2e` / `#262727` 作为 L2 抬升层。
+- **`refraction` 为默认材质**：`TxBaseSurface`、`TxCard`、`TxModal`、`TxPopover`、`TxSelect` 与 `TxDropdownMenu` 默认使用 `mode="refraction"`（`refractionRenderer="css"`）。切换为 `flat`、`plain`、`mask`、`blur`、`glass`、`acrylic` 或 `mica` 必须经过用户明确确认。
+- **非对称运动降级**：拖动或缩放透明窗口时，材质在 **0ms** 当帧退让，静止 **140ms** 后再分层恢复，保障 120Hz 帧预算。
+- **0.85 折射玻璃可读性**：半透明材质以 `0.85` 不透明度分别叠加在浅色（`#e8e8ec`）与暗色（`#0b0b0d`）桌面壁纸上时，仍须满足 WCAG 2.1 AA 可读性底线。
+
+## 13–14px 生产力字阶与瞬时交互
+
+桌面生产力界面以高信息密度与零迟滞反馈为核心目标：
+
+- **13–14px 基准字阶**：正文 `13px`、表单控件值 `14px`、辅助元信息 `12px`、微标签 `11px`，行内代码采用 `0.9em` 等宽字体调和 x 高度。
+- **排版硬规则**：正文严禁修改 `letter-spacing`，正文禁用 `font-weight: 700`；标题用 `text-wrap: balance`，定稿正文用 `text-wrap: pretty`，实时指标统一开启 `font-variant-numeric: tabular-nums`。
+- **暗色视网膜光晕字重补偿**：暗色主题下强调字重整体下调 40（`500 → 460`、`600 → 560`、`700 → 660`），抵消暗底白字的膨胀错觉。
+- **0ms 瞬时悬停与低频锁相**：`:hover` 颜色切换保持 **0ms** 不加过渡；菜单点击采用 `90ms + 90ms` 确认律动；常驻指示动画统一收敛至 90ms 相位锁定的 `live-animation-clock`，响应减动效与隐藏页签暂停门控。
+
+## 严格的 WCAG 2.1 AA/AAA 对比度阶梯
+
+TDS 提供四套经过真实 sRGB 相对亮度与 Alpha 合成校验的主题阶梯（`:root`、`.dark`、`html.contrast`、`html.dark.contrast`）：
+
+- **常规正文**：对比度 `>= 4.5:1`（WCAG 2.1 AA），包含所有语义状态胶囊在 `-soft` 半透明底色与 `--shell-bg` 合成后的实测对比度。
+- **高对比度模式**：`html.contrast` 与 `html.dark.contrast` 将文本抬升至 `>= 7.0:1`（AAA），关闭半透明折射，并将壳层语义色直接收敛到 `--tx-color-*` 高对比度 Mixin。
+- **色相 + 图标 + 文案三重互锁**：严禁仅凭颜色传递状态，所有语义状态均须同时具备图标符号与明确文本标签。
+
+## 三层声明式主题包
+
+`TdsThemePack`（`schemaVersion: 1`）是 CoreApp 桌面换肤与沙箱设计画布复用的纯数据 JSON 协议，分为三层：
+
+1. **`tokens`**：白名单化的亮/暗 `--shell-*` 色板与圆角令牌；校验器拦截 `url()`、`javascript:`、`@import` 与任意 CSS 注入字符。
+2. **`material`**：窗口材质偏好（`pure`、`refraction`、`filter`）、动效档位（`full`、`crisp`、`reduced`）与低频时钟帧率。
+3. **`surface`**：画布底纹（`none`、`dots`、`grid`、`paper-grain`）、主色微润透明度与边角高光。
+
+四套内置主题包（`tds-apple-neutral`、`tds-obsidian-cobalt`、`tds-paper-ink`、`tds-graphite-emerald`）均通过不透明与 `0.85` 折射态 WCAG AA 门禁；运行时样式严格限定在 `:not(.contrast)` 下，绝不覆盖无障碍高对比度色板。
+
+## Core 36 正交核心原语
+
+TuffEx 全量包含 193 个组件模块，但日常业务开发与 AI 界面生成统一收敛至 7 大类 **36 个正交核心原语**（表面与布局、排版与展示、数据与指标、表单与控件、导航与命令、浮层与反馈、AI 核心）：
+
+- 消除同义组件漂移（统一选型 `TxSelect`、`TxModal`、`TxEmptyState` 等唯一标准原语）。
+- 让 OpenUI 声明 Schema 与 LLM 设计提示词保持紧凑可控，显著降低虚构属性与风格割裂。
+- 当业务需求超出 36 核心原语时，按确定的特化路径升级至全量组件（如 `TxSensitiveInput`、`TxContextMenu`、`charts`）。
+
+## 实时令牌、Refraction 对比度与 Core 36 检视器
+
+在下方交互式检视器中直接读取 `docs/design/tds/tokens.json` 的四套主题色板与收敛映射、对比实色与 `0.85` 折射玻璃在浅/暗壁纸上的实时 WCAG 2.1 对比度，并按分类检索跳转全部 36 个 Core 原语文档。
+
+:::TuffDemoWrapper{demo="TdsTokenInspectorDemo"}
+:::
+
+## 延伸阅读
+
+- **[#141414 深灰画布与三层表面阶梯](/zh/concepts/dark-palette)** — 深入解析中性暗色阶梯与投影亮度余量。
+- **[Surface 8 种材质物理选型与确认门禁](/zh/concepts/surface-taxonomy)** — 对比 Refraction、Glass、Acrylic、Mica 材质与切换门禁。
+- **[双极性语义着色与 4.5:1 对比度守恒](/zh/concepts/color-mix-contrast)** — `color-mix` 墨水融合与深浅对比度计算。
+- **[13–14px 生产力基准与等宽 0.9em 调和](/zh/concepts/type-scale)** — 桌面生产力字阶与等宽代码视觉协调。
+- **[微动效响应纪律与 Sub-100ms 瞬时悬停](/zh/concepts/micro-motion)** — 空间锚点过渡与 0ms 悬停纪律。
+- **[设计基础](/zh/foundations)** — TuffEx 基础公理与 CSS 令牌参考。
+- **[主题定制](/zh/theming)** — 四层覆盖体系、暗色选择器与高对比度触发机制。
+- **[TxBaseSurface](/zh/base-surface)** — 统一琉光折射材质容器组件 API。

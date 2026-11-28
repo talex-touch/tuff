@@ -111,8 +111,15 @@ const META = path.join(REPO_ROOT, 'apps/core-app/resources/db/migrations/meta')
  * main-DB run-message log with per-run sequence keys and cascading run deletion. The real
  * migrated libSQL store tests pin ordering, missing-parent rejection and deletion. This
  * records only the known gap; it does not regenerate or repair historical snapshots.
+ *
+ * Raised 43 → 44 on 2026-11-28 for `0057_tds_canvas_sessions`, the hand-written primary-DB
+ * table storing CoreApp secure-store AES-256-GCM encrypted TDS Design Canvas sessions keyed
+ * by SHA-256(conversationId) with LRU `updated_at` indexing and conversation-delete cascade.
+ * Real migrated libSQL tests in tds-capture.test.ts and conversation-store.transaction.test.ts
+ * pin schema application, encrypted persistence, LRU eviction and deletion cascade. This
+ * records only the known gap; it does not regenerate or repair historical snapshots.
  */
-export const KNOWN_MISSING_SNAPSHOTS = 43
+export const KNOWN_MISSING_SNAPSHOTS = 44
 
 export function snapshotGap(metaDir = META) {
   const journal = JSON.parse(readFileSync(path.join(metaDir, '_journal.json'), 'utf8'))

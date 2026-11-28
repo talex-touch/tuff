@@ -42,7 +42,8 @@
 
 
 ## Design System & Concepts
-- **[Design System & Concepts Overview](/tuffex/en/concepts)** — In-depth breakdown across geometry, surfaces, dark palette, typography, micro-motion, and AI streaming.
+- **[Design System & Concepts Overview](/tuffex/en/concepts)** — In-depth breakdown across TDS tokens, geometry, surfaces, dark palette, typography, micro-motion, and AI streaming.
+- **[Tuff Design System (TDS) & Live Token Inspector](/tuffex/en/concepts/tds)** — Single-source `tokens.json`, live WCAG 2.1 refraction contrast checker, 3-layer Theme Packs, and Core 36 primitives.
 - **[G2 Continuous Curvature & Squircle Geometry](/tuffex/en/concepts/curvature)** — Beyond circular fillets, curvature continuity, and superellipses.
 - **[Surface 8-Material Taxonomy](/tuffex/en/concepts/surface-taxonomy)** — Refraction (default) and the 8-surface material matrix.
 - **[#141414 Canvas & 3-Tier Elevation](/tuffex/en/concepts/dark-palette)** — Preventing OLED smearing and the 3-tier dark scale.

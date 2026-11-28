@@ -28,6 +28,7 @@ import { useConversationHistory } from '~/modules/conversation/useConversationHi
 import { useConversationLoading } from '~/modules/conversation/useConversationLoading'
 import { blankConversationOwner, useProjectFolders } from '~/modules/layout/useProjectFolders'
 import { closeConversationTabEverywhere } from '~/modules/layout/useShellWorkspaceTabs'
+import { vTdsLiveAnimation } from '~/modules/style/live-animation-clock'
 import { useProjectStore } from '~/stores/projects'
 import MetaHintBadge from './MetaHintBadge.vue'
 import ShellHerdrSpace from './ShellHerdrSpace.vue'
@@ -418,6 +419,7 @@ function onRailRowClick(row: RailConversationRow): void {
               <Transition name="shell-rail-dot">
                 <span
                   v-if="row.id && isConversationLoading(row.id)"
+                  v-tds-live-animation="'breathe'"
                   class="ShellConversationList-RailLoadingDot"
                   aria-hidden="true"
                 />
@@ -861,7 +863,7 @@ function onRailRowClick(row: RailConversationRow): void {
 
   &.is-loading.active {
     border-color: color-mix(in srgb, var(--shell-primary) 32%, transparent);
-    animation: shell-rail-glow-pulse 2.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+    animation: shell-rail-glow-pulse 2160ms steps(24, end) infinite;
 
     &::before {
       content: '';
@@ -874,7 +876,12 @@ function onRailRowClick(row: RailConversationRow): void {
         transparent 0deg,
         transparent 40deg,
         var(--shell-primary) 100deg,
-        color-mix(in srgb, var(--shell-primary) 70%, #93c5fd) 140deg,
+        color-mix(
+            in srgb,
+            var(--shell-primary) 70%,
+            var(--tx-color-primary-light-5, var(--shell-primary))
+          )
+          140deg,
         transparent 180deg
       );
       pointer-events: none;
@@ -886,7 +893,7 @@ function onRailRowClick(row: RailConversationRow): void {
         linear-gradient(#000 0 0);
       -webkit-mask-composite: xor;
       mask-composite: exclude;
-      animation: shell-rail-spin-angle 2.4s linear infinite;
+      animation: shell-rail-spin-angle 2160ms steps(24, end) infinite;
       z-index: 2;
     }
   }
@@ -935,7 +942,7 @@ function onRailRowClick(row: RailConversationRow): void {
   background: var(--shell-primary);
   box-shadow: 0 0 5px var(--shell-primary);
   pointer-events: none;
-  animation: shell-rail-dot-pulse 1.4s ease-in-out infinite;
+  animation: shell-rail-dot-pulse 1440ms steps(16, end) infinite;
   z-index: 3;
 }
 
@@ -975,12 +982,43 @@ function onRailRowClick(row: RailConversationRow): void {
 @keyframes shell-rail-dot-pulse {
   0%,
   100% {
-    transform: scale(0.85);
-    opacity: 0.65;
+    scale: 0.94;
+    opacity: 0.52;
   }
   50% {
-    transform: scale(1.15);
+    scale: 1;
     opacity: 1;
+  }
+}
+
+html[data-live-anim-clock='active'] .ShellConversationList-RailLoadingDot,
+html.tds-reduced-motion .ShellConversationList-RailLoadingDot,
+html[data-live-anim-state='suppressed'] .ShellConversationList-RailLoadingDot {
+  animation: none;
+}
+
+html.is-window-moving .ShellConversationList-RailLoadingDot,
+html[data-live-anim-state='paused'] .ShellConversationList-RailLoadingDot {
+  animation-play-state: paused;
+}
+
+html.is-window-moving .ShellConversationList-RailItem.is-loading.active,
+html[data-live-anim-state='paused'] .ShellConversationList-RailItem.is-loading.active {
+  animation-play-state: paused;
+
+  &::before {
+    animation-play-state: paused;
+  }
+}
+
+html.tds-reduced-motion .ShellConversationList-RailItem.is-loading.active,
+html[data-live-anim-state='suppressed'] .ShellConversationList-RailItem.is-loading.active {
+  animation: none;
+  border-color: var(--shell-primary-border);
+  box-shadow: inset 0 0 0 1px var(--shell-primary-border);
+
+  &::before {
+    display: none;
   }
 }
 

@@ -3,6 +3,7 @@ import type { ConversationTurnMeta } from '~/modules/conversation/useHomeConvers
 import { useI18n } from 'vue-i18n'
 import MetaHintBadge from '~/components/shell/MetaHintBadge.vue'
 import ShellAccountAvatar from '~/components/shell/ShellAccountAvatar.vue'
+import { vTdsLiveAnimation } from '~/modules/style/live-animation-clock'
 import HomeTurnInfoMenu from './HomeTurnInfoMenu.vue'
 
 /**
@@ -72,6 +73,7 @@ const { t } = useI18n()
         @click="$emit('branch')"
       >
         <span
+          v-tds-live-animation="props.branching ? 'spin' : false"
           :class="props.branching ? 'i-ri-loader-4-line HomeTopBar-Spin' : 'i-ri-git-branch-line'"
         />
       </button>
@@ -228,13 +230,27 @@ const { t } = useI18n()
 }
 
 .HomeTopBar-Spin {
-  animation: home-topbar-spin 0.9s linear infinite;
+  animation: home-topbar-spin 1080ms steps(12, end) infinite;
 }
 
 @keyframes home-topbar-spin {
-  to {
-    transform: rotate(360deg);
+  from {
+    rotate: 0deg;
   }
+  to {
+    rotate: 360deg;
+  }
+}
+
+html[data-live-anim-clock='active'] .HomeTopBar-Spin,
+html.tds-reduced-motion .HomeTopBar-Spin,
+html[data-live-anim-state='suppressed'] .HomeTopBar-Spin {
+  animation: none;
+}
+
+html.is-window-moving .HomeTopBar-Spin,
+html[data-live-anim-state='paused'] .HomeTopBar-Spin {
+  animation-play-state: paused;
 }
 
 @media (prefers-reduced-motion: reduce) {

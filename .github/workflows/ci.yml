@@ -234,6 +234,13 @@ jobs:
       - name: Check CoreApp UI contract
         run: pnpm check coreapp-ui-contract
 
+      # Single-source TDS token parity (tokens.json <-> shell-tokens.scss / TuffEx variables /
+      # Core 36 primitives) and WCAG 2.1 AA contrast across all 4 ramps + 4 built-in theme packs
+      # (opaque + 0.85 refraction). Its Vitest suite (`scripts/tds-tokens-sync.test.mjs`) runs
+      # inside `Run repo-root tooling tests` (`pnpm test:scripts`) below.
+      - name: Check TDS tokens and contrast sync
+        run: pnpm tds:check
+
       # The release workflow calls this on a Windows runner only, where a regression would first
       # surface mid-release. The self-test runs its pure assertions on every platform instead.
       - name: Check Windows installer artifact assertions

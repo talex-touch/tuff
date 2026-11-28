@@ -30,6 +30,8 @@ import {
   createCanvasHistoryState,
   diffSnapshots,
   fnv1aHash,
+  MAX_CANVAS_HISTORY_BLOBS,
+  MAX_CANVAS_HISTORY_ENTRIES,
   peekSnapshot,
   redoSnapshot,
   restoreSnapshot,
@@ -346,6 +348,51 @@ describe('canvas-history content-addressed blob deduplication and forward restor
     const undoRestore = undoSnapshot(restored!.state)
     expect(undoRestore.frames).toHaveLength(2)
     expect(undoRestore.frames?.[0]?.source).toBe('<h1>v2</h1>')
+  })
+
+  it('aligns entry/blob caps with main store and prunes oldest snapshots so retained snapshots never lose blobs', () => {
+    expect(MAX_CANVAS_HISTORY_ENTRIES).toBe(50)
+    expect(MAX_CANVAS_HISTORY_BLOBS).toBe(512)
+
+    // 40 snapshots x 4 distinct sources = 160 distinct blobs (> 128) all retained cleanly
+    const history = createCanvasHistory()
+    for (let s = 0; s < 40; s += 1) {
+      const frames = Array.from({ length: 4 }, (_, f) =>
+        makeFrame({ id: `f-${f}`, source: `<h1>snap-${s}-frame-${f}</h1>` })
+      )
+      history.commitSnapshot(`v${s}`, frames, { now: 1000 + s, id: `snap-${s}` })
+    }
+    expect(history.getEntries()).toHaveLength(40)
+    expect(history.getBlobCount()).toBe(160)
+    for (const entry of history.getEntries()) {
+      const materialized = history.peekSnapshot(entry.id)
+      expect(materialized).toHaveLength(4)
+      for (const frame of materialized!) {
+        expect(frame.source).not.toBe('')
+      }
+    }
+
+    // Tighter maxBlobs cap prunes oldest snapshots first so EVERY retained snapshot preserves its source
+    let bounded = createCanvasHistoryState()
+    for (let s = 0; s < 5; s += 1) {
+      const frames = Array.from({ length: 4 }, (_, f) =>
+        makeFrame({ id: `f-${f}`, source: `<p>bounded-${s}-${f}</p>` })
+      )
+      bounded = commitSnapshot(bounded, `b${s}`, frames, {
+        now: 2000 + s,
+        id: `b-${s}`,
+        maxBlobs: 10
+      }).state
+    }
+    expect(Object.keys(bounded.blobs).length).toBeLessThanOrEqual(10)
+    expect(bounded.entries.map((entry) => entry.id)).toEqual(['b-3', 'b-4'])
+    for (const entry of bounded.entries) {
+      const frames = peekSnapshot(bounded, entry.id)
+      expect(frames).toHaveLength(4)
+      for (const frame of frames!) {
+        expect(frame.source).toContain(entry.id.replace('b-', 'bounded-'))
+      }
+    }
   })
 })
 

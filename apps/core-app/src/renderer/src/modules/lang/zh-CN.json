@@ -3385,7 +3385,14 @@
       "canvasMockupExportPrintHtml": "打印 / 保存 PDF",
       "canvasMockupExporting": "导出中…",
       "canvasMockupExportFailed": "导出失败，请重试。",
-      "canvasMockupExportPngFailed": "PNG 导出失败：无法栅格化画板图像。"
+      "canvasMockupExportPngFailed": "PNG 导出失败：无法栅格化画板图像。",
+      "canvasSessionLoading": "正在加载已保存画布…",
+      "canvasSessionLoadFailed": "无法加载已保存的画布会话。已暂停自动保存以保护现有数据。",
+      "canvasSessionSaveFailed": "无法保存画布更改，请重试。",
+      "canvasSessionSaveTooLarge": "画布超出存储大小上限，未能保存。请移除多余画板或历史快照后重试。",
+      "canvasSessionSaveFrameLimit": "画布超过最多 {max} 个画板的上限，未能保存。请删除部分画板以恢复保存。",
+      "canvasFrameLimitReached": "已达到画板数量上限（{max} 个）。请先删除一个画板后再添加。",
+      "canvasSessionRetry": "重试"
     },
     "tdsLint": {
       "title": "TDS 视觉检查",
@@ -3399,7 +3406,9 @@
       "severityError": "错误",
       "severityWarning": "警告",
       "severityInfo": "提示",
-      "sendToAi": "发送给 AI 修复"
+      "sendToAi": "发送给 AI 修复",
+      "autoFixToggle": "出错自动修复（单轮）",
+      "autoFixHint": "仅在出现错误时对每版画板自动发起一次修复"
     }
   },
   "settingsNav": {

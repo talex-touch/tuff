@@ -371,7 +371,7 @@ const infoRows = computed(() => {
 
   &.is-loading.active {
     border-color: color-mix(in srgb, var(--shell-primary) 32%, transparent);
-    animation: shell-row-glow-pulse 2.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+    animation: shell-row-glow-pulse 2160ms steps(24, end) infinite;
 
     &::before {
       content: '';
@@ -384,7 +384,12 @@ const infoRows = computed(() => {
         transparent 0deg,
         transparent 40deg,
         var(--shell-primary) 100deg,
-        color-mix(in srgb, var(--shell-primary) 70%, #93c5fd) 140deg,
+        color-mix(
+            in srgb,
+            var(--shell-primary) 70%,
+            var(--tx-color-primary-light-5, var(--shell-primary))
+          )
+          140deg,
         transparent 180deg
       );
       pointer-events: none;
@@ -396,7 +401,7 @@ const infoRows = computed(() => {
         linear-gradient(#000 0 0);
       -webkit-mask-composite: xor;
       mask-composite: exclude;
-      animation: shell-row-spin-angle 2.4s linear infinite;
+      animation: shell-row-spin-angle 2160ms steps(24, end) infinite;
       z-index: 2;
     }
   }
@@ -610,6 +615,26 @@ const infoRows = computed(() => {
     box-shadow:
       inset 0 0 0 1px color-mix(in srgb, var(--shell-primary) 50%, transparent),
       inset 0 0 12px color-mix(in srgb, var(--shell-primary) 28%, transparent);
+  }
+}
+
+html.is-window-moving .ShellProjectRows-Row.is-loading.active,
+html[data-live-anim-state='paused'] .ShellProjectRows-Row.is-loading.active {
+  animation-play-state: paused;
+
+  &::before {
+    animation-play-state: paused;
+  }
+}
+
+html.tds-reduced-motion .ShellProjectRows-Row.is-loading.active,
+html[data-live-anim-state='suppressed'] .ShellProjectRows-Row.is-loading.active {
+  animation: none;
+  border-color: var(--shell-primary-border);
+  box-shadow: inset 0 0 0 1px var(--shell-primary-border);
+
+  &::before {
+    display: none;
   }
 }
 

@@ -42,7 +42,8 @@
 
 
 ## 设计体系与概念
-- **[设计体系与工程概念总览](/tuffex/zh/concepts)** — 几何曲率、物理材质、色彩暗色、排版工程、微动效节拍与 AI 流式交互 18 篇细致拆解。
+- **[设计体系与工程概念总览](/tuffex/zh/concepts)** — TDS 令牌体系、几何曲率、物理材质、色彩暗色、排版工程、微动效节拍与 AI 流式交互 19 篇细致拆解。
+- **[TDS 设计体系与实时令牌检视器](/tuffex/zh/concepts/tds)** — 单一真相源 `tokens.json`、WCAG 2.1 折射对比度实时检验、三层主题包与 Core 36 核心原语。
 - **[G2 连续曲率与超椭圆几何](/tuffex/zh/concepts/curvature)** — 超越标准圆角，曲率连续性与超椭圆方程。
 - **[Surface 8 种材质物理选型](/tuffex/zh/concepts/surface-taxonomy)** — Refraction（默认）与 8 种材质选型矩阵。
 - **[#141414 深灰画布与三层表面阶梯](/tuffex/zh/concepts/dark-palette)** — OLED 防拖尾残影与三层深灰空间阶梯。

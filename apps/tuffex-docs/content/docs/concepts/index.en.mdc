@@ -7,7 +7,11 @@ description: Tuff and TuffEx core design concepts, physical geometric laws, and 
 
 The Tuff design system is not a mere collection of visual tokens, but a rigorous engineering contract built upon **perceptual ergonomics**, **modern streaming computation**, and **high-velocity productivity discipline**.
 
-This section systematically breaks down the "why" and "how" behind every design decision across geometry, material physics, color science, typography, micro-motion, and AI streaming interactions.
+This section systematically breaks down the "why" and "how" behind every design decision across the unified TDS token system, geometry, material physics, color science, typography, micro-motion, and AI streaming interactions.
+
+## Tuff Design System (TDS)
+
+- **[Tuff Design System (TDS) & Live Token Inspector](/en/concepts/tds)** — Single-source `tokens.json`, `#141414` dark neutral base, default `refraction` surface, live WCAG 2.1 0.85 contrast checker, 3-layer Theme Packs, and the Core 36 primitives matrix.
 
 ## Geometry and Curvature
 

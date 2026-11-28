@@ -36,3 +36,10 @@ const prompt = generateSystemPrompt({
 export function openUIPrompt(): string {
   return prompt
 }
+
+export {
+  buildTdsDesignArtifactPrompt,
+  shouldInjectTdsDesignPrompt,
+  TDS_DESIGN_PROMPT_MAX_BYTES,
+  tdsDesignArtifactPrompt,
+} from './tds-design-prompt'
