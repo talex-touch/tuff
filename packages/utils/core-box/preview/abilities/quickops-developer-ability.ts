@@ -875,17 +875,25 @@ function createFullCharSet(): RegexCharSet {
   return { ascii, nonAscii: true };
 }
 
+function setAsciiBit(ascii: Uint32Array, code: number): void {
+  const word = code >>> 5;
+  ascii[word] = (ascii[word] ?? 0) | (1 << (code & 31));
+}
+
+function clearAsciiBit(ascii: Uint32Array, code: number): void {
+  const word = code >>> 5;
+  ascii[word] = (ascii[word] ?? 0) & ~(1 << (code & 31));
+}
+
 function addCodeToCharSet(target: RegexCharSet, code: number, ignoreCase: boolean): void {
   if (code < 0) return;
   if (code < 128) {
-    target.ascii[code >>> 5] |= 1 << (code & 31);
+    setAsciiBit(target.ascii, code);
     if (ignoreCase) {
       if (code >= 65 && code <= 90) {
-        const lower = code + 32;
-        target.ascii[lower >>> 5] |= 1 << (lower & 31);
+        setAsciiBit(target.ascii, code + 32);
       } else if (code >= 97 && code <= 122) {
-        const upper = code - 32;
-        target.ascii[upper >>> 5] |= 1 << (upper & 31);
+        setAsciiBit(target.ascii, code - 32);
       }
     }
   } else {
@@ -909,7 +917,9 @@ function addRangeToCharSet(
 }
 
 function mergeCharSets(target: RegexCharSet, source: RegexCharSet): void {
-  for (let i = 0; i < 4; i += 1) target.ascii[i] |= source.ascii[i]!;
+  for (let i = 0; i < 4; i += 1) {
+    target.ascii[i] = (target.ascii[i] ?? 0) | (source.ascii[i] ?? 0);
+  }
   if (source.nonAscii) target.nonAscii = true;
 }
 
@@ -1176,8 +1186,8 @@ function parseRegexAst(
       pos += 1;
       const set = createFullCharSet();
       if (!dotAll) {
-        set.ascii[10 >>> 5] &= ~(1 << (10 & 31));
-        set.ascii[13 >>> 5] &= ~(1 << (13 & 31));
+        clearAsciiBit(set.ascii, 10);
+        clearAsciiBit(set.ascii, 13);
       }
       return { kind: "charset", set };
     }

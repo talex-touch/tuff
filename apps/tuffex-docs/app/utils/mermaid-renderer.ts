@@ -1,10 +1,12 @@
+import { hasDocument, hasWindow } from '@talex-touch/utils/env'
+
 let mermaidInitPromise: Promise<typeof import('mermaid')['default'] | null> | null = null
 let lastAppliedTheme: 'dark' | 'default' | null = null
 
 function isClientRuntime(): boolean {
   if (import.meta.server)
     return false
-  return Boolean(import.meta.client) || (typeof window !== 'undefined' && typeof document !== 'undefined')
+  return Boolean(import.meta.client) || (hasWindow() && hasDocument())
 }
 
 async function loadMermaid() {
