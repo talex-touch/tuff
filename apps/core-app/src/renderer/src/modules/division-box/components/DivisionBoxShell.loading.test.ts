@@ -16,7 +16,13 @@ import { ref } from 'vue'
 
 const mocks = vi.hoisted(() => ({
   send: vi.fn(),
-  on: vi.fn(() => vi.fn())
+  on: vi.fn(
+    (
+      _event: unknown,
+      _cb: (payload: { sessionId: string; newState: string }) => void
+    ): (() => void) =>
+      () => {}
+  )
 }))
 
 vi.mock('@talex-touch/utils/transport', () => ({
@@ -125,5 +131,36 @@ describe('DivisionBoxShell does not hang on the loading overlay', () => {
     await flushPromises()
 
     expect(wrapper.find('.loading-indicator').exists()).toBe(true)
+  })
+
+  it('clears loading overlay for settled non-active states and does not let stale getState overwrite a newer live state event', async () => {
+    const stateListeners: Array<(payload: { sessionId: string; newState: string }) => void> = []
+    mocks.on.mockImplementation(
+      (_event: unknown, cb: (payload: { sessionId: string; newState: string }) => void) => {
+        stateListeners.push(cb)
+        return () => {
+          const idx = stateListeners.indexOf(cb)
+          if (idx >= 0) stateListeners.splice(idx, 1)
+        }
+      }
+    )
+
+    const deferredState = Promise.withResolvers<{ success: boolean; data: { state: string } }>()
+    mocks.send.mockReturnValueOnce(deferredState.promise)
+
+    const wrapper = mountShell()
+    // Live state transition arrives while initial getState() is still in flight
+    for (const listener of stateListeners) {
+      listener({ sessionId: 'session-1', newState: 'inactive' })
+    }
+    await flushPromises()
+    expect(wrapper.find('.loading-indicator').exists()).toBe(false)
+
+    // Stale initial getState returning 'prepare' must not regress live state back to loading
+    deferredState.resolve({ success: true, data: { state: 'prepare' } })
+    await flushPromises()
+    expect(wrapper.find('.loading-indicator').exists()).toBe(false)
+
+    wrapper.unmount()
   })
 })

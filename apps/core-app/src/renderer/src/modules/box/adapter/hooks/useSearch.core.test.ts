@@ -2068,6 +2068,15 @@ describe('useSearch CoreBox reopen behavior', () => {
     await hook.handleExecute(featureItem)
     await flushPromises()
 
+    state.searchResultForRequest = (payload, requestIndex) => {
+      const base = createSearchResult(getSearchQueryText(payload), requestIndex)
+      const activations = (payload as { activations?: TuffSearchResult['activate'] } | null)
+        ?.activations
+      return activations?.length ? { ...base, activate: activations } : base
+    }
+    await hook.handleSearchImmediate({ force: true })
+    await flushPromises()
+
     const updatedWidgetItem = {
       id: 'intelligence-widget',
       kind: 'feature',
@@ -2673,6 +2682,49 @@ describe('useSearch CoreBox reopen behavior', () => {
           })
         ])
       )
+    })
+
+    it('cancels an active search stream when handleExecute runs so late chunks cannot clobber execution state', async () => {
+      state.deferCompletion = true
+      const hook = useSearch(createBoxOptions(), createClipboardOptions())
+      await flushPromises()
+
+      hook.searchVal.value = 'translate'
+      await nextTick()
+      await flushPromises()
+      expect(hook.loading.value).toBe(true)
+
+      const activeStream = state.searchRequests.at(-1)!
+      const staleSessionId = `stream-session-${state.searchRequests.length}`
+      state.streamCancel.mockClear()
+
+      const appItem = {
+        id: 'app-exec-1',
+        kind: 'app',
+        source: { id: 'app-provider', type: 'application' },
+        render: { mode: 'default', basic: { title: 'App' } }
+      } as TuffItem
+
+      await hook.handleExecute(appItem)
+      expect(state.streamCancel).toHaveBeenCalledTimes(1)
+      expect(hook.loading.value).toBe(false)
+
+      const countBeforeLateChunk = hook.res.value.length
+      activeStream.options.onData({
+        type: 'update',
+        sessionId: staleSessionId,
+        items: [
+          {
+            id: 'stale-late-item',
+            kind: 'app',
+            source: { id: 'test-source', type: 'system' },
+            render: { mode: 'default', basic: { title: 'Stale' } }
+          } as TuffItem
+        ]
+      })
+      await flushPromises()
+      expect(hook.res.value.length).toBe(countBeforeLateChunk)
+      expect(hook.res.value.some((item) => item.id === 'stale-late-item')).toBe(false)
     })
   })
 })

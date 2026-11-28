@@ -167,4 +167,58 @@ describe('useAuth focus-prompt interval lifecycle', () => {
     auth.cancelPendingBrowserLogin()
     expect(vi.getTimerCount()).toBe(0)
   })
+
+  it('clears prior pending timers on re-entrant loginWithBrowser and cleans up on retryPendingBrowserLogin error', async () => {
+    let loginCalls = 0
+    mocks.send.mockImplementation(async (event: string) => {
+      if (event === 'auth:session:getState') {
+        return { isLoaded: true, isSignedIn: false, user: null, sessionId: null }
+      }
+      if (event === 'auth:session:login') {
+        loginCalls += 1
+        if (loginCalls === 3) {
+          throw new Error('browser open failed')
+        }
+        return {
+          initiated: true,
+          authorizeUrl: `https://example.test/auth/${loginCalls}`,
+          userCode: `CODE-${loginCalls}`
+        }
+      }
+      if (event === 'auth:session:cancelLogin') {
+        return { cancelled: true }
+      }
+      return null
+    })
+
+    const { useAuth } = await import('./useAuth')
+    let auth!: ReturnType<typeof useAuth>
+
+    const wrapper = mount(
+      defineComponent({
+        setup() {
+          auth = useAuth()
+          return () => h('div')
+        }
+      })
+    )
+    await flushPromises()
+
+    const firstLogin = auth.loginWithBrowser()
+    await flushPromises()
+
+    // Re-entering loginWithBrowser supersedes and cleanly resolves the first attempt without timer leaks
+    const secondLogin = auth.loginWithBrowser()
+    await flushPromises()
+    const firstResult = await firstLogin
+    expect(firstResult.success).toBe(false)
+
+    // Retrying when transport throws settles pending login and leaves zero orphaned timers
+    await auth.reopenBrowserLogin()
+    const secondResult = await secondLogin
+    expect(secondResult.success).toBe(false)
+    expect(vi.getTimerCount()).toBe(0)
+
+    wrapper.unmount()
+  })
 })

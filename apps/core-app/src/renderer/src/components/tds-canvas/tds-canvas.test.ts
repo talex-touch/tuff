@@ -217,12 +217,29 @@ describe('canvas-geometry physics, layout, snapping, and strict CSP sandbox', ()
     expect(htmlDoc).toContain('Content-Security-Policy')
     expect(htmlDoc).toContain(TDS_CANVAS_FRAME_CSP)
     expect(htmlDoc).toContain("default-src 'none'")
+    expect(htmlDoc).toContain('script-src blob:')
+    expect(htmlDoc).not.toMatch(/script-src[^;"]*'unsafe-inline'/)
     expect(htmlDoc).toContain("form-action 'none'")
     expect(htmlDoc).toContain('sandbox="allow-scripts allow-forms allow-modals"')
     expect(htmlDoc).not.toContain('allow-same-origin')
     expect(htmlDoc).toContain('&quot;ok&quot;')
     expect(htmlDoc).toContain('&amp;')
     expect(getFrameIframeSandbox('html')).toBe('allow-scripts allow-forms allow-modals')
+
+    const createdUrls: string[] = []
+    const scriptedDoc = buildSandboxedFrameSrcdoc(
+      '<!doctype html><body><script>window.__ran = 1</script></body>',
+      'html',
+      undefined,
+      {
+        rewriteInlineScripts: true,
+        createScriptBlobUrl: () => `blob:app://canvas/s-${createdUrls.length + 1}`,
+        onBlobUrl: (url: string) => createdUrls.push(url)
+      }
+    )
+    expect(createdUrls).toEqual(['blob:app://canvas/s-1'])
+    expect(scriptedDoc).toContain('blob:app://canvas/s-1')
+    expect(scriptedDoc).not.toContain('window.__ran = 1')
 
     const svgDoc = buildSandboxedFrameSrcdoc(
       '<svg xmlns="http://www.w3.org/2000/svg"><circle r="10"/></svg>',

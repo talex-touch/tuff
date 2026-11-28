@@ -563,10 +563,74 @@ describe('tx-ai-openui actions, widgets, and error handling', () => {
     expect(wrapper.find('.tx-ai-openui__table th').attributes('scope')).toBe('col')
     expect(wrapper.find('.tx-ai-openui__table td.is-numeric').text()).toBe('42')
 
-    // SearchImage resolved via callback & Chart rendered accessible container
+    // SearchImage resolved via callback & gated behind explicit user consent before loading remote <img>
     expect(resolveImage).toHaveBeenCalledWith('mountain')
+    expect(wrapper.find('.tx-ai-openui__image img').exists()).toBe(false)
+    await wrapper.find('.tx-ai-openui__image-btn').trigger('click')
+    await nextTick()
     expect(wrapper.find('.tx-ai-openui__image img').attributes('src')).toBe('https://cdn.example.com/mountain.png')
     expect(wrapper.find('.tx-ai-openui__chart').attributes('role')).toBe('img')
+  })
+
+  it('rejects CSS url()/var() injection in OpenUI background while allowing safe color values', () => {
+    const wrapper = mount(TxAiOpenUI, {
+      props: {
+        content: [
+          'root = Col([badUrl, badImageSet, badVar, goodHex, goodToken, goodOklch])',
+          'badUrl = Box([Text("a")], "col", 0, 0, "url(https://attacker.invalid/leak.png)")',
+          'badImageSet = Box([Text("b")], "col", 0, 0, "image-set(url(https://attacker.invalid/x.png) 1x)")',
+          'badVar = Box([Text("c")], "col", 0, 0, "var(--evil-bg)")',
+          'goodHex = Box([Text("d")], "col", 0, 0, "#336699")',
+          'goodToken = Box([Text("e")], "col", 0, 0, "surface")',
+          'goodOklch = Box([Text("f")], "col", 0, 0, "oklch(0.6 0.15 240)")',
+        ].join('\n'),
+        streaming: false,
+      },
+    })
+
+    for (const id of ['badUrl', 'badImageSet', 'badVar']) {
+      const style = wrapper.find(`[data-openui-node="${id}"]`).attributes('style') ?? ''
+      expect(style).not.toContain('url(')
+      expect(style).not.toContain('image-set(')
+      expect(style).not.toContain('--evil-bg')
+      expect(style).not.toContain('background')
+    }
+
+    const goodHexStyle = wrapper.find('[data-openui-node="goodHex"]').attributes('style') ?? ''
+    expect(goodHexStyle).toContain('background-color:')
+    const goodTokenStyle = wrapper.find('[data-openui-node="goodToken"]').attributes('style') ?? ''
+    expect(goodTokenStyle).toContain('var(--openui-surface-soft)')
+    const goodOklchStyle = wrapper.find('[data-openui-node="goodOklch"]').attributes('style') ?? ''
+    expect(goodOklchStyle).toContain('background-color:')
+  })
+
+  it('gates remote OpenUI Image loading behind explicit consent and rejects non-http(s) URLs', async () => {
+    const wrapper = mount(TxAiOpenUI, {
+      props: {
+        content: [
+          'root = Col([imgA, imgB, imgUnsafe])',
+          'imgA = Image("https://cdn.example.com/a.png", "Photo A")',
+          'imgB = Image("https://cdn.example.com/b.png", "Photo B")',
+          'imgUnsafe = Image("javascript:alert(1)", "Bad")',
+        ].join('\n'),
+        streaming: false,
+      },
+    })
+
+    expect(wrapper.findAll('.tx-ai-openui__image img')).toHaveLength(0)
+    // Unsafe URL offers no load button at all
+    const unsafeNode = wrapper.find('[data-openui-node="imgUnsafe"]')
+    expect(unsafeNode.find('img').exists()).toBe(false)
+    expect(unsafeNode.find('.tx-ai-openui__image-btn').exists()).toBe(false)
+
+    // Clicking "Allow for session" on imgA approves both imgA and imgB
+    const sessionBtn = wrapper.find('[data-openui-node="imgA"] .tx-ai-openui__image-btn.is-secondary')
+    await sessionBtn.trigger('click')
+    await nextTick()
+
+    expect(wrapper.find('[data-openui-node="imgA"] img').attributes('src')).toBe('https://cdn.example.com/a.png')
+    expect(wrapper.find('[data-openui-node="imgB"] img').attributes('src')).toBe('https://cdn.example.com/b.png')
+    expect(wrapper.find('[data-openui-node="imgUnsafe"] img').exists()).toBe(false)
   })
 
   it('scopes radio group names per instance so duplicate OpenUI messages never collide', async () => {

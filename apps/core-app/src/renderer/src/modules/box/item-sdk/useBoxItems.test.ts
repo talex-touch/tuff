@@ -96,4 +96,52 @@ describe('useBoxItems', () => {
 
     harness.cleanup()
   })
+
+  it('batchUpsert updates existing items and prepends new items without index corruption or duplicates', async () => {
+    const harness = await mountBoxItemsHarness()
+
+    transportState.handlers.get('box-item:batch-upsert')?.({
+      items: [createItem('a', 'src-1'), createItem('b', 'src-1'), createItem('c', 'src-1')]
+    })
+    await nextTick()
+    expect(harness.items.map((item) => item.id)).toEqual(['a', 'b', 'c'])
+
+    // Mix new items, existing items, and duplicate ids within the same batch
+    const updatedB = {
+      ...createItem('b', 'src-1'),
+      render: { mode: 'default', basic: { title: 'b-updated' } }
+    } as TuffItem
+    const updatedC = {
+      ...createItem('c', 'src-1'),
+      render: { mode: 'default', basic: { title: 'c-updated' } }
+    } as TuffItem
+    transportState.handlers.get('box-item:batch-upsert')?.({
+      items: [
+        createItem('d', 'src-1'),
+        updatedB,
+        updatedC,
+        { ...updatedB, render: { mode: 'default', basic: { title: 'b-final' } } } as TuffItem
+      ]
+    })
+    await nextTick()
+
+    expect(harness.items.map((item) => item.id)).toEqual(['d', 'b', 'c', 'a'])
+    expect(harness.items.find((item) => item.id === 'b')?.render.basic?.title).toBe('b-final')
+    expect(harness.items.find((item) => item.id === 'c')?.render.basic?.title).toBe('c-updated')
+
+    // Subsequent single upsert & delete still find the exact items cleanly
+    transportState.handlers.get('box-item:delete')?.({ id: 'b' })
+    await nextTick()
+    expect(harness.items.map((item) => item.id)).toEqual(['d', 'c', 'a'])
+
+    // Malformed / null payloads are safely ignored
+    expect(() => {
+      transportState.handlers.get('box-item:upsert')?.(null)
+      transportState.handlers.get('box-item:batch-upsert')?.({ items: [null, undefined] })
+      transportState.handlers.get('box-item:delete')?.(undefined)
+      transportState.handlers.get('box-item:batch-delete')?.({})
+    }).not.toThrow()
+
+    harness.cleanup()
+  })
 })

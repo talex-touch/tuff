@@ -296,13 +296,17 @@ const statusSkeletonGroups = computed(() => [
   { rows: showChannelRow.value ? 2 : 1, description: true, trailing: true }
 ])
 
+let isUnmounted = false
+
 onMounted(async () => {
   setupBuildVerificationStatusListener()
   await Promise.all([loadSettings(), refreshBuildVerificationStatus()])
+  if (isUnmounted) return
   setupDownloadStatusListener()
 })
 
 onUnmounted(() => {
+  isUnmounted = true
   for (const dispose of downloadStatusDisposers) {
     try {
       dispose()

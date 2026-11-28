@@ -753,6 +753,8 @@ export function useHomeConversation(
     await finished
   }
 
+  let turnGeneration = 0
+
   async function send(
     rawText: string,
     attachments?: AiAttachment[],
@@ -788,16 +790,44 @@ export function useHomeConversation(
     // Claimed before the attachment read rather than inside `runTurn`: reading bytes back out of an
     // object URL is asynchronous, and a second Enter in that window would otherwise open a parallel
     // turn against the same thread.
+    const generation = ++turnGeneration
     streaming.value = true
 
-    // Resolved after the bubbles are on screen so the composer's send animation still finds the
-    // user message on the next tick. Whatever cannot be carried is simply left out.
-    if (sent && attachments?.length) {
-      const carried = await toModelAttachments(attachments)
-      if (carried.length > 0) sent.modelAttachments = carried
-    }
+    try {
+      // Resolved after the bubbles are on screen so the composer's send animation still finds the
+      // user message on the next tick. Whatever cannot be carried is simply left out.
+      if (sent && attachments?.length) {
+        const carried = await toModelAttachments(attachments)
+        if (generation !== turnGeneration) {
+          if (assistant.status === 'streaming' && !assistant.content.trim()) {
+            dropMessage(assistant)
+          }
+          return
+        }
+        if (carried.length > 0) sent.modelAttachments = carried
+      }
 
-    await runTurn(assistant)
+      if (generation !== turnGeneration) {
+        if (assistant.status === 'streaming' && !assistant.content.trim()) {
+          dropMessage(assistant)
+        }
+        return
+      }
+
+      await runTurn(assistant)
+    } catch (error) {
+      if (generation === turnGeneration) {
+        if (assistant.status === 'streaming' && !assistant.content.trim()) {
+          dropMessage(assistant)
+        }
+        streaming.value = false
+      }
+      throw error
+    } finally {
+      if (generation === turnGeneration && !activeTurn) {
+        streaming.value = false
+      }
+    }
   }
 
   async function retry(): Promise<void> {
@@ -825,7 +855,21 @@ export function useHomeConversation(
       options.workspace()?.stop()
       return
     }
-    activeTurn?.cancel()
+    turnGeneration += 1
+    if (activeTurn) {
+      activeTurn.cancel()
+    } else if (streaming.value) {
+      const last = messages.value[messages.value.length - 1]
+      if (
+        last &&
+        last.role === 'assistant' &&
+        last.status === 'streaming' &&
+        !last.content.trim()
+      ) {
+        dropMessage(last)
+      }
+      streaming.value = false
+    }
   }
 
   /**
@@ -845,6 +889,7 @@ export function useHomeConversation(
     //     window, retaining the whole turn closure (#825)
     //
     // cancel() is a no-op on an already-settled turn, so this stays safe to call at any time.
+    turnGeneration += 1
     activeTurn?.cancel()
     activeTurn = null
     streaming.value = false
@@ -874,8 +919,10 @@ export function useHomeConversation(
     onScopeDispose(() => {
       // Same reason as discardActiveTurn: cancelling the controller alone leaves `await finished`
       // pending, which retains the turn closure past the scope that owned it.
+      turnGeneration += 1
       activeTurn?.cancel()
       activeTurn = null
+      streaming.value = false
     })
   }
 

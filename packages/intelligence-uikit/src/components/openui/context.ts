@@ -19,6 +19,8 @@ export interface OpenUIContext {
   renderNode: (node: unknown, path?: string) => VNodeChild
   streaming: Readonly<Ref<boolean>>
   labels: Readonly<Ref<Record<string, string>>>
+  allowRemoteImages: Readonly<Ref<boolean>>
+  allowSessionRemoteImages: () => void
   resolveImage?: (query: string) => Promise<string | null>
   trigger: (plan: unknown, label?: string, form?: string) => void
   registerField: (form: string, read: () => { label: string, value: unknown }) => () => void

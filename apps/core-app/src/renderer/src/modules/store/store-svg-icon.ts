@@ -1,16 +1,235 @@
 import { fetchCoreAppSvgContent } from '~/modules/tuffex/icon-config'
 import { storeHttpRequest } from './store-http-client'
 
-const FORBIDDEN_SVG_PAIRED_ELEMENTS_RE =
-  /<\s*(script|foreignObject|iframe|object|embed)\b[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/gi
-const FORBIDDEN_SVG_ELEMENTS_RE =
-  /<\s*\/?\s*(?:script|foreignObject|iframe|object|embed|meta|link)\b[^>]*>/gi
-const FORBIDDEN_SVG_EVENT_ATTRS_RE = /\s+on[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>/]+)/gi
-const SVG_HREF_ATTRS_RE = /\s+(?:xlink:)?href\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>/]+))/gi
 const SAFE_SVG_FRAGMENT_RE = /^#[A-Za-z_][\w:.-]*$/
+const SAFE_SVG_URL_FUNC_RE = /url\s*\(([^)]*)\)/gi
+const ALLOWED_SVG_ELEMENTS = new Set([
+  'svg',
+  'g',
+  'path',
+  'circle',
+  'ellipse',
+  'rect',
+  'line',
+  'polyline',
+  'polygon',
+  'defs',
+  'clippath',
+  'mask',
+  'lineargradient',
+  'radialgradient',
+  'stop',
+  'symbol',
+  'use',
+  'title',
+  'desc',
+  'pattern',
+  'filter',
+  'fegaussianblur',
+  'feoffset',
+  'feblend',
+  'fecolormatrix',
+  'fecomposite',
+  'feflood',
+  'femerge',
+  'femergenode',
+  'fedropshadow',
+  'text',
+  'tspan'
+])
 
 const XML_COMMENT_OR_DECL_RE = /<!--[\s\S]*?-->|<\?[\s\S]*?\?>|<!\[CDATA\[[\s\S]*?\]\]>/g
 const XML_TAG_RE = /<(\/?)([A-Za-z_][\w:.-]*)((?:"[^"]*"|'[^']*'|[^>"'])*?)(\/?)>/g
+const XML_ATTR_RE = /([A-Za-z_:][\w:.-]*)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))/g
+
+function decodeSafeXmlEntities(value: string): string {
+  return value
+    .replace(/&#x([0-9a-fA-F]+);?/gi, (_m, hex: string) => {
+      const code = Number.parseInt(hex, 16)
+      return Number.isFinite(code) && code >= 0 && code <= 0x10ffff
+        ? String.fromCodePoint(code)
+        : ''
+    })
+    .replace(/&#(\d+);?/g, (_m, dec: string) => {
+      const code = Number.parseInt(dec, 10)
+      return Number.isFinite(code) && code >= 0 && code <= 0x10ffff
+        ? String.fromCodePoint(code)
+        : ''
+    })
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&apos;/gi, "'")
+}
+
+function decodeCssForSvgAttr(value: string): string {
+  return value
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/\\([0-9a-fA-F]{1,6})\s?/g, (_m, hex: string) => {
+      const code = Number.parseInt(hex, 16)
+      return Number.isFinite(code) && code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : ''
+    })
+    .replace(/\\([^\n\r\f])/g, '$1')
+}
+
+function isSafeSvgAttribute(name: string, value: string): boolean {
+  const lowerName = name.toLowerCase()
+  const localName = lowerName.includes(':') ? lowerName.split(':').pop()! : lowerName
+  const decodedValue = decodeSafeXmlEntities(value).replaceAll('\u0000', '').trim()
+  const cssDecodedValue = decodeCssForSvgAttr(decodedValue)
+
+  if (localName.startsWith('on') || lowerName.startsWith('on')) return false
+  if (
+    localName === 'href' ||
+    localName === 'src' ||
+    localName === 'action' ||
+    localName === 'formaction'
+  ) {
+    return localName === 'href' && SAFE_SVG_FRAGMENT_RE.test(decodedValue)
+  }
+
+  for (const candidate of [decodedValue, cssDecodedValue]) {
+    const lowered = candidate.toLowerCase()
+    if (
+      lowered.includes('javascript:') ||
+      lowered.includes('vbscript:') ||
+      lowered.includes('data:') ||
+      lowered.includes('expression(') ||
+      lowered.includes('@import') ||
+      lowered.includes('image-set(') ||
+      lowered.includes('cross-fade(') ||
+      lowered.includes('-moz-binding') ||
+      lowered.includes('behavior:')
+    ) {
+      return false
+    }
+    if (/\burl\s*\(/i.test(candidate)) {
+      const matches = [...candidate.matchAll(SAFE_SVG_URL_FUNC_RE)]
+      if (matches.length === 0) return false
+      for (const match of matches) {
+        const target = (match[1] ?? '')
+          .trim()
+          .replace(/^['"]|['"]$/g, '')
+          .trim()
+        if (!SAFE_SVG_FRAGMENT_RE.test(target)) {
+          return false
+        }
+      }
+    }
+  }
+  return true
+}
+
+function escapeXmlAttr(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+}
+
+function sanitizeSvgWithDomParser(slice: string): string {
+  try {
+    const doc = new DOMParser().parseFromString(slice, 'image/svg+xml')
+    if (
+      doc.getElementsByTagName('parsererror').length > 0 ||
+      doc.documentElement?.localName?.toLowerCase() !== 'svg'
+    ) {
+      return ''
+    }
+
+    const walk = (element: Element): void => {
+      for (const attr of Array.from(element.attributes)) {
+        if (!isSafeSvgAttribute(attr.name, attr.value)) {
+          element.removeAttribute(attr.name)
+        }
+      }
+      for (const child of Array.from(element.childNodes)) {
+        if (child.nodeType === 8 || child.nodeType === 7) {
+          child.parentNode?.removeChild(child)
+          continue
+        }
+        if (child.nodeType === 1) {
+          const childEl = child as Element
+          const tag = (childEl.localName || childEl.tagName).toLowerCase()
+          if (!ALLOWED_SVG_ELEMENTS.has(tag)) {
+            childEl.parentNode?.removeChild(childEl)
+            continue
+          }
+          walk(childEl)
+        }
+      }
+    }
+
+    walk(doc.documentElement)
+    return new XMLSerializer().serializeToString(doc.documentElement).trim()
+  } catch {
+    return ''
+  }
+}
+
+function sanitizeSvgWithStrictXmlAllowlist(slice: string): string {
+  const stripped = slice.replace(XML_COMMENT_OR_DECL_RE, '').trim()
+  if (!isWellFormedSvgXml(stripped)) {
+    return ''
+  }
+
+  let out = ''
+  let lastIndex = 0
+  let skipDepth = 0
+
+  for (const match of stripped.matchAll(XML_TAG_RE)) {
+    const index = match.index ?? 0
+    const between = stripped.slice(lastIndex, index)
+    if (skipDepth === 0) {
+      out += between
+    }
+    lastIndex = index + match[0].length
+
+    const isClosing = match[1] === '/'
+    const rawTag = match[2] ?? ''
+    const rawAttrs = match[3] ?? ''
+    const isSelfClosing = match[4] === '/'
+    const localTag = (rawTag.includes(':') ? rawTag.split(':').pop()! : rawTag).toLowerCase()
+
+    if (skipDepth > 0) {
+      if (isClosing) {
+        skipDepth -= 1
+      } else if (!isSelfClosing) {
+        skipDepth += 1
+      }
+      continue
+    }
+
+    if (!ALLOWED_SVG_ELEMENTS.has(localTag)) {
+      if (!isClosing && !isSelfClosing) {
+        skipDepth = 1
+      }
+      continue
+    }
+
+    if (isClosing) {
+      out += `</${rawTag}>`
+      continue
+    }
+
+    const keptAttrs: string[] = []
+    for (const attrMatch of rawAttrs.matchAll(XML_ATTR_RE)) {
+      const attrName = attrMatch[1]!
+      const attrValue = attrMatch[2] ?? attrMatch[3] ?? attrMatch[4] ?? ''
+      if (isSafeSvgAttribute(attrName, attrValue)) {
+        keptAttrs.push(`${attrName}="${escapeXmlAttr(attrValue)}"`)
+      }
+    }
+    const attrStr = keptAttrs.length > 0 ? ` ${keptAttrs.join(' ')}` : ''
+    out += `<${rawTag}${attrStr}${isSelfClosing ? '/>' : '>'}`
+  }
+
+  if (skipDepth > 0) return ''
+  out += stripped.slice(lastIndex)
+  return out.trim()
+}
 
 function isWellFormedSvgXml(svg: string): boolean {
   if (typeof DOMParser === 'function') {
@@ -114,21 +333,12 @@ export function sanitizeStoreSvg(raw: string): string {
   }
 
   const slice = trimmed.slice(svgStart)
-  const cleaned = slice
-    .replace(FORBIDDEN_SVG_PAIRED_ELEMENTS_RE, '')
-    .replace(FORBIDDEN_SVG_ELEMENTS_RE, '')
-    .replace(FORBIDDEN_SVG_EVENT_ATTRS_RE, '')
-    .replace(
-      SVG_HREF_ATTRS_RE,
-      (match, doubleQuoted?: string, singleQuoted?: string, unquoted?: string) => {
-        const value = (doubleQuoted ?? singleQuoted ?? unquoted ?? '').trim()
-        return SAFE_SVG_FRAGMENT_RE.test(value) ? match : ''
-      }
-    )
-    .replace(/javascript\s*:/gi, '')
-    .trim()
+  const cleaned =
+    typeof DOMParser === 'function' && typeof XMLSerializer === 'function'
+      ? sanitizeSvgWithDomParser(slice)
+      : sanitizeSvgWithStrictXmlAllowlist(slice)
 
-  if (!/^<svg[\s>]/i.test(cleaned) || !/<\/svg\s*>$/i.test(cleaned)) {
+  if (!cleaned || !/^<svg[\s>]/i.test(cleaned) || !/<\/svg\s*>$/i.test(cleaned)) {
     return ''
   }
 

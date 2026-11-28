@@ -237,7 +237,11 @@ export function useClipboard(
     return latest ?? clipboardOptions.last
   }
 
+  let disposed = false
+  let pasteSequence = 0
+
   async function handlePasteAsync(options?: HandlePasteOptions): Promise<void> {
+    const currentPasteSeq = ++pasteSequence
     const overrideDismissed = options?.overrideDismissed ?? false
     const triggerSearch = options?.triggerSearch ?? false
     const attemptAutoFill = options?.attemptAutoFill ?? false
@@ -247,6 +251,7 @@ export function useClipboard(
     }
 
     const clipboard = await resolveLatestClipboard()
+    if (disposed || currentPasteSeq !== pasteSequence) return
 
     if (!clipboard?.timestamp) {
       clearClipboard()
@@ -356,6 +361,7 @@ export function useClipboard(
     remember?: boolean
     preservePendingAutoFill?: boolean
   }): void {
+    pasteSequence += 1
     const remember = options?.remember ?? false
     const preservePendingAutoFill = options?.preservePendingAutoFill ?? false
 
@@ -379,16 +385,17 @@ export function useClipboard(
   // Delay clipboard channel initialization to ensure TouchChannel is available
   let cleanup: (() => void) | null = null
   let initAttempted = false
+  let initRetryTimer: ReturnType<typeof setTimeout> | null = null
 
   // Initialize clipboard channel on next tick to ensure TouchChannel is ready
   const initClipboardChannel = () => {
-    if (initAttempted) return
+    if (disposed || initAttempted) return
     initAttempted = true
 
     try {
       cleanup = useClipboardChannel({
         onNewItem: (item) => {
-          if (!item?.type) return
+          if (disposed || !item?.type) return
 
           if (isClipboardDismissed(item, clipboardOptions)) {
             return
@@ -416,10 +423,14 @@ export function useClipboard(
         }
       })
     } catch (error) {
+      if (disposed) return
       // TouchChannel not available yet, retry on next tick
       coreBoxClipboardLog.warn('TouchChannel not available, retrying...', error)
       initAttempted = false
-      setTimeout(initClipboardChannel, 100)
+      initRetryTimer = setTimeout(() => {
+        initRetryTimer = null
+        initClipboardChannel()
+      }, 100)
     }
   }
 
@@ -435,7 +446,14 @@ export function useClipboard(
     resetAutoPasteState: resetAutoPasteStateForSession,
     autoPasteActive,
     cleanup: () => {
+      disposed = true
+      pasteSequence += 1
+      if (initRetryTimer !== null) {
+        clearTimeout(initRetryTimer)
+        initRetryTimer = null
+      }
       cleanup?.()
+      cleanup = null
     }
   }
 }

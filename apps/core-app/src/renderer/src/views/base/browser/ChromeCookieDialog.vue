@@ -48,20 +48,24 @@ function setAutoSyncSites(sites: string[]): void {
   }
 }
 
+const autoSyncSites = ref<string[]>(getAutoSyncSites())
+
 const autoSyncCurrentSite = computed({
   get() {
     if (!props.domain) return false
-    return getAutoSyncSites().includes(props.domain)
+    return autoSyncSites.value.includes(props.domain)
   },
   set(val: boolean) {
     if (!props.domain) return
-    const sites = new Set(getAutoSyncSites())
+    const sites = new Set(autoSyncSites.value)
     if (val) {
       sites.add(props.domain)
     } else {
       sites.delete(props.domain)
     }
-    setAutoSyncSites(Array.from(sites))
+    const next = Array.from(sites)
+    autoSyncSites.value = next
+    setAutoSyncSites(next)
   }
 })
 
@@ -76,6 +80,9 @@ const filteredCookies = computed(() => {
 watch(
   () => props.modelValue,
   (val) => {
+    if (val) {
+      autoSyncSites.value = getAutoSyncSites()
+    }
     if (val && props.url && isConnected.value) {
       loadCookies()
     }

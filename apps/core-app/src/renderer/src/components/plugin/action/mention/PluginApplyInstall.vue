@@ -3,6 +3,7 @@ import { TxButton } from '@talex-touch/tuffex/button'
 import { sleep } from '@talex-touch/utils'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { OpenerEvents } from '@talex-touch/utils/transport/events'
+import { onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Loading from '~/assets/lotties/compress-loading.json'
 import LottieFrame from '~/components/icon/lotties/LottieFrame.vue'
@@ -118,6 +119,10 @@ function onIgnore(): void {
   clearBufferedFile(props.fileName)
   close()
 }
+
+onUnmounted(() => {
+  clearBufferedFile(props.fileName)
+})
 </script>
 
 <template>

@@ -105,9 +105,13 @@ async function handlePluginDrop(file: File): Promise<boolean> {
         )
       } else {
         const { manifest, path } = data
-        await popperMention(manifest.name, () => {
-          return h(PluginApplyInstall, { manifest, path, fileName: file.name })
-        })
+        try {
+          await popperMention(manifest.name, () => {
+            return h(PluginApplyInstall, { manifest, path, fileName: file.name })
+          })
+        } finally {
+          clearBufferedFile(file.name)
+        }
       }
     } catch (error) {
       loadingInstance.close()

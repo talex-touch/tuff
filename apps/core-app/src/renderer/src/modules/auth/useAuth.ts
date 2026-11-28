@@ -18,6 +18,7 @@ import {
   reactive,
   ref,
   render,
+  shallowRef,
   watch
 } from 'vue'
 import { toast } from 'vue-sonner'
@@ -44,7 +45,10 @@ const FOCUS_PROMPT_RECHECK_DELAY_MS = 400
 
 type BrowserIntervalId = number
 
-const pendingBrowserLogin = ref<{
+let nextBrowserLoginAttemptId = 0
+
+const pendingBrowserLogin = shallowRef<{
+  attemptId: number
   resolve: (result: LoginResult) => void
   reject: (error: Error) => void
   timeoutId: ReturnType<typeof setTimeout>
@@ -110,24 +114,30 @@ function isStepUpRequiredError(error: unknown): boolean {
 }
 
 async function waitForStepUpToken(timeoutMs = 2 * 60 * 1000): Promise<string> {
-  const existing = await getStepUpToken()
+  const existing = await getStepUpToken().catch(() => null)
   if (existing) {
     return existing
   }
 
   return await new Promise((resolve, reject) => {
+    let settled = false
     const timer = setInterval(() => {
-      void getStepUpToken().then((token) => {
-        if (!token) {
-          return
-        }
-        clearInterval(timer)
-        clearTimeout(timeout)
-        resolve(token)
-      })
+      void getStepUpToken()
+        .then((token) => {
+          if (settled || !token) {
+            return
+          }
+          settled = true
+          clearInterval(timer)
+          clearTimeout(timeout)
+          resolve(token)
+        })
+        .catch(() => {})
     }, 250)
 
     const timeout = setTimeout(() => {
+      if (settled) return
+      settled = true
       clearInterval(timer)
       reject(new Error('Step-up verification timeout'))
     }, timeoutMs)
@@ -394,6 +404,14 @@ function cleanup(): boolean {
 }
 
 async function loginWithBrowser(mode: 'sign-in' | 'sign-up' = 'sign-in'): Promise<LoginResult> {
+  if (pendingBrowserLogin.value) {
+    const previous = pendingBrowserLogin.value
+    clearTimeout(previous.timeoutId)
+    window.clearInterval(previous.countdownId)
+    pendingBrowserLogin.value = null
+    previous.resolve({ success: false, error: new Error('Superseded by new login') })
+  }
+
   const timeoutMs = resolveBrowserLoginTimeoutMs()
   authLoadingState.isLoggingIn = true
   authLoadingState.loginProgress = 0
@@ -402,11 +420,14 @@ async function loginWithBrowser(mode: 'sign-in' | 'sign-up' = 'sign-in'): Promis
 
   return new Promise((resolve) => {
     const openedAt = Date.now()
-    const timeoutId = createBrowserLoginTimeout(resolve, timeoutMs)
+    const attemptId = ++nextBrowserLoginAttemptId
+    const timeoutId = createBrowserLoginTimeout(resolve, timeoutMs, attemptId)
     const countdownId = createBrowserLoginCountdown(openedAt, timeoutMs)
-    pendingBrowserLogin.value = { resolve, reject: () => {}, timeoutId, countdownId, openedAt }
+    const loginEntry = { attemptId, resolve, reject: () => {}, timeoutId, countdownId, openedAt }
+    pendingBrowserLogin.value = loginEntry
     openBrowserLoginPage(mode)
       .then((loginStart) => {
+        if (pendingBrowserLogin.value !== loginEntry) return
         // The login already in flight was approved and applied instead; the state broadcast
         // finishes this one.
         if (!loginStart.initiated) return
@@ -414,7 +435,7 @@ async function loginWithBrowser(mode: 'sign-in' | 'sign-up' = 'sign-in'): Promis
         authLoadingState.loginUserCode = loginStart.userCode || ''
         authLoadingState.loginExpiresAt = loginStart.expiresAt || ''
         authLoadingState.loginBrowserOpenFailed = loginStart.browserOpenFailed === true
-        if (pendingBrowserLogin.value) {
+        if (pendingBrowserLogin.value === loginEntry) {
           authLoadingState.loginStage = 'waiting'
         }
         toast.info(
@@ -430,6 +451,7 @@ async function loginWithBrowser(mode: 'sign-in' | 'sign-up' = 'sign-in'): Promis
         )
       })
       .catch((err) => {
+        if (pendingBrowserLogin.value !== loginEntry) return
         clearBrowserLoginLoading()
         authLoadingState.loginStage = 'failed'
         authLoadingState.loginProgress = 0
@@ -621,22 +643,25 @@ function createBrowserLoginCountdown(openedAt: number, timeoutMs: number): Brows
 
 function createBrowserLoginTimeout(
   resolve: (result: LoginResult) => void,
-  timeoutMs: number
+  timeoutMs: number,
+  attemptId: number
 ): ReturnType<typeof setTimeout> {
-  return setTimeout(() => {
-    if (pendingBrowserLogin.value) {
+  const timeoutId = setTimeout(() => {
+    const current = pendingBrowserLogin.value
+    if (current && current.attemptId === attemptId) {
       const error = new Error('Browser login timeout')
       authLoadingState.loginStage = 'failed'
       authLoadingState.loginProgress = 0
       authLoadingState.isLoggingIn = false
       authLoadingState.loginTimeRemaining = 0
-      window.clearInterval(pendingBrowserLogin.value.countdownId)
-      clearTimeout(pendingBrowserLogin.value.timeoutId)
+      window.clearInterval(current.countdownId)
+      clearTimeout(current.timeoutId)
       pendingBrowserLogin.value = null
       toast.error(resolveAuthErrorMessage(error, 'LOGIN_TIMEOUT', translateAuthError))
       resolve({ success: false, error })
     }
   }, timeoutMs)
+  return timeoutId
 }
 
 function isJwtToken(token: string): boolean {
@@ -663,22 +688,23 @@ function cancelPendingBrowserLogin(reason = 'Login cancelled'): void {
 }
 
 async function retryPendingBrowserLogin(): Promise<void> {
-  if (!pendingBrowserLogin.value) return
-  clearTimeout(pendingBrowserLogin.value.timeoutId)
-  window.clearInterval(pendingBrowserLogin.value.countdownId)
+  const current = pendingBrowserLogin.value
+  if (!current) return
+  clearTimeout(current.timeoutId)
+  window.clearInterval(current.countdownId)
   const timeoutMs = resolveBrowserLoginTimeoutMs()
-  pendingBrowserLogin.value.openedAt = Date.now()
-  pendingBrowserLogin.value.timeoutId = createBrowserLoginTimeout(
-    pendingBrowserLogin.value.resolve,
-    timeoutMs
-  )
-  pendingBrowserLogin.value.countdownId = createBrowserLoginCountdown(
-    pendingBrowserLogin.value.openedAt,
-    timeoutMs
-  )
+  const openedAt = Date.now()
+  const nextAttemptId = ++nextBrowserLoginAttemptId
+  const nextTimeoutId = createBrowserLoginTimeout(current.resolve, timeoutMs, nextAttemptId)
+  const nextCountdownId = createBrowserLoginCountdown(openedAt, timeoutMs)
+  current.attemptId = nextAttemptId
+  current.openedAt = openedAt
+  current.timeoutId = nextTimeoutId
+  current.countdownId = nextCountdownId
   try {
     authLoadingState.loginStage = 'preparing'
     const loginStart = await openBrowserLoginPage()
+    if (pendingBrowserLogin.value !== current || current.attemptId !== nextAttemptId) return
     // The browser had approved the login after all: main applied it rather than reopening.
     if (!loginStart.initiated) return
     authLoadingState.loginAuthorizeUrl = loginStart.authorizeUrl || ''
@@ -695,6 +721,15 @@ async function retryPendingBrowserLogin(): Promise<void> {
         : resolveAuthUiMessage('settingUser.loginPageReopenedToast', 'Sign-in page reopened.')
     )
   } catch (error) {
+    if (pendingBrowserLogin.value === current && current.attemptId === nextAttemptId) {
+      clearTimeout(nextTimeoutId)
+      window.clearInterval(nextCountdownId)
+      pendingBrowserLogin.value = null
+      current.resolve({ success: false, error })
+    } else {
+      clearTimeout(nextTimeoutId)
+      window.clearInterval(nextCountdownId)
+    }
     const errorMessage = resolveAuthErrorMessage(error, 'BROWSER_OPEN_FAILED', translateAuthError)
     authLoadingState.loginStage = 'failed'
     authLoadingState.isLoggingIn = false

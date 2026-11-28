@@ -13,10 +13,13 @@ const props = withDefaults(defineProps<{
   content: string
   streaming?: boolean
   labels?: Record<string, string>
+  allowRemoteImages?: boolean
   resolveImage?: (query: string) => Promise<string | null>
-}>(), { streaming: false, labels: () => ({}) })
+}>(), { streaming: false, labels: () => ({}), allowRemoteImages: false })
 
 const emit = defineEmits<{ action: [event: OpenUIAction] }>()
+const sessionRemoteImagesAllowed = ref(false)
+const effectiveAllowRemoteImages = computed(() => props.allowRemoteImages || sessionRemoteImagesAllowed.value)
 
 const schema = library.toJSONSchema()
 const parser = createStreamingParser(schema)
@@ -164,6 +167,10 @@ provide(OPENUI_CONTEXT, {
   renderNode,
   streaming: toRef(props, 'streaming'),
   labels: toRef(props, 'labels'),
+  allowRemoteImages: effectiveAllowRemoteImages,
+  allowSessionRemoteImages: () => {
+    sessionRemoteImagesAllowed.value = true
+  },
   resolveImage: query => props.resolveImage?.(query) ?? Promise.resolve(null),
   trigger,
   registerField,

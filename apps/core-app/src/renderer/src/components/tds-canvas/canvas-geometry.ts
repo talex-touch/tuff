@@ -1,4 +1,5 @@
 import { stepSpring } from '@talex-touch/tuffex/utils'
+import { rewriteInlineScriptsToBlobs } from '../../modules/widget-sandbox/inline-script-blobs'
 import {
   getDevicePresetById,
   isResponsivePreset,
@@ -36,9 +37,11 @@ export const DEFAULT_RESPONSIVE_FRAME_SIZE: Readonly<TdsCanvasSize> = {
  * Strict zero-network Content-Security-Policy mirroring `WorkspaceFileViewer`:
  * opaque origin (no `allow-same-origin`) and `default-src 'none'` prevent all
  * external fetches, remote fonts, or data exfiltration from rendered frames.
+ * Uses `script-src blob:` so rewritten inline scripts execute under CoreApp's
+ * inherited parent CSP (`script-src 'self' 'unsafe-eval' blob:`, no `'unsafe-inline'`).
  */
 export const TDS_CANVAS_FRAME_CSP =
-  "default-src 'none'; form-action 'none'; frame-src about:; img-src data: blob:; media-src data: blob:; font-src data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'"
+  "default-src 'none'; form-action 'none'; frame-src about:; img-src data: blob:; media-src data: blob:; font-src data:; style-src 'unsafe-inline'; script-src blob:"
 
 /**
  * Critically-damped viewport spring (`response = 0.28s`, `dampingRatio = 1`)
@@ -482,6 +485,13 @@ export function getFrameIframeSandbox(kind: TdsCanvasFrameKind): string {
   return kind === 'html' ? 'allow-scripts allow-forms allow-modals' : ''
 }
 
+export interface BuildSandboxedFrameSrcdocOptions {
+  /** Rewrite inline `<script>` tags to host `blob:` URLs so they run under CoreApp's parent CSP. */
+  rewriteInlineScripts?: boolean
+  createScriptBlobUrl?: (code: string) => string | null
+  onBlobUrl?: (url: string) => void
+}
+
 /**
  * Outer-CSP double-sandboxed `srcdoc` builder mirroring `WorkspaceFileViewer`:
  * enforces `default-src 'none'` with zero network exfiltration and opaque origin.
@@ -491,15 +501,25 @@ export function getFrameIframeSandbox(kind: TdsCanvasFrameKind): string {
 export function buildSandboxedFrameSrcdoc(
   source: string,
   kind: TdsCanvasFrameKind,
-  extraStyleCss?: string
+  extraStyleCss?: string,
+  options?: BuildSandboxedFrameSrcdocOptions
 ): string {
   if (!source) return ''
   const safeCss = extraStyleCss ? sanitizeEmbeddedStyleCss(extraStyleCss) : ''
   const styleBlock = safeCss ? `<style data-tds-theme-pack>${safeCss}</style>` : ''
-  const inner =
+  let inner =
     kind === 'svg'
       ? `<!doctype html><meta charset="utf-8">${styleBlock}<body style="margin:0;width:100%;height:100%;display:grid;place-items:center;background:white">${source}</body>`
       : injectStyleBlockIntoHtml(source, styleBlock)
+  if (kind === 'html' && options?.rewriteInlineScripts) {
+    const rewritten = rewriteInlineScriptsToBlobs(inner, options.createScriptBlobUrl)
+    inner = rewritten.html
+    if (options.onBlobUrl) {
+      for (const url of rewritten.blobUrls) {
+        options.onBlobUrl(url)
+      }
+    }
+  }
   const innerSandbox = getFrameIframeSandbox(kind)
   return `<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${TDS_CANVAS_FRAME_CSP}"><style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:white}iframe{display:block;width:100%;height:100%;border:0}</style><iframe sandbox="${innerSandbox}" srcdoc="${escapeHtmlAttribute(inner)}"></iframe>`
 }

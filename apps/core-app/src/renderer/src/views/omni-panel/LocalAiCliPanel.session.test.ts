@@ -688,4 +688,42 @@ describe('localAiCliPanel terminal lifecycle', () => {
       'localAiCliPanel.continueInTerminal'
     )
   })
+
+  it('cancels a streamTask controller that resolves after reset and ignores late chunks', async () => {
+    const wrapper = await mountPanel()
+    const api = panelApi(wrapper)
+    await api.open({ prompt: '', projectId: 'p1', provider: 'pi' })
+    await flushPromises()
+
+    const lateCancel = vi.fn()
+    const pendingController = Promise.withResolvers<{ cancel: () => void }>()
+    let capturedCallbacks: typeof streamState.callbacks
+    transportStreamMock.mockImplementationOnce(
+      async (
+        _event: unknown,
+        request: Record<string, unknown>,
+        callbacks: typeof streamState.callbacks
+      ) => {
+        streamState.requests.push(request)
+        capturedCallbacks = callbacks
+        return pendingController.promise
+      }
+    )
+
+    await wrapper.find('textarea').setValue('long prompt')
+    await findButton(wrapper, 'localAiCliPanel.run').trigger('click')
+    await flushPromises()
+
+    // Reset while streamTask handshake is still unresolved
+    await api.reset()
+
+    pendingController.resolve({ cancel: lateCancel })
+    await flushPromises()
+    expect(lateCancel).toHaveBeenCalledTimes(1)
+
+    // Late chunks from the invalidated generation must be ignored
+    capturedCallbacks?.onData({ type: 'complete', callId: 'late', text: 'ghost output' })
+    await flushPromises()
+    expect(wrapper.find('.LocalAiCliPanel__result').exists()).toBe(false)
+  })
 })

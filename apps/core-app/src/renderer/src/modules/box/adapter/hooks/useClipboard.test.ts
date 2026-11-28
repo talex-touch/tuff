@@ -455,4 +455,33 @@ describe('useClipboard auto-paste freshness', () => {
     expect(blockedSearchVal.value).toBe('')
     blockedHook.cleanup()
   })
+
+  it('ignores an in-flight handlePaste response after clearClipboard or cleanup', async () => {
+    const pending = Promise.withResolvers<IClipboardItem | null>()
+    const channel = await import('./useClipboardChannel')
+    vi.mocked(channel.getLatestClipboard).mockImplementationOnce(() => pending.promise)
+
+    const boxOptions = createBoxOptions()
+    const clipboardOptions = createClipboardOptions()
+    const searchVal = ref('')
+    const hook = useClipboard(boxOptions, clipboardOptions, vi.fn(), searchVal)
+
+    hook.handlePaste({ attemptAutoFill: true, triggerSearch: true })
+    hook.clearClipboard()
+
+    pending.resolve(
+      createClipboardItem({
+        id: 99,
+        content: 'stale after clear',
+        freshnessBaseAt: Date.now(),
+        autoPasteEligible: true
+      })
+    )
+    await nextTick()
+    await Promise.resolve()
+
+    expect(searchVal.value).toBe('')
+    expect(clipboardOptions.last).toBeNull()
+    hook.cleanup()
+  })
 })

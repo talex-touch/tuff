@@ -58,10 +58,24 @@ describe('store-svg-icon', () => {
     expect(malicious).toContain('<path')
 
     const withFragmentRef = sanitizeStoreSvg(
-      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><defs><path id="p" d="M0 0h24v24H0z"/></defs><use href="#p"/><use xlink:href="#p"/></svg>'
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><defs><linearGradient id="g"/><path id="p" d="M0 0h24v24H0z"/></defs><use href="#p"/><use xlink:href="#p"/><path fill="url(#g)" d="M0 0h1"/></svg>'
     )
     expect(withFragmentRef).toContain('href="#p"')
     expect(withFragmentRef).toContain('xlink:href="#p"')
+    expect(withFragmentRef).toContain('fill="url(#g)"')
+
+    // Nested/smuggled tags, animation handlers, style tags, namespace-prefixed hrefs, CSS escapes, and remote url() references are stripped
+    const nestedAttack = sanitizeStoreSvg(
+      '<svg xmlns="http://www.w3.org/2000/svg" xmlns:x="http://www.w3.org/1999/xlink"><style>@import url(https://evil.invalid/a.css);</style><animate onbegin="alert(1)" attributeName="href" to="javascript:alert(1)"/><set attributeName="onmouseover" to="alert(1)"/><image href="https://evil.invalid/track.png"/><use x:href="https://evil.invalid/x.svg#p"/><path style="fill:\\75 rl(https://evil.invalid/g#x)" fill="url (https://evil.invalid/g#x)" d="M0 0h2"/></svg>'
+    )
+    expect(nestedAttack).not.toContain('<style')
+    expect(nestedAttack).not.toContain('<animate')
+    expect(nestedAttack).not.toContain('<set')
+    expect(nestedAttack).not.toContain('<image')
+    expect(nestedAttack).not.toContain('evil.invalid')
+    expect(nestedAttack).not.toContain('onbegin')
+    expect(nestedAttack).not.toContain('x:href')
+    expect(nestedAttack).toContain('<path')
 
     expect(sanitizeStoreSvg('<svg xmlns="http://www.w3.org/2000/svg"><path></svg>')).toBe('')
     expect(sanitizeStoreSvg('<html><body>not svg</body></html>')).toBe('')

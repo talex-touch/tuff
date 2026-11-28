@@ -47,6 +47,25 @@ const toolStatus = computed<TxAiToolStatus>(() => {
   return 'running'
 })
 
+const SAFE_DATA_IMAGE_RE = /^data:image\/(?:png|jpeg|jpg|gif|webp|avif|bmp);base64,[a-z0-9+/=\s]+$/i
+
+const safeImageSrc = computed(() => {
+  const raw = String(props.block.content ?? props.block.value ?? '').trim()
+  if (!raw)
+    return ''
+  if (SAFE_DATA_IMAGE_RE.test(raw))
+    return raw
+  try {
+    const parsed = new URL(raw)
+    if (parsed.protocol === 'https:' || parsed.protocol === 'http:' || parsed.protocol === 'blob:')
+      return parsed.href
+  }
+  catch {
+    return ''
+  }
+  return ''
+})
+
 async function setThoughtExpanded(next: boolean) {
   const seq = ++expandSeq
 
@@ -159,8 +178,8 @@ watch(
       <!-- Nothing listens for a click on a block image: the conversation's `imageClick`
            only fires for message attachments. A `<button>` here was a focusable control
            that did nothing, so the block is plain content until a viewer is wired. -->
-      <figure v-else-if="block.type === 'image'" class="tx-ai-rich-block__image">
-        <img :src="String(block.content ?? block.value ?? '')" alt="" loading="lazy">
+      <figure v-else-if="block.type === 'image' && safeImageSrc" class="tx-ai-rich-block__image">
+        <img :src="safeImageSrc" alt="" loading="lazy" referrerpolicy="no-referrer">
       </figure>
 
       <TxAiLoadingHint

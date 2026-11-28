@@ -4,7 +4,7 @@ import { TxButton } from '@talex-touch/tuffex/button'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { AppEvents } from '@talex-touch/utils/transport/events'
 import { isBuildVerificationStatus } from '@talex-touch/utils/transport/events/types'
-import { onMounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { createRendererLogger } from '~/utils/renderer-log'
 
@@ -24,20 +24,31 @@ function handleVerificationStatus(status: BuildVerificationStatus) {
   }
 }
 
+let disposeStatusListener: (() => void) | null = null
+let isUnmounted = false
+
 onMounted(async () => {
   const verificationStatusEvent = AppEvents.build.statusUpdated
-  transport.on(verificationStatusEvent, (status) => {
-    if (isBuildVerificationStatus(status)) handleVerificationStatus(status)
+  disposeStatusListener = transport.on(verificationStatusEvent, (status) => {
+    if (!isUnmounted && isBuildVerificationStatus(status)) handleVerificationStatus(status)
   })
 
   try {
     const status = await transport.send(AppEvents.build.getVerificationStatus)
-    if (isBuildVerificationStatus(status)) {
+    if (!isUnmounted && isBuildVerificationStatus(status)) {
       handleVerificationStatus(status)
     }
   } catch (error) {
-    buildSecurityLog.warn('Failed to get verification status:', error)
+    if (!isUnmounted) {
+      buildSecurityLog.warn('Failed to get verification status:', error)
+    }
   }
+})
+
+onUnmounted(() => {
+  isUnmounted = true
+  disposeStatusListener?.()
+  disposeStatusListener = null
 })
 
 function dismissBanner() {

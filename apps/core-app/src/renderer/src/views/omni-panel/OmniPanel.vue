@@ -84,6 +84,8 @@ const preserveLocalAiDraftOnClose = ref(false)
 const replaceClipboardConfirming = ref(false)
 const aiClipboardError = ref('')
 let previousFocusedElement: HTMLElement | null = null
+let aiRequestSeq = 0
+let activeAiExecutingSeq: number | null = null
 
 interface AiPreviewState {
   featureId: OmniPanelAiActionId
@@ -205,6 +207,7 @@ watch(
 )
 
 async function closePanel(): Promise<void> {
+  clearAiPreview()
   if (preserveLocalAiDraftOnClose.value) {
     preserveLocalAiDraftOnClose.value = false
   } else {
@@ -344,6 +347,8 @@ async function executeAiFeature(
     return
   }
 
+  const requestSeq = ++aiRequestSeq
+  activeAiExecutingSeq = requestSeq
   executingId.value = item.id
   replaceClipboardConfirming.value = false
   aiClipboardError.value = ''
@@ -369,6 +374,7 @@ async function executeAiFeature(
 
   try {
     const result = await executeOmniPanelAiInvoke(intelligence, request, actionId)
+    if (requestSeq !== aiRequestSeq) return
     const preview = normalizeOmniPanelAiResult(result)
     aiClipboardError.value = ''
     aiPreview.value = {
@@ -384,6 +390,7 @@ async function executeAiFeature(
       status: 'done'
     }
   } catch (error) {
+    if (requestSeq !== aiRequestSeq) return
     const fallback = t('corebox.omniPanel.executeFailed')
     const normalizedError = normalizeOmniPanelAiError(error, fallback)
     omniPanelLog.error('Failed to execute OmniPanel AI feature', error)
@@ -406,7 +413,10 @@ async function executeAiFeature(
     // English, and the preview card under the toast already shows the reason and the way out.
     toast.error(aiPreviewErrorRecovery.value?.title ?? normalizedError.message)
   } finally {
-    executingId.value = null
+    if (activeAiExecutingSeq === requestSeq) {
+      activeAiExecutingSeq = null
+      executingId.value = null
+    }
   }
 }
 
@@ -456,6 +466,11 @@ async function replaceClipboardWithAiResult(): Promise<void> {
 }
 
 function clearAiPreview(): void {
+  aiRequestSeq += 1
+  if (activeAiExecutingSeq !== null) {
+    activeAiExecutingSeq = null
+    executingId.value = null
+  }
   aiPreview.value = null
   replaceClipboardConfirming.value = false
   aiClipboardError.value = ''
@@ -512,7 +527,18 @@ async function executeFocusedFeature(): Promise<void> {
   await executeFeature(focused)
 }
 
+function shouldBypassOmniPanelKeydown(event: KeyboardEvent): boolean {
+  if (localAiPanelRef.value?.isOpen) return true
+  const target = event.target
+  if (!(target instanceof HTMLElement)) return false
+  if (target.closest('.LocalAiCliPanel')) return true
+  if (target.isContentEditable) return true
+  if (target.tagName === 'TEXTAREA' || target.tagName === 'SELECT') return true
+  return false
+}
+
 async function handleKeydown(event: KeyboardEvent): Promise<void> {
+  if (shouldBypassOmniPanelKeydown(event)) return
   const key = event.key
 
   if ((event.metaKey || event.ctrlKey) && key.toLowerCase() === 'f') {
@@ -523,7 +549,9 @@ async function handleKeydown(event: KeyboardEvent): Promise<void> {
 
   if (key === 'Escape') {
     event.preventDefault()
-    await closePanel()
+    await closePanel().catch((error) => {
+      omniPanelLog.warn('Failed to close OmniPanel on Escape', error)
+    })
     return
   }
 
@@ -557,6 +585,12 @@ async function handleKeydown(event: KeyboardEvent): Promise<void> {
   }
 }
 
+function handleWindowBlur(): void {
+  void closePanel().catch((error) => {
+    omniPanelLog.warn('Failed to close OmniPanel on blur', error)
+  })
+}
+
 const disposeContext = transport.on(omniPanelContextEvent, (payload) => {
   handleContext(payload as OmniPanelContextPayload)
   void syncLocalAiAction()
@@ -570,7 +604,7 @@ onMounted(async () => {
   previousFocusedElement =
     document.activeElement instanceof HTMLElement ? document.activeElement : null
   window.addEventListener('keydown', handleKeydown)
-  window.addEventListener('blur', closePanel)
+  window.addEventListener('blur', handleWindowBlur)
   void transport.send(omniPanelRendererReadyEvent).catch((error) => {
     omniPanelLog.error('Failed to announce OmniPanel renderer readiness', error)
   })
@@ -579,10 +613,11 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
+  clearAiPreview()
   disposeContext()
   disposeFeatureRefresh()
   window.removeEventListener('keydown', handleKeydown)
-  window.removeEventListener('blur', closePanel)
+  window.removeEventListener('blur', handleWindowBlur)
 })
 </script>
 

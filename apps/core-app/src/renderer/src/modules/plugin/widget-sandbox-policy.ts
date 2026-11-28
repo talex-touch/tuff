@@ -11,7 +11,20 @@ export const WIDGET_SANDBOX_AUDIT_MAX_ENTRIES = 2_048
 export const WIDGET_SANDBOX_SOURCE_MAX_CHARS = 1_048_576
 
 const LOCAL_EVENT_TYPES = new Set(['message', 'popstate', 'hashchange'])
-const FORBIDDEN_MEMBER_NAMES = new Set(['constructor', '__proto__'])
+const FORBIDDEN_MEMBER_NAMES = new Set([
+  'constructor',
+  '__proto__',
+  'ownerDocument',
+  'defaultView',
+  'parentWindow',
+  'contentWindow',
+  'contentDocument',
+  'frameElement',
+  '__lookupGetter__',
+  '__lookupSetter__',
+  '__defineGetter__',
+  '__defineSetter__'
+])
 const auditEntries: WidgetSandboxAuditEntry[] = []
 const policies = new Map<string, WidgetSandboxPolicy>()
 const disposedWidgetIds = new Set<string>()
@@ -513,13 +526,198 @@ function safeUrlLabel(value: string | URL): string {
   }
 }
 
-function maskNonExecutableText(code: string): { executable: string; stringValues: string[] } {
+function decodeJsStringEscape(
+  code: string,
+  slashIndex: number
+): { decoded: string; consumed: number } {
+  const next = code[slashIndex + 1]
+  if (next === undefined) return { decoded: '', consumed: 1 }
+  if (next === '\n') return { decoded: '', consumed: 2 }
+  if (next === '\r') {
+    return { decoded: '', consumed: code[slashIndex + 2] === '\n' ? 3 : 2 }
+  }
+  switch (next) {
+    case 'n':
+      return { decoded: '\n', consumed: 2 }
+    case 'r':
+      return { decoded: '\r', consumed: 2 }
+    case 't':
+      return { decoded: '\t', consumed: 2 }
+    case 'b':
+      return { decoded: '\b', consumed: 2 }
+    case 'f':
+      return { decoded: '\f', consumed: 2 }
+    case 'v':
+      return { decoded: '\v', consumed: 2 }
+    case '\\':
+    case "'":
+    case '"':
+    case '`':
+      return { decoded: next, consumed: 2 }
+    case 'x': {
+      const hex = code.slice(slashIndex + 2, slashIndex + 4)
+      if (/^[0-9a-fA-F]{2}$/.test(hex)) {
+        return { decoded: String.fromCharCode(Number.parseInt(hex, 16)), consumed: 4 }
+      }
+      return { decoded: next, consumed: 2 }
+    }
+    case 'u': {
+      if (code[slashIndex + 2] === '{') {
+        const endBrace = code.indexOf('}', slashIndex + 3)
+        if (endBrace > slashIndex + 3) {
+          const hex = code.slice(slashIndex + 3, endBrace)
+          if (/^[0-9a-fA-F]+$/.test(hex)) {
+            const point = Number.parseInt(hex, 16)
+            if (point <= 0x10ffff) {
+              return { decoded: String.fromCodePoint(point), consumed: endBrace - slashIndex + 1 }
+            }
+          }
+        }
+      } else {
+        const hex = code.slice(slashIndex + 2, slashIndex + 6)
+        if (/^[0-9a-fA-F]{4}$/.test(hex)) {
+          return { decoded: String.fromCharCode(Number.parseInt(hex, 16)), consumed: 6 }
+        }
+      }
+      return { decoded: next, consumed: 2 }
+    }
+    default: {
+      if (next >= '0' && next <= '7') {
+        const match = /^[0-7]{1,3}/.exec(code.slice(slashIndex + 1))
+        if (match) {
+          const value = Number.parseInt(match[0], 8)
+          if (value <= 0xff) {
+            return { decoded: String.fromCharCode(value), consumed: 1 + match[0].length }
+          }
+        }
+      }
+      return { decoded: next, consumed: 2 }
+    }
+  }
+}
+
+type StringToken =
+  | { kind: 'str'; value: string }
+  | { kind: 'op'; value: '+' | '(' | ')' | '[' | ']' | ',' | '.join' | 'other' }
+
+function foldStringTokens(tokens: StringToken[]): string[] {
+  const folded: string[] = []
+  let current: StringToken[] = tokens.slice()
+
+  // Iteratively fold:
+  //   (str) -> str
+  //   str + str -> str
+  //   [str, str, ...].join(sep) -> str
+  for (let pass = 0; pass < 8; pass += 1) {
+    const next: StringToken[] = []
+    let changed = false
+    let i = 0
+    while (i < current.length) {
+      const tok = current[i]!
+      // (str) -> str
+      if (
+        tok.kind === 'op' &&
+        tok.value === '(' &&
+        current[i + 1]?.kind === 'str' &&
+        current[i + 2]?.kind === 'op' &&
+        current[i + 2]?.value === ')'
+      ) {
+        next.push(current[i + 1]!)
+        i += 3
+        changed = true
+        continue
+      }
+      // str + str -> str
+      if (
+        tok.kind === 'str' &&
+        current[i + 1]?.kind === 'op' &&
+        current[i + 1]?.value === '+' &&
+        current[i + 2]?.kind === 'str'
+      ) {
+        const combined = tok.value + (current[i + 2] as { kind: 'str'; value: string }).value
+        folded.push(combined)
+        next.push({ kind: 'str', value: combined })
+        i += 3
+        changed = true
+        continue
+      }
+      // [str, str, ...].join(str) -> str
+      if (tok.kind === 'op' && tok.value === '[') {
+        let j = i + 1
+        const parts: string[] = []
+        let validArray = true
+        while (j < current.length) {
+          const item = current[j]!
+          if (item.kind === 'op' && item.value === ']') break
+          if (item.kind === 'str') {
+            parts.push(item.value)
+            j += 1
+            if (current[j]?.kind === 'op' && current[j]?.value === ',') {
+              j += 1
+            }
+          } else {
+            validArray = false
+            break
+          }
+        }
+        if (
+          validArray &&
+          parts.length > 0 &&
+          current[j]?.kind === 'op' &&
+          current[j]?.value === ']' &&
+          current[j + 1]?.kind === 'op' &&
+          current[j + 1]?.value === '.join' &&
+          current[j + 2]?.kind === 'op' &&
+          current[j + 2]?.value === '('
+        ) {
+          let sep = ','
+          let closeIdx = j + 3
+          if (current[closeIdx]?.kind === 'str') {
+            sep = (current[closeIdx] as { kind: 'str'; value: string }).value
+            closeIdx += 1
+          }
+          if (current[closeIdx]?.kind === 'op' && current[closeIdx]?.value === ')') {
+            const joined = parts.join(sep)
+            folded.push(joined)
+            next.push({ kind: 'str', value: joined })
+            i = closeIdx + 1
+            changed = true
+            continue
+          }
+        }
+      }
+      next.push(tok)
+      i += 1
+    }
+    current = next
+    if (!changed) break
+  }
+
+  for (const tok of current) {
+    if (tok.kind === 'str') folded.push(tok.value)
+  }
+  return folded
+}
+
+function maskNonExecutableText(code: string): {
+  executable: string
+  stringValues: string[]
+  hasStringTimerCall: boolean
+} {
   let executable = ''
   const stringValues: string[] = []
+  const tokens: StringToken[] = []
   let index = 0
   let state: 'code' | 'single' | 'double' | 'template' | 'line-comment' | 'block-comment' = 'code'
   let value = ''
   const templateExpressionDepth: number[] = []
+  let hasStringTimerCall = false
+
+  const checkTimerStringArg = () => {
+    if (/\b(?:setTimeout|setInterval)\s*\(\s*$/u.test(executable)) {
+      hasStringTimerCall = true
+    }
+  }
 
   while (index < code.length) {
     const char = code[index]!
@@ -547,15 +745,19 @@ function maskNonExecutableText(code: string): { executable: string; stringValues
     if (state === 'single' || state === 'double') {
       const quote = state === 'single' ? "'" : '"'
       if (char === '\\' && next !== undefined) {
-        value += next
-        executable += '  '
-        index += 2
+        const { decoded, consumed } = decodeJsStringEscape(code, index)
+        value += decoded
+        for (let k = 0; k < consumed; k += 1) {
+          executable += code[index + k] === '\n' ? '\n' : ' '
+        }
+        index += consumed
         continue
       }
       executable += char === '\n' ? '\n' : ' '
       index += 1
       if (char === quote) {
         stringValues.push(value)
+        tokens.push({ kind: 'str', value })
         value = ''
         state = 'code'
       } else value += char
@@ -563,23 +765,37 @@ function maskNonExecutableText(code: string): { executable: string; stringValues
     }
     if (state === 'template') {
       if (char === '\\' && next !== undefined) {
-        executable += '  '
-        index += 2
+        const { decoded, consumed } = decodeJsStringEscape(code, index)
+        value += decoded
+        for (let k = 0; k < consumed; k += 1) {
+          executable += code[index + k] === '\n' ? '\n' : ' '
+        }
+        index += consumed
         continue
       }
       if (char === '`' && templateExpressionDepth.length === 0) {
+        stringValues.push(value)
+        tokens.push({ kind: 'str', value })
+        tokens.push({ kind: 'op', value: ')' })
+        value = ''
         executable += ' '
         index += 1
         state = 'code'
         continue
       }
       if (char === '$' && next === '{') {
+        stringValues.push(value)
+        tokens.push({ kind: 'str', value })
+        tokens.push({ kind: 'op', value: '+' })
+        tokens.push({ kind: 'op', value: '(' })
+        value = ''
         executable += '  '
         index += 2
         templateExpressionDepth.push(1)
         state = 'code'
         continue
       }
+      value += char
       executable += char === '\n' ? '\n' : ' '
       index += 1
       continue
@@ -592,8 +808,11 @@ function maskNonExecutableText(code: string): { executable: string; stringValues
         templateExpressionDepth[top]! -= 1
         if (templateExpressionDepth[top] === 0) {
           templateExpressionDepth.pop()
+          tokens.push({ kind: 'op', value: ')' })
+          tokens.push({ kind: 'op', value: '+' })
           executable += ' '
           index += 1
+          value = ''
           state = 'template'
           continue
         }
@@ -612,6 +831,7 @@ function maskNonExecutableText(code: string): { executable: string; stringValues
       continue
     }
     if (char === "'" || char === '"') {
+      checkTimerStringArg()
       executable += ' '
       index += 1
       state = char === "'" ? 'single' : 'double'
@@ -619,34 +839,100 @@ function maskNonExecutableText(code: string): { executable: string; stringValues
       continue
     }
     if (char === '`') {
+      checkTimerStringArg()
+      tokens.push({ kind: 'op', value: '(' })
       executable += ' '
       index += 1
+      value = ''
       state = 'template'
       continue
+    }
+    if (char === '.' && /^\.\s*join\b/.test(code.slice(index))) {
+      const match = /^\.\s*join\b/.exec(code.slice(index))!
+      tokens.push({ kind: 'op', value: '.join' })
+      executable += match[0]
+      index += match[0].length
+      continue
+    }
+    if (
+      char === '+' ||
+      char === '(' ||
+      char === ')' ||
+      char === '[' ||
+      char === ']' ||
+      char === ','
+    ) {
+      tokens.push({ kind: 'op', value: char })
+    } else if (!/\s/.test(char)) {
+      tokens.push({ kind: 'op', value: 'other' })
     }
     executable += char
     index += 1
   }
-  return { executable, stringValues }
+
+  const folded = foldStringTokens(tokens)
+  for (const entry of folded) {
+    stringValues.push(entry)
+  }
+
+  return { executable, stringValues, hasStringTimerCall }
+}
+
+function hasUnsafeDefaultViewAccess(executable: string): boolean {
+  const re = /\.\s*defaultView\b/gu
+  let match: RegExpExecArray | null
+  while ((match = re.exec(executable)) !== null) {
+    const before = executable.slice(0, match.index)
+    // Only direct `document.defaultView` (bound to the sandbox document proxy) is permitted.
+    if (!/(?:^|[^.\w$])document\s*$/u.test(before)) {
+      return true
+    }
+  }
+  return false
 }
 
 function findDynamicSourceViolation(code: string): string | null {
   if (code.length > WIDGET_SANDBOX_SOURCE_MAX_CHARS) return 'source-size-limit-exceeded'
-  const { executable, stringValues } = maskNonExecutableText(code)
-  if (/\\u(?:\\\{|[0-9a-f])/iu.test(executable)) return 'escaped-identifiers-are-blocked'
+  const { executable, stringValues, hasStringTimerCall } = maskNonExecutableText(code)
+  if (/\\u(?:\{|[0-9a-f])/iu.test(executable)) return 'escaped-identifiers-are-blocked'
   if (/\beval\s*\(/u.test(executable)) return 'eval-call-blocked'
-  if (/\bFunction\s*\(/u.test(executable)) return 'Function-constructor-blocked'
+  if (/\b(?:Async|Generator|AsyncGenerator)?Function\s*\(/u.test(executable))
+    return 'Function-constructor-blocked'
   if (/\bimport\s*\(/u.test(executable)) return 'dynamic-import-blocked'
   if (/\bimportScripts\s*\(/u.test(executable)) return 'importScripts-blocked'
   if (/\bWebAssembly\b/u.test(executable)) return 'WebAssembly-blocked'
-  if (/\.\s*(?:constructor|__proto__)\b/u.test(executable))
+  if (hasStringTimerCall) return 'string-timer-callback-blocked'
+  if (
+    /\.\s*(?:constructor|__proto__|ownerDocument|parentWindow|contentWindow|contentDocument|frameElement|__lookupGetter__|__lookupSetter__|__defineGetter__|__defineSetter__)\b/u.test(
+      executable
+    ) ||
+    hasUnsafeDefaultViewAccess(executable)
+  ) {
     return 'intrinsic-constructor-escape-blocked'
+  }
+  if (
+    /\b(?:Object\s*\.\s*(?:getPrototypeOf|setPrototypeOf|getOwnPropertyDescriptor)|Reflect\s*\.\s*(?:get|getPrototypeOf|setPrototypeOf|construct)|String\s*\.\s*(?:fromCharCode|fromCodePoint))\s*\(/u.test(
+      executable
+    )
+  ) {
+    return 'reflective-escape-blocked'
+  }
   if (/\b(?:constructor|__proto__)\s*:/u.test(executable))
     return 'intrinsic-member-definition-blocked'
   if (stringValues.some((value) => FORBIDDEN_MEMBER_NAMES.has(value))) {
     return 'computed-intrinsic-member-blocked'
   }
   return null
+}
+
+export function recordWidgetSandboxDenial(
+  widgetId: string,
+  pluginName: string,
+  operation: WidgetSandboxOperation,
+  reason: string
+): WidgetSandboxError {
+  appendAuditEntry(widgetId, pluginName, operation, 'denied', reason)
+  return makeCapabilityError(operation, reason)
 }
 
 export function createWidgetSandboxPolicy(

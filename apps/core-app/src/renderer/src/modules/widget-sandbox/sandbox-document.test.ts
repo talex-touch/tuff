@@ -1,20 +1,20 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { revokeBlobUrls, rewriteInlineScriptsToBlobs } from './inline-script-blobs'
 import {
+  buildWidgetSandboxBootstrapScript,
   buildWidgetSandboxDocument,
+  createWidgetSandboxDocument,
   escapeForScriptBlock,
   WIDGET_SANDBOX_MESSAGE
 } from './sandbox-document'
 
 const RUNTIME = 'export const html = () => {}\nexport const reactive = (x) => x\n'
+const SAMPLE_BLOB_URL = 'blob:app://tuff/00000000-0000-0000-0000-000000000001'
 
-function build(source: string): string {
-  return buildWidgetSandboxDocument({ source, runtimeSource: RUNTIME })
-}
+afterEach(() => {
+  vi.restoreAllMocks()
+})
 
-/**
- * Everything the sandbox promises rests on this document being assembled
- * correctly, so these tests are about breakout, not about rendering.
- */
 describe('escapeForScriptBlock', () => {
   it('neutralises a script close tag', () => {
     expect(escapeForScriptBlock('</script>')).toBe('<\\/script>')
@@ -25,8 +25,6 @@ describe('escapeForScriptBlock', () => {
   })
 
   it('neutralises every closing tag, not just script', () => {
-    // The parser only cares about `</script`, but `</` is escaped wholesale so
-    // the rule cannot rot when the surrounding element changes.
     expect(escapeForScriptBlock('</style></div>')).toBe('<\\/style><\\/div>')
   })
 
@@ -35,95 +33,108 @@ describe('escapeForScriptBlock', () => {
   })
 
   it('is value-preserving once JavaScript parses it', () => {
-    // `\/` is `/` and `\!` is `!` to the JS parser, so the widget observes the
-    // text it wrote. Evaluated rather than asserted textually: the claim is
-    // about what JavaScript sees, not about the characters.
     const escaped = escapeForScriptBlock('a</script>b<!--c')
     expect(new Function(`return "${escaped}"`)()).toBe('a</script>b<!--c')
   })
 })
 
 describe('buildWidgetSandboxDocument', () => {
-  it('puts the CSP first in head, before anything model-authored', () => {
-    const doc = build('root.textContent = "hi"')
+  it('puts the CSP first in head with script-src blob: and zero unsafe-inline or unsafe-eval', () => {
+    const doc = buildWidgetSandboxDocument(SAMPLE_BLOB_URL)
     const head = doc.slice(doc.indexOf('<head>') + '<head>'.length)
-    // A policy governs only what is parsed after it, so the very first element
-    // in head has to be the meta — not merely "somewhere before the script".
     expect(head.trimStart().startsWith('<meta http-equiv="Content-Security-Policy"')).toBe(true)
     expect(doc.indexOf('Content-Security-Policy')).toBeLessThan(doc.indexOf('<script'))
+    expect(doc).toContain("default-src 'none'")
+    expect(doc).toContain('script-src blob:')
+    expect(doc).toContain("connect-src 'none'")
+    expect(doc).not.toContain('unsafe-eval')
+    expect(doc).not.toMatch(/script-src[^;"]*'unsafe-inline'/)
   })
 
-  it('forbids network egress', () => {
-    // The single most important line: without it a widget can post the
-    // conversation anywhere.
-    expect(build('')).toContain("connect-src 'none'")
-  })
+  it('loads the bootstrapper exclusively from a validated external blob: script tag with zero inline JS', () => {
+    const doc = buildWidgetSandboxDocument(SAMPLE_BLOB_URL)
+    const scripts = [...doc.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)]
+    expect(scripts).toHaveLength(1)
+    expect(scripts[0]?.[1]).toContain(`src="${SAMPLE_BLOB_URL}"`)
+    expect(scripts[0]?.[2]).toBe('')
 
-  it('does not grant unsafe-eval', () => {
-    expect(build('')).not.toContain('unsafe-eval')
+    expect(() => buildWidgetSandboxDocument('https://evil.example/a.js')).toThrow('blob:')
+    expect(() => buildWidgetSandboxDocument('javascript:alert(1)')).toThrow('blob:')
+    expect(() => buildWidgetSandboxDocument('blob:ok" onload="alert(1)')).toThrow('blob:')
   })
+})
 
-  it('denies everything by default', () => {
-    expect(build('')).toContain("default-src 'none'")
-  })
-
-  it('cannot be broken out of by a source that closes the script block', () => {
+describe('buildWidgetSandboxBootstrapScript', () => {
+  it('safely JSON-encodes widget & runtime sources without breakout risk', () => {
     const attack = 'const x = "</script><img src=x onerror=alert(1)>"'
-    const doc = build(attack)
-    // One script element in, one script element out: the payload never becomes
-    // markup. It does still appear in the document — as inert text inside the
-    // script block, which is the whole point of escaping rather than stripping.
-    expect(doc.match(/<\/script>/g)).toHaveLength(1)
-    expect(doc).toContain('<\\/script>')
-    const scriptBody = doc.slice(doc.indexOf('<script'), doc.indexOf('</script>'))
-    expect(scriptBody).toContain('<img src=x')
-    expect(doc.slice(doc.indexOf('</script>'))).not.toContain('<img src=x')
-  })
-
-  it('cannot be broken out of by an uppercase or spaced close tag', () => {
-    // The parser ends a script block at `</script` followed by whitespace, `>`
-    // or `/` — case-insensitively. Matching the literal `</script>` here would
-    // make this test vacuous: `</SCRIPT >` would slip past the assertion even
-    // with the escaping removed. Match what the parser matches.
-    const closeTag = /<\/script[\s/>]/gi
-    expect(build('const x = "</SCRIPT ><b>"').match(closeTag)).toHaveLength(1)
-    expect(build('const x = "</script\t>"').match(closeTag)).toHaveLength(1)
-    expect(build('const x = "</script/"').match(closeTag)).toHaveLength(1)
-  })
-
-  it('cannot be broken out of through the injected runtime source either', () => {
-    // The rule belongs to the destination, not the author: a dependency that
-    // happens to contain the sequence must be escaped the same way.
-    const doc = buildWidgetSandboxDocument({
-      source: '',
-      runtimeSource: 'const s = "</script>"'
+    const script = buildWidgetSandboxBootstrapScript({
+      source: attack,
+      runtimeSource: 'const s = "</SCRIPT >"'
     })
-    expect(doc.match(/<\/script>/g)).toHaveLength(1)
-  })
-
-  it('hands the runtime to the widget as a blob module', () => {
-    const doc = build('')
-    expect(doc).toContain('createObjectURL')
-    expect(doc).toContain('await import(runtimeUrl)')
-    // The runtime rides in as a string literal, so it must be JSON-encoded.
-    expect(doc).toContain(JSON.stringify(RUNTIME).slice(1, 20))
-  })
-
-  it('wires the three host messages', () => {
-    const doc = build('')
+    expect(script).toContain(JSON.stringify(attack))
+    expect(script).toContain(JSON.stringify('const s = "</SCRIPT >"'))
+    expect(script).toContain('URL.createObjectURL')
+    expect(script).toContain('URL.revokeObjectURL')
+    expect(script).toContain('await import(widgetUrl)')
+    expect(script).toContain('securitypolicyviolation')
     for (const type of Object.values(WIDGET_SANDBOX_MESSAGE)) {
-      expect(doc).toContain(JSON.stringify(type))
+      expect(script).toContain(JSON.stringify(type))
     }
   })
 
-  it('reports policy violations instead of swallowing them', () => {
-    expect(build('')).toContain('securitypolicyviolation')
-  })
+  it('creates and idempotently revokes the host bootstrap blob URL', () => {
+    const createSpy = vi.spyOn(URL, 'createObjectURL').mockReturnValue(SAMPLE_BLOB_URL)
+    const revokeSpy = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined)
 
-  it('keeps the widget source verbatim when it holds no breakout sequence', () => {
-    const source = 'root.append(html`<p>${count}</p>`)'
-    // Only `</p>` is rewritten; the rest must survive untouched or the widget
-    // silently renders something other than what the model wrote.
-    expect(build(source)).toContain('root.append(html`<p>${count}<\\/p>`)')
+    const built = createWidgetSandboxDocument({
+      source: 'root.textContent = "hi"',
+      runtimeSource: RUNTIME
+    })
+
+    expect(createSpy).toHaveBeenCalledTimes(1)
+    expect(built.bootstrapScriptUrl).toBe(SAMPLE_BLOB_URL)
+    expect(built.srcdoc).toContain(`<script defer src="${SAMPLE_BLOB_URL}"></script>`)
+
+    built.revoke()
+    built.revoke()
+    expect(revokeSpy).toHaveBeenCalledTimes(1)
+    expect(revokeSpy).toHaveBeenCalledWith(SAMPLE_BLOB_URL)
+  })
+})
+
+describe('rewriteInlineScriptsToBlobs', () => {
+  it('rewrites classic and module inline scripts into blob URLs while preserving comments, raw tags, data scripts, and external scripts', () => {
+    const created: string[] = []
+    const createFakeBlob = (code: string) => {
+      created.push(code)
+      return `blob:app://tuff/script-${created.length}`
+    }
+
+    const input = [
+      '<!-- <script>ignoredInComment()</script> -->',
+      '<textarea><script>ignoredInTextarea()</script></textarea>',
+      '<script type="application/json">{"a":1}</script>',
+      '<script src="blob:already-external"></script>',
+      '<script id="classic">window.x = 1;</script>',
+      '<script type="module">export const y = 2;</script>'
+    ].join('\n')
+
+    const { html, blobUrls } = rewriteInlineScriptsToBlobs(input, createFakeBlob)
+
+    expect(blobUrls).toEqual(['blob:app://tuff/script-1', 'blob:app://tuff/script-2'])
+    expect(created[0]).toBe('window.x = 1;')
+    expect(created[1]).toContain('URL.createObjectURL')
+    expect(created[1]).toContain(JSON.stringify('export const y = 2;'))
+
+    expect(html).toContain('<!-- <script>ignoredInComment()</script> -->')
+    expect(html).toContain('<textarea><script>ignoredInTextarea()</script></textarea>')
+    expect(html).toContain('<script type="application/json">{"a":1}</script>')
+    expect(html).toContain('<script src="blob:already-external"></script>')
+    expect(html).toContain('<script id="classic" src="blob:app://tuff/script-1"></script>')
+    expect(html).toContain('<script defer src="blob:app://tuff/script-2"></script>')
+
+    const revokeSpy = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined)
+    revokeBlobUrls(blobUrls)
+    expect(revokeSpy).toHaveBeenCalledTimes(2)
   })
 })

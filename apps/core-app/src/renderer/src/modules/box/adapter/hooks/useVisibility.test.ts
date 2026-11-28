@@ -332,4 +332,54 @@ describe('useVisibility clipboard autoPaste and dismissal on show', () => {
     expect(handlePaste).toHaveBeenCalledWith({ triggerSearch: true, attemptAutoFill: true })
     hook.cleanup()
   })
+
+  it('cancels pending focus timer and drops stale clipboard check if hidden before onShow finishes', async () => {
+    vi.useFakeTimers()
+    try {
+      const pendingClipboard = Promise.withResolvers<IClipboardItem | null>()
+      const clipboardChannel = await import('./useClipboardChannel')
+      vi.mocked(clipboardChannel.getLatestClipboard).mockImplementationOnce(
+        () => pendingClipboard.promise
+      )
+
+      const focus = vi.fn()
+      const handlePaste = vi.fn()
+      const clipboardOptions = createClipboardOptions(null)
+      const hook = useVisibility({
+        boxOptions: createBoxOptions(),
+        searchVal: ref(''),
+        clipboardOptions,
+        handlePaste,
+        boxInputRef: ref({ focus }),
+        deactivateAllProviders: vi.fn(async () => undefined)
+      })
+
+      const triggerShortcut = state.listeners.get(CoreBoxEvents.ui.shortcutTriggered.toEventName())
+      const triggerShow = state.listeners.get(CoreBoxEvents.ui.trigger.toEventName())
+
+      triggerShortcut?.()
+      triggerShow?.({ show: true })
+      // Hide immediately before clipboard fetch resolves or focus timer fires
+      triggerShow?.({ show: false })
+
+      pendingClipboard.resolve({
+        id: 202,
+        type: 'image',
+        content: 'tfile:///tmp/late.png',
+        thumbnail: 'data:image/png;base64,abc',
+        timestamp: new Date().toISOString(),
+        freshnessBaseAt: Date.now() - 500,
+        autoPasteEligible: true
+      })
+      await Promise.resolve()
+      await Promise.resolve()
+      await vi.advanceTimersByTimeAsync(100)
+
+      expect(focus).not.toHaveBeenCalled()
+      expect(handlePaste).not.toHaveBeenCalled()
+      hook.cleanup()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })

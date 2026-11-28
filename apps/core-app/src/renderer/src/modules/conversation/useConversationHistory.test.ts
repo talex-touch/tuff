@@ -91,6 +91,36 @@ describe('refresh', () => {
     await history.refresh()
     expect(history.conversations.value).toEqual([])
   })
+
+  it('preserves the last known list on transient refresh failure and ignores stale out-of-order responses', async () => {
+    const history = useConversationHistory()
+    const initialRows = [{ id: 'c-init', title: 'Initial', createdAt: 1, updatedAt: 1 }]
+    send.mockResolvedValueOnce(initialRows)
+    await history.refresh()
+    expect(history.conversations.value).toEqual(initialRows)
+
+    // Transient error must keep the last good list instead of wiping the sidebar
+    send.mockRejectedValueOnce(new Error('transient timeout'))
+    await history.refresh()
+    expect(history.conversations.value).toEqual(initialRows)
+
+    // Out-of-order concurrent refreshes: slower older call must not overwrite newer result
+    const first = Promise.withResolvers<typeof initialRows>()
+    const second = Promise.withResolvers<typeof initialRows>()
+    send.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise)
+
+    const p1 = history.refresh()
+    const p2 = history.refresh()
+
+    const newerRows = [{ id: 'c-new', title: 'Newer', createdAt: 2, updatedAt: 3 }]
+    second.resolve(newerRows)
+    await p2
+    expect(history.conversations.value).toEqual(newerRows)
+
+    first.resolve([{ id: 'c-stale', title: 'Stale', createdAt: 1, updatedAt: 2 }])
+    await p1
+    expect(history.conversations.value).toEqual(newerRows)
+  })
 })
 
 describe('shared list', () => {

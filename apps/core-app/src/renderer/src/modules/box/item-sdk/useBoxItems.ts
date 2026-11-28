@@ -75,56 +75,56 @@ export function useBoxItems(): UseBoxItemsReturn {
    * 创建新 item
    */
   const create = (item: TuffItem): void => {
-    void transport.send(BOX_ITEM_EVENTS.CREATE, { item })
+    void transport.send(BOX_ITEM_EVENTS.CREATE, { item }).catch(() => {})
   }
 
   /**
    * 更新 item 部分字段
    */
   const update = (id: string, updates: Partial<TuffItem>): void => {
-    void transport.send(BOX_ITEM_EVENTS.UPDATE, { id, updates })
+    void transport.send(BOX_ITEM_EVENTS.UPDATE, { id, updates }).catch(() => {})
   }
 
   /**
    * 创建或更新 item（推荐）
    */
   const upsert = (item: TuffItem): void => {
-    void transport.send(BOX_ITEM_EVENTS.UPSERT, { item })
+    void transport.send(BOX_ITEM_EVENTS.UPSERT, { item }).catch(() => {})
   }
 
   /**
    * 删除 item
    */
   const remove = (id: string): void => {
-    void transport.send(BOX_ITEM_EVENTS.DELETE, { id })
+    void transport.send(BOX_ITEM_EVENTS.DELETE, { id }).catch(() => {})
   }
 
   /**
    * 批量 upsert
    */
   const batchUpsert = (itemsToUpsert: TuffItem[]): void => {
-    void transport.send(BOX_ITEM_EVENTS.BATCH_UPSERT, { items: itemsToUpsert })
+    void transport.send(BOX_ITEM_EVENTS.BATCH_UPSERT, { items: itemsToUpsert }).catch(() => {})
   }
 
   /**
    * 批量删除
    */
   const batchDelete = (ids: string[]): void => {
-    void transport.send(BOX_ITEM_EVENTS.BATCH_DELETE, { ids })
+    void transport.send(BOX_ITEM_EVENTS.BATCH_DELETE, { ids }).catch(() => {})
   }
 
   /**
    * 清空所有或指定来源
    */
   const clear = (source?: string): void => {
-    void transport.send(BOX_ITEM_EVENTS.CLEAR, { source })
+    void transport.send(BOX_ITEM_EVENTS.CLEAR, { source }).catch(() => {})
   }
 
   /**
    * 请求同步
    */
   const sync = (): void => {
-    void transport.send(BOX_ITEM_EVENTS.SYNC)
+    void transport.send(BOX_ITEM_EVENTS.SYNC).catch(() => {})
   }
 
   // ==================== 事件处理器 ====================
@@ -132,7 +132,9 @@ export function useBoxItems(): UseBoxItemsReturn {
   /**
    * 处理 upsert 事件
    */
-  const handleUpsert = ({ item }: { item: TuffItem }): void => {
+  const handleUpsert = (payload?: { item?: TuffItem } | null): void => {
+    const item = payload?.item
+    if (!item || typeof item.id !== 'string' || !item.id) return
     const index = itemsMap.get(item.id)
 
     if (index !== undefined) {
@@ -155,11 +157,15 @@ export function useBoxItems(): UseBoxItemsReturn {
   /**
    * 处理 update 事件
    */
-  const handleUpdate = ({ id, updates }: { id: string; updates: Partial<TuffItem> }): void => {
+  const handleUpdate = (payload?: { id?: string; updates?: Partial<TuffItem> } | null): void => {
+    const id = payload?.id
+    const updates = payload?.updates
+    if (typeof id !== 'string' || !id || !updates || typeof updates !== 'object') return
     const index = itemsMap.get(id)
 
     if (index !== undefined) {
       const existing = items.value[index]
+      if (!existing) return
       // 深度合并（简化版）
       const updated = { ...existing, ...updates }
       items.value.splice(index, 1, updated)
@@ -169,7 +175,9 @@ export function useBoxItems(): UseBoxItemsReturn {
   /**
    * 处理 delete 事件
    */
-  const handleDelete = ({ id }: { id: string }): void => {
+  const handleDelete = (payload?: { id?: string } | null): void => {
+    const id = payload?.id
+    if (typeof id !== 'string' || !id) return
     const index = itemsMap.get(id)
 
     if (index !== undefined) {
@@ -182,26 +190,35 @@ export function useBoxItems(): UseBoxItemsReturn {
   /**
    * 处理 batch-upsert 事件
    */
-  const handleBatchUpsert = ({ items: batchItems }: { items: TuffItem[] }): void => {
-    // Reverse iterate to preserve incoming order while unshifting
-    // so the first item in data.items ends up before subsequent ones.
-    for (let i = batchItems.length - 1; i >= 0; i--) {
-      const item = batchItems[i]
-      const index = itemsMap.get(item.id)
-      if (index !== undefined) {
-        items.value.splice(index, 1)
-      }
-      items.value.unshift(item)
+  const handleBatchUpsert = (payload?: { items?: TuffItem[] } | null): void => {
+    const batchItems = payload?.items
+    if (!Array.isArray(batchItems) || batchItems.length === 0) return
+
+    const latestById = new Map<string, TuffItem>()
+    for (const item of batchItems) {
+      if (!item || typeof item.id !== 'string' || !item.id) continue
+      latestById.set(item.id, item)
     }
+    if (latestById.size === 0) return
+
+    items.value = [
+      ...latestById.values(),
+      ...items.value.filter((item) => !latestById.has(item.id))
+    ]
     rebuildIndex()
   }
 
   /**
    * 处理 batch-delete 事件
    */
-  const handleBatchDelete = ({ ids }: { ids: string[] }): void => {
+  const handleBatchDelete = (payload?: { ids?: string[] } | null): void => {
+    const ids = payload?.ids
+    if (!Array.isArray(ids) || ids.length === 0) return
     // 批量删除需要重建索引
-    const idsToDelete = new Set(ids)
+    const idsToDelete = new Set(
+      ids.filter((id): id is string => typeof id === 'string' && id.length > 0)
+    )
+    if (idsToDelete.size === 0) return
     items.value = items.value.filter((item) => !idsToDelete.has(item.id))
     rebuildIndex()
   }
@@ -209,7 +226,8 @@ export function useBoxItems(): UseBoxItemsReturn {
   /**
    * 处理 clear 事件
    */
-  const handleClear = ({ source }: { source?: string }): void => {
+  const handleClear = (payload?: { source?: string } | null): void => {
+    const source = payload?.source
     if (source) {
       // 清空指定来源
       items.value = items.value.filter((item) => !matchesSource(item, source))
@@ -224,8 +242,12 @@ export function useBoxItems(): UseBoxItemsReturn {
   /**
    * 处理 sync-response 事件
    */
-  const handleSyncResponse = ({ items: syncedItems }: { items: TuffItem[] }): void => {
-    items.value = syncedItems
+  const handleSyncResponse = (payload?: { items?: TuffItem[] } | null): void => {
+    const syncedItems = payload?.items
+    if (!Array.isArray(syncedItems)) return
+    items.value = syncedItems.filter((item): item is TuffItem =>
+      Boolean(item && typeof item.id === 'string' && item.id)
+    )
     rebuildIndex()
   }
 

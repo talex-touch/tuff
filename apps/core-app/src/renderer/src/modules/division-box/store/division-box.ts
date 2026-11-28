@@ -206,7 +206,8 @@ export const useDivisionBoxStore = defineStore('divisionBox', {
     /**
      * Handle state change event from main process
      */
-    handleStateChanged(event: DivisionBoxStateChangedPayload): void {
+    handleStateChanged(event: DivisionBoxStateChangedPayload | null | undefined): void {
+      if (!event || typeof event.sessionId !== 'string' || !event.sessionId) return
       const session = this.activeSessions.get(event.sessionId)
       if (session) {
         session.state = event.newState
@@ -217,26 +218,41 @@ export const useDivisionBoxStore = defineStore('divisionBox', {
     /**
      * Handle session destroyed event from main process
      */
-    handleSessionDestroyed(sessionId: string): void {
+    handleSessionDestroyed(sessionId: string | null | undefined): void {
+      if (typeof sessionId !== 'string' || !sessionId) return
       this.activeSessions.delete(sessionId)
+    },
+
+    /**
+     * Dispose IPC event listeners
+     */
+    disposeIPCListeners(): void {
+      disposeStateChanged?.()
+      disposeStateChanged = null
+      disposeSessionDestroyed?.()
+      disposeSessionDestroyed = null
     },
 
     /**
      * Initialize IPC event listeners
      */
-    initializeIPCListeners(): void {
+    initializeIPCListeners(): () => void {
       if (disposeStateChanged || disposeSessionDestroyed) {
-        return
+        return () => this.disposeIPCListeners()
       }
 
       const transport = useTuffTransport()
       disposeStateChanged = transport.on(DivisionBoxEvents.stateChanged, (event) => {
+        if (!event || typeof event !== 'object') return
         this.handleStateChanged(event as DivisionBoxStateChangedPayload)
       })
 
       disposeSessionDestroyed = transport.on(DivisionBoxEvents.sessionDestroyed, (payload) => {
+        if (!payload || typeof payload !== 'object') return
         this.handleSessionDestroyed((payload as DivisionBoxSessionDestroyedPayload).sessionId)
       })
+
+      return () => this.disposeIPCListeners()
     }
   }
 })

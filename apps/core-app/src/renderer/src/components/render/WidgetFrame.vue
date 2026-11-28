@@ -228,6 +228,7 @@ watch(
 onErrorCaptured((error) => {
   const resolved = error instanceof Error ? error : new Error(String(error))
   renderError.value = resolved
+  unmountShadowApp()
   if (isDev) {
     const evalPosition = parseEvalLine(resolved)
     if (evalPosition && props.rendererId) {
@@ -291,8 +292,11 @@ function handleWidgetNavigationEvent(event: Event): void {
 function ensureShadowRoot(): ShadowRoot | null {
   const host = shadowHost.value
   if (!host) return null
+  if (shadowRoot.value && shadowRoot.value.host !== host) {
+    unmountShadowApp()
+  }
   if (!shadowRoot.value) {
-    shadowRoot.value = host.attachShadow({ mode: 'open' })
+    shadowRoot.value = host.shadowRoot ?? host.attachShadow({ mode: 'open' })
     shadowRoot.value.addEventListener('click', handleWidgetNavigationEvent, true)
     shadowRoot.value.addEventListener('submit', handleWidgetNavigationEvent, true)
     if (isDev) {
@@ -302,19 +306,33 @@ function ensureShadowRoot(): ShadowRoot | null {
   if (!shadowContainer.value) {
     shadowContainer.value = document.createElement('div')
     shadowContainer.value.className = 'WidgetFrame-ShadowContainer'
+    shadowContainer.value.dataset.widgetScope = props.rendererId
     shadowRoot.value.appendChild(shadowContainer.value)
     if (isDev) {
       devLog('[WidgetFrame] shadow container created', { rendererId: props.rendererId })
     }
+  } else {
+    shadowContainer.value.dataset.widgetScope = props.rendererId
   }
   return shadowRoot.value
 }
 
+function findWidgetStyleElement(widgetId: string): HTMLStyleElement | null {
+  if (typeof CSS !== 'undefined' && typeof CSS.escape === 'function') {
+    return document.querySelector<HTMLStyleElement>(
+      `style[data-widget-id="${CSS.escape(widgetId)}"]`
+    )
+  }
+  const styles = document.querySelectorAll<HTMLStyleElement>('style[data-widget-id]')
+  for (const style of styles) {
+    if (style.dataset.widgetId === widgetId) return style
+  }
+  return null
+}
+
 function syncShadowStyles(): void {
   if (!shadowRoot.value || !props.rendererId) return
-  const sourceStyle = document.querySelector(
-    `style[data-widget-id="${props.rendererId}"]`
-  ) as HTMLStyleElement | null
+  const sourceStyle = findWidgetStyleElement(props.rendererId)
   const cssText = sourceStyle?.textContent ?? ''
   if (!shadowStyle.value) {
     shadowStyle.value = document.createElement('style')
@@ -324,11 +342,13 @@ function syncShadowStyles(): void {
 }
 
 function unmountShadowApp(): void {
-  if (shadowApp.value && shadowContainer.value) {
+  if (shadowApp.value) {
     shadowApp.value.unmount()
     shadowApp.value = null
   }
   if (shadowRoot.value) {
+    shadowRoot.value.removeEventListener('click', handleWidgetNavigationEvent, true)
+    shadowRoot.value.removeEventListener('submit', handleWidgetNavigationEvent, true)
     shadowRoot.value.innerHTML = ''
   }
   shadowRoot.value = null
@@ -337,7 +357,7 @@ function unmountShadowApp(): void {
 }
 
 function mountShadowApp(): void {
-  if (!renderer.value) return
+  if (!renderer.value || renderError.value) return
   const root = ensureShadowRoot()
   if (!root || !shadowContainer.value) return
   syncShadowStyles()
@@ -367,13 +387,26 @@ function mountShadowApp(): void {
   app.config.errorHandler = (error) => {
     const resolved = error instanceof Error ? error : new Error(String(error))
     renderError.value = resolved
+    unmountShadowApp()
     emits('render-error', resolved)
     if (isDev) {
       widgetFrameLog.error('Shadow render error', resolved)
     }
   }
-  app.mount(shadowContainer.value)
   shadowApp.value = app
+  try {
+    app.mount(shadowContainer.value)
+  } catch (error) {
+    const resolved = error instanceof Error ? error : new Error(String(error))
+    renderError.value = resolved
+    unmountShadowApp()
+    emits('render-error', resolved)
+    return
+  }
+  if (renderError.value) {
+    unmountShadowApp()
+    return
+  }
   if (isDev) {
     devLog('[WidgetFrame] shadow app mounted', {
       rendererId: props.rendererId,
@@ -383,7 +416,7 @@ function mountShadowApp(): void {
 }
 
 function syncShadowApp(): void {
-  if (!canRenderShadow.value) {
+  if (!canRenderShadow.value || renderError.value) {
     unmountShadowApp()
     return
   }
@@ -410,7 +443,9 @@ function syncShadowApp(): void {
  */
 onMounted(syncShadowApp)
 
-watch(() => [canRenderShadow.value, rendererKey.value], syncShadowApp, { flush: 'post' })
+watch(() => [canRenderShadow.value, rendererKey.value, Boolean(renderError.value)], syncShadowApp, {
+  flush: 'post'
+})
 
 onBeforeUnmount(() => {
   clearMissingRendererTimer()
@@ -422,6 +457,7 @@ onBeforeUnmount(() => {
   <div
     class="WidgetFrame"
     :class="{ 'is-preview': preview, 'is-empty': !renderer, 'has-error': !!renderError }"
+    :data-widget-scope="rendererId"
     @click.capture="handleWidgetNavigationEvent"
     @submit.capture="handleWidgetNavigationEvent"
   >

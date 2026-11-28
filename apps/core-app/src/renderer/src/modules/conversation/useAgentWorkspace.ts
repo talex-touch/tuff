@@ -329,11 +329,16 @@ export function useAgentWorkspace(options: UseAgentWorkspaceOptions): UseAgentWo
     state: ConversationWorkspaceState | null
     error: AgentWorkspaceError | null
   } | null = null
+  let prefetchSeq = 0
 
   async function prefetch(id: string): Promise<void> {
+    const seq = ++prefetchSeq
     try {
-      prefetched = { id, state: await sdk.get(id), error: null }
+      const next = await sdk.get(id)
+      if (seq !== prefetchSeq) return
+      prefetched = { id, state: next, error: null }
     } catch (error) {
+      if (seq !== prefetchSeq) return
       workspaceLog.error(`Failed to read workspace ${id}`, error)
       prefetched = { id, state: null, error: toAgentWorkspaceError(error) }
     }
@@ -345,10 +350,15 @@ export function useAgentWorkspace(options: UseAgentWorkspaceOptions): UseAgentWo
       if (id === previous) return
       // The first send mints the id and creates the thread in one call; its reply is the state.
       // Reading it again here would race that reply for nothing.
-      if (previous === null && id && pendingCreate === id) return
+      if (previous === null && id && pendingCreate === id) {
+        prefetchSeq += 1
+        prefetched = null
+        return
+      }
       resetMirror()
       const ready = prefetched
       prefetched = null
+      prefetchSeq += 1
       if (id && ready?.id === id) {
         loadSequence.claim()
         loading.value = false
@@ -364,6 +374,8 @@ export function useAgentWorkspace(options: UseAgentWorkspaceOptions): UseAgentWo
   const disposers = [sdk.onChanged(applyState), sdk.onMessageUpdate(applyFrame)]
   if (getCurrentScope()) {
     onScopeDispose(() => {
+      prefetchSeq += 1
+      prefetched = null
       for (const dispose of disposers) dispose()
     })
   }
