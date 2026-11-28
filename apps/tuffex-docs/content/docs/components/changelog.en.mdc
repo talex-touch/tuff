@@ -13,11 +13,23 @@ verified: false
 
 | Item | Value |
 |------|-------|
-| Source version | **0.9.7** |
-| Release version | **0.9.7** (latest npm release) |
+| Source version | **0.9.8** |
+| Release version | **0.9.8** (latest npm release) |
 | Component modules | **197**: Base 99 · Pro 61 · AI 37 |
 
 ## Release History
+
+### Version 0.9.8 (2026-11-28)
+
+Fix deep chart subpath on-demand CSS loading, redesign `Maps` and `TxAllocationBar`, complete ECharts dark-mode theme decoration, and expand the Data Suite gallery to showcase all 37 data and chart components.
+
+- **New components**: none
+- **Main updated components**: allocation-bar, charts
+- **Key features & fixes**:
+  - **Charts deep-subpath on-demand CSS**: extended `tuffexOnDemandStylePlugin` to recognize static, dynamic, and built `@talex-touch/tuffex/charts/src/*` imports and inject `charts/style.css`, while ensuring every chart subpath entry loads `--tx-chart-*` tokens so `Maps`, `SankeyChart`, `LearningCurve`, `MonoChart`, and `DitherChart` always render with full styles.
+  - **Maps redesign (`TxChoroplethMap` / `TxBubbleMap`)**: added a framed ocean canvas, subtle `d3-geo` graticule, crisp country borders, frosted floating zoom/reset controls, frosted tooltips, and a refined bottom pill gradient legend.
+  - **AllocationBar redesign (`TxAllocationBar`)**: streamlined to a precision 14px segmented bar with concentric outer radii, subtle top specular sheen, clean focus styling, refined legend chips, and a structured detail card with indicator dot and percentage readout.
+  - **ECharts dark-mode theming**: extended `decorateChartOption` to theme `treemap` parent headers/borders and chart `title` text from tokens, fixing white treemap headers and dim donut center titles in dark mode.
 
 ### Version 0.9.7 (2026-11-28)
 

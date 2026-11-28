@@ -1,3 +1,4 @@
+import '../style/index.scss'
 import type { LearningCurveLabels, LearningCurveProps, LearningCurveRun } from './src/types'
 import { withInstall } from '../utils/with-install'
 import component from './src/TxLearningCurve.vue'

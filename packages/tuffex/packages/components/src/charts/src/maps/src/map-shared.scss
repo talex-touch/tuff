@@ -7,6 +7,9 @@
   flex-direction: column;
   width: 100%;
   overflow: hidden;
+  border-radius: var(--tx-map-radius, 12px);
+  border: 1px solid var(--tx-map-frame-border, color-mix(in srgb, var(--tx-chart-text-primary, #6b7280) 15%, transparent));
+  background: var(--tx-map-ocean, color-mix(in srgb, var(--tx-chart-map-area, #e5e7eb) 22%, transparent));
 
   // A roaming map is picked up and moved: `grab` everywhere on it, regions and
   // bubbles included, and the page leaves its touches to the map.
@@ -50,11 +53,18 @@
     width: 100%;
   }
 
+  &__graticule {
+    fill: none;
+    stroke: var(--tx-map-graticule, color-mix(in srgb, var(--tx-chart-text-primary, #6b7280) 14%, transparent));
+    pointer-events: none;
+  }
+
   // kumo sets `emphasis: { disabled: true }` on the geo layer, so the land base
   // never reacts to hover.
   &__land {
     fill: var(--tx-chart-map-area, #e5e7eb);
-    stroke: var(--tx-chart-map-area, #e5e7eb);
+    stroke: var(--tx-map-border, var(--tx-bg-color, #ffffff));
+    stroke-linejoin: round;
   }
 
   // Bubbles are ECharts scatter symbols: opacity/scale are animated inline (see
@@ -66,9 +76,60 @@
   }
 
   &__region {
-    stroke: var(--tx-chart-map-area, #e5e7eb);
+    stroke: var(--tx-map-border, var(--tx-bg-color, #ffffff));
+    stroke-linejoin: round;
+    transition: fill-opacity 140ms ease, filter 140ms ease;
 
     &.has-data {
+      cursor: default;
+
+      &.is-hovered {
+        filter: brightness(1.08);
+      }
+    }
+  }
+
+  &__controls {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 6;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 2px;
+    border-radius: 8px;
+    border: 1px solid var(--tx-map-frame-border, color-mix(in srgb, var(--tx-chart-text-primary, #6b7280) 18%, transparent));
+    background: var(--tx-map-control-bg, color-mix(in srgb, var(--tx-bg-color, #ffffff) 76%, transparent));
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+
+  &__control-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--tx-text-color-primary, var(--tx-chart-text-primary, #6b7280));
+    cursor: pointer;
+    transition: background-color 140ms ease, opacity 140ms ease;
+
+    &:hover:not(:disabled) {
+      background: color-mix(in srgb, var(--tx-chart-text-primary, #6b7280) 14%, transparent);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--tx-color-primary, #409eff);
+      outline-offset: -1px;
+    }
+
+    &:disabled {
+      opacity: 0.35;
       cursor: default;
     }
   }
@@ -81,11 +142,14 @@
     gap: 0.5rem;
     min-width: 100px;
     max-width: 20rem;
-    padding: 0.5rem;
+    padding: 6px 10px;
     border: 1px solid var(--tx-chart-grid-line, rgb(107 114 128 / 20%));
-    border-radius: 0.5rem;
-    background: var(--tx-chart-tooltip-bg, canvas);
-    box-shadow: 0 4px 12px rgb(0 0 0 / 10%);
+    border-radius: 8px;
+    background: var(--tx-chart-tooltip-bg, color-mix(in srgb, var(--tx-bg-color-overlay, #ffffff) 92%, transparent));
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    color: var(--tx-text-color-primary, inherit);
+    box-shadow: var(--tx-box-shadow-light, 0 6px 18px rgb(0 0 0 / 16%));
     font-size: 0.75rem;
     pointer-events: none;
   }
@@ -102,16 +166,22 @@
     flex: none;
     display: flex;
     align-items: center;
-    gap: 0.375rem;
+    justify-content: flex-end;
+    gap: 6px;
     height: var(--tx-map-legend-inset, 22px);
-    padding-left: 0.75rem;
+    padding: 0 10px;
+    border-top: 1px solid var(--tx-map-frame-border, color-mix(in srgb, var(--tx-chart-text-primary, #6b7280) 12%, transparent));
+    background: var(--tx-map-legend-bg, color-mix(in srgb, var(--tx-bg-color, #ffffff) 48%, transparent));
     font-size: 0.6875rem;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
     color: var(--tx-chart-text-primary, #6b7280);
   }
 
   &__legend-bar {
-    width: 96px;
-    height: 8px;
-    border-radius: 4px;
+    width: 88px;
+    height: 6px;
+    border-radius: 999px;
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tx-chart-text-primary, #6b7280) 14%, transparent);
   }
 }

@@ -1,3 +1,4 @@
+import '../style/index.scss'
 import { withInstall } from '../utils/with-install'
 import component from './src/TxDitherChart.vue'
 

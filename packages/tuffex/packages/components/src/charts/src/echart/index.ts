@@ -1,3 +1,4 @@
+import '../style/index.scss'
 import type { BarChartProps, BarChartSeriesInput } from './src/options/bar'
 import type { FunnelChartDatum, FunnelChartProps } from './src/options/funnel'
 import type { GaugeChartProps } from './src/options/gauge'

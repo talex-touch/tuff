@@ -83,4 +83,16 @@ describe('decorateChartOption', () => {
     expect(readField(firstSeries(option), 'axisLine')).toBeUndefined()
     expect(readField(firstSeries(option), 'axisLabel')).toBeUndefined()
   })
+
+  it('themes treemap parent headers and chart titles from tokens instead of ECharts defaults', () => {
+    const option = decorate({
+      title: { text: 'Channels' },
+      series: [{ type: 'treemap', upperLabel: { show: true }, data: [{ name: 'Core', children: [{ name: 'UI', value: 10 }] }] }],
+    } as EChartsOption)
+    const series = firstSeries(option)
+    expect(readField(readField(option.title, 'textStyle'), 'color')).toBe(tokens.text)
+    expect(readField(readField(series, 'itemStyle'), 'borderColor')).toBe(tokens.axisLine)
+    expect(readField(readField(series, 'upperLabel'), 'color')).toBe(tokens.text)
+    expect(readField(readField(series, 'upperLabel'), 'show')).toBe(true)
+  })
 })

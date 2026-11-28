@@ -1,8 +1,18 @@
 {
   "$schema": "./components-lifecycle.schema.json",
-  "currentVersion": "0.9.7",
+  "currentVersion": "0.9.8",
   "totalComponents": 197,
   "versions": [
+    {
+      "version": "0.9.8",
+      "date": "2026-11-28",
+      "title": "图表深层子路径按需样式修复、Maps 与 AllocationBar 视觉重构及 ECharts 暗色主题补齐 (Charts On-Demand CSS Fix, Maps & AllocationBar Redesign & ECharts Dark Theme)",
+      "newComponents": [],
+      "updatedComponents": [
+        "allocation-bar",
+        "charts"
+      ]
+    },
     {
       "version": "0.9.7",
       "date": "2026-11-28",

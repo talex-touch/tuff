@@ -3,7 +3,7 @@ import type { ComputedRef, Ref } from 'vue'
 import type { ViewMotion } from '../../../../../../utils/pan-zoom'
 import type { RoamBounds, RoamBox, RoamState } from './roam'
 import type { MapBaseProps, MapLabels } from './types'
-import { geoPath } from 'd3-geo'
+import { geoGraticule10, geoPath } from 'd3-geo'
 import { computed, onBeforeUnmount, onMounted, reactive, ref, shallowRef, useId, watch } from 'vue'
 import { drawnScale } from '../../../../../../utils/drawn-scale'
 import { createFrameLoop } from '../../../../../../utils/frame-loop'
@@ -44,6 +44,8 @@ import {
 } from './roam'
 import { MAP_DEFAULT_LABELS } from './types'
 
+const GRATICULE_GEOMETRY = geoGraticule10()
+
 export interface MapBase {
   container: Ref<HTMLElement | null>
   width: ComputedRef<number>
@@ -52,6 +54,8 @@ export interface MapBase {
   ready: ComputedRef<boolean>
   /** Projection fitted to the display window (pre-roam). */
   projection: ComputedRef<GeoProjection | null>
+  /** Subtle latitude/longitude graticule projected in the display window. */
+  graticulePath: ComputedRef<string>
   /** Single path for the whole land base. */
   landPath: ComputedRef<string>
   /** Path for one feature (choropleth fills regions individually). */
@@ -61,6 +65,15 @@ export interface MapBase {
   transform: ComputedRef<string>
   /** Divide radii/strokes by this so they stay constant-size under zoom. */
   scaleFactor: ComputedRef<number>
+  /** True once the user has panned or zoomed away from the fitted home view. */
+  isTransformed: ComputedRef<boolean>
+  /** True while zooming in further is allowed. */
+  canZoomIn: ComputedRef<boolean>
+  /** True while zooming out further is allowed. */
+  canZoomOut: ComputedRef<boolean>
+  zoomIn: () => void
+  zoomOut: () => void
+  resetView: () => void
   pointer: { x: number, y: number }
   tooltipStyle: (el: HTMLElement | null) => Record<string, string>
   /** A pan or pinch is moving the map (the pointer has travelled past the slop). */
@@ -244,6 +257,13 @@ export function useMapBase(props: MapBaseProps, options: MapBaseOptions = {}): M
     return fitted ? geoPath(fitted) : null
   })
 
+  const graticulePath = computed(() => {
+    const generator = pathGenerator.value
+    if (!generator)
+      return ''
+    return generator(GRATICULE_GEOMETRY) ?? ''
+  })
+
   const landPath = computed(() => {
     const generator = pathGenerator.value
     if (!generator)
@@ -286,6 +306,9 @@ export function useMapBase(props: MapBaseProps, options: MapBaseOptions = {}): M
   })
 
   const scaleFactor = computed(() => roamState.value.k)
+  const isTransformed = computed(() => drawn.value !== null)
+  const canZoomIn = computed(() => roamState.value.k < MAX_ZOOM_FACTOR - 1e-3)
+  const canZoomOut = computed(() => roamState.value.k > zoom.value + 1e-3)
 
   /** The displayed window as fitted: what a pan keeps in view. */
   const box = computed<RoamBox>(() => {
@@ -359,6 +382,22 @@ export function useMapBase(props: MapBaseProps, options: MapBaseOptions = {}): M
 
   function reset(): void {
     springTo(home.value, true)
+  }
+
+  function zoomBy(factor: number): void {
+    if (!props.roam)
+      return
+    const middle = { x: width.value / 2, y: height.value / 2 }
+    const next = zoomAbout(goal(), factor, middle)
+    springTo(clampRoam(next, boundsAt(next.k)))
+  }
+
+  function zoomIn(): void {
+    zoomBy(Math.SQRT2)
+  }
+
+  function zoomOut(): void {
+    zoomBy(Math.SQRT1_2)
   }
 
   /** A pan let go with `velocity` (px/s): glide on, or spring back inside. */
@@ -704,11 +743,18 @@ export function useMapBase(props: MapBaseProps, options: MapBaseOptions = {}): M
     rootStyle,
     ready,
     projection,
+    graticulePath,
     landPath,
     featurePath,
     project,
     transform,
     scaleFactor,
+    isTransformed,
+    canZoomIn,
+    canZoomOut,
+    zoomIn,
+    zoomOut,
+    resetView: reset,
     pointer,
     tooltipStyle,
     dragging,

@@ -30,6 +30,12 @@ const tuffexBaseStyleEntry = useTuffexSource
 const tuffexComponentSourceEntry = `${tuffexComponentsSourceRoot}/$1/index.ts`
 const tuffexComponentDistEntry = `${tuffexDistRoot}/$1/index.js`
 const tuffexComponentEntry = useTuffexSource ? tuffexComponentSourceEntry : tuffexComponentDistEntry
+const tuffexChartSubpathEntry = useTuffexSource
+  ? `${tuffexComponentsSourceRoot}/charts/src/$1/index.ts`
+  : `${tuffexDistRoot}/charts/src/$1/index.js`
+const tuffexChartSubpathTypePathEntry = useTuffexSource
+  ? `${tuffexComponentsSourceRoot}/charts/src/*/index.ts`
+  : `${tuffexDistRoot}/charts/src/*/index.d.ts`
 const tuffexComponentStyleEntry = resolve(tuffexDistRoot, '$1/style.css')
 const tuffexComponentTypePathEntry = useTuffexSource
   ? `${tuffexComponentsSourceRoot}/*/index.ts`
@@ -245,6 +251,7 @@ export default defineNuxtConfig({
         { find: /^@talex-touch\/tuffex\/utils$/, replacement: tuffexDistUtilsEntry },
         { find: /^@talex-touch\/tuffex\/base\.css$/, replacement: tuffexBaseStyleEntry },
         { find: /^@talex-touch\/tuffex\/([^/]+)\/style\.css$/, replacement: tuffexComponentStyleEntry },
+        { find: /^@talex-touch\/tuffex\/charts\/src\/([a-z0-9-]+)$/, replacement: tuffexChartSubpathEntry },
         { find: /^@talex-touch\/tuffex\/([a-z0-9-]+)$/, replacement: tuffexComponentEntry },
       ],
     },
@@ -275,6 +282,7 @@ export default defineNuxtConfig({
           '@talex-touch/tuffex/*/style.css': [tuffexComponentStyleTypePathEntry],
           '@talex-touch/tuffex/utils/*': [tuffexUtilsSubpathTypePathEntry],
           '@talex-touch/tuffex/utils': [tuffexDistUtilsEntry],
+          '@talex-touch/tuffex/charts/src/*': [tuffexChartSubpathTypePathEntry],
           '@talex-touch/tuffex/*': [tuffexComponentTypePathEntry],
         },
       },

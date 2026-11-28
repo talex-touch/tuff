@@ -35,6 +35,15 @@ function isComponentSubpath(componentName: string) {
     && !componentName.endsWith('.css')
 }
 
+function componentNameFromSpecifier(specifier: string): string | undefined {
+  const direct = /^@talex-touch\/tuffex\/([a-z0-9-]+)$/.exec(specifier)?.[1]
+  if (direct && isComponentSubpath(direct))
+    return direct
+  if (/^@talex-touch\/tuffex\/charts\/src\/[a-z0-9-]+(?:\/.*)?$/.test(specifier))
+    return 'charts'
+  return undefined
+}
+
 
 
 function createStyleImports(
@@ -59,7 +68,11 @@ function componentNameFromDistEntry(id: string, root: string | undefined): strin
 
   const relativeId = normalizedId.slice(normalizedRoot.length + 1)
   const componentName = /^([a-z0-9-]+)\/index\.js$/.exec(relativeId)?.[1]
-  return componentName && isComponentSubpath(componentName) ? componentName : undefined
+  if (componentName && isComponentSubpath(componentName))
+    return componentName
+  if (/^charts\/src\/[a-z0-9-]+\/index\.js$/.test(relativeId))
+    return 'charts'
+  return undefined
 }
 
 /** The built component root `id` is under: this plugin's own package's, or an installed copy's. */
@@ -436,8 +449,8 @@ export function tuffexOnDemandStylePlugin(options: TuffexOnDemandStylePluginOpti
         const style = /^@talex-touch\/tuffex\/([a-z0-9-]+)\/style\.css$/.exec(node.source.value)?.[1]
         if (style)
           existingStyles.add(style)
-        const name = /^@talex-touch\/tuffex\/([a-z0-9-]+)$/.exec(node.source.value)?.[1]
-        if (name && isComponentSubpath(name))
+        const name = componentNameFromSpecifier(node.source.value)
+        if (name)
           componentNames.add(name)
       }
       if (distComponentName) {
@@ -459,10 +472,7 @@ export function tuffexOnDemandStylePlugin(options: TuffexOnDemandStylePluginOpti
       const styleImports = createStyleImports(closure, existingStyles)
       for (const name of closure)
         existingStyles.add(name)
-      const dynamicImports = componentImportSites(ast, (specifier) => {
-        const name = /^@talex-touch\/tuffex\/([a-z0-9-]+)$/.exec(specifier)?.[1]
-        return name && isComponentSubpath(name) ? name : undefined
-      })
+      const dynamicImports = componentImportSites(ast, specifier => componentNameFromSpecifier(specifier))
       if (componentNames.size || dynamicImports.length)
         dependents.set(id.split('?')[0]!, [...componentNames, ...dynamicImports.map(site => site.name)])
       if (!styleImports && !dynamicImports.length)
