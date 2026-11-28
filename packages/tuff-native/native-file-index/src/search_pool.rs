@@ -142,7 +142,12 @@ impl SearchPool {
 
         impl Drop for CallerParticipantGuard<'_> {
             fn drop(&mut self) {
-                if self.packet.active_threads.fetch_sub(1, AtomicOrdering::AcqRel) == 1 {
+                if self
+                    .packet
+                    .active_threads
+                    .fetch_sub(1, AtomicOrdering::AcqRel)
+                    == 1
+                {
                     let mut done = self
                         .packet
                         .done_lock

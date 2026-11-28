@@ -555,12 +555,7 @@ fn main() {
     let mut writer = BufWriter::new(stdout.lock());
     let mut line_buf = Vec::new();
 
-    loop {
-        let status = match read_bounded_line(&mut reader, &mut line_buf, MAX_REQUEST_LINE_BYTES) {
-            Ok(status) => status,
-            Err(_) => break,
-        };
-
+    while let Ok(status) = read_bounded_line(&mut reader, &mut line_buf, MAX_REQUEST_LINE_BYTES) {
         let (response, should_exit) = match status {
             BoundedLineStatus::Eof => break,
             BoundedLineStatus::TooLong => (
