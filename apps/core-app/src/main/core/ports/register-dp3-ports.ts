@@ -15,7 +15,6 @@ import {
   recordAcceptedExecute,
   resolveExecuteEventId
 } from '../../modules/box-tool/search-engine/execute-recorder'
-import { resolveScanProgressSchemaShape } from '../../modules/box-tool/search-engine/scan-progress-schema'
 import { registerClipboardPorts } from '../../modules/clipboard/clipboard-ports'
 import { flowBus } from '../../modules/flow-bus/flow-bus'
 import { flowTargetRegistry } from '../../modules/flow-bus/target-registry'
@@ -148,7 +147,6 @@ export function registerDp3Ports(): void {
         getIndexingProgress: () => fileProvider.getIndexingProgress(),
         getWatchedPaths: () => fileProvider.getWatchedPaths(),
         getWorkerStatusSnapshot: () => fileProvider.getWorkerStatusSnapshot(),
-        resolveScanProgressSchemaShape: (db) => resolveScanProgressSchemaShape(db),
         getOcrDashboardSnapshot: (limit) => ocrService.getDashboardSnapshot(limit)
       }
     }),

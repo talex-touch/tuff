@@ -55,7 +55,6 @@ const mocks = vi.hoisted(() => ({
     sizeBytes: 10,
     durationMs: 2
   })),
-  resolveScanProgressSchemaShape: vi.fn(async () => ({ sourceScoped: true })),
   flowRegisterTarget: vi.fn(() => true),
   flowUnregisterTarget: vi.fn(() => true),
   flowRegisterDeliveryHandler: vi.fn(() => vi.fn()),
@@ -139,10 +138,6 @@ vi.mock('../../modules/box-tool/search-engine/app-launch-recorder', () => ({
 vi.mock('../../modules/box-tool/search-engine/execute-recorder', () => ({
   recordAcceptedExecute: mocks.recordAcceptedExecute,
   resolveExecuteEventId: mocks.resolveExecuteEventId
-}))
-
-vi.mock('../../modules/box-tool/search-engine/scan-progress-schema', () => ({
-  resolveScanProgressSchemaShape: mocks.resolveScanProgressSchemaShape
 }))
 
 vi.mock('../../modules/flow-bus/flow-bus', () => ({
@@ -269,15 +264,15 @@ describe('registerDp3Ports', () => {
 
     // System ports
     const systemPorts = getSystemPorts()
-    expect(
-      systemPorts.performance.resolveUtilityProcessRole({ name: 'tuff-plugin-host' })
-    ).toBe('plugin-runtime')
+    expect(systemPorts.performance.resolveUtilityProcessRole({ name: 'tuff-plugin-host' })).toBe(
+      'plugin-runtime'
+    )
     expect(
       systemPorts.performance.resolveUtilityProcessRole({ name: 'Tuff Pi Agent Runtime' })
     ).toBe('pi-agent-runtime')
-    expect(
-      systemPorts.performance.resolveUtilityProcessRole({ name: 'Tuff OCR Runtime' })
-    ).toBe('ocr-runtime')
+    expect(systemPorts.performance.resolveUtilityProcessRole({ name: 'Tuff OCR Runtime' })).toBe(
+      'ocr-runtime'
+    )
     expect(systemPorts.performance.resolveUtilityProcessRole({ name: 'unknown' })).toBeNull()
     expect(systemPorts.performance.getCoreBoxWindow()).toBe(mocks.windowCurrent.window)
     expect(systemPorts.performance.resolvePluginNameByWebContents(99)).toBe('view-plugin')
@@ -291,7 +286,9 @@ describe('registerDp3Ports', () => {
     await expect(terminalPorts.executable.findCommandInSearchRoots('zsh')).resolves.toBe(
       '/opt/bin/zsh'
     )
-    expect(terminalPorts.executable.withExecutableDirOnPath({ PATH: '/usr/bin' }, '/opt/bin/zsh')).toEqual({
+    expect(
+      terminalPorts.executable.withExecutableDirOnPath({ PATH: '/usr/bin' }, '/opt/bin/zsh')
+    ).toEqual({
       PATH: '/opt/bin/zsh:/usr/bin'
     })
 
@@ -300,6 +297,8 @@ describe('registerDp3Ports', () => {
     expect(getQuickOpsFlowBusPort()).toBeNull()
     expect(getNativeCapabilitiesPorts().fileIndex).toBeNull()
     expect(getClipboardPorts().coreBox.isCoreBoxWindowVisible()).toBe(false)
-    expect(getSystemPorts().performance.resolveUtilityProcessRole({ name: 'tuff-plugin-host' })).toBeNull()
+    expect(
+      getSystemPorts().performance.resolveUtilityProcessRole({ name: 'tuff-plugin-host' })
+    ).toBeNull()
   })
 })

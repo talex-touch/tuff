@@ -1,7 +1,5 @@
 import type { PerformanceProcessRole } from '@talex-touch/utils/transport/events/types'
-import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import type { BrowserWindow } from 'electron'
-import type * as schema from '../../db/schema'
 import type { FileProviderWorkerStatusSnapshot } from '../box-tool/addon/files/services/file-provider-worker-status-service'
 
 export interface SystemPerformanceDiagnosticsPort {
@@ -37,9 +35,6 @@ export interface SystemDashboardDiagnosticsPort {
   getIndexingProgress(): Promise<SystemDashboardIndexingProgress>
   getWatchedPaths(): string[]
   getWorkerStatusSnapshot(): Promise<FileProviderWorkerStatusSnapshot>
-  resolveScanProgressSchemaShape(
-    db: Pick<LibSQLDatabase<typeof schema>, 'all'>
-  ): Promise<{ sourceScoped: boolean }>
   getOcrDashboardSnapshot(limit: number): Promise<SystemDashboardOcrSnapshot>
 }
 
@@ -67,7 +62,6 @@ function createDefaultSystemPorts(): SystemPorts {
         summary: { total: 0, busy: 0, idle: 0, offline: 0 },
         workers: []
       }),
-      resolveScanProgressSchemaShape: async () => ({ sourceScoped: false }),
       getOcrDashboardSnapshot: async () => ({ jobs: [] })
     }
   }

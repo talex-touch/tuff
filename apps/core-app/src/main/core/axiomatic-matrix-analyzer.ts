@@ -291,7 +291,11 @@ function getScriptKind(filePath: string): ts.ScriptKind {
   }
 }
 
-function collectSourceFilesRecursive(rootDir: string, currentDir = rootDir, out: string[] = []): string[] {
+function collectSourceFilesRecursive(
+  rootDir: string,
+  currentDir = rootDir,
+  out: string[] = []
+): string[] {
   if (!existsSync(currentDir)) return out
   const entries = readdirSync(currentDir, { withFileTypes: true })
   for (const entry of entries) {
@@ -473,7 +477,11 @@ export function extractRuntimeSignalsFromSource(
     }
 
     // 2. Re-export declarations (`export ... from '...'`)
-    if (ts.isExportDeclaration(node) && node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)) {
+    if (
+      ts.isExportDeclaration(node) &&
+      node.moduleSpecifier &&
+      ts.isStringLiteral(node.moduleSpecifier)
+    ) {
       if (!node.isTypeOnly) {
         let isRuntime = false
         if (!node.exportClause) {
@@ -537,7 +545,8 @@ export function extractRuntimeSignalsFromSource(
         }
       } else {
         const isRequireCall =
-          (ts.isIdentifier(expr) && (expr.text === 'require' || createRequireNames.has(expr.text))) ||
+          (ts.isIdentifier(expr) &&
+            (expr.text === 'require' || createRequireNames.has(expr.text))) ||
           (ts.isPropertyAccessExpression(expr) && expr.name.text === 'require') ||
           isCreateRequireCall(expr)
 
@@ -580,7 +589,12 @@ function resolveTargetInModules(
   modulesDir: string
 ): { moduleKey: string; resolvedRelativePath: string } | null {
   let resolved: string | null = null
-  if (specifier.startsWith('./') || specifier.startsWith('../') || specifier === '.' || specifier === '..') {
+  if (
+    specifier.startsWith('./') ||
+    specifier.startsWith('../') ||
+    specifier === '.' ||
+    specifier === '..'
+  ) {
     resolved = path.resolve(path.dirname(fromFile), specifier)
   } else if (specifier.startsWith('@/') && !specifier.startsWith('@/common/')) {
     // tsconfig.node.json maps `@/*` -> `src/main/*` (except `@/common/*` -> `packages/utils/common/*`)
@@ -755,7 +769,12 @@ export function analyzeAxiomaticMatrix(options: AnalyzeOptions = {}): AxiomaticM
     for (const filePath of pureFiles) {
       const relFromMain = toPosix(path.relative(mainDir, filePath))
       const sourceText = readFileSync(filePath, 'utf8')
-      const { specifiers } = extractRuntimeSignalsFromSource(sourceText, filePath, relFromMain, null)
+      const { specifiers } = extractRuntimeSignalsFromSource(
+        sourceText,
+        filePath,
+        relFromMain,
+        null
+      )
       for (const item of specifiers) {
         const resolved = resolveTargetInModules(filePath, item.specifier, mainDir, modulesDir)
         if (!resolved) continue
@@ -835,11 +854,15 @@ export function formatAxiomaticMatrixReport(
   }
 
   lines.push('')
-  lines.push('Legend: [n]=intra-domain, *n=UPPER-TRIANGULAR VIOLATION (i < j), n=valid lower-triangular (i > j), .=0')
+  lines.push(
+    'Legend: [n]=intra-domain, *n=UPPER-TRIANGULAR VIOLATION (i < j), n=valid lower-triangular (i > j), .=0'
+  )
 
   if (report.unmappedEntries.length > 0) {
     lines.push('')
-    lines.push(`UNMAPPED MODULE ENTRIES (${report.unmappedEntries.length}): ${report.unmappedEntries.join(', ')}`)
+    lines.push(
+      `UNMAPPED MODULE ENTRIES (${report.unmappedEntries.length}): ${report.unmappedEntries.join(', ')}`
+    )
   }
 
   if (report.cheatViolations.length > 0) {
@@ -854,7 +877,9 @@ export function formatAxiomaticMatrixReport(
     lines.push('')
     lines.push(`SMUGGLED SHARED/DB -> MODULE IMPORTS (${report.smuggledSharedImports.length}):`)
     for (const v of report.smuggledSharedImports) {
-      lines.push(`  - ${v.file}:${v.line} (${v.kind}) -> ${v.toDomain}/${v.toModule} ('${v.specifier}')`)
+      lines.push(
+        `  - ${v.file}:${v.line} (${v.kind}) -> ${v.toDomain}/${v.toModule} ('${v.specifier}')`
+      )
     }
   }
 
@@ -909,11 +934,15 @@ if (isDirectCli) {
   }
 
   const report = analyzeAxiomaticMatrix({ mainDir })
-  console.log(formatAxiomaticMatrixReport(report, { includeEdgeDetails: true, filterRows }))
+  process.stdout.write(
+    `${formatAxiomaticMatrixReport(report, { includeEdgeDetails: true, filterRows })}\n`
+  )
 
   if (strict) {
     const rowEdges = filterRows
-      ? report.upperTriangularEdges.filter((e) => filterRows!.includes(Number(e.fromDomain.slice(2))))
+      ? report.upperTriangularEdges.filter((e) =>
+          filterRows!.includes(Number(e.fromDomain.slice(2)))
+        )
       : report.upperTriangularEdges
     const failed =
       report.unmappedEntries.length > 0 ||

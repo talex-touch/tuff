@@ -11,6 +11,7 @@ import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { sql } from 'drizzle-orm'
 import { app } from 'electron'
 import { resolveMainRuntime } from '../../core/runtime-accessor'
+import { resolveScanProgressSchemaShape } from '../../db/scan-progress-schema'
 import { config } from '../../db/schema'
 import { createLogger } from '../../utils/logger'
 import { appendWorkflowDebugLog } from '../../utils/workflow-debug'
@@ -270,7 +271,7 @@ export class TuffDashboardModule extends BaseModule {
   }
 
   private async loadRecentScanProgressRows(db: LibSQLDatabase<typeof schema>, limit: number) {
-    const shape = await getSystemPorts().dashboard.resolveScanProgressSchemaShape(db)
+    const shape = await resolveScanProgressSchemaShape(db)
     if (shape.sourceScoped) {
       return db.all<{ sourceId: string; path: string; lastScanned: unknown }>(sql`
         SELECT source_id AS sourceId, path, last_scanned AS lastScanned

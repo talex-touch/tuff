@@ -1,6 +1,5 @@
 import type { IntelligenceProviderConfig } from '@talex-touch/tuff-intelligence'
 import { Buffer } from 'node:buffer'
-import { createHash } from 'node:crypto'
 import { isDeepStrictEqual } from 'node:util'
 import {
   normalizeIntelligenceProviderConfigDeleteRequest,
@@ -16,6 +15,10 @@ import {
   providerWithCredentialState,
   redactProviderConfigDocument
 } from '../../shared/provider-credential-document'
+import {
+  PROVIDER_CREDENTIAL_SECURE_STORE_PURPOSE as PROVIDER_SECURE_STORE_PURPOSE,
+  providerCredentialSecureStoreKey
+} from '../../shared/provider-credential-key'
 
 export interface ProviderCredentialVaultEntry {
   key: string
@@ -75,8 +78,6 @@ interface SurfaceState {
   nextDocument?: Record<string, unknown>
 }
 
-const PROVIDER_SECURE_STORE_PURPOSE = 'intelligence-provider-credential'
-
 function cloneRecord(value: Record<string, unknown>): Record<string, unknown> {
   return structuredClone(value)
 }
@@ -92,14 +93,12 @@ function documentsEqual(
   return isDeepStrictEqual(left, right)
 }
 
-export { providerConfigDocumentContainsCredential, redactProviderConfigDocument }
-
-export function providerCredentialSecureStoreKey(providerId: string): string {
-  const digest = createHash('sha256').update(providerId, 'utf8').digest('hex').slice(0, 40)
-  return `provider.${digest}.api-key`
+export {
+  providerConfigDocumentContainsCredential,
+  providerCredentialSecureStoreKey,
+  PROVIDER_SECURE_STORE_PURPOSE,
+  redactProviderConfigDocument
 }
-
-export { PROVIDER_SECURE_STORE_PURPOSE }
 
 export class ProviderCredentialService {
   private readonly credentials = new Map<string, string>()
