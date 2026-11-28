@@ -27,7 +27,8 @@ import type { ApiErrorProjection, ApiResponse, SafeHandlerOptions } from '../../
 import type { CapabilityTestPayload } from './capability-testers/base-tester'
 import {
   IntelligenceCapabilityType,
-  IntelligenceProviderType
+  IntelligenceProviderType,
+  toRuntimeCapabilityId
 } from '@talex-touch/tuff-intelligence'
 import {
   closeSystemTranslation,
@@ -50,6 +51,7 @@ import { safeApiHandler } from '../../utils/safe-handler'
 import { BaseModule } from '../abstract-base-module'
 import { conversationModule } from '../conversation'
 import { withPermission } from '../permission/channel-guard'
+import { getPermissionModule } from '../permission/permission-module-ref'
 import { getMainConfig, isMainStorageReady } from '../storage'
 import {
   agentManager,
@@ -77,7 +79,12 @@ import {
 } from './intelligence-error-normalizer'
 import { applyHomeConversationInjection } from './home-conversation-injection'
 import { getIntelligenceLocalEnvironment } from './intelligence-local-environment'
-import { markHomeChatInvoke, resolveHomeChatOrigin } from './intelligence-invoke-purpose'
+import {
+  markHomeChatInvoke,
+  markPluginInvocation,
+  resolveHomeChatOrigin,
+  stripUntrustedInvokeMetadata
+} from './intelligence-invoke-purpose'
 import { aiCliOrchestrator } from './ai-cli-orchestrator'
 import {
   createMainStorageAutoResumeReader,
@@ -477,17 +484,33 @@ function resolveContextActor(context: Pick<HandlerContext, 'plugin'>) {
 }
 
 function bindPluginMetadataCaller<T>(payload: T, context: Pick<HandlerContext, 'plugin'>): T {
-  if (!context.plugin || !payload || typeof payload !== 'object') {
+  if (!payload || typeof payload !== 'object') {
     return payload
   }
 
   const record = payload as T & { metadata?: Record<string, unknown> }
+  const hasMetadata = Boolean(record.metadata && typeof record.metadata === 'object')
+  if (!context.plugin) {
+    if (!hasMetadata || !Object.hasOwn(record.metadata!, 'profileId')) {
+      return payload
+    }
+    const metadata = { ...record.metadata }
+    delete metadata.profileId
+    return { ...record, metadata }
+  }
+
+  const metadata = { ...(record.metadata ?? {}) }
+  delete metadata.profileId
+  delete metadata.approved
+  delete metadata.approvalGranted
+  delete metadata.approvedAt
+  delete metadata.workingDirectory
+  delete metadata.automationPolicy
+  delete metadata.contextEntrypoint
+  metadata.caller = `plugin:${context.plugin.name}`
   return {
     ...record,
-    metadata: {
-      ...record.metadata,
-      caller: `plugin:${context.plugin.name}`
-    }
+    metadata
   }
 }
 
@@ -573,15 +596,15 @@ function bindPluginInvokeCaller(
   options: IntelligenceInvokeOptions | undefined,
   context: Pick<HandlerContext, 'plugin'>
 ): IntelligenceInvokeOptions | undefined {
+  const sanitized = stripUntrustedInvokeMetadata(options, Boolean(context.plugin))
   if (!context.plugin) {
-    return options
+    return sanitized
   }
-  const scoped = bindPluginMetadataCaller(options ?? {}, context)
-  const metadata = { ...(scoped.metadata ?? {}) }
-  delete metadata.approved
-  delete metadata.approvalGranted
-  delete metadata.approvedAt
-  return { ...scoped, metadata }
+  const scoped = bindPluginMetadataCaller(sanitized ?? {}, context)
+  const hasSystemShell = Boolean(
+    getPermissionModule()?.getStore?.()?.hasPermission(context.plugin.name, 'system.shell')
+  )
+  return markPluginInvocation(scoped, context.plugin.name, hasSystemShell)
 }
 
 /**
@@ -616,7 +639,8 @@ async function assertAutonomousIntelligencePermission(
   payload: unknown,
   context: Pick<HandlerContext, 'plugin'>
 ): Promise<void> {
-  if (!Object.hasOwn(AUTONOMOUS_INTELLIGENCE_CAPABILITIES, capabilityId)) {
+  const runtimeCapabilityId = toRuntimeCapabilityId(capabilityId) || capabilityId
+  if (!Object.hasOwn(AUTONOMOUS_INTELLIGENCE_CAPABILITIES, runtimeCapabilityId)) {
     return
   }
   await enforceAutonomousIntelligencePermission(payload, context as HandlerContext)
@@ -1503,13 +1527,14 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
         }
 
         const { capabilityId, payload, options } = data
+        const runtimeCapabilityId = toRuntimeCapabilityId(capabilityId) || capabilityId
         const scopedOptions = await withHomeChatPurpose(
           bindPluginInvokeCaller(options, context),
           context
         )
-        await assertAutonomousIntelligencePermission(capabilityId, data, context)
+        await assertAutonomousIntelligencePermission(runtimeCapabilityId, data, context)
         ensureIntelligenceConfigLoaded()
-        if (capabilityId === 'agent.run' || capabilityId === 'workflow.execute') {
+        if (runtimeCapabilityId === 'agent.run' || runtimeCapabilityId === 'workflow.execute') {
           await this.waitForAgentRuntime()
         }
         // Also applied here, not only on the streaming path: the home conversation falls back to a
@@ -1545,13 +1570,16 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
         }
 
         const { capabilityId, payload, options } = data
+        const runtimeCapabilityId = toRuntimeCapabilityId(capabilityId) || capabilityId
         const scopedOptions = await withHomeChatPurpose(
           bindPluginInvokeCaller(options, streamContext),
           streamContext
         )
-        await assertAutonomousIntelligencePermission(capabilityId, data, streamContext)
+        await assertAutonomousIntelligencePermission(runtimeCapabilityId, data, streamContext)
         ensureIntelligenceConfigLoaded()
-        if (capabilityId === 'agent.run') await this.waitForAgentRuntime()
+        if (runtimeCapabilityId === 'agent.run' || runtimeCapabilityId === 'workflow.execute') {
+          await this.waitForAgentRuntime()
+        }
         const streamPayload = await applyHomeConversationInjection(
           payload,
           scopedOptions,

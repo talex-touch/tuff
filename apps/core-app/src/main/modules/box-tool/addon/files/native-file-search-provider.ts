@@ -833,14 +833,14 @@ class LinuxNativeFileProvider extends BaseNativeFileSearchProvider {
     const limit = String(NATIVE_SEARCH_CANDIDATE_POOL)
     switch (this.backend) {
       case 'tracker3':
-        return { command: 'tracker3', args: ['search', '--files', '--limit', limit, text] }
+        return { command: 'tracker3', args: ['search', '--files', '--limit', limit, '--', text] }
       case 'tracker':
-        return { command: 'tracker', args: ['search', '--files', '--limit', limit, text] }
+        return { command: 'tracker', args: ['search', '--files', '--limit', limit, '--', text] }
       case 'baloo':
-        return { command: 'baloosearch', args: ['--limit', limit, text] }
+        return { command: 'baloosearch', args: ['--limit', limit, '--', text] }
       case 'locate':
       default:
-        return { command: 'locate', args: ['-i', '-l', limit, text] }
+        return { command: 'locate', args: ['-i', '-l', limit, '--', text] }
     }
   }
 

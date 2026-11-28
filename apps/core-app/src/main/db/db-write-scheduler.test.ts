@@ -706,4 +706,38 @@ describe('DbWriteScheduler per-file lanes', () => {
     await primaryHold
     await dbWriteScheduler.drain()
   })
+
+  it('honors explicit maxQueueWaitMs above the 10s droppable default instead of dropping early', async () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+    try {
+      const scheduler = new DbWriteScheduler()
+      const gate = createGate()
+      const blocker = scheduler.schedule(
+        'blocker',
+        async () => {
+          await gate.wait
+        },
+        { priority: 'critical' }
+      )
+
+      const longWaitTask = scheduler.schedule(
+        'long-wait-best-effort',
+        async () => 'completed-after-15s',
+        {
+          priority: 'best_effort',
+          dropPolicy: 'drop',
+          maxQueueWaitMs: 30_000
+        }
+      )
+
+      // Advance past the 10s DROPPABLE_TIMEOUT_MS default but below explicit 30s maxQueueWaitMs
+      await vi.advanceTimersByTimeAsync(15_000)
+      gate.release()
+
+      await blocker
+      await expect(longWaitTask).resolves.toBe('completed-after-15s')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })

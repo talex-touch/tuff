@@ -7,6 +7,7 @@ import { existsSync } from 'node:fs'
 import path from 'node:path'
 import { eq } from 'drizzle-orm'
 import type { DbUtils } from '../../../../../db/utils'
+import { scheduleDbWrite } from '../../../../../db/db-write'
 import { fileExtensions, files as filesSchema } from '../../../../../db/schema'
 import {
   APP_ENTRY_ENABLED_EXTENSION_KEY,
@@ -78,10 +79,16 @@ export class AppManagedEntryService {
         return { success: false, status: 'invalid', reason: 'path-conflicts-with-scanned-app' }
       }
 
-      await db
-        .update(filesSchema)
-        .set({ name: appInfo.name, displayName, mtime: appInfo.lastModified })
-        .where(eq(filesSchema.id, existingFile.id))
+      await scheduleDbWrite(
+        'app-managed-entry.update',
+        async () => {
+          await db
+            .update(filesSchema)
+            .set({ name: appInfo.name, displayName, mtime: appInfo.lastModified })
+            .where(eq(filesSchema.id, existingFile.id))
+        },
+        { priority: 'interactive' }
+      )
 
       const nextExtensions = buildManagedEntryExtensions(existingFile.id, appInfo, enabled)
       await dbUtils.addFileExtensions(nextExtensions)
@@ -104,17 +111,22 @@ export class AppManagedEntryService {
       }
     }
 
-    const [insertedFile] = await db
-      .insert(filesSchema)
-      .values({
-        path: appInfo.path,
-        name: appInfo.name,
-        displayName,
-        type: 'app' as const,
-        mtime: appInfo.lastModified,
-        ctime: new Date()
-      })
-      .returning()
+    const [insertedFile] = await scheduleDbWrite(
+      'app-managed-entry.insert',
+      async () =>
+        await db
+          .insert(filesSchema)
+          .values({
+            path: appInfo.path,
+            name: appInfo.name,
+            displayName,
+            type: 'app' as const,
+            mtime: appInfo.lastModified,
+            ctime: new Date()
+          })
+          .returning(),
+      { priority: 'interactive' }
+    )
     if (!insertedFile) return { success: false, status: 'error', reason: 'insert-failed' }
 
     const nextExtensions = buildManagedEntryExtensions(insertedFile.id, appInfo, enabled)
@@ -147,10 +159,16 @@ export class AppManagedEntryService {
     }
 
     const db = dbUtils.getDb()
-    await db.transaction(async (tx) => {
-      await tx.delete(fileExtensions).where(eq(fileExtensions.fileId, existingFile.id))
-      await tx.delete(filesSchema).where(eq(filesSchema.id, existingFile.id))
-    })
+    await scheduleDbWrite(
+      'app-managed-entry.remove',
+      async () => {
+        await db.transaction(async (tx) => {
+          await tx.delete(fileExtensions).where(eq(fileExtensions.fileId, existingFile.id))
+          await tx.delete(filesSchema).where(eq(filesSchema.id, existingFile.id))
+        })
+      },
+      { priority: 'interactive' }
+    )
     await this.options.removeIndexedItems(
       resolveAppItemIds({
         bundleId: extensions.bundleId,
@@ -234,16 +252,29 @@ export class AppManagedEntryService {
     if (launchKind === 'uwp' && process.platform !== 'win32')
       return { reason: 'launch-kind-unsupported' }
 
-    if (launchKind !== 'uwp') {
+    if (launchKind === 'uwp') {
+      const normalizedUwp = launchTarget.replace(/^shell:AppsFolder\\/i, '')
+      if (!/^[A-Za-z0-9._-]+![A-Za-z0-9._$-]+$/.test(normalizedUwp)) {
+        return { reason: 'uwp-target-invalid' }
+      }
+    } else {
       if (launchKind === 'protocol') {
         if (!/^steam:\/\/rungameid\/\d+$/i.test(launchTarget))
           return { reason: 'protocol-not-allowed' }
       } else {
+        if (/[\r\n\0]/.test(normalizedPath) || /[\r\n\0]/.test(launchTarget)) {
+          return { reason: 'path-invalid' }
+        }
         if (!path.isAbsolute(normalizedPath)) return { reason: 'path-not-absolute' }
         if (!existsSync(normalizedPath)) return { reason: 'path-not-found' }
         if (!path.isAbsolute(launchTarget)) return { reason: 'launch-target-not-absolute' }
         if (!existsSync(launchTarget)) return { reason: 'launch-target-not-found' }
       }
+    }
+
+    const rawLaunchArgs = normalizeOptionalString(input.launchArgs)
+    if (rawLaunchArgs && /[\r\n\0]/.test(rawLaunchArgs)) {
+      return { reason: 'launch-args-invalid' }
     }
 
     const displayPath = normalizeOptionalString(input.displayPath) || normalizedPath

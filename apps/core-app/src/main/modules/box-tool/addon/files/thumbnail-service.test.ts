@@ -62,28 +62,33 @@ describe('thumbnail-service', () => {
 
     // FFmpeg is a real external boundary, so it stays faked — but the fake materializes a real
     // frame on disk, which is what lets the encoder downstream be the real one.
-    execFileMock.mockImplementation((bin: string, args: string[], callback: unknown) => {
-      const done = (typeof callback === 'function' ? callback : args) as (
-        error: Error | null,
-        result?: unknown
-      ) => void
-      if (bin.includes('ffprobe')) {
-        done(null, { stdout: '10\n', stderr: '' })
-        return
-      }
+    execFileMock.mockImplementation(
+      (bin: string, args: string[], optionsOrCallback: unknown, maybeCallback?: unknown) => {
+        const done = (
+          typeof maybeCallback === 'function'
+            ? maybeCallback
+            : typeof optionsOrCallback === 'function'
+              ? optionsOrCallback
+              : args
+        ) as (error: Error | null, result?: unknown) => void
+        if (bin.includes('ffprobe')) {
+          done(null, { stdout: '10\n', stderr: '' })
+          return
+        }
 
-      const framePath = args[args.length - 1]
-      extractedFrames.push(framePath)
-      void sharp({
-        create: { width: 32, height: 32, channels: 3, background: { r: 12, g: 34, b: 56 } }
-      })
-        .jpeg()
-        .toFile(framePath)
-        .then(
-          () => done(null, { stdout: '', stderr: '' }),
-          (error: Error) => done(error)
-        )
-    })
+        const framePath = args[args.length - 1]
+        extractedFrames.push(framePath)
+        void sharp({
+          create: { width: 32, height: 32, channels: 3, background: { r: 12, g: 34, b: 56 } }
+        })
+          .jpeg()
+          .toFile(framePath)
+          .then(
+            () => done(null, { stdout: '', stderr: '' }),
+            (error: Error) => done(error)
+          )
+      }
+    )
   })
 
   afterEach(async () => {
@@ -172,11 +177,21 @@ describe('thumbnail-service', () => {
     expect(execFileMock).toHaveBeenCalledWith(
       '/bin/ffprobe',
       expect.arrayContaining([videoPath]),
+      expect.objectContaining({
+        timeout: expect.any(Number),
+        killSignal: 'SIGKILL',
+        maxBuffer: expect.any(Number)
+      }),
       expect.any(Function)
     )
     expect(execFileMock).toHaveBeenCalledWith(
       '/bin/ffmpeg',
       expect.arrayContaining(['-frames:v', '1', '-an', '-y']),
+      expect.objectContaining({
+        timeout: expect.any(Number),
+        killSignal: 'SIGKILL',
+        maxBuffer: expect.any(Number)
+      }),
       expect.any(Function)
     )
 

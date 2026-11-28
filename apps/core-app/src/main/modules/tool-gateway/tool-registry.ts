@@ -9,7 +9,8 @@ import type { StableToolErrorCode } from '../ai/tool-error-projection'
 import type { HerdrRuntimePlane } from '../herdr-core/runtime-plane'
 import type { AgentContextSource, McpRiskLevel } from './agent-context-source'
 import type { PluginFeatureSource } from './plugin-feature-source'
-import { readFile, stat, writeFile } from 'node:fs/promises'
+import { constants as fsConstants } from 'node:fs'
+import { open, realpath, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { isAbsolute, resolve } from 'node:path'
 import {
@@ -422,15 +423,14 @@ export function createToolRegistry(options: ToolRegistryOptions): Map<string, To
       classify: async (args) => {
         const requested = readStringArg(args, 'path')
         const resolved = resolveUserPath(requested)
+        const canonical = resolved ? await realpath(resolved).catch(() => resolved) : ''
         return {
           risk: 'read',
           summary: `Read ${requested}`,
+          // Keyed by canonical realpath so symlink target swaps cannot reuse a remembered approval.
           // Unresolvable paths keep the raw input in the key rather than sharing one bucket.
-          // resolveUserPath returns '' (not null) for these, so `??` would not have caught it and
-          // every empty-ish path would have collapsed onto `tuff_read_file:` -- one remembered
-          // yes covering all of them.
-          rememberKey: resolved
-            ? `tuff_read_file:${resolved}`
+          rememberKey: canonical
+            ? `tuff_read_file:${canonical}`
             : `tuff_read_file:unresolved:${requested}`
         }
       },
@@ -439,13 +439,34 @@ export function createToolRegistry(options: ToolRegistryOptions): Map<string, To
         if (!path) return toolFailure('TOOL_INPUT_INVALID')
         if (looksBinary(path)) return toolFailure('TOOL_INPUT_INVALID')
 
+        let handle: Awaited<ReturnType<typeof open>> | undefined
         try {
-          const info = await stat(path)
-          if (info.isDirectory()) return toolFailure('TOOL_INPUT_INVALID')
+          const canonical = await realpath(path)
+          if (looksBinary(canonical)) return toolFailure('TOOL_INPUT_INVALID')
+          const flags =
+            fsConstants.O_RDONLY |
+            (typeof fsConstants.O_NOFOLLOW === 'number' ? fsConstants.O_NOFOLLOW : 0)
+          handle = await open(canonical, flags)
+          const info = await handle.stat()
+          if (!info.isFile()) return toolFailure('TOOL_INPUT_INVALID')
           if (info.size > MAX_READ_BYTES) return toolFailure('TOOL_INPUT_INVALID')
-          return { output: await readFile(path, 'utf8'), isError: false }
+
+          const chunks: Buffer[] = []
+          let total = 0
+          const scratch = Buffer.allocUnsafe(Math.min(64 * 1024, MAX_READ_BYTES + 1))
+          while (true) {
+            const { bytesRead } = await handle.read(scratch, 0, scratch.length, null)
+            if (bytesRead === 0) break
+            total += bytesRead
+            if (total > MAX_READ_BYTES) return toolFailure('TOOL_INPUT_INVALID')
+            chunks.push(Buffer.from(scratch.subarray(0, bytesRead)))
+          }
+          const buffer = chunks.length === 1 ? chunks[0]! : Buffer.concat(chunks, total)
+          return { output: buffer.toString('utf8'), isError: false }
         } catch (error) {
           return projectedToolFailure(error)
+        } finally {
+          await handle?.close().catch(() => undefined)
         }
       }
     },

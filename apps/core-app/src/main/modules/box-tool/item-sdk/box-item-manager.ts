@@ -444,8 +444,16 @@ export class BoxItemManager {
     const resultRecord = result as Record<string, unknown>
 
     Object.keys(sourceRecord).forEach((key) => {
+      if (
+        !Object.hasOwn(sourceRecord, key) ||
+        key === '__proto__' ||
+        key === 'constructor' ||
+        key === 'prototype'
+      ) {
+        return
+      }
       const sourceValue = sourceRecord[key]
-      const targetValue = resultRecord[key]
+      const targetValue = Object.hasOwn(resultRecord, key) ? resultRecord[key] : undefined
 
       const isObject = (value: unknown): value is Record<string, unknown> =>
         Boolean(value) && typeof value === 'object' && !Array.isArray(value)

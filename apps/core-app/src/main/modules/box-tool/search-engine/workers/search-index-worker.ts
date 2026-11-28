@@ -714,6 +714,27 @@ async function handleShutdown(): Promise<void> {
   }
 }
 
+async function applyWorkerConnectionPragmas(workerClient: Client, maxBytes: number): Promise<void> {
+  await workerClient.execute('PRAGMA foreign_keys = ON')
+  await workerClient.execute('PRAGMA synchronous = NORMAL')
+  await workerClient.execute('PRAGMA locking_mode = NORMAL')
+  // Disable mmap on the worker connection. The worker is force-terminated
+  // (worker.terminate(), no close) on idle/shutdown/error; tearing down a large
+  // memory-mapped write region mid-write is SQLite's classic corruption
+  // amplifier. This write-heavy indexing path gains little from mmap.
+  await workerClient.execute('PRAGMA mmap_size = 0')
+  // The sole writer of this file; SQLite keeps the cap per connection, so it is set here too.
+  await applySearchIndexSizeCap(workerClient, maxBytes)
+}
+
+async function reconnectAndReconfigureWorkerClient(
+  workerClient: Client,
+  maxBytes: number
+): Promise<void> {
+  await workerClient.reconnect()
+  await applyWorkerConnectionPragmas(workerClient, maxBytes)
+}
+
 async function handleInit(message: InitMessage): Promise<void> {
   if (initialized && searchIndex) {
     // Already initialized — allow re-init with same path
@@ -738,8 +759,12 @@ async function handleInit(message: InitMessage): Promise<void> {
   const workerClient = createClient({ url: `file:${dbPath}`, timeout: 30_000 })
   client = workerClient
   dbFilePath = dbPath
+  const maxBytes = await readSearchIndexMaxBytes(path.dirname(dbPath))
 
-  // Apply WAL mode and performance pragmas — same as main thread
+  // Apply non-locking connection-scoped PRAGMAs before WAL configuration.
+  await applyWorkerConnectionPragmas(workerClient, maxBytes)
+
+  // Apply WAL mode — same as main thread
   const journalModeResult = await workerClient.execute('PRAGMA journal_mode = WAL')
   const journalMode = String(
     (journalModeResult.rows?.[0] as Record<string, unknown> | undefined)?.journal_mode ?? ''
@@ -751,23 +776,25 @@ async function handleInit(message: InitMessage): Promise<void> {
       meta: { journalMode }
     })
   }
-  await workerClient.execute('PRAGMA synchronous = NORMAL')
-  await workerClient.execute('PRAGMA locking_mode = NORMAL')
-  // Disable mmap on the worker connection. The worker is force-terminated
-  // (worker.terminate(), no close) on idle/shutdown/error; tearing down a large
-  // memory-mapped write region mid-write is SQLite's classic corruption
-  // amplifier. This write-heavy indexing path gains little from mmap.
-  await workerClient.execute('PRAGMA mmap_size = 0')
-  // The sole writer of this file; SQLite keeps the cap per connection, so it is set here too.
-  await applySearchIndexSizeCap(workerClient, await readSearchIndexMaxBytes(path.dirname(dbPath)))
+
+  const onBusyReconnect = async () => {
+    try {
+      await reconnectAndReconfigureWorkerClient(workerClient, maxBytes)
+    } catch (error) {
+      searchIndexWorkerLog.warn('Worker DB reconnect/pragma reconfiguration failed', { error })
+    }
+  }
 
   const workerDb = drizzle(workerClient, { schema })
 
   db = workerDb
-  filePersistenceRepository = new SqliteFileIndexPersistenceRepository(workerDb)
+  filePersistenceRepository = new SqliteFileIndexPersistenceRepository(workerDb, {
+    onBusyReconnect
+  })
   searchIndex = new SearchIndexService(workerDb, {
     directMode: true,
-    logger: noopSearchIndexRuntimeLogger
+    logger: noopSearchIndexRuntimeLogger,
+    onBusyReconnect
   })
   await searchIndex.warmup()
   initialized = true

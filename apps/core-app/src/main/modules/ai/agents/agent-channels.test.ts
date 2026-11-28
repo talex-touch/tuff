@@ -235,9 +235,65 @@ describe('registerAgentChannels', () => {
       }
 
       await expect(handler(task, pluginContext)).resolves.toEqual(expectedResult)
-      expect(manager).toHaveBeenCalledWith({ ...task, caller: 'plugin:third-party-plugin' })
+      expect(manager).toHaveBeenCalledWith({
+        ...task,
+        caller: 'plugin:third-party-plugin',
+        context: {
+          workingDirectory: undefined,
+          metadata: {
+            caller: 'plugin:third-party-plugin',
+            _pluginSystemShell: false
+          }
+        }
+      })
     }
   )
+
+  it('strips untrusted workingDirectory, profileId, and approval metadata from plugin agent tasks', async () => {
+    const { transport, handlers } = createTransport()
+    const pluginContext = {
+      plugin: { name: 'third-party-plugin', uniqueKey: 'plugin-key', verified: true }
+    } as HandlerContext
+    permissionMocks.runtimeAvailable = true
+    permissionMocks.permissionGranted = true
+
+    registerAgentChannels(transport)
+
+    const execute = handlers.get(AgentsEvents.api.execute.toEventName())
+    if (!execute) throw new Error('Queued agent execution handler was not registered')
+
+    await execute(
+      {
+        agentId: 'builtin.workflow-agent',
+        input: { operation: 'summarize' },
+        context: {
+          workingDirectory: '/etc',
+          metadata: {
+            profileId: 'profile:cli:codex',
+            approved: true,
+            approvalGranted: true,
+            automationPolicy: { mode: 'full' },
+            safeTag: 'kept'
+          }
+        }
+      },
+      pluginContext
+    )
+
+    expect(agentManagerMock.executeTask).toHaveBeenCalledWith({
+      agentId: 'builtin.workflow-agent',
+      input: { operation: 'summarize' },
+      caller: 'plugin:third-party-plugin',
+      context: {
+        workingDirectory: undefined,
+        metadata: {
+          safeTag: 'kept',
+          caller: 'plugin:third-party-plugin',
+          _pluginSystemShell: false
+        }
+      }
+    })
+  })
 
   it('preserves an explicit host caller for queued execution', async () => {
     const { transport, handlers } = createTransport()

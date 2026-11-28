@@ -31,8 +31,15 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value))
 }
 
+const ALLOWED_PIN_IMAGE_MIME_PATTERN = /^image\/(?:png|jpeg|webp|gif)$/i
+
 function resolveImageMimeType(value: string | undefined): string {
-  return value?.startsWith('image/') ? value : 'image/png'
+  const normalized = value?.trim().toLowerCase()
+  return normalized && ALLOWED_PIN_IMAGE_MIME_PATTERN.test(normalized) ? normalized : 'image/png'
+}
+
+function sanitizeBase64Payload(value: string): string {
+  return value.replace(/[^A-Za-z0-9+/=]/g, '')
 }
 
 function escapeHtml(value: string): string {
@@ -47,7 +54,7 @@ function escapeHtml(value: string): string {
 function buildHtml(payload: ImageTranslatePinWindowPayload): string {
   const sourceText = payload.sourceText?.trim()
   const targetText = payload.targetText?.trim()
-  const imageSrc = `data:${resolveImageMimeType(payload.imageMimeType)};base64,${payload.translatedImageBase64}`
+  const imageSrc = `data:${resolveImageMimeType(payload.imageMimeType)};base64,${sanitizeBase64Payload(payload.translatedImageBase64)}`
   const shouldRenderClientOverlay =
     isRecord(payload.overlay) && payload.overlay.mode === 'client-render' && Boolean(targetText)
 
@@ -155,7 +162,7 @@ function buildHtml(payload: ImageTranslatePinWindowPayload): string {
   </header>
   <main>
     <div class="stage">
-      <img src="${imageSrc}" alt="Translated image" />
+      <img src="${escapeHtml(imageSrc)}" alt="Translated image" />
       ${shouldRenderClientOverlay ? `<div class="overlay">${escapeHtml(targetText!)}</div>` : ''}
     </div>
   </main>

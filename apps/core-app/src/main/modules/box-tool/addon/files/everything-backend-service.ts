@@ -45,6 +45,26 @@ export function sanitizeEverythingCliQuery(query: string): string {
   return query.replace(/^[\s-]+/, '')
 }
 
+const WINDOWS_UNC_OR_NETWORK_PATH_PATTERN = /^(?:\\\\|\/\/|\\\\\?\\UNC\\)/i
+
+export function validateEverythingCliPath(esPath: string): string {
+  const trimmed = typeof esPath === 'string' ? esPath.trim() : ''
+  if (!trimmed || /[\r\n\0]/.test(trimmed)) {
+    throw new Error('Selected file is not Everything CLI (es.exe)')
+  }
+  if (WINDOWS_UNC_OR_NETWORK_PATH_PATTERN.test(trimmed)) {
+    throw new Error('Everything CLI path must be a local es.exe executable')
+  }
+  const segments = trimmed.split(/[\\/]+/)
+  if (segments.includes('..')) {
+    throw new Error('Selected file is not Everything CLI (es.exe)')
+  }
+  if (path.win32.basename(trimmed).toLowerCase() !== 'es.exe') {
+    throw new Error('Selected file is not Everything CLI (es.exe)')
+  }
+  return trimmed
+}
+
 export interface EverythingSdkAddon {
   search?: (query: string, options?: { maxResults?: number }) => unknown
   query?: (query: string, options?: { maxResults?: number }) => unknown
@@ -54,6 +74,7 @@ export interface EverythingSdkAddon {
 export interface EverythingBackendRuntime {
   execFileAsync?: typeof execFileAsync
   access?: typeof fs.access
+  lstat?: typeof fs.lstat
   requireModule?: (candidate: string) => unknown
   platform?: NodeJS.Platform
   resourcesPath?: string
@@ -68,6 +89,7 @@ export interface EverythingBackendRuntime {
 export class EverythingBackendService {
   private readonly exec: typeof execFileAsync
   private readonly access: typeof fs.access
+  private readonly lstat?: typeof fs.lstat
   private readonly requireModule: (candidate: string) => unknown
   private readonly platform: NodeJS.Platform
   private readonly resourcesPath: string
@@ -77,6 +99,7 @@ export class EverythingBackendService {
   constructor(runtime: EverythingBackendRuntime = {}) {
     this.exec = runtime.execFileAsync ?? execFileAsync
     this.access = runtime.access ?? fs.access
+    this.lstat = runtime.lstat ?? (typeof fs.lstat === 'function' ? fs.lstat : undefined)
     this.requireModule = runtime.requireModule ?? createRequire(import.meta.url)
     this.platform = runtime.platform ?? process.platform
     this.resourcesPath = runtime.resourcesPath ?? process.resourcesPath ?? ''
@@ -124,17 +147,30 @@ export class EverythingBackendService {
     }
   }
 
+  private async assertSafeCliPath(esPath: string): Promise<string> {
+    const safePath = validateEverythingCliPath(esPath)
+    if (this.lstat && /[\\/]/.test(safePath)) {
+      const stat = await this.lstat(safePath)
+      if (stat.isSymbolicLink() || !stat.isFile()) {
+        throw new Error('Selected file is not Everything CLI (es.exe)')
+      }
+    }
+    return safePath
+  }
+
   async probeCli(esPath: string): Promise<{ version: string | null }> {
-    const output = await this.readCliVersion(esPath)
+    const safePath = await this.assertSafeCliPath(esPath)
+    const output = await this.readCliVersion(safePath)
     const version = parseEverythingVersion(output)
-    if (!isEverythingCliProbeOutput(esPath, output, version)) {
+    if (!isEverythingCliProbeOutput(safePath, output, version)) {
       throw new Error('Selected file is not Everything CLI (es.exe)')
     }
     return { version }
   }
 
   async readCliVersion(esPath: string): Promise<string> {
-    const result = await this.exec(esPath, ['-version'], { timeout: 3000, windowsHide: true })
+    const safePath = await this.assertSafeCliPath(esPath)
+    const result = await this.exec(safePath, ['-version'], { timeout: 3000, windowsHide: true })
     return normalizeExecFileOutput(result)
   }
 
@@ -144,8 +180,9 @@ export class EverythingBackendService {
     maxResults: number,
     signal?: AbortSignal
   ): Promise<EverythingSearchResult[]> {
+    const safePath = await this.assertSafeCliPath(esPath)
     const { stdout } = await this.exec(
-      esPath,
+      safePath,
       [
         sanitizeEverythingCliQuery(query),
         '-n',

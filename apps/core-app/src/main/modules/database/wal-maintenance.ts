@@ -160,7 +160,9 @@ const DEFAULT_UNREGISTERED_WRITER_STATUS: DatabaseWalSearchIndexWriterStatus = {
 
 export interface DatabaseWalMaintenanceDeps {
   getClient: () => Client | null
+  getAuxClient?: () => Client | null
   getWalSizeBytes: () => Promise<number>
+  getAuxWalSizeBytes?: () => Promise<number>
   getOpenFdCount: () => Promise<number | null>
   runWalCheckpoint: (mode: WalCheckpointMode) => Promise<void>
   reportDatabaseHealth: (source: 'periodic' | 'threshold') => Promise<void>
@@ -315,7 +317,58 @@ export class DatabaseWalMaintenance {
     )
   }
 
+  private async runAuxWalCheckpoint(mode: WalCheckpointMode): Promise<void> {
+    const auxClient = this.deps.getAuxClient?.()
+    if (!auxClient) return
+
+    const stats = dbWriteScheduler.getStats()
+    const auxLane = stats.lanes.aux
+    if (mode === 'TRUNCATE') {
+      if (auxLane.queued > DB_WAL_TRUNCATE_MAX_QUEUED_WRITES) {
+        return
+      }
+      const auxWalSize = (await this.deps.getAuxWalSizeBytes?.()) ?? 0
+      if (auxWalSize < DB_WAL_TRUNCATE_MIN_BYTES) {
+        return
+      }
+    } else if (auxLane.queued > 0 || auxLane.processing) {
+      return
+    }
+
+    try {
+      await dbWriteScheduler.schedule(
+        `database.aux.wal-checkpoint.${mode.toLowerCase()}`,
+        async () => {
+          const activeAux = this.deps.getAuxClient?.()
+          if (!activeAux) return
+          const result = await activeAux.execute(`PRAGMA wal_checkpoint(${mode})`)
+          const parsed = parseWalCheckpointRow(result.rows?.[0])
+          const auxWalSize = (await this.deps.getAuxWalSizeBytes?.()) ?? 0
+          this.deps.log.info(`Aux WAL checkpoint ${mode} complete`, {
+            meta: {
+              mode,
+              busy: parsed.busy,
+              logFrames: parsed.log,
+              checkpointedFrames: parsed.checkpointed,
+              walSizeBytes: auxWalSize
+            }
+          })
+        },
+        {
+          lane: 'aux',
+          priority: 'best_effort',
+          dropPolicy: 'drop',
+          maxQueueWaitMs: DB_WAL_CHECKPOINT_MAX_QUEUE_WAIT_MS
+        }
+      )
+    } catch (error) {
+      this.deps.log.warn(`Aux WAL checkpoint ${mode} failed`, { error })
+    }
+  }
+
   async runWalCheckpoint(mode: WalCheckpointMode): Promise<void> {
+    await this.runAuxWalCheckpoint(mode)
+
     const client = this.deps.getClient()
     if (!client) return
 
@@ -323,6 +376,13 @@ export class DatabaseWalMaintenance {
     if (busyBeforeSchedule) {
       this.logWalCheckpointSkippedBusy(mode, busyBeforeSchedule)
       return
+    }
+
+    if (mode === 'TRUNCATE') {
+      const stats = dbWriteScheduler.getStats()
+      if (stats.lanes.primary.queued > DB_WAL_TRUNCATE_MAX_QUEUED_WRITES) {
+        return
+      }
     }
 
     const writer = this.getSearchIndexWriterPort()
@@ -463,10 +523,17 @@ export class DatabaseWalMaintenance {
           })
           return
         }
-        const walSize = await this.deps.getWalSizeBytes()
-        if (walSize < DB_WAL_TRUNCATE_MIN_BYTES) {
+        const [walSize, auxWalSize] = await Promise.all([
+          this.deps.getWalSizeBytes(),
+          this.deps.getAuxWalSizeBytes?.() ?? Promise.resolve(0)
+        ])
+        if (walSize < DB_WAL_TRUNCATE_MIN_BYTES && auxWalSize < DB_WAL_TRUNCATE_MIN_BYTES) {
           this.deps.log.debug('Skipping WAL TRUNCATE checkpoint because WAL is below threshold', {
-            meta: { walSizeBytes: walSize, minBytes: DB_WAL_TRUNCATE_MIN_BYTES }
+            meta: {
+              walSizeBytes: walSize,
+              auxWalSizeBytes: auxWalSize,
+              minBytes: DB_WAL_TRUNCATE_MIN_BYTES
+            }
           })
           return
         }

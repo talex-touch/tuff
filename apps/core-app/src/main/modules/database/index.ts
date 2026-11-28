@@ -19,6 +19,7 @@ import * as schema from '../../db/schema'
 import { resolveRuntimeRootPath } from '../../utils/app-root-path'
 import { t } from '../../utils/i18n-helper'
 import { scheduleDbWrite, setAuxDbResolver, setDbBusyRecovery } from '../../db/db-write'
+import { dbWriteScheduler } from '../../db/db-write-scheduler'
 import { DB_AUX_ENABLED, DB_SEARCH_SPLIT_ENABLED } from '../../db/runtime-flags'
 import {
   isSqliteBusyError,
@@ -67,6 +68,7 @@ const AUX_COPY_TABLES = [
   'analytics_report_queue',
   'telemetry_upload_stats',
   'recommendation_cache',
+  'recommendation_exposure_daily',
   'clipboard_history',
   'clipboard_history_meta',
   'ocr_jobs',
@@ -112,7 +114,9 @@ export class DatabaseModule extends BaseModule {
   private disposeRetryExhaustedListener: (() => void) | null = null
   private readonly walMaintenance = new DatabaseWalMaintenance({
     getClient: () => this.client,
+    getAuxClient: () => this.auxClient,
     getWalSizeBytes: () => this.getWalSizeBytes(),
+    getAuxWalSizeBytes: () => this.getAuxWalSizeBytes(),
     getOpenFdCount: () => this.getOpenFdCount(),
     runWalCheckpoint: (mode) => this.runWalCheckpoint(mode),
     reportDatabaseHealth: (source) => this.reportDatabaseHealth(source),
@@ -284,10 +288,24 @@ export class DatabaseModule extends BaseModule {
     }
   }
 
+  private async applyConnectionScopedPragmas(
+    client: Client,
+    label: 'primary' | 'aux' | 'search'
+  ): Promise<void> {
+    // Apply non-locking per-connection PRAGMAs before journal_mode/auto_vacuum so a transient
+    // SQLITE_BUSY on WAL configuration can never leave foreign_keys=OFF or size caps unset.
+    await client.execute('PRAGMA foreign_keys = ON')
+    await client.execute('PRAGMA synchronous = NORMAL')
+    await client.execute('PRAGMA locking_mode = NORMAL')
+    await client.execute('PRAGMA mmap_size = 268435456')
+    if (label === 'search') await applySearchIndexSizeCap(client, this.searchIndexMaxBytes)
+  }
+
   private async configureSqliteClient(
     client: Client,
     label: 'primary' | 'aux' | 'search'
   ): Promise<void> {
+    await this.applyConnectionScopedPragmas(client, label)
     // Must precede WAL: once WAL writes the header, only a VACUUM can change it. Lets both
     // primary and search databases hand freed pages back to the disk incrementally.
     if (label === 'search' || label === 'primary') {
@@ -312,13 +330,6 @@ export class DatabaseModule extends BaseModule {
         userImpact: 'degraded'
       })
     }
-    // Enforce declared foreign keys. SQLite defaults this OFF per-connection,
-    // which silently disabled every onDelete: 'cascade' in the schema.
-    await client.execute('PRAGMA foreign_keys = ON')
-    await client.execute('PRAGMA synchronous = NORMAL')
-    await client.execute('PRAGMA locking_mode = NORMAL')
-    await client.execute('PRAGMA mmap_size = 268435456')
-    if (label === 'search') await applySearchIndexSizeCap(client, this.searchIndexMaxBytes)
     dbLog.info(
       `SQLite ${label} configured: WAL mode enabled, busy_timeout=${MAIN_DB_BUSY_TIMEOUT_MS}ms`
     )
@@ -330,7 +341,7 @@ export class DatabaseModule extends BaseModule {
   ): Promise<void> {
     try {
       await client.reconnect()
-      await this.configureSqliteClient(client, label)
+      await this.applyConnectionScopedPragmas(client, label)
     } catch (error) {
       dbLog.warn(`Failed to recover SQLite ${label} client after SQLITE_BUSY`, { error })
     }
@@ -509,6 +520,10 @@ export class DatabaseModule extends BaseModule {
 
   private async getWalSizeBytes(): Promise<number> {
     return readWalFileSizeBytes(this.mainDbPath)
+  }
+
+  private async getAuxWalSizeBytes(): Promise<number> {
+    return readWalFileSizeBytes(this.auxDbPath)
   }
 
   private async getOpenFdCount(): Promise<number | null> {
@@ -879,42 +894,49 @@ export class DatabaseModule extends BaseModule {
     const escapedMainPath = this.escapeSqlPath(this.mainDbPath)
     await this.auxClient.execute(`ATTACH DATABASE '${escapedMainPath}' AS coredb`)
     try {
-      for (const table of AUX_COPY_TABLES) {
-        // Copy by name, never positionally. Only columns the two schemas share are moved; one
-        // side having an extra column is survivable, silently shifting values is not.
-        const [targetColumns, sourceColumns] = await Promise.all([
-          this.getTableColumns(this.auxClient, table),
-          this.getTableColumns(this.auxClient, `coredb.${table}`)
-        ])
-        const shared = targetColumns.filter((column) => sourceColumns.includes(column))
-        if (shared.length === 0) {
-          dbLog.warn(`Aux migration found no shared columns for ${table}; skipping copy`, {
-            meta: { targetColumns, sourceColumns }
-          })
-          continue
+      await this.auxClient.execute('BEGIN IMMEDIATE')
+      try {
+        for (const table of AUX_COPY_TABLES) {
+          // Copy by name, never positionally. Only columns the two schemas share are moved; one
+          // side having an extra column is survivable, silently shifting values is not.
+          const [targetColumns, sourceColumns] = await Promise.all([
+            this.getTableColumns(this.auxClient, table),
+            this.getTableColumns(this.auxClient, `coredb.${table}`)
+          ])
+          const shared = targetColumns.filter((column) => sourceColumns.includes(column))
+          if (shared.length === 0) {
+            dbLog.warn(`Aux migration found no shared columns for ${table}; skipping copy`, {
+              meta: { targetColumns, sourceColumns }
+            })
+            continue
+          }
+          if (shared.length !== targetColumns.length || shared.length !== sourceColumns.length) {
+            dbLog.warn(`Aux migration copying a column subset for ${table}`, {
+              meta: {
+                copied: shared.length,
+                targetOnly: targetColumns.filter((c) => !sourceColumns.includes(c)),
+                sourceOnly: sourceColumns.filter((c) => !targetColumns.includes(c))
+              }
+            })
+          }
+          const columnList = shared.map((column) => `"${column}"`).join(', ')
+          await this.auxClient.execute(
+            `INSERT OR IGNORE INTO ${table} (${columnList}) SELECT ${columnList} FROM coredb.${table}`
+          )
+          const [sourceCount, targetCount] = await Promise.all([
+            this.getTableCount(this.auxClient, `coredb.${table}`),
+            this.getTableCount(this.auxClient, table)
+          ])
+          if (targetCount < sourceCount) {
+            dbLog.warn(`Aux migration verification mismatch for ${table}`, {
+              meta: { sourceCount, targetCount }
+            })
+          }
         }
-        if (shared.length !== targetColumns.length || shared.length !== sourceColumns.length) {
-          dbLog.warn(`Aux migration copying a column subset for ${table}`, {
-            meta: {
-              copied: shared.length,
-              targetOnly: targetColumns.filter((c) => !sourceColumns.includes(c)),
-              sourceOnly: sourceColumns.filter((c) => !targetColumns.includes(c))
-            }
-          })
-        }
-        const columnList = shared.map((column) => `"${column}"`).join(', ')
-        await this.auxClient.execute(
-          `INSERT OR IGNORE INTO ${table} (${columnList}) SELECT ${columnList} FROM coredb.${table}`
-        )
-        const [sourceCount, targetCount] = await Promise.all([
-          this.getTableCount(this.auxClient, `coredb.${table}`),
-          this.getTableCount(this.auxClient, table)
-        ])
-        if (targetCount < sourceCount) {
-          dbLog.warn(`Aux migration verification mismatch for ${table}`, {
-            meta: { sourceCount, targetCount }
-          })
-        }
+        await this.auxClient.execute('COMMIT')
+      } catch (copyError) {
+        await this.auxClient.execute('ROLLBACK').catch(() => undefined)
+        throw copyError
       }
       await this.markAuxMigrationCompleted()
       dbLog.info('Aux hot tables migration completed', {
@@ -1097,10 +1119,21 @@ export class DatabaseModule extends BaseModule {
       await this.ensureDatabaseIntegrity(this.auxDbPath, 'aux', this.probeDbIntegrity)
       const auxDb = drizzle(this.auxClient, { schema })
       await this.ensureAuxTables()
-      await this.migrateHotTablesToAux()
-      if (this.destroying) return
-      this.auxDb = auxDb
-      this.auxInitialized = true
+      // Serialize the copy, marker write, and auxInitialized flip behind the primary write lane so
+      // no concurrent fallback-to-primary aux write can land on database.db after its table was
+      // copied and become orphaned once routing switches to database-aux.db.
+      await scheduleDbWrite(
+        'database.aux.migrate',
+        async () => {
+          if (this.destroying || !this.auxClient || !this.db) return
+          await this.migrateHotTablesToAux()
+          if (this.destroying) return
+          this.auxDb = auxDb
+          this.auxInitialized = true
+        },
+        { lane: 'primary', priority: 'critical' }
+      )
+      if (this.destroying || !this.auxInitialized) return
       setDbBusyRecovery('aux', async () => {
         if (this.auxClient) await this.recoverSqliteClient(this.auxClient, 'aux')
       })
@@ -1603,26 +1636,61 @@ export class DatabaseModule extends BaseModule {
       this.walMaintenance.unregisterTasks()
       this.walMaintenanceRegistered = false
     }
-    // Flush the WAL back into the main db before closing. DatabaseModule is
-    // destroyed last (reverse load order), after the search-index worker has
-    // been terminated, so this connection is the final writer. Leaving a large
-    // uncheckpointed WAL for the next launch to recover is a known WAL-mode
-    // corruption origin; best-effort, never block quit on failure.
+
+    // Drain queued primary/aux writes (bounded so shutdown never hangs indefinitely)
+    // before checkpointing and closing the underlying SQLite connections.
     try {
-      await this.client?.execute('PRAGMA wal_checkpoint(TRUNCATE)')
+      await Promise.race([
+        dbWriteScheduler.drain(),
+        new Promise<void>((resolve) => {
+          const timer = setTimeout(resolve, 3_000)
+          timer.unref?.()
+        })
+      ])
     } catch (error) {
-      dbLog.warn('Final WAL checkpoint on shutdown failed', { error })
+      dbLog.warn('Draining DB write scheduler during shutdown failed', { error })
     }
-    this.client?.close()
-    this.auxClient?.close()
+
+    // Fence and detach all exported handles/resolvers synchronously before awaiting IO.
+    setAuxDbResolver(null)
+    const primaryClient = this.client
+    const auxClient = this.auxClient
+    const searchClient = this.searchClient
+    this.client = null
+    this.auxClient = null
+    this.searchClient = null
+    this.db = null
+    this.auxDb = null
+    this.auxInitialized = false
+    this.searchDb = null
+    this.searchInitialized = false
+
+    // Flush the WAL back into both primary and aux DBs before closing.
     try {
-      this.searchClient?.close()
+      await primaryClient?.execute('PRAGMA wal_checkpoint(TRUNCATE)')
+    } catch (error) {
+      dbLog.warn('Final primary WAL checkpoint on shutdown failed', { error })
+    }
+    try {
+      await auxClient?.execute('PRAGMA wal_checkpoint(TRUNCATE)')
+    } catch (error) {
+      dbLog.warn('Final aux WAL checkpoint on shutdown failed', { error })
+    }
+    try {
+      primaryClient?.close()
     } catch {
       // ignore
     }
-    this.searchClient = null
-    this.searchDb = null
-    this.searchInitialized = false
+    try {
+      auxClient?.close()
+    } catch {
+      // ignore
+    }
+    try {
+      searchClient?.close()
+    } catch {
+      // ignore
+    }
     // Clean shutdown reached: remove the running marker so the next boot skips
     // the full-file quick_check. (If we crash before here, the marker persists
     // and the next boot probes for corruption.)
@@ -1633,9 +1701,6 @@ export class DatabaseModule extends BaseModule {
         dbLog.warn('Failed to clear database running marker', { error })
       }
     }
-    this.db = null
-    this.auxDb = null
-    this.auxInitialized = false
     dbLog.info('DatabaseManager destroyed')
   }
 

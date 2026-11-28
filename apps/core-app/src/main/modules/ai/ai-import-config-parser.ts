@@ -14,8 +14,29 @@ export interface ParsedMcpProfile {
   requiresReauth: boolean
 }
 
+const FORBIDDEN_OBJECT_KEYS = new Set(['__proto__', 'constructor', 'prototype'])
+
+function isSafeObjectKey(key: string): boolean {
+  return Boolean(key) && !FORBIDDEN_OBJECT_KEYS.has(key)
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+function sanitizeParsedValue(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(sanitizeParsedValue)
+  }
+  if (!isRecord(value)) {
+    return value
+  }
+  const clean: Record<string, unknown> = {}
+  for (const [key, entry] of Object.entries(value)) {
+    if (!isSafeObjectKey(key)) continue
+    clean[key] = sanitizeParsedValue(entry)
+  }
+  return clean
 }
 
 function splitTopLevel(value: string, separator = ','): string[] {
@@ -90,7 +111,9 @@ function parseScalar(value: string): unknown {
     for (const entry of splitTopLevel(trimmed.slice(1, -1))) {
       const separator = entry.indexOf('=') >= 0 ? entry.indexOf('=') : entry.indexOf(':')
       if (separator <= 0) return null
-      result[unquote(entry.slice(0, separator))] = parseScalar(entry.slice(separator + 1))
+      const key = unquote(entry.slice(0, separator))
+      if (!isSafeObjectKey(key) || Object.hasOwn(result, key)) return null
+      result[key] = parseScalar(entry.slice(separator + 1))
     }
     return result
   }
@@ -119,16 +142,18 @@ function uncommentToml(line: string): string {
 }
 
 function setPath(root: Record<string, unknown>, path: string[], value: unknown): boolean {
-  if (path.length === 0 || path.some((key) => !key)) return false
+  if (path.length === 0 || path.some((key) => !isSafeObjectKey(key))) return false
   let current = root
   for (const key of path.slice(0, -1)) {
-    const existing = current[key]
-    if (existing === undefined) current[key] = {}
-    else if (!isRecord(existing)) return false
+    if (!Object.hasOwn(current, key)) {
+      current[key] = {}
+    } else if (!isRecord(current[key])) {
+      return false
+    }
     current = current[key] as Record<string, unknown>
   }
   const last = path.at(-1)!
-  if (current[last] !== undefined) return false
+  if (Object.hasOwn(current, last)) return false
   current[last] = value
   return true
 }
@@ -229,7 +254,7 @@ function parseYaml(content: string): Record<string, unknown> | null {
     if (indent <= parent.indent) return null
     const key = unquote(match[2]!.trim())
     const rawValue = match[3]?.trim() ?? ''
-    if (!key || parent.value[key] !== undefined) return null
+    if (!isSafeObjectKey(key) || Object.hasOwn(parent.value, key)) return null
     if (!rawValue) {
       const child: Record<string, unknown> = {}
       parent.value[key] = child
@@ -281,13 +306,13 @@ export function parseConfig(content: string, extension: string): Record<string, 
   try {
     if (extension === '.json' || extension === '.jsonc') {
       const parsed = JSON.parse(stripJsonComments(content))
-      return isRecord(parsed) ? parsed : null
+      return isRecord(parsed) ? (sanitizeParsedValue(parsed) as Record<string, unknown>) : null
     }
     if (extension === '.toml') return parseToml(content)
     if (extension === '.yaml' || extension === '.yml') {
       try {
         const parsed = YAML.parse(content)
-        return isRecord(parsed) ? parsed : null
+        return isRecord(parsed) ? (sanitizeParsedValue(parsed) as Record<string, unknown>) : null
       } catch {
         return parseYaml(content)
       }

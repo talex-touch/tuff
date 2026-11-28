@@ -5,6 +5,7 @@ import type {
 } from '../../../../global-shortcon'
 import { eq } from 'drizzle-orm'
 import { getLogger } from '@talex-touch/utils/common/logger'
+import { scheduleDbWrite } from '../../../../../db/db-write'
 import { config as configSchema } from '../../../../../db/schema'
 
 /**
@@ -248,10 +249,16 @@ export class AppShortcutService {
     try {
       const value = JSON.stringify(this.bindings)
       const db = dbUtils.getDb()
-      await db
-        .insert(configSchema)
-        .values({ key: APP_SHORTCUTS_CONFIG_KEY, value })
-        .onConflictDoUpdate({ target: configSchema.key, set: { value } })
+      await scheduleDbWrite(
+        'app-shortcut.save',
+        async () => {
+          await db
+            .insert(configSchema)
+            .values({ key: APP_SHORTCUTS_CONFIG_KEY, value })
+            .onConflictDoUpdate({ target: configSchema.key, set: { value } })
+        },
+        { priority: 'interactive' }
+      )
       return true
     } catch (error) {
       log.error('Failed to persist app shortcut bindings', { error })

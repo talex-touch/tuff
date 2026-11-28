@@ -8,7 +8,7 @@ import {
   foldSearchText,
   normalizeSearchText
 } from '@talex-touch/utils/search'
-import { resolveAppItemId } from '../app-index-metadata'
+import { resolveAppItemId, resolveAppItemIds } from '../app-index-metadata'
 
 const log = getLogger('app-search-catalog')
 
@@ -428,6 +428,7 @@ export function recallAppCatalogEntries(
  */
 export class AppSearchCatalogService {
   private entries: readonly AppCatalogEntry[] = []
+  private rowsByItemId = new Map<string, AppCatalogRow>()
   private ready = false
   private loadedAt = 0
   private reloading: Promise<void> | null = null
@@ -454,6 +455,11 @@ export class AppSearchCatalogService {
 
   size(): number {
     return this.entries.length
+  }
+
+  findRowByItemId(itemId: string): AppCatalogRow | null {
+    if (!itemId) return null
+    return this.rowsByItemId.get(itemId) ?? null
   }
 
   /** Runs the funnel over the current snapshot; arranges a background reload when it has aged. */
@@ -520,7 +526,24 @@ export class AppSearchCatalogService {
           await new Promise<void>((resolve) => setImmediate(resolve))
         }
       }
+      const rowsByItemId = new Map<string, AppCatalogRow>()
+      for (const entry of entries) {
+        const info = this.deps.toScannedInfo(entry.row)
+        const ids = resolveAppItemIds({
+          bundleId: entry.row.extensions.bundleId,
+          stableId: info.stableId,
+          uniqueId: info.uniqueId,
+          appIdentity: entry.row.extensions.appIdentity,
+          path: entry.row.path
+        })
+        for (const id of ids) {
+          if (!rowsByItemId.has(id)) {
+            rowsByItemId.set(id, entry.row)
+          }
+        }
+      }
       this.entries = entries
+      this.rowsByItemId = rowsByItemId
       this.loadedAt = this.now()
       this.ready = true
       this.deps.onSnapshotReplaced?.()

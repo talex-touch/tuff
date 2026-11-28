@@ -40,7 +40,7 @@ import {
 } from '../../local-ai-cli/workspace-root'
 import { IntelligenceContextExecutionService } from '../intelligence-context-execution'
 import { ContextHygieneService } from '../intelligence-context-hygiene'
-import { markHomeChatInvoke } from '../intelligence-invoke-purpose'
+import { markHomeChatInvoke, markSchedulerProfileAuthority } from '../intelligence-invoke-purpose'
 import { PiCliProvider, setPiToolRuntimeResolver } from './pi-cli-provider'
 import {
   CLAUDE_CLI_ORIGIN,
@@ -947,10 +947,7 @@ describe('PiCliProvider Home native sessions', () => {
           () => true
         ).chatStream(
           { messages: TURNS_ONE },
-          {
-            ...homeOptions(conversationId),
-            metadata: { ...homeOptions(conversationId).metadata, profileId: CLAUDE_CLI_PROFILE_ID }
-          }
+          markSchedulerProfileAuthority(homeOptions(conversationId), CLAUDE_CLI_PROFILE_ID)
         )
       )
       expect(failed.error?.message).toMatch(/ENOENT/)

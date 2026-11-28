@@ -100,6 +100,7 @@ export class FileIndexWorkerClient {
   private workerStartedAt: number | null = null
   private lastMetricsSample: { at: number; cpuUsage: WorkerMetricsPayload['cpuUsage'] } | null =
     null
+  private closed = false
   private readonly idleShutdown = new IdleWorkerShutdownController({
     timeoutMs: FILE_WORKER_IDLE_SHUTDOWN_MS,
     shouldShutdown: () => this.pending.size === 0 && this.metricsPending.size === 0,
@@ -165,6 +166,7 @@ export class FileIndexWorkerClient {
   }
 
   shutdown(): void {
+    this.closed = true
     const error = new Error('FILE_INDEX_WORKER_CLOSED')
     for (const pending of this.pending.values()) pending.reject(error)
     this.pending.clear()
@@ -194,6 +196,9 @@ export class FileIndexWorkerClient {
   }
 
   private ensureWorker(): Worker {
+    if (this.closed) {
+      throw new Error('FILE_INDEX_WORKER_CLOSED')
+    }
     this.idleShutdown.cancel()
     if (this.worker) {
       return this.worker
@@ -206,9 +211,15 @@ export class FileIndexWorkerClient {
     worker.on('message', (message: WorkerMessage) => this.handleMessage(message))
     worker.on('error', (error) => this.handleWorkerError(error))
     worker.on('exit', (code) => {
-      if (this.worker === worker && code !== 0) {
+      if (this.worker !== worker) return
+      if (code !== 0 || this.pending.size > 0 || this.metricsPending.size > 0) {
         this.handleWorkerError(new Error(`FileIndexWorker exited with code ${code}`))
+        return
       }
+      this.idleShutdown.cancel()
+      this.worker = null
+      this.workerStartedAt = null
+      this.lastMetricsSample = null
     })
 
     this.worker = worker

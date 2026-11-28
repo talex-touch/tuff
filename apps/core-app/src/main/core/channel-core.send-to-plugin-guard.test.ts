@@ -86,4 +86,29 @@ describe('_sendTo reports a missing plugin name instead of throwing', () => {
 
     expect(sent).toHaveLength(1)
   })
+
+  it('cleans up pendingMap immediately when target webContents is destroyed', async () => {
+    const listeners = new Map<string, Set<() => void>>()
+    const win = {
+      webContents: {
+        isDestroyed: () => false,
+        send: vi.fn(),
+        once: (event: string, fn: () => void) => {
+          const set = listeners.get(event) ?? new Set()
+          set.add(fn)
+          listeners.set(event, set)
+        },
+        removeListener: (event: string, fn: () => void) => {
+          listeners.get(event)?.delete(fn)
+        }
+      }
+    }
+
+    const pending = channel._sendTo(win, 'main', 'destroy:event', { data: 1 })
+    for (const fn of listeners.get('destroyed') ?? []) fn()
+
+    await expect(pending).resolves.toMatchObject({
+      data: { reason: 'webcontents_destroyed', eventName: 'destroy:event' }
+    })
+  })
 })

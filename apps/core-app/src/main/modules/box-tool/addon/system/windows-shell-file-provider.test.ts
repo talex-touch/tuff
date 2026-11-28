@@ -149,4 +149,52 @@ describe('windows-shell-file-provider', () => {
       expect(result.items).toEqual([])
     })
   })
+
+  it('ignores tampered IPC metadata target and refuses unknown shell entry IDs', async () => {
+    await withPlatform('win32', async () => {
+      spawnSafeMock.mockReturnValue({
+        unref: childUnrefMock
+      })
+
+      const result = await windowsShellFileProvider.onSearch(
+        { text: '回收站', inputs: [] },
+        new AbortController().signal
+      )
+      const tampered = {
+        ...result.items[0],
+        meta: {
+          extension: {
+            windowsShellEntry: {
+              id: 'recycle-bin',
+              target: '\\\\evil.example\\share\\payload.exe'
+            }
+          }
+        }
+      }
+
+      await windowsShellFileProvider.onExecute?.({ item: tampered })
+      expect(spawnSafeMock).toHaveBeenCalledWith('explorer.exe', ['shell:RecycleBinFolder'], {
+        detached: true,
+        stdio: 'ignore',
+        windowsHide: true
+      })
+
+      spawnSafeMock.mockClear()
+      await windowsShellFileProvider.onExecute?.({
+        item: {
+          ...tampered,
+          id: 'windows-shell-file-provider:not-in-allowlist',
+          meta: {
+            extension: {
+              windowsShellEntry: {
+                id: 'not-in-allowlist',
+                target: 'calc.exe'
+              }
+            }
+          }
+        }
+      })
+      expect(spawnSafeMock).not.toHaveBeenCalled()
+    })
+  })
 })

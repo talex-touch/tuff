@@ -1,5 +1,4 @@
 import { Buffer } from 'node:buffer'
-import { readFile } from 'node:fs/promises'
 import { StringDecoder } from 'node:string_decoder'
 import type {
   IntelligenceChatPayload,
@@ -22,6 +21,7 @@ import { getLocalEmbeddingRuntime } from '../local-embedding-runtime'
 import { LOCAL_EMBEDDING_MODEL_KEY } from '../local-embedding-model'
 import { recognizeOcrSourceIsolated } from '../../ocr/ocr-runtime'
 import { OpenAiCompatibleLangChainProvider } from './langchain-openai-compatible-provider'
+import { readSafeVisionImageFile } from './vision-image-file'
 
 interface OllamaChatResponse {
   error?: unknown
@@ -394,7 +394,7 @@ export class LocalProvider extends OpenAiCompatibleLangChainProvider {
         languageHint: payload.language,
         includeLayout: payload.includeLayout,
         maxBlocks: 120,
-        decodeBuffer: (source) => this.getImageBuffer(source)
+        decodeBuffer: (source) => this.getImageBuffer(source, options)
       },
       {
         timeoutMs: this.resolveRequestTimeout(options, 30_000),
@@ -437,7 +437,10 @@ export class LocalProvider extends OpenAiCompatibleLangChainProvider {
     }
   }
 
-  private async getImageBuffer(source: IntelligenceVisionOcrPayload['source']): Promise<Buffer> {
+  private async getImageBuffer(
+    source: IntelligenceVisionOcrPayload['source'],
+    options?: IntelligenceInvokeOptions
+  ): Promise<Buffer> {
     if (source.type === 'data-url' && source.dataUrl) {
       return this.decodeDataUrl(source.dataUrl)
     }
@@ -457,7 +460,8 @@ export class LocalProvider extends OpenAiCompatibleLangChainProvider {
     }
 
     if (source.type === 'file' && source.filePath) {
-      return await readFile(source.filePath)
+      const image = await readSafeVisionImageFile(source.filePath, options)
+      return image.buffer
     }
 
     throw new Error('[LocalProvider] Invalid vision image source')

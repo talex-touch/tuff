@@ -11,6 +11,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { markSchedulerProfileAuthority } from '../intelligence-invoke-purpose'
 import { PiCliProvider } from './pi-cli-provider'
 import {
   ANTIGRAVITY_CLI_ORIGIN,
@@ -502,13 +503,29 @@ describe('PiCliProvider claude', () => {
     await expect(async () => {
       for await (const _chunk of new PiCliProvider({ ...CLAUDE_CONFIG }, () => true).chatStream(
         imageTurn(),
-        { metadata: { profileId: CLAUDE_CLI_PROFILE_ID } }
+        markSchedulerProfileAuthority(
+          { metadata: { profileId: CLAUDE_CLI_PROFILE_ID } },
+          CLAUDE_CLI_PROFILE_ID
+        )
       )) {
         void _chunk
       }
     }).rejects.toThrow(/ATTACHMENTS_UNSUPPORTED/)
 
     // Decided from the argv, so the child never existed: nothing was spawned and nothing billed.
+    expect(existsSync(spawnMarker)).toBe(false)
+  })
+
+  it('never spawns claude when metadata.profileId is spoofed without Main scheduler authority', async () => {
+    await expect(async () => {
+      for await (const _chunk of new PiCliProvider({ ...CLAUDE_CONFIG }, () => true).chatStream(
+        userTurn(),
+        { metadata: { profileId: CLAUDE_CLI_PROFILE_ID } }
+      )) {
+        void _chunk
+      }
+    }).rejects.toThrow(/CLAUDE_CONFIG_PROVIDER_UNAVAILABLE/)
+
     expect(existsSync(spawnMarker)).toBe(false)
   })
 })
@@ -561,6 +578,18 @@ describe('PiCliProvider ACP-only external CLIs never spawn binaries', () => {
       for await (const _chunk of cliProvider.chatStream(userTurn(), {
         metadata: { profileId: ANTIGRAVITY_CLI_PROFILE_ID }
       })) {
+        void _chunk
+      }
+    }).rejects.toThrow(/ANTIGRAVITY_CONFIG_PROVIDER_UNAVAILABLE/)
+
+    await expect(async () => {
+      for await (const _chunk of cliProvider.chatStream(
+        userTurn(),
+        markSchedulerProfileAuthority(
+          { metadata: { profileId: ANTIGRAVITY_CLI_PROFILE_ID } },
+          ANTIGRAVITY_CLI_PROFILE_ID
+        )
+      )) {
         void _chunk
       }
     }).rejects.toThrow(/ANTIGRAVITY_ACP_RUNTIME_REQUIRED/)

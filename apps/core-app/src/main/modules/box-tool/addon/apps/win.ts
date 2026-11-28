@@ -491,20 +491,73 @@ async function readUwpManifestMetadata(
   }
 }
 
+const MAX_UWP_LOGO_BYTES = 5 * 1024 * 1024
+
+function isPathWithinRoot(candidatePath: string, rootPath: string): boolean {
+  const relative = path.relative(rootPath, candidatePath)
+  return Boolean(relative) && !relative.startsWith('..') && !path.isAbsolute(relative)
+}
+
+async function verifyUwpLogoCandidate(
+  installLocation: string,
+  candidatePath: string
+): Promise<string | null> {
+  const resolvedRoot = path.resolve(installLocation)
+  const resolvedCandidate = path.resolve(candidatePath)
+  if (!isPathWithinRoot(resolvedCandidate, resolvedRoot)) {
+    return null
+  }
+
+  if (typeof fs.lstat === 'function') {
+    const linkStat = await fs.lstat(resolvedCandidate).catch(() => null)
+    if (!linkStat || linkStat.isSymbolicLink() || !linkStat.isFile()) {
+      return null
+    }
+  }
+
+  if (typeof fs.realpath === 'function') {
+    const [canonicalRoot, canonicalCandidate] = await Promise.all([
+      fs.realpath(resolvedRoot).catch(() => null),
+      fs.realpath(resolvedCandidate).catch(() => null)
+    ])
+    if (!canonicalRoot || !canonicalCandidate) {
+      return null
+    }
+    if (!isPathWithinRoot(canonicalCandidate, canonicalRoot)) {
+      return null
+    }
+    return canonicalCandidate
+  }
+
+  return resolvedCandidate
+}
+
 async function resolveUwpLogoFilePath(
   installLocation: string,
   logoRelativePath?: string
 ): Promise<string | null> {
-  if (!installLocation || !logoRelativePath) return null
+  if (!installLocation || !logoRelativePath || logoRelativePath.includes('\0')) return null
 
+  const resolvedInstallLocation = path.resolve(installLocation)
   const normalizedRelativePath = path.normalize(logoRelativePath.replace(/[\\/]+/g, path.sep))
-  const primaryPath = path.resolve(installLocation, normalizedRelativePath)
+  if (path.isAbsolute(normalizedRelativePath)) return null
+
+  const primaryPath = path.resolve(resolvedInstallLocation, normalizedRelativePath)
+  if (!isPathWithinRoot(primaryPath, resolvedInstallLocation)) {
+    return null
+  }
 
   try {
     await fs.access(primaryPath)
-    return primaryPath
+    return await verifyUwpLogoCandidate(resolvedInstallLocation, primaryPath)
   } catch {
     const logoDirectory = path.dirname(primaryPath)
+    if (
+      logoDirectory !== resolvedInstallLocation &&
+      !isPathWithinRoot(logoDirectory, resolvedInstallLocation)
+    ) {
+      return null
+    }
     const extension = path.extname(primaryPath)
     const basename = path.basename(primaryPath, extension)
 
@@ -524,7 +577,10 @@ async function resolveUwpLogoFilePath(
         })
 
       if (variants.length > 0) {
-        return path.join(logoDirectory, variants[0])
+        return await verifyUwpLogoCandidate(
+          resolvedInstallLocation,
+          path.join(logoDirectory, variants[0])
+        )
       }
     } catch {
       return null
@@ -536,7 +592,21 @@ async function resolveUwpLogoFilePath(
 
 async function readImageAsDataUrl(filePath: string): Promise<string> {
   try {
+    if (typeof fs.lstat === 'function') {
+      const linkStat = await fs.lstat(filePath)
+      if (linkStat.isSymbolicLink() || !linkStat.isFile() || linkStat.size > MAX_UWP_LOGO_BYTES) {
+        return ''
+      }
+    } else if (typeof fs.stat === 'function') {
+      const fileStat = await fs.stat(filePath).catch(() => null)
+      if (fileStat && typeof fileStat.size === 'number' && fileStat.size > MAX_UWP_LOGO_BYTES) {
+        return ''
+      }
+    }
     const buffer = await fs.readFile(filePath)
+    if (buffer.length === 0 || buffer.length > MAX_UWP_LOGO_BYTES) {
+      return ''
+    }
     return `data:${getImageMimeType(filePath)};base64,${buffer.toString('base64')}`
   } catch {
     return ''

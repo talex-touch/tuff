@@ -18,6 +18,7 @@ import {
 import { agentStoreService } from '../../../service/agent-store.service'
 import { createLogger } from '../../../utils/logger'
 import { withPermission } from '../../permission/channel-guard'
+import { getPermissionModule } from '../../permission/permission-module-ref'
 import { agentManager } from './agent-manager'
 
 const agentChannelsLog = createLogger('Intelligence').child('AgentChannels')
@@ -32,10 +33,38 @@ const AGENT_EXECUTION_PERMISSION = {
 } as const
 
 function bindAgentTaskCaller(task: AgentTask, context: HandlerContext): AgentTask {
-  const caller = context.plugin
-    ? `plugin:${context.plugin.name}`
-    : task.caller?.trim() || DEFAULT_AGENT_CALLER
-  return task.caller === caller ? task : { ...task, caller }
+  if (!context.plugin) {
+    const caller = task.caller?.trim() || DEFAULT_AGENT_CALLER
+    return task.caller === caller ? task : { ...task, caller }
+  }
+
+  const pluginName = context.plugin.name
+  const caller = `plugin:${pluginName}`
+  const hasSystemShell = Boolean(
+    getPermissionModule()?.getStore?.()?.hasPermission(pluginName, 'system.shell')
+  )
+  const rawMetadata =
+    task.context?.metadata && typeof task.context.metadata === 'object'
+      ? { ...task.context.metadata }
+      : {}
+  delete rawMetadata.profileId
+  delete rawMetadata.approved
+  delete rawMetadata.approvalGranted
+  delete rawMetadata.approvedAt
+  delete rawMetadata.automationPolicy
+  delete rawMetadata.workingDirectory
+  rawMetadata.caller = caller
+  rawMetadata._pluginSystemShell = hasSystemShell
+
+  return {
+    ...task,
+    caller,
+    context: {
+      ...(task.context ?? {}),
+      workingDirectory: undefined,
+      metadata: rawMetadata
+    }
+  }
 }
 
 interface AgentChannelOptions {

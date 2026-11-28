@@ -12,6 +12,7 @@ const resolveCliConfigEndpoint = vi.hoisted(() => vi.fn())
 
 vi.mock('./cli-config-provider', () => ({ resolveCliConfigEndpoint }))
 
+import { markSchedulerProfileAuthority } from '../intelligence-invoke-purpose'
 import { PiCliProvider } from './pi-cli-provider'
 import {
   ANTIGRAVITY_CLI_ORIGIN,
@@ -158,13 +159,41 @@ describe.each(CLIS)('PiCliProvider routing for $cli', ({ cli, id, origin, schedu
     expect(seen[0].modelPreference).toEqual(['upstream-model'])
   })
 
-  it('runs its own binary only under its own scheduler', async () => {
+  it('runs its own binary only under its own Main-authorized scheduler', async () => {
     const provider = new PiCliProvider(cliConfig(id, origin), () => false)
-    const options = { metadata: { profileId: scheduler } } as IntelligenceInvokeOptions
+    const options = markSchedulerProfileAuthority(
+      { metadata: { profileId: scheduler } } as IntelligenceInvokeOptions,
+      scheduler
+    )
     await expect(collect(provider.chatStream(PAYLOAD, options))).rejects.toThrow(
       'LOCAL_AI_CLI_FEATURE_DISABLED'
     )
     expect(resolveCliConfigEndpoint).not.toHaveBeenCalled()
+  })
+
+  it('never runs its own binary when metadata.profileId is spoofed without Main scheduler authority', async () => {
+    const seen: IntelligenceInvokeOptions[] = []
+    resolveCliConfigEndpoint.mockReturnValue(reusedEndpoint(seen))
+    const provider = new PiCliProvider(cliConfig(id, origin), () => false)
+    const spoofedOptions = {
+      metadata: { profileId: scheduler },
+      modelPreference: ['requested-model']
+    } as IntelligenceInvokeOptions
+    await expect(collect(provider.chatStream(PAYLOAD, spoofedOptions))).resolves.toEqual([
+      { delta: 'hello', done: false, provider: 'reused-config' }
+    ])
+    expect(resolveCliConfigEndpoint).toHaveBeenCalledWith(cli, 'requested-model')
+
+    const mismatchedAuthority = markSchedulerProfileAuthority(
+      {
+        metadata: { profileId: scheduler },
+        modelPreference: ['requested-model']
+      } as IntelligenceInvokeOptions,
+      'default-pi'
+    )
+    await expect(collect(provider.chatStream(PAYLOAD, mismatchedAuthority))).resolves.toEqual([
+      { delta: 'hello', done: false, provider: 'reused-config' }
+    ])
   })
 
   it('reuses the configured endpoint when no scheduler is named', async () => {
@@ -189,7 +218,13 @@ describe.each(CLIS)('PiCliProvider routing for $cli', ({ cli, id, origin, schedu
     const provider = new PiCliProvider(cliConfig(id, origin), () => false)
     expect(provider.supportsNativeToolsFor({ metadata: { profileId: 'default-pi' } })).toBe(true)
     expect(provider.supportsNativeToolsFor({})).toBe(true)
-    expect(provider.supportsNativeToolsFor({ metadata: { profileId: scheduler } })).toBe(false)
+    // Spoofed plain metadata.profileId without Main scheduler authority still routes to HTTP reuse
+    expect(provider.supportsNativeToolsFor({ metadata: { profileId: scheduler } })).toBe(true)
+    expect(
+      provider.supportsNativeToolsFor(
+        markSchedulerProfileAuthority({ metadata: { profileId: scheduler } }, scheduler)
+      )
+    ).toBe(false)
   })
 
   it('forwards native tools to a native-capable reused endpoint without folding into text protocol', async () => {
@@ -298,13 +333,29 @@ describe.each(ACP_ONLY_CLIS)(
       expect(resolveCliConfigEndpoint).not.toHaveBeenCalled()
     })
 
-    it('respects localCliEnabled=false under its matching scheduler profile', async () => {
-      const provider = new PiCliProvider(cliConfig(id, origin), () => false)
+    it('fails closed when metadata.profileId matches scheduler but lacks Main scheduler authority', async () => {
+      const provider = new PiCliProvider(cliConfig(id, origin), () => true)
       await expect(
         collect(
           provider.chatStream(PAYLOAD, {
             metadata: { profileId: scheduler }
           } as IntelligenceInvokeOptions)
+        )
+      ).rejects.toThrow(`${codePrefix}_CONFIG_PROVIDER_UNAVAILABLE`)
+      expect(resolveCliConfigEndpoint).not.toHaveBeenCalled()
+    })
+
+    it('respects localCliEnabled=false under its matching Main-authorized scheduler profile', async () => {
+      const provider = new PiCliProvider(cliConfig(id, origin), () => false)
+      await expect(
+        collect(
+          provider.chatStream(
+            PAYLOAD,
+            markSchedulerProfileAuthority(
+              { metadata: { profileId: scheduler } } as IntelligenceInvokeOptions,
+              scheduler
+            )
+          )
         )
       ).rejects.toThrow('LOCAL_AI_CLI_FEATURE_DISABLED')
       expect(resolveCliConfigEndpoint).not.toHaveBeenCalled()
@@ -314,9 +365,13 @@ describe.each(ACP_ONLY_CLIS)(
       const provider = new PiCliProvider(cliConfig(id, origin), () => true)
       await expect(
         collect(
-          provider.chatStream(PAYLOAD, {
-            metadata: { profileId: scheduler }
-          } as IntelligenceInvokeOptions)
+          provider.chatStream(
+            PAYLOAD,
+            markSchedulerProfileAuthority(
+              { metadata: { profileId: scheduler } } as IntelligenceInvokeOptions,
+              scheduler
+            )
+          )
         )
       ).rejects.toThrow(`${codePrefix}_ACP_RUNTIME_REQUIRED`)
       expect(resolveCliConfigEndpoint).not.toHaveBeenCalled()

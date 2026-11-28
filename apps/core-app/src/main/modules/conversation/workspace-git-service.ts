@@ -2269,7 +2269,10 @@ export async function pushWorkspaceGit(
     if (!targetRemote.ok) {
       return { ok: false, error: targetRemote.error }
     }
-    args = ['push', '-u', targetRemote.remote, 'HEAD']
+    if (!isValidRemoteName(targetRemote.remote)) {
+      return { ok: false, error: 'Invalid Git push remote name' }
+    }
+    args = ['push', '-u', '--', targetRemote.remote, 'HEAD']
   }
 
   const res = await runGit(ctx.repoRoot, args, REMOTE_GIT_TIMEOUT_MS)

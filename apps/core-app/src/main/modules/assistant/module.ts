@@ -167,38 +167,53 @@ export class AssistantModule extends BaseModule {
       return
     }
 
+    const assertHostOnly = (context: { plugin?: unknown } | undefined) => {
+      if (context?.plugin) {
+        throw new Error('ASSISTANT_HOST_ONLY_CAPABILITY')
+      }
+    }
+
     this.transportDisposers.push(
-      this.transport.on(AssistantEvents.voice.getRuntimeConfig, () => {
+      this.transport.on(AssistantEvents.voice.getRuntimeConfig, (_payload, context) => {
+        assertHostOnly(context)
         return this.buildRuntimeConfig(this.readAppSetting())
       })
     )
 
     this.transportDisposers.push(
-      this.transport.on(AssistantEvents.voice.closePanel, () => {
+      this.transport.on(AssistantEvents.voice.closePanel, (_payload, context) => {
+        assertHostOnly(context)
         this.closeVoicePanel()
       })
     )
 
     this.transportDisposers.push(
-      this.transport.on(AssistantEvents.voice.openIntelligenceSettings, async () => {
-        return await this.openIntelligenceSettings()
-      })
+      this.transport.on(
+        AssistantEvents.voice.openIntelligenceSettings,
+        async (_payload, context) => {
+          assertHostOnly(context)
+          return await this.openIntelligenceSettings()
+        }
+      )
     )
 
     this.transportDisposers.push(
-      this.transport.on(AssistantEvents.voice.getGlobeKeyStatus, async () => {
+      this.transport.on(AssistantEvents.voice.getGlobeKeyStatus, async (_payload, context) => {
+        assertHostOnly(context)
         return await readGlobeKeyStatus()
       })
     )
 
     this.transportDisposers.push(
-      this.transport.on(AssistantEvents.voice.disableGlobeKeyAction, async () => {
+      this.transport.on(AssistantEvents.voice.disableGlobeKeyAction, async (_payload, context) => {
+        assertHostOnly(context)
         return await disableGlobeKeyAction()
       })
     )
 
     this.transportDisposers.push(
-      this.transport.on(AssistantEvents.voice.openKeyboardSettings, async () => {
+      this.transport.on(AssistantEvents.voice.openKeyboardSettings, async (_payload, context) => {
+        assertHostOnly(context)
         return await openKeyboardSettings()
       })
     )

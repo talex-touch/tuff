@@ -62,7 +62,7 @@ async function runWithDbBusyRecovery<T>(
   }
 }
 
-export function setAuxDbResolver(resolver: AuxDbResolver): void {
+export function setAuxDbResolver(resolver: AuxDbResolver | null): void {
   auxDbResolver = resolver
 }
 

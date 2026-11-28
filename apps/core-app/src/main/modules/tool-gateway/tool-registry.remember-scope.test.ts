@@ -1,3 +1,6 @@
+import fs from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { createToolRegistry, resolveUserPath } from './tool-registry'
 
@@ -52,5 +55,29 @@ describe('tuff_read_file confirmation scope', () => {
     const b = await rememberKeyFor('   ')
 
     expect(a).not.toBe(b)
+  })
+
+  it('canonicalizes symlinks via realpath in rememberKey and rejects non-regular files in execute', async () => {
+    const tmpDir = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'tool-reg-read-')))
+    try {
+      const target = path.join(tmpDir, 'target.txt')
+      const link = path.join(tmpDir, 'link.txt')
+      await fs.writeFile(target, 'hello world', 'utf8')
+      await fs.symlink(target, link)
+
+      const keyTarget = await rememberKeyFor(target)
+      const keyLink = await rememberKeyFor(link)
+      expect(keyLink).toBe(keyTarget)
+
+      const tool = registry().get('tuff_read_file')!
+      const ok = await tool.execute({ path: link })
+      expect(ok).toEqual({ output: 'hello world', isError: false })
+
+      await expect(tool.execute({ path: tmpDir })).resolves.toEqual(
+        expect.objectContaining({ isError: true, code: 'TOOL_INPUT_INVALID' })
+      )
+    } finally {
+      await fs.rm(tmpDir, { recursive: true, force: true })
+    }
   })
 })

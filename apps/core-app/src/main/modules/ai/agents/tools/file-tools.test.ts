@@ -105,4 +105,47 @@ describe('file-tools file.search', () => {
 
     expect(result.count).toBe(5)
   })
+
+  it('confines file.read, file.exists, file.info, and file.list inside workingDirectory and blocks symlinks and credential files', async () => {
+    const outsideRoot = await fs.realpath(
+      await fs.mkdtemp(path.join(os.tmpdir(), 'tuff-file-outside-'))
+    )
+    try {
+      const outsideSecret = path.join(outsideRoot, 'secret.txt')
+      await fs.writeFile(outsideSecret, 'TOP_SECRET')
+      await fs.symlink(outsideSecret, path.join(tmpRoot, 'escape-link.txt'))
+      await fs.writeFile(path.join(tmpRoot, '.env'), 'API_KEY=secret')
+      await fs.writeFile(path.join(tmpRoot, 'safe.txt'), 'hello safe')
+
+      const ctx = { taskId: 'test', agentId: 'test', workingDirectory: tmpRoot }
+
+      expect(
+        (await toolRegistry.executeTool('file.read', { path: outsideSecret }, ctx)).success
+      ).toBe(false)
+      expect(
+        (await toolRegistry.executeTool('file.read', { path: '../outside' }, ctx)).success
+      ).toBe(false)
+      expect(
+        (await toolRegistry.executeTool('file.read', { path: 'escape-link.txt' }, ctx)).success
+      ).toBe(false)
+      expect((await toolRegistry.executeTool('file.read', { path: '.env' }, ctx)).success).toBe(
+        false
+      )
+      expect(
+        (await toolRegistry.executeTool('file.exists', { path: outsideSecret }, ctx)).success
+      ).toBe(false)
+      expect(
+        (await toolRegistry.executeTool('file.info', { path: outsideSecret }, ctx)).success
+      ).toBe(false)
+      expect(
+        (await toolRegistry.executeTool('file.list', { path: outsideRoot }, ctx)).success
+      ).toBe(false)
+
+      const safeRead = await toolRegistry.executeTool('file.read', { path: 'safe.txt' }, ctx)
+      expect(safeRead.success).toBe(true)
+      expect(safeRead.output).toBe('hello safe')
+    } finally {
+      await fs.rm(outsideRoot, { recursive: true, force: true }).catch(() => undefined)
+    }
+  })
 })

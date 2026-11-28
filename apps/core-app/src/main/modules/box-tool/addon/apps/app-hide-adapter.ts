@@ -6,6 +6,8 @@ import { getLogger } from '@talex-touch/utils/common/logger'
 const execFileAsync = promisify(execFile)
 const appHideLog = getLogger('app-hide')
 const APP_HIDE_COMMAND_TIMEOUT_MS = 2_000
+const DARWIN_BUNDLE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,254}$/
+const CONTROL_CHAR_PATTERN = /[\r\n\0]/
 
 export interface AppShortcutTarget {
   /** macOS identity of the application: the scan reads it from the bundle's `Info.plist`. */
@@ -69,7 +71,11 @@ public static class TuffAppPutAwayWinApi {
   [DllImport("user32.dll")] public static extern bool ShowWindowAsync(IntPtr hWnd, int nCmdShow);
 }
 "@
-$wantPath = [string]$args[0]
+$wantPath = [string]$env:TUFF_APP_HIDE_PATH
+if ([string]::IsNullOrWhiteSpace($wantPath)) {
+  [pscustomobject]@{ hidden = $false; reason = 'invalid-target' } | ConvertTo-Json -Compress
+  exit 0
+}
 $running = @()
 try { $running = @(Get-Process | Where-Object { $_.Path -and $_.Path -ieq $wantPath }) } catch {}
 if ($running.Count -eq 0) {
@@ -116,11 +122,17 @@ function parseOutcome(stdout: string): AppPutAwayOutcome | null {
 export async function putAwayApplicationInFront(
   target: AppShortcutTarget
 ): Promise<AppPutAwayOutcome> {
+  if (!target.path || CONTROL_CHAR_PATTERN.test(target.path)) {
+    return { hidden: false, reason: 'invalid-target' }
+  }
+
   try {
     if (process.platform === 'darwin') {
+      const safeBundleId =
+        target.bundleId && DARWIN_BUNDLE_ID_PATTERN.test(target.bundleId) ? target.bundleId : ''
       const { stdout } = await execFileAsync(
         'osascript',
-        ['-l', 'JavaScript', '-e', MAC_PUT_AWAY_SCRIPT, target.bundleId ?? '', target.path],
+        ['-l', 'JavaScript', '-e', MAC_PUT_AWAY_SCRIPT, '--', safeBundleId, target.path],
         { timeout: APP_HIDE_COMMAND_TIMEOUT_MS }
       )
       return parseOutcome(stdout) ?? { hidden: false, reason: 'unparsable' }
@@ -135,10 +147,16 @@ export async function putAwayApplicationInFront(
           '-ExecutionPolicy',
           'Bypass',
           '-Command',
-          WINDOWS_PUT_AWAY_SCRIPT,
-          target.path
+          WINDOWS_PUT_AWAY_SCRIPT
         ],
-        { timeout: APP_HIDE_COMMAND_TIMEOUT_MS, windowsHide: true }
+        {
+          timeout: APP_HIDE_COMMAND_TIMEOUT_MS,
+          windowsHide: true,
+          env: {
+            ...process.env,
+            TUFF_APP_HIDE_PATH: target.path
+          }
+        }
       )
       return parseOutcome(stdout) ?? { hidden: false, reason: 'unparsable' }
     }

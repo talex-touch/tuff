@@ -57,6 +57,7 @@ import type {
 } from './worktree'
 import type { WorkflowExecutionContext } from './intelligence-workflow-service'
 import { createHash, randomUUID } from 'node:crypto'
+import { hasPluginSystemShellGrant, readPluginInvocation } from './intelligence-invoke-purpose'
 import {
   openUIPrompt,
   shouldInjectTdsDesignPrompt,
@@ -721,10 +722,7 @@ export class AiCliOrchestrator {
       | AiAutomationPolicy
       | undefined
     const isFullPermission =
-      !automationPolicy &&
-      (toolGatewayModule.getGatewayState().mode === 'full' ||
-        (context.payload.profile.permissionPolicy.mode === 'preauthorized' &&
-          context.payload.profile.permissionPolicy.allowedPermissions.includes('*')))
+      !automationPolicy && toolGatewayModule.getGatewayState().mode === 'full'
 
     if (isFullPermission) {
       return { approved: true, remember: false }
@@ -1808,17 +1806,32 @@ export class AiCliOrchestrator {
     if (!this.initialized) throw new Error('AI CLI orchestrator is not initialized')
     const objective = String(request.objective || '').trim()
     if (!objective) throw new Error('Objective is required')
-    const profile = await aiOrchestratorStore.getProfile(request.profileId || DEFAULT_PROFILE_ID)
+    const rawMetadata = toRecord(request.metadata)
+    const isPluginCaller =
+      typeof rawMetadata.caller === 'string' && rawMetadata.caller.trim().startsWith('plugin:')
+    const pluginHasSystemShell = rawMetadata._pluginSystemShell === true
+    if (isPluginCaller && request.profileId && request.profileId.startsWith('profile:cli:')) {
+      throw new Error('AGENT_PROFILE_FORBIDDEN')
+    }
+    const effectiveProfileId = isPluginCaller
+      ? DEFAULT_PROFILE_ID
+      : request.profileId || DEFAULT_PROFILE_ID
+    const profile = await aiOrchestratorStore.getProfile(effectiveProfileId)
     if (!profile || !profile.enabled) {
-      throw new Error(`Agent profile ${request.profileId || DEFAULT_PROFILE_ID} is unavailable`)
+      throw new Error(`Agent profile ${effectiveProfileId} is unavailable`)
     }
     await workspace?.assertAuthority()
     const runtimeProvider = profile.runtimeProvider
     const authorityToolIds = automationPolicy
       ? intersectTools(automationPolicy.allowedToolIds, request.allowedToolIds)
       : request.allowedToolIds
-    const allowedToolIds = intersectTools(profile.allowedToolIds, authorityToolIds)
-    const requestedCwd = resolve(request.cwd || process.cwd())
+    const SHELL_TOOL_IDS = new Set(['system.exec', 'bash'])
+    const baseAllowedToolIds = intersectTools(profile.allowedToolIds, authorityToolIds)
+    const allowedToolIds =
+      isPluginCaller && !pluginHasSystemShell
+        ? baseAllowedToolIds.filter((toolId) => !SHELL_TOOL_IDS.has(toolId))
+        : baseAllowedToolIds
+    const requestedCwd = resolve((isPluginCaller ? undefined : request.cwd) || process.cwd())
     const cwd = await realpath(requestedCwd).catch(() => requestedCwd)
     await aiImportedConfigRuntime.assertAgentProfileVisible(profile.id, cwd)
     const budget = resolveExecutionBudget(request)
@@ -2445,22 +2458,37 @@ export class AiCliOrchestrator {
     payload: IntelligenceAgentPayload,
     options: IntelligenceInvokeOptions
   ): AiOrchestratorExecuteRequest {
+    const pluginName = readPluginInvocation(options)
+    const isPluginCaller =
+      Boolean(pluginName) ||
+      (typeof options.metadata?.caller === 'string' &&
+        options.metadata.caller.trim().startsWith('plugin:'))
+    const metadata = options.metadata ? { ...options.metadata } : {}
+    if (isPluginCaller) {
+      delete metadata.profileId
+      delete metadata.workingDirectory
+      delete metadata.approved
+      delete metadata.approvalGranted
+      delete metadata.approvedAt
+      delete metadata.automationPolicy
+      metadata.caller = pluginName ? `plugin:${pluginName}` : String(options.metadata?.caller)
+      metadata._pluginSystemShell = hasPluginSystemShellGrant(options)
+    }
     return {
       objective: payload.task,
       input: { task: payload.task },
       profileId:
-        typeof options.metadata?.profileId === 'string' ? options.metadata.profileId : undefined,
+        !isPluginCaller && typeof metadata.profileId === 'string' ? metadata.profileId : undefined,
       cwd:
-        typeof options.metadata?.workingDirectory === 'string'
-          ? options.metadata.workingDirectory
+        !isPluginCaller && typeof metadata.workingDirectory === 'string'
+          ? metadata.workingDirectory
           : undefined,
-      approved: options.metadata?.approved === true,
-      allowedToolIds: Array.isArray(options.metadata?.allowedToolIds)
-        ? options.metadata.allowedToolIds.filter((item): item is string => typeof item === 'string')
+      approved: !isPluginCaller && metadata.approved === true,
+      allowedToolIds: Array.isArray(metadata.allowedToolIds)
+        ? metadata.allowedToolIds.filter((item): item is string => typeof item === 'string')
         : undefined,
-      sessionId:
-        typeof options.metadata?.sessionId === 'string' ? options.metadata.sessionId : undefined,
-      metadata: options.metadata
+      sessionId: typeof metadata.sessionId === 'string' ? metadata.sessionId : undefined,
+      metadata
     }
   }
 
@@ -2630,6 +2658,24 @@ export class AiCliOrchestrator {
   ): Promise<IntelligenceInvokeResult<PromptWorkflowExecution>> {
     const workflow = normalizeInlineWorkflow(payload)
     const startedAt = Date.now()
+    const pluginName = readPluginInvocation(options)
+    const isPluginCaller =
+      Boolean(pluginName) ||
+      (typeof options.metadata?.caller === 'string' &&
+        options.metadata.caller.trim().startsWith('plugin:'))
+    const workflowMetadata = options.metadata ? { ...options.metadata } : {}
+    if (isPluginCaller) {
+      delete workflowMetadata.profileId
+      delete workflowMetadata.workingDirectory
+      delete workflowMetadata.approved
+      delete workflowMetadata.approvalGranted
+      delete workflowMetadata.approvedAt
+      delete workflowMetadata.automationPolicy
+      workflowMetadata.caller = pluginName
+        ? `plugin:${pluginName}`
+        : String(options.metadata?.caller)
+      workflowMetadata._pluginSystemShell = hasPluginSystemShellGrant(options)
+    }
     const run = await this.executeWorkflowRun({
       workflow,
       run: {
@@ -2641,14 +2687,14 @@ export class AiCliOrchestrator {
         inputs: toRecord(toRecord(payload).inputs),
         steps: [],
         startedAt,
-        metadata: options.metadata
+        metadata: workflowMetadata
       },
       inputs: toRecord(toRecord(payload).inputs),
       sessionId:
-        typeof options.metadata?.sessionId === 'string' ? options.metadata.sessionId : undefined,
+        typeof workflowMetadata.sessionId === 'string' ? workflowMetadata.sessionId : undefined,
       triggerType: 'manual',
       continueOnError: toRecord(payload).continueOnError === true,
-      metadata: options.metadata,
+      metadata: workflowMetadata,
       onUpdate: async () => undefined
     })
     const usage = toRecord(run.outputs?.usage)
@@ -2686,7 +2732,22 @@ export class AiCliOrchestrator {
       return this.agentError(taskId, task.agentId, `Agent ${task.agentId} is disabled`)
     }
 
-    const metadata = task.context?.metadata ?? {}
+    const metadata = task.context?.metadata ? { ...task.context.metadata } : {}
+    const isPluginCaller =
+      (typeof task.caller === 'string' && task.caller.trim().startsWith('plugin:')) ||
+      (typeof metadata.caller === 'string' && metadata.caller.trim().startsWith('plugin:'))
+    if (isPluginCaller) {
+      delete metadata.profileId
+      delete metadata.workingDirectory
+      delete metadata.approved
+      delete metadata.approvalGranted
+      delete metadata.approvedAt
+      delete metadata.automationPolicy
+      metadata.caller =
+        typeof task.caller === 'string' && task.caller.trim().startsWith('plugin:')
+          ? task.caller.trim()
+          : String(metadata.caller).trim()
+    }
     if (this.agentTaskRunIds.has(taskId)) {
       return this.agentError(taskId, task.agentId, 'Agent task is already running')
     }
@@ -2697,12 +2758,16 @@ export class AiCliOrchestrator {
         {
           objective: `${descriptor.description}\n\n${toObjective(task)}`,
           input: task.input,
-          profileId: typeof metadata.profileId === 'string' ? metadata.profileId : undefined,
-          cwd: task.context?.workingDirectory,
+          profileId:
+            !isPluginCaller && typeof metadata.profileId === 'string'
+              ? metadata.profileId
+              : undefined,
+          cwd: isPluginCaller ? undefined : task.context?.workingDirectory,
           timeoutMs: task.timeout || descriptor.config?.timeout,
-          approved: metadata.approved === true,
-          allowedToolIds: descriptor.tools?.map((tool) => tool.toolId),
-          sessionId: task.context?.sessionId
+          approved: !isPluginCaller && metadata.approved === true,
+          allowedToolIds: descriptor.tools ? descriptor.tools.map((tool) => tool.toolId) : [],
+          sessionId: task.context?.sessionId,
+          metadata
         },
         undefined,
         undefined,

@@ -367,7 +367,19 @@ export class FileReviewService {
     execute: (resolvedPaths: readonly string[]) => Promise<T>
   ): Promise<T> {
     if (!ctx.workspace) {
-      const resolved = paths.map((value) => resolveToolPath(value, ctx.workingDirectory))
+      const canonicalRoot = await fs.realpath(ctx.workingDirectory || process.cwd())
+      const runtimeRoot = await canonicalRuntimeRoot()
+      const resolved = paths.map((value) => resolveToolPath(value, canonicalRoot))
+      for (const absolute of resolved) {
+        const relative = relativeInside(canonicalRoot, absolute)
+        if (relative === null || isCredentialPath(relative, absolute, runtimeRoot)) {
+          throw toolRefusal('TOOL_RESOURCE_ACCESS_DENIED')
+        }
+        const confinement = await checkConfinement(canonicalRoot, absolute)
+        if (confinement !== 'ok') {
+          throw toolRefusal('TOOL_RESOURCE_ACCESS_DENIED')
+        }
+      }
       return this.locks.withLocks(resolved, () => execute(resolved))
     }
 

@@ -190,9 +190,15 @@ export class FileScanWorkerClient {
     worker.on('message', (message: WorkerMessage) => this.handleMessage(message))
     worker.on('error', (error) => this.handleWorkerError(error))
     worker.on('exit', (code) => {
-      if (this.worker === worker && code !== 0) {
+      if (this.worker !== worker) return
+      if (code !== 0 || this.pending.size > 0 || this.metricsPending.size > 0) {
         this.handleWorkerError(new Error(`FileScanWorker exited with code ${code}`))
+        return
       }
+      this.idleShutdown.cancel()
+      this.worker = null
+      this.workerStartedAt = null
+      this.lastMetricsSample = null
     })
 
     this.worker = worker

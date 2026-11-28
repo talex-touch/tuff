@@ -211,6 +211,8 @@ export interface SearchIndexServiceOptions {
   readExecutor?: SearchIndexReadExecutor
   /** Evaluated when a scheduled maintenance slice actually starts, never while holding a slot. */
   canRunMaintenance?: () => boolean
+  /** Reconnect callback invoked on SQLITE_BUSY in directMode (reapplies per-connection PRAGMAs). */
+  onBusyReconnect?: () => void | Promise<void>
 }
 
 export class SearchIndexService {
@@ -225,6 +227,7 @@ export class SearchIndexService {
   private readonly readExecutor?: SearchIndexReadExecutor
   private readonly documentStore: SearchIndexDocumentStore
   private readonly canRunMaintenance?: () => boolean
+  private readonly onBusyReconnect?: () => void | Promise<void>
   private filePersistenceRepository: SqliteFileIndexPersistenceRepository | null = null
   private readonly zeroResultDiagnosticAt = new Map<string, number>()
   /**
@@ -258,6 +261,7 @@ export class SearchIndexService {
     this.directMode = options?.directMode ?? false
     this.runtimeLogger = options?.logger ?? noopSearchIndexRuntimeLogger
     this.initializationMode = options?.initializationMode ?? 'writer'
+    this.onBusyReconnect = options?.onBusyReconnect
     this.readiness = options?.readiness
     this.readExecutor = options?.readExecutor
     this.documentStore = new SearchIndexDocumentStore(db)
@@ -312,7 +316,7 @@ export class SearchIndexService {
       const client = (this.db as LibSQLDatabase<typeof schema> & { $client?: Client }).$client
       return withSqliteRetry(operation, {
         label,
-        onBusy: client ? () => client.reconnect() : undefined
+        onBusy: this.onBusyReconnect ?? (client ? () => client.reconnect() : undefined)
       })
     }
     return scheduleDbWrite(label, operation)

@@ -672,10 +672,44 @@ describe('native-file-search-provider', () => {
         expect(results.map((result) => result.path)).toEqual(['/home/demo/docs/wx-notes.md'])
         expect(execFileMock).toHaveBeenCalledWith(
           'locate',
-          ['-i', '-l', '150', 'wx'],
+          ['-i', '-l', '150', '--', 'wx'],
           expect.any(Object),
           expect.any(Function)
         )
+      } finally {
+        provider.backend = null
+      }
+    })
+
+    it('inserts -- end-of-options before dash-prefixed queries on all Linux native backends', async () => {
+      const provider = linuxNativeFileProvider as unknown as SearchableSpotlightProvider & {
+        backend: string | null
+      }
+      stubFolders({})
+      stubStat()
+      execFileMock.mockImplementation((_command, _args, _options, callback) => {
+        callback(null, { stdout: '' })
+      })
+
+      const cases: Array<[string, string, string[]]> = [
+        ['locate', 'locate', ['-i', '-l', '150', '--', '-d /etc/passwd']],
+        ['tracker3', 'tracker3', ['search', '--files', '--limit', '150', '--', '--evil']],
+        ['tracker', 'tracker', ['search', '--files', '--limit', '150', '--', '--evil']],
+        ['baloo', 'baloosearch', ['--limit', '150', '--', '-t']]
+      ]
+
+      try {
+        for (const [backend, expectedCmd, expectedArgs] of cases) {
+          execFileMock.mockClear()
+          provider.backend = backend
+          await provider.searchNative(expectedArgs.at(-1)!, new AbortController().signal)
+          expect(execFileMock).toHaveBeenCalledWith(
+            expectedCmd,
+            expectedArgs,
+            expect.any(Object),
+            expect.any(Function)
+          )
+        }
       } finally {
         provider.backend = null
       }

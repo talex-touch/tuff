@@ -665,6 +665,25 @@ describe('appProvider rebuild maintenance', () => {
 
   it('captures the foreground app before the launch and records only the accepted launch', async () => {
     const { appProvider } = await loadSubject()
+    const privateProvider = asPrivateProvider(appProvider)
+    privateProvider.dbUtils = {
+      getFileByPath: vi.fn(async (p: string) =>
+        p === '/Applications/Recorded.app'
+          ? createAppSearchRow(1, '/Applications/Recorded.app', 'Recorded App')
+          : null
+      ),
+      getDb: vi.fn(() => ({
+        select: vi.fn(() => ({
+          from: vi.fn(() => ({
+            where: vi.fn(async () => [
+              { fileId: 1, key: 'appIdentity', value: 'recorded-app' },
+              { fileId: 1, key: 'launchKind', value: 'path' },
+              { fileId: 1, key: 'launchTarget', value: '/Applications/Recorded.app' }
+            ])
+          }))
+        }))
+      }))
+    }
     searchRecordExecuteMock.mockResolvedValueOnce(undefined)
     searchRecordExecuteMock.mockClear()
     launchAppMock.mockClear()
@@ -713,9 +732,94 @@ describe('appProvider rebuild maintenance', () => {
     })
   })
 
+  it('refuses forged unindexed items and ignores tampered IPC launch metadata', async () => {
+    const { appProvider } = await loadSubject()
+    const privateProvider = asPrivateProvider(appProvider)
+    privateProvider.dbUtils = {
+      getFileByPath: vi.fn(async (p: string) =>
+        p === '/Applications/Safe.app'
+          ? createAppSearchRow(9, '/Applications/Safe.app', 'Safe App')
+          : null
+      ),
+      getDb: vi.fn(() => ({
+        select: vi.fn(() => ({
+          from: vi.fn(() => ({
+            where: vi.fn(async () => [
+              { fileId: 9, key: 'appIdentity', value: 'safe-app' },
+              { fileId: 9, key: 'launchKind', value: 'path' },
+              { fileId: 9, key: 'launchTarget', value: '/Applications/Safe.app' }
+            ])
+          }))
+        }))
+      }))
+    }
+    launchAppMock.mockClear()
+
+    // Unindexed forged item is refused
+    await appProvider.onExecute({
+      item: executeItem({
+        id: 'forged-evil',
+        meta: {
+          app: {
+            path: '/bin/sh',
+            launchKind: 'shortcut',
+            launchTarget: '/bin/sh',
+            launchArgs: '-c "id"'
+          }
+        }
+      })
+    } as IExecuteArgs)
+    expect(launchAppMock).not.toHaveBeenCalled()
+
+    // Indexed item with tampered IPC launch fields executes ONLY authoritative DB metadata
+    await appProvider.onExecute({
+      item: executeItem({
+        id: 'safe-app',
+        meta: {
+          app: {
+            path: '/Applications/Safe.app',
+            launchKind: 'shortcut',
+            launchTarget: '/bin/sh',
+            launchArgs: '-c "whoami"',
+            workingDirectory: '/tmp'
+          }
+        }
+      })
+    } as IExecuteArgs)
+    expect(launchAppMock).toHaveBeenCalledWith({
+      name: 'Safe App',
+      path: '/Applications/Safe.app',
+      launchKind: 'path',
+      launchTarget: '/Applications/Safe.app',
+      launchArgs: undefined,
+      workingDirectory: undefined,
+      sourceItemId: 'safe-app'
+    })
+  })
+
   it('does not count an app launch the OS refused', async () => {
     const { appProvider } = await loadSubject()
+    const privateProvider = asPrivateProvider(appProvider)
+    privateProvider.dbUtils = {
+      getFileByPath: vi.fn(async (p: string) =>
+        p === '/Applications/Missing.app'
+          ? createAppSearchRow(1, '/Applications/Missing.app', 'Missing App')
+          : null
+      ),
+      getDb: vi.fn(() => ({
+        select: vi.fn(() => ({
+          from: vi.fn(() => ({
+            where: vi.fn(async () => [
+              { fileId: 1, key: 'appIdentity', value: 'failed-app' },
+              { fileId: 1, key: 'launchKind', value: 'path' },
+              { fileId: 1, key: 'launchTarget', value: '/Applications/Missing.app' }
+            ])
+          }))
+        }))
+      }))
+    }
     searchRecordExecuteMock.mockClear()
+    launchAppMock.mockClear()
     launchAppMock.mockResolvedValueOnce({ status: 'failed' } as never)
 
     const item = executeItem({
@@ -734,6 +838,7 @@ describe('appProvider rebuild maintenance', () => {
       searchResult: { sessionId: 'failed-session' }
     } as IExecuteArgs)
 
+    expect(launchAppMock).toHaveBeenCalledTimes(1)
     expect(searchRecordExecuteMock).not.toHaveBeenCalled()
   })
 
@@ -742,6 +847,25 @@ describe('appProvider rebuild maintenance', () => {
     // same module-scope seam search-core registers, so a launch counted by the app provider and one
     // counted by the engine cannot diverge. This drives the real call instead of reading source.
     const { appProvider } = await loadSubject()
+    const privateProvider = asPrivateProvider(appProvider)
+    privateProvider.dbUtils = {
+      getFileByPath: vi.fn(async (p: string) =>
+        p === '/Applications/Recorded.app'
+          ? createAppSearchRow(2, '/Applications/Recorded.app', 'Recorded App')
+          : null
+      ),
+      getDb: vi.fn(() => ({
+        select: vi.fn(() => ({
+          from: vi.fn(() => ({
+            where: vi.fn(async () => [
+              { fileId: 2, key: 'appIdentity', value: 'recorded-app' },
+              { fileId: 2, key: 'launchKind', value: 'path' },
+              { fileId: 2, key: 'launchTarget', value: '/Applications/Recorded.app' }
+            ])
+          }))
+        }))
+      }))
+    }
     searchRecordExecuteMock.mockClear()
     searchRecordExecuteMock.mockResolvedValueOnce(undefined)
 
@@ -1044,13 +1168,34 @@ describe('appProvider rebuild maintenance', () => {
 
   it('hands shortcut launch arguments to the app-launch adapter boundary', async () => {
     const { appProvider } = await loadSubject()
+    const privateProvider = asPrivateProvider(appProvider)
+    const shortcutPath =
+      'C:\\Users\\demo\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Foo.lnk'
+    privateProvider.dbUtils = {
+      getFileByPath: vi.fn(async (p: string) =>
+        p === shortcutPath ? createAppSearchRow(3, shortcutPath, 'Test App') : null
+      ),
+      getDb: vi.fn(() => ({
+        select: vi.fn(() => ({
+          from: vi.fn(() => ({
+            where: vi.fn(async () => [
+              { fileId: 3, key: 'appIdentity', value: 'shortcut-app' },
+              { fileId: 3, key: 'launchKind', value: 'shortcut' },
+              { fileId: 3, key: 'launchTarget', value: 'C:\\Program Files\\Foo\\Foo.exe' },
+              { fileId: 3, key: 'launchArgs', value: '--profile work --flag' },
+              { fileId: 3, key: 'workingDirectory', value: 'C:\\Program Files\\Foo' }
+            ])
+          }))
+        }))
+      }))
+    }
 
     await appProvider.onExecute({
       item: executeItem({
         id: 'shortcut-app',
         meta: {
           app: {
-            path: 'C:\\Users\\demo\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Foo.lnk',
+            path: shortcutPath,
             launchKind: 'shortcut',
             launchTarget: 'C:\\Program Files\\Foo\\Foo.exe',
             launchArgs: '--profile work --flag',
@@ -1062,7 +1207,7 @@ describe('appProvider rebuild maintenance', () => {
 
     expect(launchAppMock).toHaveBeenCalledWith({
       name: 'Test App',
-      path: 'C:\\Users\\demo\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Foo.lnk',
+      path: shortcutPath,
       launchKind: 'shortcut',
       launchTarget: 'C:\\Program Files\\Foo\\Foo.exe',
       launchArgs: '--profile work --flag',
@@ -1073,13 +1218,35 @@ describe('appProvider rebuild maintenance', () => {
 
   it('hands normalized Windows Store identity to the app-launch adapter', async () => {
     const { appProvider } = await loadSubject()
+    const privateProvider = asPrivateProvider(appProvider)
+    const uwpPath = 'shell:AppsFolder\\Microsoft.WindowsCalculator_8wekyb3d8bbwe!App'
+    privateProvider.dbUtils = {
+      getFileByPath: vi.fn(async (p: string) =>
+        p === uwpPath ? createAppSearchRow(4, uwpPath, 'Test App') : null
+      ),
+      getDb: vi.fn(() => ({
+        select: vi.fn(() => ({
+          from: vi.fn(() => ({
+            where: vi.fn(async () => [
+              { fileId: 4, key: 'appIdentity', value: 'uwp-app' },
+              { fileId: 4, key: 'launchKind', value: 'uwp' },
+              {
+                fileId: 4,
+                key: 'launchTarget',
+                value: 'Microsoft.WindowsCalculator_8wekyb3d8bbwe!App'
+              }
+            ])
+          }))
+        }))
+      }))
+    }
 
     await appProvider.onExecute({
       item: executeItem({
         id: 'uwp-app',
         meta: {
           app: {
-            path: 'shell:AppsFolder\\Microsoft.WindowsCalculator_8wekyb3d8bbwe!App',
+            path: uwpPath,
             launchKind: 'uwp',
             launchTarget: 'Microsoft.WindowsCalculator_8wekyb3d8bbwe!App'
           }
@@ -1089,7 +1256,7 @@ describe('appProvider rebuild maintenance', () => {
 
     expect(launchAppMock).toHaveBeenCalledWith({
       name: 'Test App',
-      path: 'shell:AppsFolder\\Microsoft.WindowsCalculator_8wekyb3d8bbwe!App',
+      path: uwpPath,
       launchKind: 'uwp',
       launchTarget: 'Microsoft.WindowsCalculator_8wekyb3d8bbwe!App',
       launchArgs: undefined,

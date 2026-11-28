@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { sanitizeEverythingCliQuery } from './everything-backend-service'
+import { sanitizeEverythingCliQuery, validateEverythingCliPath } from './everything-backend-service'
 
 /**
  * Option injection into the Everything CLI (#903).
@@ -72,5 +72,35 @@ describe('searchCli argv', () => {
     expect(calls).toHaveLength(1)
     expect(calls[0].args[0]).toBe('export-csv out.csv')
     expect(calls[0].args[0].startsWith('-')).toBe(false)
+  })
+
+  it('rejects non-es.exe binaries, UNC paths, and symlinks BEFORE executing probeCli', async () => {
+    const { EverythingBackendService } = await import('./everything-backend-service')
+    const calls: string[] = []
+    const service = new EverythingBackendService({
+      execFileAsync: (async (file: string) => {
+        calls.push(file)
+        return { stdout: '1.1.0.27', stderr: '' }
+      }) as never,
+      lstat: (async (target: string) => ({
+        isSymbolicLink: () => String(target).includes('symlink'),
+        isFile: () => true
+      })) as never
+    })
+
+    for (const badPath of [
+      'C:\\Windows\\System32\\calc.exe',
+      '\\\\attacker\\share\\es.exe',
+      '//attacker/share/es.exe',
+      'C:\\Tools\\..\\Evil\\es.exe',
+      'C:\\Tools\\symlink\\es.exe'
+    ]) {
+      await expect(service.probeCli(badPath)).rejects.toThrow()
+    }
+
+    expect(calls).toEqual([])
+    expect(validateEverythingCliPath('C:\\Program Files\\Everything\\es.exe')).toBe(
+      'C:\\Program Files\\Everything\\es.exe'
+    )
   })
 })

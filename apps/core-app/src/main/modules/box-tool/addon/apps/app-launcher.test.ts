@@ -185,7 +185,7 @@ describe('app launcher', () => {
     expect(showInternalSystemNotificationMock).toHaveBeenCalled()
   })
 
-  it('launches Windows command scripts through cmd.exe', async () => {
+  it('launches Windows command scripts with args through cmd.exe using verbatim quoting', async () => {
     vi.useFakeTimers()
     spawnSafeMock.mockReturnValue(createDetachedChildProcessMock())
 
@@ -204,10 +204,56 @@ describe('app launcher', () => {
 
     expect(spawnSafeMock).toHaveBeenCalledWith(
       'cmd.exe',
-      ['/d', '/s', '/c', 'C:\\Tools\\run.cmd', '--flag', 'two words'],
-      expect.objectContaining({ cwd: 'C:\\Tools' })
+      ['/d', '/s', '/c', '""C:\\Tools\\run.cmd" --flag "two words""'],
+      expect.objectContaining({ cwd: 'C:\\Tools', windowsVerbatimArguments: true })
     )
     expect(shellOpenPathMock).not.toHaveBeenCalled()
+  })
+
+  it('opens zero-argument Windows batch scripts through shell.openPath without spawning cmd.exe', async () => {
+    shellOpenPathMock.mockResolvedValue('')
+
+    await expect(
+      withPlatform('win32', () =>
+        launchApp({
+          name: 'Zero Arg Script',
+          path: 'C:\\Tools\\run.bat',
+          launchKind: 'shortcut',
+          launchTarget: 'C:\\Tools\\run.bat'
+        })
+      )
+    ).resolves.toEqual({ status: 'success' })
+
+    expect(shellOpenPathMock).toHaveBeenCalledWith('C:\\Tools\\run.bat')
+    expect(spawnSafeMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects Windows batch launches containing cmd.exe shell metacharacters', async () => {
+    await expect(
+      withPlatform('win32', () =>
+        launchApp({
+          name: 'Injected Script',
+          path: 'C:\\Tools\\a&calc.cmd',
+          launchKind: 'shortcut',
+          launchTarget: 'C:\\Tools\\a&calc.cmd',
+          launchArgs: '--flag safe'
+        })
+      )
+    ).resolves.toEqual({ status: 'failed', error: 'APP_LAUNCH_COMMAND_INVALID' })
+
+    await expect(
+      withPlatform('win32', () =>
+        launchApp({
+          name: 'Injected Args',
+          path: 'C:\\Tools\\run.cmd',
+          launchKind: 'shortcut',
+          launchTarget: 'C:\\Tools\\run.cmd',
+          launchArgs: '--ok & calc.exe'
+        })
+      )
+    ).resolves.toEqual({ status: 'failed', error: 'APP_LAUNCH_COMMAND_INVALID' })
+
+    expect(spawnSafeMock).not.toHaveBeenCalled()
   })
 
   it('launches Windows PowerShell scripts through powershell.exe', async () => {

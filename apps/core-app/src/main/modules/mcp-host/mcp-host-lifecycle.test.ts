@@ -240,4 +240,38 @@ describe('mcp host listener lifecycle', () => {
     expect(startMcpHostServer).toHaveBeenCalledTimes(1)
     expect(module.handle).toBe(nextHandle)
   })
+
+  it('clears remembered tool approvals on disable, token rotation, port change, and tool disable', async () => {
+    startMcpHostServer.mockReset()
+    handlers.clear()
+
+    const { module, handle } = setupModule({ port: 43110 })
+    handle.releaseClose()
+    const restartedHandle = makeControllableHandle('http://127.0.0.1:43110/mcp', 43110)
+    restartedHandle.releaseClose()
+    startMcpHostServer.mockResolvedValue(restartedHandle)
+    module.toolset = {
+      specs: [
+        { name: 'tuff_read_file', description: 'Read file', inputSchema: {} },
+        { name: 'tuff_open_url', description: 'Open URL', inputSchema: {} }
+      ],
+      handlers: new Map()
+    }
+
+    module.remembered.add('tuff_read_file:/tmp/a')
+    await invokeHandler(McpHostEvents.rotateToken.toEventName(), {})
+    expect(module.remembered.size).toBe(0)
+
+    module.remembered.add('tuff_read_file:/tmp/a')
+    module.remembered.add('tuff_open_url')
+    await invokeHandler(McpHostEvents.setToolEnabled.toEventName(), {
+      name: 'tuff_read_file',
+      enabled: false
+    })
+    expect(module.remembered.has('tuff_read_file:/tmp/a')).toBe(false)
+    expect(module.remembered.has('tuff_open_url')).toBe(true)
+
+    await invokeHandler(McpHostEvents.setEnabled.toEventName(), { enabled: false })
+    expect(module.remembered.size).toBe(0)
+  })
 })

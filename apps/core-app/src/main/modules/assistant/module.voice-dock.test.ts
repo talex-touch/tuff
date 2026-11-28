@@ -866,4 +866,40 @@ describe('AssistantModule voice dock', () => {
 
     await module.onDestroy({} as never)
   })
+
+  it('rejects plugin callers on host-only AssistantEvents.voice.* handlers', async () => {
+    const mainWindow = {
+      isDestroyed: vi.fn(() => false),
+      isMinimized: vi.fn(() => false),
+      restore: vi.fn(),
+      show: vi.fn(),
+      focus: vi.fn(),
+      webContents: { id: 503 }
+    }
+    const { module } = await createInitializedModuleWithHandler(
+      AssistantEvents.voice.openIntelligenceSettings.toEventName(),
+      mainWindow
+    )
+
+    const pluginContext = {
+      plugin: { name: 'untrusted-plugin', uniqueKey: 'k' }
+    } as unknown as HandlerContext
+
+    for (const event of [
+      AssistantEvents.voice.getRuntimeConfig,
+      AssistantEvents.voice.closePanel,
+      AssistantEvents.voice.openIntelligenceSettings,
+      AssistantEvents.voice.getGlobeKeyStatus,
+      AssistantEvents.voice.disableGlobeKeyAction,
+      AssistantEvents.voice.openKeyboardSettings
+    ]) {
+      const handler = mocks.handlers.get(event.toEventName())
+      expect(handler, event.toEventName()).toBeDefined()
+      await expect(
+        Promise.resolve().then(() => handler!(undefined, pluginContext))
+      ).rejects.toThrow('ASSISTANT_HOST_ONLY_CAPABILITY')
+    }
+
+    await module.onDestroy({} as never)
+  })
 })

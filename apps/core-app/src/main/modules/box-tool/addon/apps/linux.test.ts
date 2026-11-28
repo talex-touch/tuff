@@ -1,5 +1,15 @@
+import fs from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { resolveApplicationRoots, resolveIconRoots } from './linux'
+import {
+  findDesktopFiles,
+  findIconPath,
+  parseDesktopFile,
+  resolveApplicationRoots,
+  resolveIconRoots,
+  tokenizeDesktopExec
+} from './linux'
 
 const HOME = '/home/tester'
 
@@ -113,5 +123,75 @@ describe('linux icon theme roots', () => {
     const roots = resolveIconRoots({ XDG_DATA_DIRS: '/usr/share:/usr/share' }, HOME)
 
     expect(new Set(roots).size).toBe(roots.length)
+  })
+})
+
+describe('linux desktop hardening', () => {
+  it('avoids infinite recursion on cyclic directory symlinks', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'linux-desktop-cycle-'))
+    try {
+      const sub = path.join(root, 'sub')
+      await fs.mkdir(sub, { recursive: true })
+      await fs.writeFile(path.join(sub, 'demo.desktop'), '[Desktop Entry]\n', 'utf8')
+      await fs.symlink(root, path.join(sub, 'loop-back'))
+
+      const found = await findDesktopFiles(root)
+      expect(found).toEqual([path.join(sub, 'demo.desktop')])
+    } finally {
+      await fs.rm(root, { recursive: true, force: true })
+    }
+  })
+
+  it('rejects icon name path traversal outside icon roots', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'linux-icon-traversal-'))
+    try {
+      const iconsDir = path.join(root, 'share', 'icons')
+      await fs.mkdir(iconsDir, { recursive: true })
+      const secret = path.join(root, 'secret.png')
+      await fs.writeFile(secret, 'not-an-icon')
+
+      const resolved = await findIconPath(
+        '../../../../../secret',
+        { XDG_DATA_DIRS: path.join(root, 'share') },
+        root
+      )
+      expect(resolved).toBe('')
+    } finally {
+      await fs.rm(root, { recursive: true, force: true })
+    }
+  })
+
+  it('tokenizes Exec with quotes/args and assigns distinct stableIds for flatpak apps', async () => {
+    expect(
+      tokenizeDesktopExec('"/usr/bin/flatpak" run --branch=stable org.gnome.Calculator %U')
+    ).toEqual(['/usr/bin/flatpak', 'run', '--branch=stable', 'org.gnome.Calculator'])
+
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'linux-flatpak-desktop-'))
+    try {
+      const calcPath = path.join(root, 'org.gnome.Calculator.desktop')
+      const filesPath = path.join(root, 'org.gnome.Nautilus.desktop')
+      await fs.writeFile(
+        calcPath,
+        '[Desktop Entry]\nType=Application\nName=Calculator\nExec=/usr/bin/flatpak run org.gnome.Calculator %u\n',
+        'utf8'
+      )
+      await fs.writeFile(
+        filesPath,
+        '[Desktop Entry]\nType=Application\nName=Files\nExec=/usr/bin/flatpak run org.gnome.Nautilus %U\n',
+        'utf8'
+      )
+
+      const calc = await parseDesktopFile(calcPath, root)
+      const files = await parseDesktopFile(filesPath, root)
+
+      expect(calc?.stableId).toBe('org.gnome.Calculator.desktop')
+      expect(files?.stableId).toBe('org.gnome.Nautilus.desktop')
+      expect(calc?.stableId).not.toBe(files?.stableId)
+      expect(calc?.launchKind).toBe('shortcut')
+      expect(calc?.launchTarget).toBe('/usr/bin/flatpak')
+      expect(calc?.launchArgs).toBe('run org.gnome.Calculator')
+    } finally {
+      await fs.rm(root, { recursive: true, force: true })
+    }
   })
 })

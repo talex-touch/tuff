@@ -17,6 +17,8 @@ const EARLY_EXIT_OBSERVATION_MS = 2500
 const WINDOWS_DIRECT_EXECUTABLE_EXTENSIONS = new Set(['.exe', '.com'])
 const WINDOWS_BATCH_EXTENSIONS = new Set(['.cmd', '.bat'])
 const WINDOWS_POWERSHELL_EXTENSIONS = new Set(['.ps1'])
+const WINDOWS_CMD_METACHAR_PATTERN = /[&|^%<>!"\r\n\0]/
+const CONTROL_CHAR_PATTERN = /[\r\n\0]/
 // What spawnSafe throws for a command it refuses to run.
 const SPAWN_GUARD_FAILURES = new Set([
   'COMMAND_EMPTY',
@@ -167,7 +169,7 @@ async function launchShellPath(target: string): Promise<AppLaunchOutcome> {
 async function launchSpawnCommand(
   command: string,
   args: string[],
-  options?: { cwd?: string; observeEarlyExit?: boolean }
+  options?: { cwd?: string; observeEarlyExit?: boolean; windowsVerbatimArguments?: boolean }
 ): Promise<AppLaunchOutcome> {
   let child: ChildProcess
   try {
@@ -175,7 +177,8 @@ async function launchSpawnCommand(
       cwd: options?.cwd,
       detached: true,
       stdio: 'ignore',
-      windowsHide: true
+      windowsHide: true,
+      ...(options?.windowsVerbatimArguments ? { windowsVerbatimArguments: true } : {})
     })
   } catch (error) {
     return { status: 'failed', error: toSpawnFailure(error) }
@@ -186,6 +189,10 @@ async function launchSpawnCommand(
       : observeEarlySpawnFailure(child)
   child.unref()
   return await outcome
+}
+
+function quoteWindowsCmdToken(token: string): string {
+  return token.length === 0 || /\s/.test(token) ? `"${token}"` : token
 }
 
 async function launchWindowsShortcut(plan: AppLaunchPlan): Promise<AppLaunchOutcome> {
@@ -214,12 +221,33 @@ async function launchWindowsShortcut(plan: AppLaunchPlan): Promise<AppLaunchOutc
 
   const cwd = resolveWindowsSpawnWorkingDirectory(plan)
   if (isWindowsBatchFile(plan.launchTarget)) {
+    if (CONTROL_CHAR_PATTERN.test(plan.launchTarget)) {
+      return { status: 'failed', error: AppLaunchFailureCode.CommandInvalid }
+    }
+    if (plan.launchArgs.length === 0) {
+      appLaunchAdapterLog.info(`Opening Windows command script via shell: ${plan.launchTarget}`)
+      return await launchShellPath(plan.launchTarget)
+    }
+    if (
+      WINDOWS_CMD_METACHAR_PATTERN.test(plan.launchTarget) ||
+      plan.launchArgs.some((arg) => WINDOWS_CMD_METACHAR_PATTERN.test(arg))
+    ) {
+      appLaunchAdapterLog.warn(
+        'Refused Windows command script launch containing shell metacharacters',
+        {
+          target: plan.launchTarget
+        }
+      )
+      return { status: 'failed', error: AppLaunchFailureCode.CommandInvalid }
+    }
+    const quotedTarget = `"${plan.launchTarget}"`
+    const quotedArgs = plan.launchArgs.map(quoteWindowsCmdToken)
+    const commandLine = `"${[quotedTarget, ...quotedArgs].join(' ')}"`
     appLaunchAdapterLog.info(`Launching Windows command script: ${plan.launchTarget}`)
-    return await launchSpawnCommand(
-      'cmd.exe',
-      ['/d', '/s', '/c', plan.launchTarget, ...plan.launchArgs],
-      { cwd }
-    )
+    return await launchSpawnCommand('cmd.exe', ['/d', '/s', '/c', commandLine], {
+      cwd,
+      windowsVerbatimArguments: true
+    })
   }
 
   if (isWindowsPowerShellFile(plan.launchTarget)) {

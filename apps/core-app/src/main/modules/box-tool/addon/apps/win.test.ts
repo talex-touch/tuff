@@ -936,4 +936,69 @@ describe('win app scanner', () => {
       'reg-query:failed'
     ])
   })
+
+  it('rejects UWP manifest logo path traversal outside installLocation and oversized logos', async () => {
+    const installLocation = 'C:\\Program Files\\WindowsApps\\Acme.App'
+    const manifestPath = `${installLocation}\\AppxManifest.xml`
+    const hugeLogoPath = `${installLocation}\\Assets\\HugeLogo.png`
+
+    readdirMock.mockResolvedValue([])
+    accessMock.mockResolvedValue(undefined)
+    statMock.mockImplementation(async (target: string) => {
+      if (target === hugeLogoPath) {
+        return {
+          isDirectory: () => false,
+          isFile: () => true,
+          size: 6 * 1024 * 1024,
+          mtime: new Date(0)
+        }
+      }
+      return createFileStat()
+    })
+    readFileMock.mockImplementation(async (target: string) => {
+      if (target === manifestPath) {
+        return `<?xml version="1.0" encoding="utf-8"?>
+<Package>
+  <Applications>
+    <Application Id="TraversalApp">
+      <uap:VisualElements DisplayName="Traversal" Square44x44Logo="..\\..\\secret.png" />
+    </Application>
+    <Application Id="HugeLogoApp">
+      <uap:VisualElements DisplayName="HugeLogo" Square44x44Logo="Assets\\HugeLogo.png" />
+    </Application>
+  </Applications>
+</Package>`
+      }
+      if (target === hugeLogoPath) {
+        return Buffer.alloc(6 * 1024 * 1024, 1)
+      }
+      throw new Error(`Unexpected readFile outside package: ${target}`)
+    })
+    execFileSafeMock.mockResolvedValue({
+      stdout: JSON.stringify([
+        {
+          Name: 'Traversal',
+          AppId: 'Acme.App_12345!TraversalApp',
+          PackageFamilyName: 'Acme.App_12345',
+          InstallLocation: installLocation
+        },
+        {
+          Name: 'HugeLogo',
+          AppId: 'Acme.App_12345!HugeLogoApp',
+          PackageFamilyName: 'Acme.App_12345',
+          InstallLocation: installLocation
+        }
+      ]),
+      stderr: ''
+    })
+
+    const { getApps } = await import('./win')
+    const apps = await getApps()
+
+    const traversal = apps.find((entry) => entry.launchTarget === 'Acme.App_12345!TraversalApp')
+    const hugeLogo = apps.find((entry) => entry.launchTarget === 'Acme.App_12345!HugeLogoApp')
+    expect(traversal?.icon).toBe('')
+    expect(hugeLogo?.icon).toBe('')
+    expect(readFileMock).not.toHaveBeenCalledWith(expect.stringContaining('secret.png'))
+  })
 })

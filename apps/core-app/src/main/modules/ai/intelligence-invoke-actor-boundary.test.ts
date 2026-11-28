@@ -8,6 +8,7 @@ import './intelligence-test-harness'
 // ~20s to transform cold, which blew the 5s per-test timeout and cascaded into
 // half-registered handler maps. Collection is not timeout-bounded.
 import { IntelligenceModule } from './intelligence-module'
+import { readPluginInvocation } from './intelligence-invoke-purpose'
 import { intelligenceTtsService } from './intelligence-tts-service'
 
 vi.mock('../sentry/sentry-service', () => {
@@ -27,12 +28,20 @@ vi.mock('../sentry/sentry-service', () => {
 
 const intelligenceSdkMocks = vi.hoisted(() => ({
   invoke: vi.fn(
-    async (): Promise<{ provider: string; model: string; result?: unknown }> => ({
+    async (
+      _capabilityId: string,
+      _payload: unknown,
+      _options?: { metadata?: Record<string, unknown>; [key: string]: unknown }
+    ): Promise<{ provider: string; model: string; result?: unknown }> => ({
       provider: 'test-provider',
       model: 'test-model'
     })
   ),
-  stream: vi.fn(async function* () {
+  stream: vi.fn(async function* (
+    _capabilityId: string,
+    _payload: unknown,
+    _options?: { metadata?: Record<string, unknown>; [key: string]: unknown }
+  ) {
     yield { type: 'text-delta', text: 'streamed response' }
   }),
   updateConfig: vi.fn()
@@ -153,19 +162,25 @@ describe('intelligenceModule invoke actor boundary', () => {
       1,
       'text.chat',
       { messages: [] },
-      {
+      expect.objectContaining({
         ...sharedOptions,
         metadata: { ...sharedOptions.metadata, caller: 'plugin:third-party-plugin' }
-      }
+      })
     )
     expect(intelligenceSdkMocks.invoke).toHaveBeenNthCalledWith(
       2,
       'text.chat',
       { messages: [] },
-      {
+      expect.objectContaining({
         ...sharedOptions,
         metadata: { ...sharedOptions.metadata, caller: 'plugin:third-party-plugin' }
-      }
+      })
+    )
+    expect(readPluginInvocation(intelligenceSdkMocks.invoke.mock.calls[0]?.[2])).toBe(
+      'third-party-plugin'
+    )
+    expect(readPluginInvocation(intelligenceSdkMocks.invoke.mock.calls[1]?.[2])).toBe(
+      'third-party-plugin'
     )
   })
 
@@ -200,11 +215,14 @@ describe('intelligenceModule invoke actor boundary', () => {
     expect(intelligenceSdkMocks.stream).toHaveBeenCalledWith(
       'text.chat',
       { messages: [] },
-      {
+      expect.objectContaining({
         preferredProviderId: 'approved-provider',
         timeout: 2_000,
         metadata: { caller: 'plugin:third-party-plugin', traceId: 'plugin-stream-trace' }
-      }
+      })
+    )
+    expect(readPluginInvocation(intelligenceSdkMocks.stream.mock.calls[0]?.[2])).toBe(
+      'third-party-plugin'
     )
   })
 
@@ -470,8 +488,23 @@ describe('intelligenceModule invoke actor boundary', () => {
     await expect(
       invokeHandler({ capabilityId: 'agent.run', payload: {}, options: {} }, pluginContext())
     ).rejects.toMatchObject(unavailableAgentsPermission)
+    for (const alias of [
+      'agent',
+      'agent-run',
+      'agent_run',
+      'AGENT.RUN',
+      'workflow',
+      'workflow.run'
+    ]) {
+      await expect(
+        invokeHandler({ capabilityId: alias, payload: {}, options: {} }, pluginContext())
+      ).rejects.toMatchObject(unavailableAgentsPermission)
+    }
     await expect(
       streamHandler({ capabilityId: 'workflow.execute', payload: {}, options: {} }, streamContext)
+    ).rejects.toMatchObject(unavailableAgentsPermission)
+    await expect(
+      streamHandler({ capabilityId: 'workflow.run', payload: {}, options: {} }, streamContext)
     ).rejects.toMatchObject(unavailableAgentsPermission)
 
     expect(intelligenceSdkMocks.invoke).not.toHaveBeenCalled()
@@ -505,5 +538,48 @@ describe('intelligenceModule invoke actor boundary', () => {
     )
 
     expect(intelligenceSdkMocks.invoke).toHaveBeenCalledWith('text.chat', { messages: [] }, options)
+  })
+
+  it('strips untrusted metadata.profileId from both host and plugin IPC calls and strips plugin control fields', async () => {
+    const { intelligenceApiEvents, invokeHandlers } = registerInvokeHandlers()
+    const handler = invokeHandlers.get(intelligenceApiEvents.invoke.toEventName())
+    if (!handler) throw new Error('Invoke handler was not registered')
+
+    await handler(
+      {
+        capabilityId: 'text.chat',
+        payload: { messages: [] },
+        options: {
+          preferredProviderId: 'codex-cli',
+          metadata: { profileId: 'profile:cli:codex', traceId: 'host-spoof' }
+        }
+      },
+      {} as HandlerContext
+    )
+    expect(intelligenceSdkMocks.invoke.mock.calls[0]?.[2]?.metadata).toEqual({
+      traceId: 'host-spoof'
+    })
+
+    await handler(
+      {
+        capabilityId: 'text.chat',
+        payload: { messages: [] },
+        options: {
+          preferredProviderId: 'claude-cli',
+          metadata: {
+            profileId: 'profile:cli:claude',
+            approved: true,
+            workingDirectory: '/etc',
+            contextEntrypoint: { id: 'corebox.ai-ask', owner: 'corebox', mode: 'new' },
+            traceId: 'plugin-spoof'
+          }
+        }
+      },
+      pluginContext()
+    )
+    expect(intelligenceSdkMocks.invoke.mock.calls[1]?.[2]?.metadata).toEqual({
+      caller: 'plugin:third-party-plugin',
+      traceId: 'plugin-spoof'
+    })
   })
 })

@@ -500,3 +500,70 @@ describe('DatabaseModule scan_progress source-scope startup migration', () => {
     )
   })
 })
+
+describe('DatabaseModule aux WAL checkpointing and shutdown teardown', () => {
+  beforeEach(async () => {
+    await dbWriteScheduler.drain()
+    vi.clearAllMocks()
+  })
+
+  it('checkpoints auxClient alongside primary client during PASSIVE WAL maintenance', async () => {
+    const primaryExecute = vi.fn(async () => ({ rows: [{ busy: 0, log: 1, checkpointed: 1 }] }))
+    const auxExecute = vi.fn(async () => ({ rows: [{ busy: 0, log: 2, checkpointed: 2 }] }))
+    const module = createModule({ execute: primaryExecute })
+    ;(module as unknown as { auxClient: { execute: typeof auxExecute } }).auxClient = {
+      execute: auxExecute
+    }
+
+    await runWalCheckpoint(module, 'PASSIVE')
+
+    expect(auxExecute).toHaveBeenCalledWith('PRAGMA wal_checkpoint(PASSIVE)')
+    expect(primaryExecute).toHaveBeenCalledWith('PRAGMA wal_checkpoint(PASSIVE)')
+  })
+
+  it('checkpoints and closes both primary and aux clients and clears handles on onDestroy', async () => {
+    const primaryClient = {
+      execute: vi.fn(async () => ({ rows: [] })),
+      close: vi.fn()
+    }
+    const auxClient = {
+      execute: vi.fn(async () => ({ rows: [] })),
+      close: vi.fn()
+    }
+    const searchClient = {
+      execute: vi.fn(async () => ({ rows: [] })),
+      close: vi.fn()
+    }
+    const module = new DatabaseModule()
+    const internals = module as unknown as {
+      client: typeof primaryClient | null
+      auxClient: typeof auxClient | null
+      searchClient: typeof searchClient | null
+      db: unknown
+      auxDb: unknown
+      auxInitialized: boolean
+      searchDb: unknown
+      searchInitialized: boolean
+    }
+    internals.client = primaryClient
+    internals.auxClient = auxClient
+    internals.searchClient = searchClient
+    internals.db = { id: 'primary' }
+    internals.auxDb = { id: 'aux' }
+    internals.auxInitialized = true
+    internals.searchDb = { id: 'search' }
+    internals.searchInitialized = true
+
+    await module.onDestroy()
+
+    expect(primaryClient.execute).toHaveBeenCalledWith('PRAGMA wal_checkpoint(TRUNCATE)')
+    expect(auxClient.execute).toHaveBeenCalledWith('PRAGMA wal_checkpoint(TRUNCATE)')
+    expect(primaryClient.close).toHaveBeenCalledTimes(1)
+    expect(auxClient.close).toHaveBeenCalledTimes(1)
+    expect(searchClient.close).toHaveBeenCalledTimes(1)
+    expect(module.getClient()).toBeNull()
+    expect(module.getAuxClient()).toBeNull()
+    expect(module.isAuxReady()).toBe(false)
+    expect(module.isSearchDbReady()).toBe(false)
+  })
+})

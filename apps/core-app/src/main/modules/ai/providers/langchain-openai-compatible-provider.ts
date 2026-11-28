@@ -27,8 +27,6 @@ import type {
   IntelligenceVisionOcrResult
 } from '@talex-touch/tuff-intelligence'
 import { Buffer } from 'node:buffer'
-import { readFile } from 'node:fs/promises'
-import path from 'node:path'
 import { HumanMessage, SystemMessage } from '@langchain/core/messages'
 import {
   toLangChainOpenAiReasoningFields,
@@ -38,6 +36,7 @@ import { getNetworkService, type NetworkFetchInit } from '../../network'
 import { readReasoningPlan } from '../reasoning-effort-runtime'
 import { IntelligenceProvider } from '../runtime/base-provider'
 import { decodeImageAttachment } from './attachment-spill'
+import { readSafeVisionImageFile } from './vision-image-file'
 import {
   type LangChainFunctionTool,
   ToolCallAssembler,
@@ -367,24 +366,10 @@ function resolveModelName(rawMessage: Record<string, unknown>, fallback: string)
   return fallback
 }
 
-function detectMime(filePath: string): string {
-  const ext = path.extname(filePath).toLowerCase()
-  switch (ext) {
-    case '.jpg':
-    case '.jpeg':
-      return 'image/jpeg'
-    case '.webp':
-      return 'image/webp'
-    case '.gif':
-      return 'image/gif'
-    case '.bmp':
-      return 'image/bmp'
-    default:
-      return 'image/png'
-  }
-}
-
-async function toVisionDataUrl(source: IntelligenceVisionImageSource): Promise<string> {
+async function toVisionDataUrl(
+  source: IntelligenceVisionImageSource,
+  options?: IntelligenceInvokeOptions
+): Promise<string> {
   if (source.type === 'data-url' && source.dataUrl) {
     return source.dataUrl
   }
@@ -397,9 +382,8 @@ async function toVisionDataUrl(source: IntelligenceVisionImageSource): Promise<s
   }
 
   if (source.type === 'file' && source.filePath) {
-    const buffer = await readFile(source.filePath)
-    const mime = detectMime(source.filePath)
-    return `data:${mime};base64,${buffer.toString('base64')}`
+    const image = await readSafeVisionImageFile(source.filePath, options)
+    return `data:${image.mimeType};base64,${image.buffer.toString('base64')}`
   }
 
   throw new Error('Invalid vision image source')
@@ -436,20 +420,15 @@ function extensionFromImageMime(mimeType: string): string {
 
 async function toImageFilePayload(
   source: IntelligenceVisionImageSource,
-  fallbackName: string
+  fallbackName: string,
+  options?: IntelligenceInvokeOptions
 ): Promise<ImageFilePayload> {
   if (source.type === 'file' && source.filePath) {
-    const buffer = await readFile(source.filePath)
-    if (buffer.byteLength === 0) {
-      throw new Error('Image payload is required')
-    }
-    const mimeType = detectMime(source.filePath)
-    const extension =
-      path.extname(source.filePath).replace(/^\./, '') || extensionFromImageMime(mimeType)
+    const image = await readSafeVisionImageFile(source.filePath, options)
     return {
-      blob: new Blob([new Uint8Array(buffer)], { type: mimeType }),
-      filename: `${fallbackName}.${extension}`,
-      mimeType
+      blob: new Blob([new Uint8Array(image.buffer)], { type: image.mimeType }),
+      filename: `${fallbackName}.${image.extension}`,
+      mimeType: image.mimeType
     }
   }
 
@@ -1001,7 +980,7 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
       endpoint: '/langchain/vision'
     })
 
-    const imageDataUrl = await toVisionDataUrl(source)
+    const imageDataUrl = await toVisionDataUrl(source, options)
     const model = await this.createChatModel({ model: modelName, options, maxTokens })
     const response = await model.invoke(
       [
@@ -1201,13 +1180,13 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
     const startTime = Date.now()
     const traceId = this.generateTraceId()
     const modelName = this.resolveImageModel(options)
-    const image = await toImageFilePayload(payload.source, 'image')
+    const image = await toImageFilePayload(payload.source, 'image', options)
     const form = new FormData()
     form.append('image', image.blob, image.filename)
     form.append('model', modelName)
     form.append('prompt', prompt)
     if (payload.mask) {
-      const mask = await toImageFilePayload(payload.mask, 'mask')
+      const mask = await toImageFilePayload(payload.mask, 'mask', options)
       form.append('mask', mask.blob, mask.filename)
     }
 
