@@ -1,6 +1,6 @@
 ---
 title: Motion Suite
-description: "Buttons, card spreads, carousels, loaders and dither charts."
+description: "All 11 motion categories covering buttons, controls, transitions, morphing, text strokes, cards, 3D carousels, physics, loaders and motion charts."
 category: MotionSuite
 status: beta
 since: 0.6.3
@@ -11,7 +11,7 @@ verified: false
 
 ## Usage
 
-Each cell below renders its real component with caller-provided content or data. Hover, focus, click, drag or use the visible controls to try it. The reset button remounts only that specimen, including its local model and playback state; the component name opens the full variant gallery and API.
+All 30 motion components are organized below into 11 dedicated category bands. Use the sticky category bar to jump directly to any group, and interact via hover, focus, click, drag or variant switches. The reset button remounts only that specimen, restoring local models and playback; clicking any component name opens its full variant gallery and API page.
 
 ::DocsComponentsGallery{suite="motion"}
 ::
@@ -21,7 +21,7 @@ Each cell below renders its real component with caller-provided content or data.
 - Drive values, items, status and navigation from your application. A visual press, loading cycle or submit request does not establish that a business operation succeeded.
 - Keep repeated or decorative motion out of live regions. Provide one readable text value and native keyboard controls.
 - Respect reduced motion and visibility. The shared activity gate suspends continuous work when the specimen is hidden, deactivated or unmounted.
-- Use the existing `TxTextMorph` engine for changing text values and the shared spring for motion; these families do not add another text-diff or physics engine.
+- Use `TxTextMorph` for changing text values, `TxIconMorph` for vector stroke icons, and the shared spring engine for motion rather than stacking duplicate animation engines.
 
 ## API Reference
 
@@ -33,15 +33,30 @@ import {
   TxCarousel3D,
   TxDistortionWave,
   TxFlipBook,
+  TxFlipOverlay,
+  TxFoldCorner,
+  TxFusion,
+  TxFusionSurface,
+  TxIconMorph,
+  TxKeyframeStrokeText,
+  TxLiquid,
+  TxMorph,
   TxMotion,
   TxMotionButton,
+  TxMotionControl,
   TxMotionDock,
+  TxMotionForm,
   TxMotionLoader,
+  TxMotionMetric,
   TxMotionText,
-  TxMotionToggle,
   TxMotionTransition,
   TxPhysicsMotion,
   TxPixelField,
+  TxStagger,
+  TxTextMorph,
+  TxTextTransformer,
+  TxTransition,
+  TxTuffLogoStroke,
   TxVoiceRing,
 } from '@talex-touch/tuffex/pro'
 import { TxDitherChart } from '@talex-touch/tuffex/charts'
@@ -54,19 +69,19 @@ The `suite="motion"` key above is a documentation grouping; there is no fourth i
 
 | Overview component | Prop | Value | Behavior |
 | --- | --- | --- | --- |
-| `DocsComponentsGallery` | `suite` | `motion` | Renders only the Motion band, with fifteen live specimens and per-specimen reset controls. |
+| `DocsComponentsGallery` | `suite` | `motion` | Renders all 11 Motion categories (30 live specimens) with sticky category navigation and per-specimen reset controls. |
 
 ### Related Suites
 
+- [Pro](/en/pro-suite): advanced editors and widgets, materials & lighting effects, and low-level primitives.
 - [Data](/en/data-suite): MonoChart, the existing chart family and compact visualization.
-- [Pro](/en/pro-suite): MotionForm, MotionControl and MotionMetric, alongside existing effects and primitives.
 - [Concepts](/en): installation, theming, accessibility and the full component index.
 
 ## Overview
 
-- The twelve families share visibility, reduced-motion and spring physics; continuous work stops when inactive.
-- Changing text values goes through `TxTextMorph`; no second text diff or physics engine is added.
-- Install from the Pro barrel; DitherChart also has the `@talex-touch/tuffex/charts` entry and ships in npm 0.7.0.
+- All 11 categories (30 components) share visibility gating, reduced-motion fallbacks and spring physics; continuous loops suspend while offscreen or inactive.
+- Changing text values goes through `TxTextMorph` and vector icon transitions through `TxIconMorph`, avoiding duplicate diff or physics runtimes.
+- Install from the Pro barrel or single-component subpaths; `TxDitherChart` also exposes the `@talex-touch/tuffex/charts` entry.
 
 ## Technologies
 
@@ -74,18 +89,9 @@ The `suite="motion"` key above is a documentation grouping; there is no fourth i
 
 ## Related components
 
-- [MotionButton](/en/motion-button): native-semantic buttons with named effects and source presets.
-- [Card spread](/en/card-spread): arc, fan and stamp layouts.
-- [3D carousel](/en/carousel-3d): arc, CoverFlow and Time Machine paths.
-- [Flip book](/en/flip-book): two-sided pages that turn by dragging.
-- [Motion loader](/en/motion-loader): 137 source-defined loading scenes.
-- [DitherChart](/en/dither-chart): pixel, ordered-dither and SVG pattern charts.
-- [MotionText](/en/motion-text): character, word and paragraph text effects.
-- [Physics motion](/en/physics-motion): 61 grabbable physical scenes.
-- [Motion](/en/motion): entrances, hover, pointer and scroll-linked interactions.
-- [Motion dock](/en/motion-dock): magnifying, keyboard-reorderable caller items.
-- [PixelField](/en/pixel-field): interactive square-pixel particle stage with botanical presets and custom sampling.
-- [VoiceRing](/en/voice-ring): voice-reactive ring of light with emotion tint and directional lean.
-- [MotionToggle](/en/motion-toggle): controlled switch and action styles.
-- [MotionTransition](/en/motion-transition): door, liquid-wave, iris and curtain switching.
-- [DistortionWave](/en/distortion-wave): WebGL2 chromatic lens wave screen transition.
+- **Buttons & Controls**: [MotionButton](/en/motion-button), [MotionControl](/en/motion-control), [MotionForm](/en/motion-form)
+- **Transitions & Reveal**: [MotionTransition](/en/motion-transition), [DistortionWave](/en/distortion-wave), [Transition](/en/transition), [Stagger](/en/stagger), [FlipOverlay](/en/flip-overlay), [FoldPage](/en/fold-page)
+- **Morph & Fluid**: [Morph](/en/morph), [IconMorph](/en/icon-morph), [Liquid](/en/liquid), [Fusion](/en/fusion), [FusionSurface](/en/fusion-surface)
+- **Text & Stroke**: [MotionText](/en/motion-text), [TextMorph](/en/text-morph), [TextTransformer](/en/text-transformer), [KeyframeStrokeText](/en/keyframe-stroke-text), [TuffLogoStroke](/en/tuff-logo-stroke)
+- **Cards & 3D Carousels**: [CardSpread](/en/card-spread), [Carousel3D](/en/carousel-3d), [FlipBook](/en/flip-book)
+- **Interaction, Physics, Loaders & Charts**: [Motion](/en/motion), [MotionDock](/en/motion-dock), [PixelField](/en/pixel-field), [VoiceRing](/en/voice-ring), [PhysicsMotion](/en/physics-motion), [MotionLoader](/en/motion-loader), [DitherChart](/en/dither-chart), [MotionMetric](/en/motion-metric)

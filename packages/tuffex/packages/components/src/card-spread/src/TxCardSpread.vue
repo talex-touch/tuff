@@ -368,19 +368,83 @@ defineExpose({ select, toggle })
 .tx-card-spread__stage { position: relative; width: 100%; }
 /* A deck that fits lets a card out of its slot come out over the page; one that scrolls keeps clipping it. */
 .tx-card-spread__viewport.is-unclipped { overflow: visible; }
-.tx-card-spread__card { position: absolute; top: 50%; left: 50%; padding: 0; border: 0; border-radius: 16px; background: var(--tx-bg-color-overlay, var(--tx-bg-color)); color: inherit; box-shadow: inset 0 0 0 1px var(--tx-border-color), 2px 4px 12px color-mix(in srgb, var(--tx-text-color-primary) 15%, transparent); overflow: hidden; cursor: pointer; text-align: left; font: inherit; }
+.tx-card-spread__card {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  border: 0;
+  border-radius: 16px;
+  background: var(--tx-bg-color-overlay, var(--tx-bg-color));
+  color: inherit;
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--tx-border-color) 82%, transparent),
+    2px 6px 18px color-mix(in srgb, var(--tx-text-color-primary) 12%, transparent);
+  overflow: hidden;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+}
 /* A card is pulled out in any direction, so it is the one place a touch drag does not scroll the page. */
 .tx-card-spread.is-draggable .tx-card-spread__card { cursor: grab; touch-action: none; -webkit-user-select: none; user-select: none; }
 .tx-card-spread.is-dragging .tx-card-spread__card { cursor: grabbing; }
 .tx-card-spread.is-draggable .tx-card-spread__focus-list { touch-action: pan-y; -webkit-user-select: none; user-select: none; }
-.tx-card-spread__card.is-selected { box-shadow: inset 0 0 0 2px var(--tx-color-primary), 2px 4px 12px color-mix(in srgb, var(--tx-text-color-primary) 15%, transparent); }
+.tx-card-spread__card.is-selected {
+  box-shadow:
+    inset 0 0 0 1.5px color-mix(in srgb, var(--tx-color-primary) 58%, transparent),
+    0 0 0 3px color-mix(in srgb, var(--tx-color-primary) 12%, transparent),
+    4px 10px 26px color-mix(in srgb, var(--tx-text-color-primary) 16%, transparent);
+}
 .tx-card-spread__card.is-stamp { outline: 2px dashed var(--tx-border-color-darker); outline-offset: -7px; }
-.tx-card-spread__card:focus-visible, .tx-card-spread__toggle:focus-visible, .tx-card-spread__focus-item:focus-visible { outline: 2px solid var(--tx-color-primary); outline-offset: 3px; }
-.tx-card-spread__image { display: block; width: 100%; height: 68%; object-fit: cover; }
-.tx-card-spread__content { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; }
-.tx-card-spread__content small { font-size: 12px; color: var(--tx-text-color-regular); }
-.tx-card-spread__toggle { display: block; margin: 8px auto; padding: 6px 12px; border: 0; border-radius: 8px; background: var(--tx-fill-color-light); color: var(--tx-text-color-regular); font: inherit; cursor: pointer; }
-.tx-card-spread__toggle:hover { background: var(--tx-fill-color); }
+.tx-card-spread__card:focus-visible, .tx-card-spread__toggle:focus-visible, .tx-card-spread__focus-item:focus-visible { outline: 2px solid color-mix(in srgb, var(--tx-color-primary) 78%, transparent); outline-offset: 2px; }
+.tx-card-spread__image { display: block; width: 100%; height: 68%; flex: none; object-fit: cover; }
+.tx-card-spread__content {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  padding: 8px 11px;
+}
+.tx-card-spread__content > span {
+  font-size: 12.5px;
+  font-weight: var(--tx-font-weight-semibold, 600);
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tx-card-spread__content small {
+  font-size: 11px;
+  line-height: 1.3;
+  color: var(--tx-text-color-secondary);
+}
+.tx-card-spread__toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 30px;
+  margin: 8px auto 0;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--tx-fill-color-light);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tx-border-color) 75%, transparent);
+  color: var(--tx-text-color-regular);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: var(--tx-font-weight-medium, 500);
+  cursor: pointer;
+  transition: background-color 180ms ease, color 180ms ease, transform 160ms ease;
+}
+.tx-card-spread { display: flex; flex-direction: column; align-items: center; }
+.tx-card-spread__viewport { width: 100%; }
+.tx-card-spread__toggle:hover { background: var(--tx-fill-color); color: var(--tx-text-color-primary); }
+.tx-card-spread__toggle:active { transform: scale(0.97); }
 .tx-card-spread__focus-list { display: flex; flex-wrap: wrap; justify-content: center; gap: 24px; padding: 28px 16px; }
 .tx-card-spread__focus-item { position: relative; padding: 4px 8px; border: 0; background: transparent; color: inherit; font: inherit; font-weight: var(--tx-font-weight-medium, 500); cursor: pointer; text-decoration: none; }
 .tx-card-spread__focus-item.has-brackets { color: var(--tx-color-primary); }

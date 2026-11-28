@@ -1,7 +1,7 @@
 ---
 title: FlipOverlay 翻转遮罩
 description: 从触发源翻转展开的 3D Overlay
-category: Effects
+category: MotionTransitions
 status: beta
 since: 0.3.4
 tags: [overlay, motion, transition]

@@ -1,7 +1,7 @@
 ---
 title: "IconMorph"
 description: "A stroke icon that morphs into another icon with spring physics."
-category: Effects
+category: MotionMorph
 status: beta
 since: 0.6.0
 tags: [icon, morph, vector, animation, spring, svg]

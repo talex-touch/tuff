@@ -32,11 +32,11 @@ Tuffex (`@talex-touch/tuffex`) is the Vue 3 component library behind CoreBox, pl
 | [Concepts](/en) | Installation, design rules, concepts manual, helpers | 27 | Documentation only |
 | [Templates](/en/template-shell) | App shells / Content / AI apps / Data & flow | 25 | Compositions of existing entries |
 | [Basics Suite](/en/base-suite) | General / Form / Layout / Navigation / Data Display / Feedback / Status & Empty | 100 | `@talex-touch/tuffex/base` |
-| [Pro Suite](/en/pro-suite) | Interaction / Effects / Primitives | 43 | `@talex-touch/tuffex/pro` |
+| [Pro Suite](/en/pro-suite) | Interaction / Materials & Light / Primitives | 27 | `@talex-touch/tuffex/pro` |
 | [AI Suite](/en/ai-suite) | Chat / Agents / Reasoning / Context & Insight | 36 | `@talex-touch/tuffex/ai` |
 | [Data Suite](/en/data-suite) | Charts / Visualization | 12 | `@talex-touch/tuffex/pro` + `/charts` |
 | [Flow Suite](/en/flow-suite) | Flow | 1 | `@talex-touch/tuffex/ai` |
-| [Motion Suite](/en/motion-suite) | 10 groups: buttons, carousels, loaders, text, transitions… | 15 | `@talex-touch/tuffex/pro` + `/charts` |
+| [Motion Suite](/en/motion-suite) | 11 groups: buttons, controls, transitions, morphing, text, cards, physics… | 30 | `@talex-touch/tuffex/pro` + `/charts` |
 
 - Page counts are documentation entries, excluding suite overviews; they are not export counts.
 - There are only three suite entries: `base`, `pro` and `ai`. Data, Flow and Motion are documentation suites; charts also have `@talex-touch/tuffex/charts`.
@@ -248,11 +248,8 @@ A template is a full-page composition of existing components, shown in a shared 
 - [VirtualList](/en/virtual-list)
 - [DeviceMockup](/en/device-mockup)
 - [VersionCapsule](/en/version-capsule)
-- [MotionForm](/en/motion-form)
-- [MotionControl](/en/motion-control)
-- [MotionMetric](/en/motion-metric)
 
-### Effects
+### Materials & Light
 
 - [GlassSurface](/en/glass-surface)
 - [TouchSurface](/en/touch-surface)
@@ -264,20 +261,7 @@ A template is a full-page composition of existing components, shown in a shared 
 - [GradualBlur](/en/gradual-blur)
 - [EdgeFadeMask](/en/edge-fade-mask)
 - [GlowText](/en/glow-text)
-- [KeyframeStrokeText](/en/keyframe-stroke-text)
-- [TuffLogoStroke](/en/tuff-logo-stroke)
-- [TextMorph](/en/text-morph)
-- [IconMorph](/en/icon-morph)
-- [Morph](/en/morph)
-- [TextTransformer](/en/text-transformer)
-- [Transition](/en/transition)
-- [Stagger](/en/stagger)
-- [Fusion](/en/fusion)
-- [FusionSurface](/en/fusion-surface)
 - [FlowLight](/en/flow-light)
-- [Liquid](/en/liquid)
-- [FlipOverlay](/en/flip-overlay)
-- [FoldPage](/en/fold-page)
 - [ImageGeneration](/en/image-generation)
 - [MetalFx](/en/metal-fx)
 - [VoiceBeam](/en/voice-beam)
@@ -377,6 +361,36 @@ Partly adapted from [Beautiful UI](https://www.beautifului.dev) (MIT).
 
 - [MotionButton](/en/motion-button)
 
+### Controls & Forms
+
+- [MotionControl](/en/motion-control)
+- [MotionForm](/en/motion-form)
+
+### Transitions & Reveal
+
+- [MotionTransition](/en/motion-transition)
+- [DistortionWave](/en/distortion-wave)
+- [Transition](/en/transition)
+- [Stagger](/en/stagger)
+- [FlipOverlay](/en/flip-overlay)
+- [FoldPage](/en/fold-page)
+
+### Morph & Fluid
+
+- [Morph](/en/morph)
+- [IconMorph](/en/icon-morph)
+- [Liquid](/en/liquid)
+- [Fusion](/en/fusion)
+- [FusionSurface](/en/fusion-surface)
+
+### Text & Stroke
+
+- [MotionText](/en/motion-text)
+- [TextMorph](/en/text-morph)
+- [TextTransformer](/en/text-transformer)
+- [KeyframeStrokeText](/en/keyframe-stroke-text)
+- [TuffLogoStroke](/en/tuff-logo-stroke)
+
 ### Card Spreads
 
 - [CardSpread](/en/card-spread)
@@ -386,37 +400,25 @@ Partly adapted from [Beautiful UI](https://www.beautifului.dev) (MIT).
 - [Carousel3D](/en/carousel-3d)
 - [FlipBook](/en/flip-book)
 
-### Loaders
+### Hover, Cursor & Scroll
 
-- [MotionLoader](/en/motion-loader)
-
-### Dither Charts
-
-- [DitherChart](/en/dither-chart)
-
-### Text
-
-- [MotionText](/en/motion-text)
+- [Motion](/en/motion)
+- [MotionDock](/en/motion-dock)
+- [PixelField](/en/pixel-field)
+- [VoiceRing](/en/voice-ring)
 
 ### Physics
 
 - [PhysicsMotion](/en/physics-motion)
 
-### Hover, Cursor & Scroll
+### Loaders
 
-- [MotionDock](/en/motion-dock)
-- [Motion](/en/motion)
-- [PixelField](/en/pixel-field)
-- [VoiceRing](/en/voice-ring)
+- [MotionLoader](/en/motion-loader)
 
-### Toggles
+### Charts & Metrics
 
-- [MotionToggle](/en/motion-toggle)
-
-### Transitions
-
-- [MotionTransition](/en/motion-transition)
-- [DistortionWave](/en/distortion-wave)
+- [DitherChart](/en/dither-chart)
+- [MotionMetric](/en/motion-metric)
 
 ## Technologies
 

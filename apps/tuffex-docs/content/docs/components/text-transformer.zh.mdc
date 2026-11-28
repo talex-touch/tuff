@@ -1,7 +1,7 @@
 ---
 title: "TextTransformer 文本变换"
 description: "逐字形变或整串交叉淡化的短文本过渡"
-category: Effects
+category: MotionText
 status: beta
 since: 0.3.4
 tags: [text, transition, autosize, live-region]

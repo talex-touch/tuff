@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { TxButton, TxDistortionWave } from '#components'
+import { TxButton, TxDistortionWave, TxSlider } from '#components'
 
 const { locale } = useI18n()
 const zh = computed(() => locale.value === 'zh')
@@ -30,27 +30,33 @@ const scrubValue = ref(0.34)
 const revealed = ref(false)
 const originRef = ref<HTMLButtonElement | null>(null)
 
-function onScrubInput(event: Event): void {
-  const val = Number((event.target as HTMLInputElement).value)
+function formatPercent(value: number): string {
+  return `${Math.round(value * 100)}%`
+}
+
+function onScrubUpdate(value: number): void {
   scrubbing.value = true
-  scrubValue.value = val
+  scrubValue.value = value
 }
 </script>
 
 <template>
   <div class="dw-scrub not-prose">
     <div class="dw-scrub__bar">
-      <label class="dw-scrub__slider">
-        <span>{{ copy.scrub }} ({{ Math.round(scrubValue * 100) }}%)</span>
-        <input
-          type="range"
-          min="0"
-          max="1"
-          step="0.01"
-          :value="scrubValue"
-          @input="onScrubInput"
-        >
-      </label>
+      <div class="dw-scrub__slider">
+        <span class="dw-scrub__label">{{ copy.scrub }}</span>
+        <TxSlider
+          class="dw-scrub__control"
+          :model-value="scrubValue"
+          :min="0"
+          :max="1"
+          :step="0.01"
+          :aria-label="copy.scrub"
+          show-value
+          :format-value="formatPercent"
+          @update:model-value="onScrubUpdate"
+        />
+      </div>
       <TxButton v-if="scrubbing" size="sm" variant="secondary" @click="scrubbing = false">
         {{ copy.liveMode }}
       </TxButton>
@@ -115,16 +121,21 @@ function onScrubInput(event: Event): void {
 .dw-scrub__slider {
   display: flex;
   align-items: center;
-  gap: 10px;
-  flex: 1 1 220px;
+  gap: 12px;
+  flex: 1 1 260px;
+  min-width: 0;
   font-size: 12px;
   color: var(--tx-text-color-regular);
 }
 
-.dw-scrub__slider input {
-  flex: 1;
-  accent-color: var(--tx-color-primary);
-  cursor: pointer;
+.dw-scrub__label {
+  flex: none;
+  white-space: nowrap;
+}
+
+.dw-scrub__control {
+  flex: 1 1 auto;
+  min-width: 140px;
 }
 
 .dw-scrub__card-host {

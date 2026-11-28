@@ -145,7 +145,9 @@ const lastLabel = ref('')
 | `size` | `'xs' \| 'sm' \| 'md' \| 'lg'` | `md` | Heights 24/30/36/42 px; size vocabulary is shared with other TuffEx controls. |
 | `disabled` | `boolean` | `false` | Native disabled button, or destination-less, non-tabbable disabled link. Also disables every focus-blur item. |
 | `animated` | `boolean` | `true` | Enables decoration when the shared lifecycle gate is active. |
-| `selected` | `boolean` | — | Caller-owned target-icon state; sets `aria-pressed` on a button. Does not execute or acknowledge an operation. |
+| `selected` | `boolean` | — | Caller-owned target-icon state; sets `aria-pressed` on a button and applies a subtle tinted rim. Does not execute or acknowledge an operation. |
+| `count` | `number` | — | Optional caller-owned counter rendered beside the label via numeric `TxTextMorph`; hidden when `iconOnly` is true. |
+| `burst` | `boolean` | `false` | Emits a brief radial particle burst around the leading icon when `selected` switches to `true`, gated by motion activity and reduced motion. |
 | `href` | `string` | — | Renders a native anchor instead of a button. |
 | `target` | `string` | — | Native anchor target. |
 | `rel` | `string` | `noopener noreferrer` for `_blank` | Native anchor relationship; explicit value wins. |

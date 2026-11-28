@@ -12,7 +12,7 @@ import MotionButtonGlyph from './MotionButtonGlyph.vue'
 defineOptions({ name: 'TxMotionButton', inheritAttrs: false })
 const props = withDefaults(defineProps<MotionButtonProps>(), {
   label: '', size: 'md', disabled: false, animated: true, type: 'button',
-  iconOnly: false, magneticStrength: 0.35, items: () => [],
+  iconOnly: false, burst: false, magneticStrength: 0.35, items: () => [],
   blurAmount: 4, opacityAmount: 0.4, showBrackets: true,
 })
 const emit = defineEmits<MotionButtonEmits>()
@@ -65,12 +65,36 @@ let replayFrame: number | undefined
 let frame: number | undefined
 let lastTime: number | undefined
 let center: { x: number, y: number } | undefined
+let burstAnimations: Animation[] = []
 let x = 0
 let y = 0
 let vx = 0
 let vy = 0
 let targetX = 0
 let targetY = 0
+
+function stopBurst(): void {
+  for (const animation of burstAnimations) animation.cancel()
+  burstAnimations = []
+}
+function playBurst(): void {
+  stopBurst()
+  if (!props.burst || !motionActive.value || !root.value) return
+  for (const particle of root.value.querySelectorAll<HTMLElement>('.tx-motion-button__particle')) {
+    if (!particle.animate) continue
+    const angle = Number(particle.dataset.angle) * Math.PI / 180
+    const animation = particle.animate([
+      { transform: 'translate(0, 0) scale(0.25)', opacity: 0 },
+      { transform: `translate(${Math.cos(angle) * 16}px, ${Math.sin(angle) * 16}px) scale(1)`, opacity: 1, offset: 0.3 },
+      { transform: `translate(${Math.cos(angle) * 24}px, ${Math.sin(angle) * 24}px) scale(0.25)`, opacity: 0 },
+    ], { duration: 480, easing: 'ease-out' })
+    burstAnimations.push(animation)
+    animation.onfinish = () => {
+      animation.cancel()
+      burstAnimations = burstAnimations.filter(item => item !== animation)
+    }
+  }
+}
 
 function clearHold(): void {
   if (holdTimer !== undefined) clearTimeout(holdTimer)
@@ -239,11 +263,15 @@ function resetMotion(): void {
   clearHold()
   cancelReplay()
   stopMagnet()
+  stopBurst()
   hovered.value = focused.value = pressed.value = false
   pointerIndex.value = focusIndex.value = null
 }
 watch(motionActive, (active) => { if (!active) resetMotion() })
 watch(() => [props.sourceId, props.variant, props.disabled, props.href], resetMotion)
+watch(() => props.selected, (next, prev) => {
+  if (next === true && prev !== true) playBurst()
+})
 watch(iconActive, () => {
   if (motionActive.value && (variant.value === 'morph' || variant.value === 'color-morph'))
     morphPhase.value = morphPhase.value === 'a' ? 'b' : 'a'
@@ -300,7 +328,7 @@ defineExpose({ replay, focus: () => {
     ref="root"
     v-bind="$attrs"
     class="tx-motion-button"
-    :class="[`tx-motion-button--${size}`, `tx-motion-button--${variant}`, replayPhase ? 'is-phase-b' : 'is-phase-a', { 'is-interacting': interacting, 'is-icon-active': iconActive, 'is-pressed': pressed, 'is-disabled': disabled, 'is-animated': motionActive, 'is-icon-only': iconOnly }]"
+    :class="[`tx-motion-button--${size}`, `tx-motion-button--${variant}`, replayPhase ? 'is-phase-b' : 'is-phase-a', { 'is-interacting': interacting, 'is-icon-active': iconActive, 'is-selected': selected === true, 'is-pressed': pressed, 'is-disabled': disabled, 'is-animated': motionActive, 'is-icon-only': iconOnly }]"
     :style="styles"
     :href="disabled ? undefined : href"
     :target="target"
@@ -355,6 +383,9 @@ defineExpose({ replay, focus: () => {
             <span v-if="variant === 'ring'" class="tx-motion-button__notification" />
           </span>
         </template>
+        <span v-if="burst" class="tx-motion-button__particles" aria-hidden="true">
+          <i v-for="index in 8" :key="index" class="tx-motion-button__particle" :data-angle="index * 45" />
+        </span>
       </span>
       <span v-if="!iconOnly" class="tx-motion-button__label" :class="{ 'tx-motion-button__label--reveal': variant === 'text-reveal' }">
         <span v-if="variant === 'text-reveal'" class="tx-motion-button__label-track">
@@ -362,6 +393,9 @@ defineExpose({ replay, focus: () => {
           <span aria-hidden="true"><slot name="reveal" :active="iconActive"><TxTextMorph :key="motionActive ? 'animated' : 'static'" :text="displayLabel" :disabled="!motionActive" /></slot></span>
         </span>
         <slot v-else :active="iconActive" :selected="selected === true" :disabled="disabled"><TxTextMorph :key="motionActive ? 'animated' : 'static'" :text="displayLabel" :disabled="!motionActive" /></slot>
+      </span>
+      <span v-if="!iconOnly && count !== undefined" class="tx-motion-button__count">
+        <TxTextMorph :key="motionActive ? 'animated' : 'static'" :text="count" numbers :disabled="!motionActive" />
       </span>
       <span v-if="variant === 'slide-arrow'" class="tx-motion-button__trailing" aria-hidden="true">
         <span class="tx-motion-button__glyph" :style="{ color: secondColor }"><slot name="active-icon" :active="true"><MotionButtonGlyph :icon="activeIcon" :animated="motionActive" :spring="glyphSpring" /></slot></span>
@@ -390,6 +424,7 @@ defineExpose({ replay, focus: () => {
   border: 0;
   border-radius: 40px;
   background: var(--tx-fill-color-light);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tx-border-color) 68%, transparent);
   color: var(--tx-text-color-regular);
   font: inherit;
   font-size: 13px;
@@ -402,15 +437,25 @@ defineExpose({ replay, focus: () => {
   &--xs { --tx-motion-button-height: 24px; --tx-motion-button-pad: 12px; }
   &--sm { --tx-motion-button-height: 30px; --tx-motion-button-pad: 16px; }
   &--lg { --tx-motion-button-height: 42px; --tx-motion-button-pad: 28px; font-size: 14px; }
+  &.is-selected {
+    background: color-mix(in srgb, var(--tx-motion-button-icon-color) 10%, var(--tx-fill-color-light));
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tx-motion-button-icon-color) 34%, var(--tx-border-color));
+    color: var(--tx-text-color-primary);
+  }
   &.is-interacting { background: var(--tx-motion-button-hover-bg); padding-inline: calc(var(--tx-motion-button-pad) + 4px); scale: 1.02; }
+  &.is-selected.is-interacting { background: color-mix(in srgb, var(--tx-motion-button-icon-color) 14%, var(--tx-motion-button-hover-bg)); }
   &.is-pressed { scale: 0.96; }
-  &:focus-visible { outline: 2px solid var(--tx-color-primary); outline-offset: 3px; }
+  &:focus-visible { outline: 2px solid color-mix(in srgb, var(--tx-color-primary) 78%, transparent); outline-offset: 2px; }
   &.is-disabled { color: var(--tx-text-color-disabled); cursor: not-allowed; opacity: 0.6; }
   &.is-icon-only { width: var(--tx-motion-button-height); padding: 0; }
   &__content { position: relative; display: flex; align-items: center; justify-content: center; pointer-events: none; }
   &__leading, &__trailing { position: relative; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: 16px; height: 16px; }
   &__leading { margin-inline-end: 10px; }
   &.is-icon-only &__leading { margin: 0; }
+  &__particles { position: absolute; left: 50%; top: 50%; pointer-events: none; }
+  &__particle { position: absolute; width: 4px; height: 4px; margin: -2px; border-radius: 50%; background: var(--tx-motion-button-icon-color); opacity: 0; }
+  &__count { margin-inline-start: 8px; padding-inline-start: 8px; border-inline-start: 1px solid color-mix(in srgb, var(--tx-border-color) 72%, transparent); font-size: 12px; font-variant-numeric: tabular-nums; color: var(--tx-text-color-secondary); }
+  &.is-selected &__count { color: var(--tx-text-color-primary); }
   &__glyph { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; transform-origin: center; }
   &__glyph--second { position: absolute; inset: 0; opacity: 0; }
   &__label { white-space: nowrap; }
@@ -441,7 +486,7 @@ defineExpose({ replay, focus: () => {
   &--text-reveal.is-interacting &__label-track { transform: translateY(-18px); }
   &--expand-ring.is-interacting &__glyph { transform: scale(1.1); }
   &__expansion { position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tx-text-color-primary) 25%, transparent); opacity: 0; pointer-events: none; }
-  &--focus-blur { flex-wrap: wrap; gap: 24px; padding: 6px 8px; min-height: 0; border-radius: 0; background: none; cursor: default; }
+  &--focus-blur { flex-wrap: wrap; gap: 24px; padding: 6px 8px; min-height: 0; border-radius: 0; background: none; box-shadow: none; cursor: default; }
   &__item { position: relative; display: inline-flex; padding: 4px 8px; border: 0; background: none; font: inherit; color: inherit; text-decoration: none; cursor: pointer; outline-offset: 4px; }
   &__item.is-focused { color: var(--tx-color-primary); }
   &__item.is-inactive { filter: blur(var(--tx-motion-button-blur)); opacity: var(--tx-motion-button-dim); }

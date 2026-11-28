@@ -10,6 +10,7 @@ import { drawnScale } from '../../../../utils/drawn-scale'
 import { createVelocityTracker, projectMomentum, rubberband } from '../../../../utils/gesture'
 import { useMotionActivity } from '../../../../utils/motion-activity'
 import { presets, resolveTransition } from '../../liquid/src/spring'
+import { TxSlider } from '../../slider'
 import { TxTextMorph } from '../../text-morph'
 
 defineOptions({ name: 'TxCarousel3D' })
@@ -326,7 +327,16 @@ defineExpose({ previous, next, select })
             <span v-if="node.main" class="tx-carousel-3d__date" :style="{ opacity: hoverPosition === node.position ? 1 : 0, transform: hoverPosition === node.position ? 'translateY(0) scale(1)' : 'translateY(-2px) scale(0.8)', transition }">{{ items[node.index]?.date || items[node.index]?.title }}</span>
             <span class="tx-carousel-3d__line" :style="nodeStyle(node.position, node.main)" />
           </button>
-          <input class="tx-carousel-3d__scrubber" type="range" min="0" :max="items.length - 1" step="1" :value="current" :disabled="disabled" :aria-label="timelineLabel" @input="select(Number(($event.target as HTMLInputElement).value))">
+          <TxSlider
+            class="tx-carousel-3d__scrubber"
+            :model-value="current"
+            :min="0"
+            :max="Math.max(0, items.length - 1)"
+            :step="1"
+            :disabled="disabled"
+            :aria-label="timelineLabel"
+            @update:model-value="select"
+          />
         </div>
       </div>
       <div class="tx-carousel-3d__caption" aria-live="polite" aria-atomic="true">
@@ -352,34 +362,73 @@ defineExpose({ previous, next, select })
 </template>
 
 <style scoped>
-.tx-carousel-3d { position: relative; width: 100%; overflow: hidden; border-radius: 16px; background: var(--tx-bg-color); color: var(--tx-text-color-primary); font-size: 13px; padding: 12px 0; }
+.tx-carousel-3d { position: relative; width: 100%; overflow: hidden; border-radius: 16px; background: transparent; color: var(--tx-text-color-primary); font-size: 13px; padding: 8px 0 4px; }
 .tx-carousel-3d__spatial { display: flex; align-items: center; justify-content: center; gap: 12px; }
 .tx-carousel-3d__stage { position: relative; flex: 1; min-width: 0; transform-style: preserve-3d; }
 /* A horizontal drag moves the deck and a vertical swipe still scrolls the page; the time machine moves vertically. */
 .tx-carousel-3d.is-draggable .tx-carousel-3d__stage { cursor: grab; touch-action: pan-y; -webkit-user-select: none; user-select: none; }
 .tx-carousel-3d.is-draggable.is-time-machine .tx-carousel-3d__stage { touch-action: pan-x; }
-.tx-carousel-3d__slide { position: absolute; left: 50%; top: 50%; padding: 0; border: 0; border-radius: 12px; color: inherit; font: inherit; background: var(--tx-bg-color-overlay, var(--tx-bg-color)); box-shadow: inset 0 0 0 1px var(--tx-border-color), 3px 6px 20px color-mix(in srgb, var(--tx-text-color-primary) 15%, transparent); cursor: pointer; overflow: hidden; }
+.tx-carousel-3d__slide {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  padding: 0;
+  border: 0;
+  border-radius: 14px;
+  color: inherit;
+  font: inherit;
+  background: var(--tx-bg-color-overlay, var(--tx-bg-color));
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--tx-border-color) 82%, transparent),
+    3px 8px 22px color-mix(in srgb, var(--tx-text-color-primary) 13%, transparent);
+  cursor: pointer;
+  overflow: hidden;
+}
 .tx-carousel-3d__slide img { display: block; width: 100%; height: 100%; object-fit: cover; }
-.tx-carousel-3d__content { display: flex; height: 100%; box-sizing: border-box; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 12px; }
-.tx-carousel-3d__content small { color: var(--tx-text-color-regular); font-size: 12px; }
+.tx-carousel-3d__content { display: flex; height: 100%; box-sizing: border-box; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 12px; text-align: center; }
+.tx-carousel-3d__content > span { font-size: 13px; font-weight: var(--tx-font-weight-semibold, 600); letter-spacing: -0.01em; }
+.tx-carousel-3d__content small { color: var(--tx-text-color-secondary); font-size: 11.5px; }
 .tx-carousel-3d.is-draggable .tx-carousel-3d__slide { cursor: grab; }
 .tx-carousel-3d.is-dragging .tx-carousel-3d__stage, .tx-carousel-3d.is-dragging .tx-carousel-3d__slide { cursor: grabbing; }
-.tx-carousel-3d__slide.is-active { box-shadow: inset 0 0 0 2px var(--tx-color-primary), 3px 6px 20px color-mix(in srgb, var(--tx-text-color-primary) 15%, transparent); }
-.tx-carousel-3d__caption { min-height: 20px; text-align: center; padding: 6px 12px; font-weight: var(--tx-font-weight-medium, 500); }
-.tx-carousel-3d__controls, .tx-carousel-3d__dots { display: flex; justify-content: center; align-items: center; gap: 4px; }
-.tx-carousel-3d__controls button { padding: 6px 8px; border: 0; border-radius: 8px; color: var(--tx-text-color-regular); background: var(--tx-fill-color-light); font: inherit; cursor: pointer; }
-.tx-carousel-3d__controls button:hover { background: var(--tx-fill-color); }
-.tx-carousel-3d__controls .tx-carousel-3d__dot { width: 28px; height: 28px; padding: 8px 4px; background: transparent; }
-.tx-carousel-3d__dot span { display: block; width: 6px; height: 6px; margin: auto; border-radius: 6px; background: var(--tx-text-color-placeholder); }
+.tx-carousel-3d__slide.is-active {
+  box-shadow:
+    inset 0 0 0 1.5px color-mix(in srgb, var(--tx-color-primary) 58%, transparent),
+    0 0 0 3px color-mix(in srgb, var(--tx-color-primary) 12%, transparent),
+    4px 12px 28px color-mix(in srgb, var(--tx-text-color-primary) 18%, transparent);
+}
+.tx-carousel-3d__caption { min-height: 22px; text-align: center; padding: 4px 12px 6px; font-size: 13px; font-weight: var(--tx-font-weight-semibold, 600); letter-spacing: -0.01em; }
+.tx-carousel-3d__controls, .tx-carousel-3d__dots { display: flex; justify-content: center; align-items: center; gap: 6px; }
+.tx-carousel-3d__dots { gap: 2px; }
+.tx-carousel-3d__controls > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 30px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  color: var(--tx-text-color-regular);
+  background: var(--tx-fill-color-light);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tx-border-color) 75%, transparent);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: var(--tx-font-weight-medium, 500);
+  cursor: pointer;
+  transition: background-color 180ms ease, color 180ms ease, transform 160ms ease;
+}
+.tx-carousel-3d__controls > button:hover:not(:disabled) { background: var(--tx-fill-color); color: var(--tx-text-color-primary); }
+.tx-carousel-3d__controls > button:active:not(:disabled) { transform: scale(0.97); }
+.tx-carousel-3d__controls .tx-carousel-3d__dot { width: 24px; height: 24px; padding: 6px 3px; border: 0; border-radius: 999px; background: transparent; cursor: pointer; }
+.tx-carousel-3d__dot span { display: block; width: 6px; height: 6px; margin: auto; border-radius: 999px; background: color-mix(in srgb, var(--tx-text-color-placeholder) 70%, transparent); }
 .tx-carousel-3d__dot.is-active span { width: 18px; background: var(--tx-color-primary); }
-.tx-carousel-3d button:focus-visible, .tx-carousel-3d__scrubber:focus-visible { outline: 2px solid var(--tx-color-primary); outline-offset: 3px; }
-.tx-carousel-3d button:disabled { cursor: not-allowed; }
+.tx-carousel-3d button:focus-visible { outline: 2px solid color-mix(in srgb, var(--tx-color-primary) 78%, transparent); outline-offset: 2px; }
+.tx-carousel-3d button:disabled { cursor: not-allowed; opacity: 0.42; }
 .tx-carousel-3d__timeline { display: flex; flex-direction: column; align-items: stretch; flex: 0 0 112px; padding: 12px 8px 12px 0; }
 .tx-carousel-3d__tick { display: flex; align-items: center; justify-content: flex-end; gap: 8px; min-height: 12px; padding: 3px 0; border: 0; background: transparent; color: var(--tx-text-color-regular); cursor: pointer; font: inherit; }
 .tx-carousel-3d__date { font-size: 12px; white-space: nowrap; }
 .tx-carousel-3d__line { display: block; width: 24px; height: 3px; border-radius: 3px; background: var(--tx-text-color-placeholder); transform-origin: right; }
 .tx-carousel-3d__tick.is-main.is-selected .tx-carousel-3d__line { background: var(--tx-color-primary); }
-.tx-carousel-3d__scrubber { width: 100%; margin-top: 12px; accent-color: var(--tx-color-primary); }
+.tx-carousel-3d__scrubber { width: 100%; margin-top: 12px; }
 .tx-carousel-3d__defs { position: absolute; width: 0; height: 0; }
 @media (max-width: 400px) { .tx-carousel-3d__timeline { flex-basis: 88px; } .tx-carousel-3d__date { max-width: 52px; overflow: hidden; text-overflow: ellipsis; } }
 @media (prefers-reduced-motion: reduce) { .tx-carousel-3d__line, .tx-carousel-3d__date, .tx-carousel-3d__dot span { transition: none !important; } }

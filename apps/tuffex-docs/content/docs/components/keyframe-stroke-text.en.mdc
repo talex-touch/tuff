@@ -1,7 +1,7 @@
 ---
 title: "KeyframeStrokeText"
 description: "SVG text that draws its stroke, then fades in its fill."
-category: Effects
+category: MotionText
 status: beta
 since: 0.3.4
 tags: [text, svg, animation]

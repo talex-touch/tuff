@@ -1,7 +1,7 @@
 ---
 title: "TextTransformer"
 description: "A short-text transition that morphs per character or crossfades."
-category: Effects
+category: MotionText
 status: beta
 since: 0.3.4
 tags: [text, transition, autosize, live-region]

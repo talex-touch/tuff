@@ -42,11 +42,26 @@ function forVariant(variant: CardSpreadVariant) { return items.value.slice(0, va
       <label><input v-model="expanded" type="checkbox">{{ copy.expand }}</label>
       <label><input v-model="animated" type="checkbox">{{ copy.animated }}</label>
       <label><input v-model="colorful" type="checkbox">{{ copy.colorful }}</label>
-      <label>{{ copy.arc }} {{ arc }}° <input v-model.number="arc" type="range" min="0" max="60"></label>
-      <label>{{ copy.gap }} {{ gap }}px <input v-model.number="gap" type="range" min="0" max="220"></label>
-      <label>{{ copy.offset }} {{ offset }}px <input v-model.number="offset" type="range" min="0" max="80"></label>
-      <label>{{ copy.blur }} {{ blur }}px <input v-model.number="blur" type="range" min="0" max="8" step="0.5"></label>
-      <label>{{ copy.opacity }} {{ opacity }} <input v-model.number="opacity" type="range" min="0.1" max="1" step="0.1"></label>
+      <label class="card-spread-demo__slider">
+        <span>{{ copy.arc }}</span>
+        <TxSlider v-model="arc" :min="0" :max="60" :step="1" show-value :format-value="(v: number) => `${v}°`" :aria-label="copy.arc" />
+      </label>
+      <label class="card-spread-demo__slider">
+        <span>{{ copy.gap }}</span>
+        <TxSlider v-model="gap" :min="0" :max="220" :step="2" show-value :format-value="(v: number) => `${v}px`" :aria-label="copy.gap" />
+      </label>
+      <label class="card-spread-demo__slider">
+        <span>{{ copy.offset }}</span>
+        <TxSlider v-model="offset" :min="0" :max="80" :step="2" show-value :format-value="(v: number) => `${v}px`" :aria-label="copy.offset" />
+      </label>
+      <label class="card-spread-demo__slider">
+        <span>{{ copy.blur }}</span>
+        <TxSlider v-model="blur" :min="0" :max="8" :step="0.5" show-value :format-value="(v: number) => `${v}px`" :aria-label="copy.blur" />
+      </label>
+      <label class="card-spread-demo__slider">
+        <span>{{ copy.opacity }}</span>
+        <TxSlider v-model="opacity" :min="0.1" :max="1" :step="0.1" show-value :format-value="(v: number) => v.toFixed(1)" :aria-label="copy.opacity" />
+      </label>
       <label><input v-model="brackets" type="checkbox">{{ copy.brackets }}</label>
     </div>
     <p>{{ copy.hint }}</p>
@@ -69,7 +84,8 @@ function forVariant(variant: CardSpreadVariant) { return items.value.slice(0, va
 .card-spread-demo__controls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; }
 .card-spread-demo__controls label { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .card-spread-demo__controls select { max-width: 220px; font: inherit; background: var(--tx-bg-color); color: inherit; }
-.card-spread-demo__controls input[type='range'] { width: 120px; accent-color: var(--tx-color-primary); }
+.card-spread-demo__slider { min-width: 190px; }
+.card-spread-demo__slider :deep(.tx-slider) { flex: 1; min-width: 110px; }
 .card-spread-demo__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 16px; }
 .card-spread-demo__specimen { min-width: 0; padding: 12px; border-radius: 12px; box-shadow: inset 0 0 0 1px var(--tx-border-color); }
 .card-spread-demo h3 { font-size: 14px; font-weight: 600; margin: 0; }

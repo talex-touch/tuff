@@ -1,6 +1,6 @@
 ---
 title: 动效套件
-description: 按钮、卡片、轮播、加载与抖动图表动效
+description: 涵盖按钮、控件、转场、形变流体、文字描边、卡片轮播、物理与图表的全部 11 类动效组件
 category: MotionSuite
 status: beta
 since: 0.6.3
@@ -11,7 +11,7 @@ verified: false
 
 ## 用法
 
-下方每个格子都渲染真实组件，内容或数据由标本传入。使用悬停、焦点、点击、拖动或可见控件体验行为。重置按钮只重新挂载当前标本，模型与播放状态一起恢复；点击组件名称进入完整变体演示和 API 页。
+下方按 11 个动效分类完整呈现全部 30 个动效组件，每个格子均渲染真实组件并由标本驱动数据。可通过顶部分类跳转条快速定位，用悬停、焦点、点击、拖动或变体切换按钮实时体验；右上角重置按钮只重新挂载当前标本，点击组件名称进入完整变体演示与 API 页。
 
 ::DocsComponentsGallery{suite="motion"}
 ::
@@ -21,7 +21,7 @@ verified: false
 - 数值、条目、状态和导航由应用驱动。按钮反馈、加载循环或提交请求不能证明业务操作成功。
 - 重复和装饰动效不要进入 live region。保留一份可读文字和原生键盘控件。
 - 尊重减少动态效果与可见性。共享活动门禁在隐藏、失活或卸载时停止持续工作。
-- 文字值变化复用 `TxTextMorph`，运动复用共享 spring；这些家族不新增文字 diff 或物理引擎。
+- 文字值变化复用 `TxTextMorph`，图标过渡复用 `TxIconMorph`，运动复用共享 spring；这些家族不新增重复物理引擎。
 
 ## API 参考
 
@@ -33,15 +33,30 @@ import {
   TxCarousel3D,
   TxDistortionWave,
   TxFlipBook,
+  TxFlipOverlay,
+  TxFoldCorner,
+  TxFusion,
+  TxFusionSurface,
+  TxIconMorph,
+  TxKeyframeStrokeText,
+  TxLiquid,
+  TxMorph,
   TxMotion,
   TxMotionButton,
+  TxMotionControl,
   TxMotionDock,
+  TxMotionForm,
   TxMotionLoader,
+  TxMotionMetric,
   TxMotionText,
-  TxMotionToggle,
   TxMotionTransition,
   TxPhysicsMotion,
   TxPixelField,
+  TxStagger,
+  TxTextMorph,
+  TxTextTransformer,
+  TxTransition,
+  TxTuffLogoStroke,
   TxVoiceRing,
 } from '@talex-touch/tuffex/pro'
 import { TxDitherChart } from '@talex-touch/tuffex/charts'
@@ -54,19 +69,19 @@ import '@talex-touch/tuffex/base.css'
 
 | 总览组件 | 属性 | 值 | 行为 |
 | --- | --- | --- | --- |
-| `DocsComponentsGallery` | `suite` | `motion` | 只展示 Motion 部分，包含十五个实时标本和各自的重置控件。 |
+| `DocsComponentsGallery` | `suite` | `motion` | 按 11 个分类带完整展示全部 30 个动效实时标本、顶部分类快捷导航与各自重置控件。 |
 
 ### 相关套件
 
+- [进阶套件](/zh/pro-suite)：高级应用组件、表面材质与光效、底层原语。
 - [数据套件](/zh/data-suite)：MonoChart、现有图表族和轻量可视化。
-- [进阶套件](/zh/pro-suite)：MotionForm、MotionControl、MotionMetric，以及现有视觉效果和原语。
 - [理念](/zh)：安装、主题、无障碍和完整组件索引。
 
 ## 概述
 
-- 十二个家族共享可见性、减少动态效果与 spring 物理；失活时停止持续工作。
-- 文字值变化统一经 `TxTextMorph`，不引入第二套文字 diff 或物理引擎。
-- 安装使用 Pro barrel；DitherChart 另有 `@talex-touch/tuffex/charts` 入口，随 npm 0.7.0 发布。
+- 全系 11 个动效分类、30 个组件共享可见性、减少动态效果与 spring 物理；离屏或失活时自动暂停持续帧循环。
+- 文本变化统一经 `TxTextMorph`，图标变形统一经 `TxIconMorph`，不额外引入第二套 diff 或物理引擎。
+- 均从 `@talex-touch/tuffex/pro` 或单组件子路径引入；`TxDitherChart` 另有 `@talex-touch/tuffex/charts` 入口。
 
 ## 技术实现
 
@@ -74,18 +89,9 @@ import '@talex-touch/tuffex/base.css'
 
 ## 相关组件
 
-- [MotionButton 动效按钮](/zh/motion-button)：命名按钮效果与来源预设。
-- [卡片展开](/zh/card-spread)：弧形、扇形与印章布局。
-- [三维轮播](/zh/carousel-3d)：弧线、CoverFlow 与时间机器路径。
-- [翻页书](/zh/flip-book)：可拖动翻页的双面书页。
-- [动态加载器](/zh/motion-loader)：137 个来源加载场景。
-- [DitherChart 抖动图表](/zh/dither-chart)：像素、有序抖动与 SVG 图案。
-- [MotionText 文字动效](/zh/motion-text)：字符、词与段落的文字效果。
-- [物理动效](/zh/physics-motion)：61 个可抓取的物理场景。
-- [Motion 通用交互](/zh/motion)：入场、悬停、指针与滚动联动。
-- [动态应用栏](/zh/motion-dock)：放大与键盘排序的调用方条目。
-- [PixelField 像素粒子场](/zh/pixel-field)：支持植物预设、自定义采样与指针聚拢的像素点阵。
-- [VoiceRing 语音光环](/zh/voice-ring)：响应音量、情绪色与声源方位倾斜的发光光环。
-- [MotionToggle 动态开关](/zh/motion-toggle)：受控开关与操作样式。
-- [MotionTransition 动态转场](/zh/motion-transition)：门、液体波、光圈与帘幕切换。
-- [DistortionWave 折射波转场](/zh/distortion-wave)：WebGL2 彩色色散折射波视图切换。
+- **按钮与复合控件**：[MotionButton](/zh/motion-button)、[MotionControl](/zh/motion-control)、[MotionForm](/zh/motion-form)
+- **转场与入场**：[MotionTransition](/zh/motion-transition)、[DistortionWave](/zh/distortion-wave)、[Transition](/zh/transition)、[Stagger](/zh/stagger)、[FlipOverlay](/zh/flip-overlay)、[FoldPage](/zh/fold-page)
+- **形变与流体**：[Morph](/zh/morph)、[IconMorph](/zh/icon-morph)、[Liquid](/zh/liquid)、[Fusion](/zh/fusion)、[FusionSurface](/zh/fusion-surface)
+- **文字与描边**：[MotionText](/zh/motion-text)、[TextMorph](/zh/text-morph)、[TextTransformer](/zh/text-transformer)、[KeyframeStrokeText](/zh/keyframe-stroke-text)、[TuffLogoStroke](/zh/tuff-logo-stroke)
+- **卡片与 3D 轮播**：[CardSpread](/zh/card-spread)、[Carousel3D](/zh/carousel-3d)、[FlipBook](/zh/flip-book)
+- **交互、物理、加载与图表**：[Motion](/zh/motion)、[MotionDock](/zh/motion-dock)、[PixelField](/zh/pixel-field)、[VoiceRing](/zh/voice-ring)、[PhysicsMotion](/zh/physics-motion)、[MotionLoader](/zh/motion-loader)、[DitherChart](/zh/dither-chart)、[MotionMetric](/zh/motion-metric)

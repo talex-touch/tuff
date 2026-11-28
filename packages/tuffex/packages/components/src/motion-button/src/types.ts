@@ -56,6 +56,10 @@ export interface MotionButtonProps {
   animated?: boolean
   /** Caller-owned state. Hover and replay do not change it. */
   selected?: boolean
+  /** Optional caller-owned counter displayed alongside the label via TxTextMorph. */
+  count?: number
+  /** Emit a brief radial particle burst around the icon when `selected` switches to true. */
+  burst?: boolean
   href?: string
   target?: string
   rel?: string

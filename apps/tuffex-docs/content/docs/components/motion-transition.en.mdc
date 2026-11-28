@@ -129,7 +129,7 @@ code: |
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `--tx-motion-transition-surface` | `--tx-bg-color-overlay` | Opaque door, iris and final wave surface. |
+| `--tx-motion-transition-surface` | `--tx-fill-color-light` | Opaque door, iris and final wave surface. |
 | `--tx-motion-transition-pad` | Size-dependent, `16px` at md | Content/header/footer spacing. |
 | `--tx-motion-transition-radius` | Size-dependent, `16px` at md | Card/modal radius. |
 | `--tx-motion-transition-width` | `width` prop in dialog modes | Modal width. Prefer the prop when using a dialog. |

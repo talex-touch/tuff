@@ -1,7 +1,7 @@
 ---
 title: "MotionForm"
 description: "Fifteen animated form interactions built on TuffEx form controls."
-category: Advanced
+category: MotionControls
 status: beta
 since: 0.7.0
 tags: [form, motion, validation, otp, files]

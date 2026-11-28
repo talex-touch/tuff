@@ -1,7 +1,7 @@
 ---
 title: "Fusion 交融"
 description: "激活时让两个插槽交融的 gooey 效果"
-category: Effects
+category: MotionMorph
 status: beta
 since: 0.3.4
 tags: [fusion, gooey, motion]

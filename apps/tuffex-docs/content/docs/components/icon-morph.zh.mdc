@@ -1,7 +1,7 @@
 ---
 title: "IconMorph 图标形变"
 description: "以弹簧物理在描边图标间形变的组件"
-category: Effects
+category: MotionMorph
 status: beta
 since: 0.6.0
 tags: [icon, morph, vector, animation, spring, svg, 图标, 动效]

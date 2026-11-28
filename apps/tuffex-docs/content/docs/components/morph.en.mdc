@@ -1,7 +1,7 @@
 ---
 title: Morph
 description: A shape container that morphs continuously between states.
-category: Effects
+category: MotionMorph
 status: beta
 since: 0.7.0
 tags: [morph, shape, spring, state]
