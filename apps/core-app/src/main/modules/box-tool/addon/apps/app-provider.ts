@@ -113,7 +113,6 @@ import {
   APP_ENTRY_SOURCE_EXTENSION_KEY,
   APP_ENTRY_SOURCE_MANUAL,
   APP_IDENTIFIER_EXTENSION_KEYS,
-  APP_IDENTITY_EXTENSION_KEY,
   APP_IDENTITY_KIND_EXTENSION_KEY,
   APP_LAUNCH_KIND_EXTENSION_KEY,
   APP_LAUNCH_TARGET_EXTENSION_KEY,
@@ -158,6 +157,7 @@ import {
   type AppSearchFinishOptions
 } from './app-search-pipeline'
 import { AppSearchCatalogService } from './services/app-search-catalog-service'
+import { resolveAuthoritativeExecuteLaunch } from './services/app-execute-authority'
 import { searchIndexCommitHub } from '../../search-engine/search-index-commit-hub'
 import type { AppLaunchKind, ScannedAppInfo } from './app-types'
 
@@ -3438,137 +3438,36 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     return await this.fetchExtensionsForFiles(files)
   }
 
-  private async resolveAuthoritativeAppForExecute(
-    itemId: string,
-    hintedPath?: string
-  ): Promise<ScannedAppInfo | null> {
-    const normalizedItemId = itemId?.trim() || ''
-    const normalizedHintedPath = hintedPath?.trim() || ''
-
-    if (this.searchCatalog.isReady()) {
-      const fromCatalog =
-        (normalizedItemId ? this.searchCatalog.findRowByItemId(normalizedItemId) : null) ??
-        (normalizedHintedPath ? this.searchCatalog.findRowByItemId(normalizedHintedPath) : null)
-      if (fromCatalog) {
-        const mapped = this._mapDbAppToScannedInfo(fromCatalog)
-        if (!normalizedItemId || resolveAppItemIds(mapped).includes(normalizedItemId)) {
-          return mapped
-        }
-      }
-    }
-
-    if (!this.dbUtils) {
-      return null
-    }
-
-    const candidates: DbAppRecord[] = []
-    const seenIds = new Set<number>()
-    const addCandidate = (record: DbAppRecord | null | undefined): void => {
-      if (!record || record.type !== 'app' || seenIds.has(record.id)) return
-      seenIds.add(record.id)
-      candidates.push(record)
-    }
-
-    if (normalizedItemId && typeof this.dbUtils.getFileByPath === 'function') {
-      addCandidate(await this.dbUtils.getFileByPath(normalizedItemId).catch(() => null))
-    }
-    if (
-      normalizedHintedPath &&
-      normalizedHintedPath !== normalizedItemId &&
-      typeof this.dbUtils.getFileByPath === 'function'
-    ) {
-      addCandidate(await this.dbUtils.getFileByPath(normalizedHintedPath).catch(() => null))
-    }
-
-    if (candidates.length === 0 && normalizedItemId && typeof this.dbUtils.getDb === 'function') {
-      try {
-        const db = this.dbUtils.getDb()
-        const extMatches = await db
-          .select({ fileId: fileExtensions.fileId })
-          .from(fileExtensions)
-          .where(
-            and(
-              inArray(fileExtensions.key, [APP_IDENTITY_EXTENSION_KEY, 'bundleId']),
-              eq(fileExtensions.value, normalizedItemId)
-            )
-          )
-        const fileIds = Array.from(new Set(extMatches.map((row) => row.fileId)))
-        if (fileIds.length > 0) {
-          const matchedFiles = await db
-            .select()
-            .from(filesSchema)
-            .where(and(eq(filesSchema.type, 'app'), inArray(filesSchema.id, fileIds)))
-          for (const file of matchedFiles) {
-            addCandidate(file)
-          }
-        }
-      } catch {
-        // Fallback lookup failed; refuse execution below
-      }
-    }
-
-    if (candidates.length === 0) {
-      return null
-    }
-
-    const withExtensions = await this.fetchExtensionsForFiles(candidates)
-    for (const row of withExtensions) {
-      const mapped = this._mapDbAppToScannedInfo(row)
-      if (normalizedItemId && resolveAppItemIds(mapped).includes(normalizedItemId)) {
-        return mapped
-      }
-    }
-    for (const row of withExtensions) {
-      if (normalizedHintedPath && row.path === normalizedHintedPath) {
-        return this._mapDbAppToScannedInfo(row)
-      }
-    }
-    return null
-  }
-
   async onExecute(args: IExecuteArgs): Promise<IProviderActivate | null> {
     const { item, searchResult, eventId } = args
-
     const appMeta = (item.meta?.app as { path?: string } | undefined) ?? { path: undefined }
-    const authoritativeApp = await this.resolveAuthoritativeAppForExecute(item.id, appMeta.path)
-    if (!authoritativeApp) {
+    const resolved = await resolveAuthoritativeExecuteLaunch(
+      {
+        searchCatalog: this.searchCatalog,
+        dbUtils: this.dbUtils,
+        fetchExtensionsForFiles: (files) => this.fetchExtensionsForFiles(files),
+        mapDbAppToScannedInfo: (row) => this._mapDbAppToScannedInfo(row)
+      },
+      item.id,
+      appMeta.path,
+      item.render?.basic?.title
+    )
+    if (resolved.status !== 'ok') {
       logApp(
-        `Execution refused: App is not in authoritative app index (${item.id})`,
-        LogStyle.warning
+        resolved.status === 'refused'
+          ? `Execution refused: App is not in authoritative app index (${item.id})`
+          : 'Execution failed: App path not found',
+        resolved.status === 'refused' ? LogStyle.warning : LogStyle.error
       )
       return null
     }
-
-    const appPath = authoritativeApp.path
-    if (!appPath) {
-      logApp('Execution failed: App path not found', LogStyle.error)
-      return null
-    }
-
-    const launchKind = authoritativeApp.launchKind || 'path'
-    const rawLaunchTarget = authoritativeApp.launchTarget || appPath
-    const launchTarget =
-      launchKind === 'uwp' && isWindowsUwpShellPath(rawLaunchTarget)
-        ? rawLaunchTarget.replace(/^shell:AppsFolder\\/i, '')
-        : rawLaunchTarget
-    const launchArgs = authoritativeApp.launchArgs
-    const workingDirectory = authoritativeApp.workingDirectory
-
     // Foreground read before the launch is handed over: once the target is frontmost, "what the
     // user came from" is gone. Awaited before `launchApp` below for the same reason — a read left
     // to race reports the launched app as the app it was launched from (3s-cached in the common
     // case).
     const previous = await resolvePreviousAppContext()
 
-    const outcome = await launchApp({
-      name: authoritativeApp.displayName || authoritativeApp.name || item.render?.basic?.title,
-      path: appPath,
-      launchKind,
-      launchTarget,
-      launchArgs,
-      workingDirectory,
-      sourceItemId: item.id
-    })
+    const outcome = await launchApp({ ...resolved.params, sourceItemId: item.id })
 
     // Only a launch the OS accepted is a use. A missing path, a failed open and a launch that was
     // merely scheduled are not, and a count recorded before this point could not tell them apart.
