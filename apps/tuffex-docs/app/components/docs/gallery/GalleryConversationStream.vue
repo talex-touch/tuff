@@ -106,7 +106,7 @@ async function loadOlder() {
   if (olderPagesLeft.value <= 0)
     return { hasMore: false }
   olderPagesLeft.value -= 1
-  const batch: StreamTurn[] = Array.from({ length: 4 }, (_, i) => {
+  const batch: StreamTurn[] = Array.from({ length: 4 }, (_, i): StreamTurn => {
     olderCounter += 1
     return {
       id: `older-${olderCounter}`,

@@ -10,6 +10,7 @@ import type {
   ChoiceStepLabelFormatter,
 } from './types'
 import { computed, nextTick, ref, useId, watch } from 'vue'
+import TxAutoSizer from '../../auto-sizer/src/TxAutoSizer.vue'
 import TxButton from '../../button/src/button.vue'
 import TxCard from '../../card/src/TxCard.vue'
 import TxIcon from '../../icon/src/TxIcon.vue'
@@ -61,6 +62,7 @@ const MAX_SKELETON_ROWS = 24
 const MAX_STAGGER_INDEX = 8
 
 const listRef = ref<HTMLElement | null>(null)
+const autoSizerRef = ref<InstanceType<typeof TxAutoSizer> | null>(null)
 let prevButtonEl: HTMLButtonElement | null = null
 let nextButtonEl: HTMLButtonElement | null = null
 
@@ -119,12 +121,35 @@ function goTo(index: number): void {
 
 /* ─── entrance ─── */
 
-// `appear`: rows rise in one after another. `step`: the new page blur-fades in as one.
-// Both are CSS animations on freshly mounted nodes, so the options are ready and clickable
-// from their first frame, and reduced motion drops only the motion.
+// `appear`: rows rise in one after another on mount / after loading.
+// `step`: outgoing page slides out while the incoming page slides in seamlessly.
 type Entrance = 'appear' | 'step' | 'none'
+type SlideDirection = 'none' | 'next' | 'prev'
 
 const entrance = ref<Entrance>(props.appear ? 'appear' : 'none')
+const slideDirection = ref<SlideDirection>('none')
+const slideTransitionName = computed(() => {
+  if (slideDirection.value === 'next')
+    return 'tx-choice-card-slide-next'
+  if (slideDirection.value === 'prev')
+    return 'tx-choice-card-slide-prev'
+  return ''
+})
+
+let lastStepIndex = stepIndex.value
+
+// Sync flush so `<Transition :name="slideTransitionName">` already carries the new
+// direction on the exact render that swaps `pageKey`.
+watch(pageKey, (nextKey, prevKey) => {
+  if (!prevKey || !nextKey || prevKey === nextKey)
+    slideDirection.value = 'none'
+  else if (stepIndex.value < lastStepIndex)
+    slideDirection.value = 'prev'
+  else
+    slideDirection.value = 'next'
+
+  lastStepIndex = stepIndex.value
+}, { flush: 'sync' })
 
 /* ─── selection and roving focus ─── */
 
@@ -266,6 +291,8 @@ watch(pageKey, async (key, previous) => {
   if (!previous || !key || typeof document === 'undefined')
     return
 
+  void autoSizerRef.value?.refresh()
+
   const focused = document.activeElement
   const prevEl = prevButtonEl
   const nextEl = nextButtonEl
@@ -298,8 +325,10 @@ watch(pageKey, async (key, previous) => {
 // Declared after the page watcher so that, when a page and its options arrive together,
 // the options' first appearance wins.
 watch(() => props.loading, (loading, was) => {
-  if (was && !loading)
+  if (was && !loading) {
+    slideDirection.value = 'none'
     entrance.value = props.appear ? 'appear' : 'none'
+  }
 })
 </script>
 
@@ -322,20 +351,23 @@ watch(() => props.loading, (loading, was) => {
       refraction-tone="mist"
     >
       <header class="tx-choice-card__head">
-        <div
-          :id="headingId"
-          :key="pageKey || 'placeholder'"
-          class="tx-choice-card__heading"
-          :class="{ 'is-stepping': entrance === 'step' }"
-        >
-          <slot v-if="current" name="header" :step="current" :step-index="stepIndex" :total="total">
-            <h3 class="tx-choice-card__title">
-              {{ current.title }}
-            </h3>
-          </slot>
-          <div v-else class="tx-choice-card__title tx-choice-card__bar is-placeholder" aria-hidden="true">
-            <TxSkeleton width="56%" :height="12" :radius="4" />
-          </div>
+        <div :id="headingId" class="tx-choice-card__heading-viewport">
+          <Transition :name="slideTransitionName">
+            <div
+              :key="pageKey || 'placeholder'"
+              class="tx-choice-card__heading"
+              :class="{ 'is-stepping': entrance === 'step' }"
+            >
+              <slot v-if="current" name="header" :step="current" :step-index="stepIndex" :total="total">
+                <h3 class="tx-choice-card__title">
+                  {{ current.title }}
+                </h3>
+              </slot>
+              <div v-else class="tx-choice-card__title tx-choice-card__bar is-placeholder" aria-hidden="true">
+                <TxSkeleton width="56%" :height="12" :radius="4" />
+              </div>
+            </div>
+          </Transition>
         </div>
 
         <div v-if="total > 1" class="tx-choice-card__pager">
@@ -393,57 +425,68 @@ watch(() => props.loading, (loading, was) => {
         </div>
       </div>
 
-      <ul
+      <TxAutoSizer
         v-else
-        ref="listRef"
-        :key="pageKey"
-        class="tx-choice-card__options"
-        :class="{ 'is-appearing': entrance === 'appear', 'is-stepping': entrance === 'step' }"
-        role="list"
-        :aria-labelledby="headingId"
+        ref="autoSizerRef"
+        :width="false"
+        :height="true"
+        :duration-ms="280"
+        easing="cubic-bezier(0.22, 1, 0.36, 1)"
+        outer-class="tx-choice-card__viewport"
       >
-        <li
-          v-for="(option, index) in options"
-          :key="option.id"
-          class="tx-choice-card__item"
-          :style="{ '--tx-choice-card-index': Math.min(index, MAX_STAGGER_INDEX) }"
-        >
-          <TxButton
-            variant="bare"
-            :border="false"
-            class="tx-choice-card__option"
-            :class="{ 'is-selected': isSelected(option) }"
-            :disabled="option.disabled"
-            :tabindex="index === rovingIndex ? 0 : -1"
-            :aria-current="isSelected(option) ? 'true' : undefined"
-            :aria-labelledby="`${baseId}-o${index}`"
-            :aria-describedby="option.description ? `${baseId}-o${index}-desc` : undefined"
-            @click="choose(option, index)"
-            @focus="activeIndex = index"
-            @keydown="onKeydown($event, index)"
+        <Transition :name="slideTransitionName">
+          <ul
+            ref="listRef"
+            :key="pageKey"
+            class="tx-choice-card__options"
+            :class="{ 'is-appearing': entrance === 'appear', 'is-stepping': entrance === 'step' }"
+            role="list"
+            :aria-labelledby="headingId"
           >
-            <span v-if="hasIcons" class="tx-choice-card__icon" aria-hidden="true">
-              <TxIcon v-if="option.icon" :icon="iconSource(option.icon)" />
-            </span>
-            <span class="tx-choice-card__text">
-              <span :id="`${baseId}-o${index}`" class="tx-choice-card__label">{{ option.label }}</span>
-              <span
-                v-if="option.description"
-                :id="`${baseId}-o${index}-desc`"
-                class="tx-choice-card__desc"
-              >{{ option.description }}</span>
-            </span>
-            <span v-if="isSelected(option)" class="tx-choice-card__check" aria-hidden="true">
-              <TxIcon name="check" />
-            </span>
-            <span v-else class="tx-choice-card__arrow" aria-hidden="true">
-              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M9 6l6 6-6 6" />
-              </svg>
-            </span>
-          </TxButton>
-        </li>
-      </ul>
+            <li
+              v-for="(option, index) in options"
+              :key="option.id"
+              class="tx-choice-card__item"
+              :style="{ '--tx-choice-card-index': Math.min(index, MAX_STAGGER_INDEX) }"
+            >
+              <TxButton
+                variant="bare"
+                :border="false"
+                class="tx-choice-card__option"
+                :class="{ 'is-selected': isSelected(option) }"
+                :disabled="option.disabled"
+                :tabindex="index === rovingIndex ? 0 : -1"
+                :aria-current="isSelected(option) ? 'true' : undefined"
+                :aria-labelledby="`${baseId}-o${index}`"
+                :aria-describedby="option.description ? `${baseId}-o${index}-desc` : undefined"
+                @click="choose(option, index)"
+                @focus="activeIndex = index"
+                @keydown="onKeydown($event, index)"
+              >
+                <span v-if="hasIcons" class="tx-choice-card__icon" aria-hidden="true">
+                  <TxIcon v-if="option.icon" :icon="iconSource(option.icon)" />
+                </span>
+                <span class="tx-choice-card__text">
+                  <span :id="`${baseId}-o${index}`" class="tx-choice-card__label">{{ option.label }}</span>
+                  <span
+                    v-if="option.description"
+                    :id="`${baseId}-o${index}-desc`"
+                    class="tx-choice-card__desc"
+                  >{{ option.description }}</span>
+                </span>
+                <span v-if="isSelected(option)" class="tx-choice-card__check" aria-hidden="true">
+                  <TxIcon name="check" />
+                </span>
+                <span v-else class="tx-choice-card__arrow" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M9 6l6 6-6 6" />
+                  </svg>
+                </span>
+              </TxButton>
+            </li>
+          </ul>
+        </Transition>
+      </TxAutoSizer>
     </TxCard>
   </section>
 </template>
@@ -456,17 +499,10 @@ watch(() => props.loading, (loading, was) => {
   }
 }
 
-@keyframes tx-choice-card-blur-in {
-  from {
-    opacity: 0;
-    filter: blur(4px);
-  }
-}
-
 .tx-choice-card {
   // Sizes are read, never set, here: a host overrides them on the card or any ancestor.
   //   --tx-choice-card-pad            inset between the TxCard edge and the options (12px)
-  //   --tx-choice-card-option-radius  option corner radius (12px)
+  //   --tx-choice-card-option-radius  option & pager corner radius, matching TxButton (12px)
   //   --tx-choice-card-option-pad-x   option horizontal inset (12px)
   //   --tx-choice-card-label-line     label line height (20px)
   //   --tx-choice-card-desc-line      description line height (18px)
@@ -479,7 +515,7 @@ watch(() => props.loading, (loading, was) => {
 }
 
 .tx-choice-card__card.tx-card {
-  // Concentric with the options: outer radius = inner radius + card inset.
+  // Concentric with the options and pager: outer radius = inner radius + card inset.
   // Set padding and radius directly too so host overrides of --tx-choice-card-*
   // win over TxCard's inline prop variables.
   --tx-card-radius: calc(var(--tx-choice-card-option-radius, 12px) + var(--tx-choice-card-pad, 12px));
@@ -493,11 +529,18 @@ watch(() => props.loading, (loading, was) => {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 2px 2px 12px 4px;
+  padding: 0 0 12px 4px;
+}
+
+.tx-choice-card__heading-viewport {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .tx-choice-card__heading {
-  flex: 1;
+  width: 100%;
   min-width: 0;
 }
 
@@ -506,8 +549,8 @@ watch(() => props.loading, (loading, was) => {
   align-items: center;
   flex: none;
   gap: 2px;
-  padding: 2px;
-  border-radius: 999px;
+  padding: 3px;
+  border-radius: var(--tx-choice-card-option-radius, 12px);
   background: var(--tx-fill-color-light, #f5f7fa);
   box-shadow: inset 0 0 0 1px var(--tx-border-color-lighter, #ebeef5);
   color: var(--tx-text-color-regular, #606266);
@@ -515,7 +558,7 @@ watch(() => props.loading, (loading, was) => {
 
 .tx-choice-card__nav.tx-button {
   --tx-button-bare-padding: 0;
-  --tx-button-bare-radius: 999px;
+  --tx-button-bare-radius: calc(var(--tx-choice-card-option-radius, 12px) - 3px);
   --tx-button-bare-bg: transparent;
   --tx-button-bare-hover: var(--tx-fill-color, #f0f2f5);
   --tx-button-height: 22px;
@@ -528,7 +571,7 @@ watch(() => props.loading, (loading, was) => {
   min-width: 22px;
   min-height: 22px;
   padding: 0;
-  border-radius: 999px;
+  border-radius: calc(var(--tx-choice-card-option-radius, 12px) - 3px);
   justify-content: center;
   color: inherit;
   cursor: pointer;
@@ -570,6 +613,13 @@ watch(() => props.loading, (loading, was) => {
   &.is-placeholder {
     --tx-skeleton-base-color: var(--tx-fill-color, #f0f2f5);
   }
+}
+
+.tx-choice-card__viewport {
+  position: relative;
+  margin: -6px calc(var(--tx-choice-card-pad, 12px) * -1);
+  padding: 6px var(--tx-choice-card-pad, 12px);
+  overflow: hidden;
 }
 
 .tx-choice-card__options {
@@ -732,9 +782,41 @@ watch(() => props.loading, (loading, was) => {
       calc(var(--tx-choice-card-index, 0) * 45ms) both;
   }
 
-  .tx-choice-card__options.is-stepping,
-  .tx-choice-card__heading.is-stepping {
-    animation: tx-choice-card-blur-in 160ms var(--tx-ease-out-strong, cubic-bezier(0.23, 1, 0.32, 1)) both;
+  .tx-choice-card-slide-next-enter-active,
+  .tx-choice-card-slide-next-leave-active,
+  .tx-choice-card-slide-prev-enter-active,
+  .tx-choice-card-slide-prev-leave-active {
+    transition:
+      transform 280ms var(--tx-ease-out-strong, cubic-bezier(0.22, 1, 0.36, 1)),
+      opacity 220ms ease;
+    will-change: transform, opacity;
+  }
+
+  .tx-choice-card__heading.tx-choice-card-slide-next-leave-active,
+  .tx-choice-card__heading.tx-choice-card-slide-prev-leave-active {
+    position: absolute;
+    inset: 0 0 auto;
+    width: 100%;
+    pointer-events: none;
+  }
+
+  .tx-choice-card__options.tx-choice-card-slide-next-leave-active,
+  .tx-choice-card__options.tx-choice-card-slide-prev-leave-active {
+    position: absolute;
+    inset: 6px var(--tx-choice-card-pad, 12px) auto;
+    pointer-events: none;
+  }
+
+  .tx-choice-card-slide-next-enter-from,
+  .tx-choice-card-slide-prev-leave-to {
+    transform: translateX(calc(100% + var(--tx-choice-card-pad, 12px)));
+    opacity: 0;
+  }
+
+  .tx-choice-card-slide-next-leave-to,
+  .tx-choice-card-slide-prev-enter-from {
+    transform: translateX(calc(-100% - var(--tx-choice-card-pad, 12px)));
+    opacity: 0;
   }
 
   .tx-choice-card__arrow {

@@ -143,11 +143,13 @@ function find(selector: string): Map<string, string> | undefined {
 }
 
 describe('txChoiceCard style contract', () => {
-  it('positive control: the compile produced the card, its rows, both entrances and their gate', () => {
-    for (const selector of ['.tx-choice-card', '.tx-choice-card__option', '.tx-choice-card__title', '.tx-choice-card__desc'])
+  it('positive control: the compile produced the card, its rows, rise entrance, slide transitions and their gate', () => {
+    for (const selector of ['.tx-choice-card', '.tx-choice-card__option', '.tx-choice-card__pager', '.tx-choice-card__title', '.tx-choice-card__desc'])
       expect(find(selector), selector).toBeDefined()
     expect(keyframes.length).toBeGreaterThan(0)
-    expect(gated.filter(rule => rule.declarations.has('animation'))).toHaveLength(2)
+    expect(gated.filter(rule => rule.declarations.has('animation'))).toHaveLength(1)
+    expect(gated.filter(rule => rule.selectors.includes('.tx-choice-card-slide-next-enter-active'))).toHaveLength(1)
+    expect(gated.filter(rule => rule.selectors.includes('.tx-choice-card-slide-prev-enter-active'))).toHaveLength(1)
   })
 
   it('never transitions colour, and changes it on hover at once', () => {
@@ -217,6 +219,8 @@ describe('txChoiceCard style contract', () => {
     expect(card.get('padding')).toBe('var(--tx-choice-card-pad, 12px)')
     expect(card.get('--tx-card-radius')).toBe('calc(var(--tx-choice-card-option-radius, 12px) + var(--tx-choice-card-pad, 12px))')
     expect(find('.tx-choice-card__option')?.get('border-radius')).toBe('var(--tx-choice-card-option-radius, 12px)')
+    expect(find('.tx-choice-card__pager')?.get('border-radius')).toBe('var(--tx-choice-card-option-radius, 12px)')
+    expect(find('.tx-choice-card__nav.tx-button')?.get('border-radius')).toBe('calc(var(--tx-choice-card-option-radius, 12px) - 3px)')
     for (const rule of styleRules) {
       const border = rule.declarations.get('border')
       if (border !== undefined)

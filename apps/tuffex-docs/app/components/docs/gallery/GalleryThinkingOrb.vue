@@ -9,7 +9,8 @@ const labels = computed(() => locale.value === 'zh'
   : { working: 'Working…', searching: 'Searching…', solving: 'Solving…' })
 
 const states = ['working', 'searching', 'solving'] as const satisfies readonly OrbState[]
-const active = ref<OrbState>('working')
+type GalleryOrbState = (typeof states)[number]
+const active = ref<GalleryOrbState>('working')
 
 function cycleState(): void {
   const next = (states.indexOf(active.value) + 1) % states.length

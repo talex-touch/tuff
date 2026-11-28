@@ -234,7 +234,7 @@ const copy = computed(() => (props.localeKey === 'zh'
         {
           id: 'scope',
           question: '允许插件申请哪些运行时权限？',
-          type: 'checkbox' as const,
+          type: 'check' as const,
           options: [
             { value: 'clipboard', label: '读取剪贴板历史' },
             { value: 'fs', label: '访问当前工作区文件' },
@@ -375,7 +375,7 @@ const copy = computed(() => (props.localeKey === 'zh'
         {
           id: 'scope',
           question: 'Grant runtime permissions for this plugin?',
-          type: 'checkbox' as const,
+          type: 'check' as const,
           options: [
             { value: 'clipboard', label: 'Read clipboard history' },
             { value: 'fs', label: 'Access active workspace files' },

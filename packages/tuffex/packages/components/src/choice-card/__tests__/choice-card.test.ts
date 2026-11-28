@@ -539,4 +539,20 @@ describe('txChoiceCard entrance', () => {
     expect(list.element).not.toBe(before)
     expect(list.classes()).toContain('is-stepping')
   })
+
+  it('slides forward on next step and reverses on previous step', async () => {
+    const wrapper = mountCard({ steps: [start, report], step: 0 })
+
+    await wrapper.setProps({ step: 1 })
+    const headNext = wrapper.find('.tx-choice-card__heading-viewport > transition-stub')
+    const listNext = wrapper.find('.tx-choice-card__viewport > div > transition-stub')
+    expect(headNext.attributes('name')).toBe('tx-choice-card-slide-next')
+    expect(listNext.attributes('name')).toBe('tx-choice-card-slide-next')
+
+    await wrapper.setProps({ step: 0 })
+    const headPrev = wrapper.find('.tx-choice-card__heading-viewport > transition-stub')
+    const listPrev = wrapper.find('.tx-choice-card__viewport > div > transition-stub')
+    expect(headPrev.attributes('name')).toBe('tx-choice-card-slide-prev')
+    expect(listPrev.attributes('name')).toBe('tx-choice-card-slide-prev')
+  })
 })
