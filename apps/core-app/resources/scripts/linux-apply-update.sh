@@ -171,8 +171,12 @@ install_appimage() {
 }
 
 install_deb() {
-  if [ -z "$DEB_PACKAGE" ] || [ -L "$DEB_PACKAGE" ] || [ ! -f "$DEB_PACKAGE" ]; then
-    log "deb package missing or symlink"
+  if [ -n "$DEB_PACKAGE" ] && [ -L "$DEB_PACKAGE" ]; then
+    log "deb package symlink rejected"
+    return 1
+  fi
+  if [ -z "$DEB_PACKAGE" ] || [ ! -f "$DEB_PACKAGE" ]; then
+    log "deb package not found"
     return 1
   fi
   if ! command -v pkexec >/dev/null 2>&1; then
