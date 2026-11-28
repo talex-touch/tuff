@@ -6,7 +6,11 @@
  * without introducing an upper-triangular runtime dependency.
  */
 
-import type { DivisionBoxConfig, DivisionBoxSize, ManifestDivisionBoxConfig } from '@talex-touch/utils'
+import type {
+  DivisionBoxConfig,
+  DivisionBoxSize,
+  ManifestDivisionBoxConfig
+} from '@talex-touch/utils'
 import { createLogger } from '../utils/logger'
 import type { Primitive } from '../utils/logger'
 

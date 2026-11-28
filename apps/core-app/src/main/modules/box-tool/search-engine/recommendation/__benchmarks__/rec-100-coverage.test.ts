@@ -192,7 +192,13 @@ describe('Tuff Smart Recommendation & Dual-Layer Gemma 100-Scenario Coverage Sui
       runWithEmbeddingPriority: (_priority, run) => run(),
       onUsageLimitsChanged: () => () => {},
       readUsageLimitInfo: (error) => {
-        if (error && typeof error === 'object' && 'code' in error && error.code === 'USAGE_LIMIT_REACHED' && 'usageLimit' in error) {
+        if (
+          error &&
+          typeof error === 'object' &&
+          'code' in error &&
+          error.code === 'USAGE_LIMIT_REACHED' &&
+          'usageLimit' in error
+        ) {
           return (error as { usageLimit: never }).usageLimit
         }
         return null

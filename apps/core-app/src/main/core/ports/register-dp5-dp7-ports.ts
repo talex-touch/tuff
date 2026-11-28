@@ -55,8 +55,9 @@ const pluginIntelligenceContextAdapter = Object.freeze({
 })
 
 const pluginAiOrchestratorAdapter = Object.freeze({
-  listOrchestratorRuns: (request?: Parameters<typeof aiOrchestratorStore.listOrchestratorRuns>[0]) =>
-    aiOrchestratorStore.listOrchestratorRuns(request)
+  listOrchestratorRuns: (
+    request?: Parameters<typeof aiOrchestratorStore.listOrchestratorRuns>[0]
+  ) => aiOrchestratorStore.listOrchestratorRuns(request)
 })
 
 const pluginVoiceAdapter = Object.freeze({

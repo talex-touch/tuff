@@ -465,7 +465,11 @@ async function runSmoke(signal: AbortSignal): Promise<Record<string, unknown>> {
   let result: Record<string, unknown> | undefined
   try {
     const migrationsFolder = await resolvePackagedMigrationsFolder()
-    const createStore = (db: Parameters<NonNullable<Parameters<typeof runOrchestratorPrivacyAcceptance>[0]['createStore']>>[0]) =>
+    const createStore = (
+      db: Parameters<
+        NonNullable<Parameters<typeof runOrchestratorPrivacyAcceptance>[0]['createStore']>
+      >[0]
+    ) =>
       new AiOrchestratorStore({
         getDb: () => db,
         scheduleWrite: scheduleDbWrite

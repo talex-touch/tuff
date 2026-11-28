@@ -1,4 +1,9 @@
-import type { IProviderActivate, ISearchProvider, TuffQuery, TuffSearchResult } from '@talex-touch/utils'
+import type {
+  IProviderActivate,
+  ISearchProvider,
+  TuffQuery,
+  TuffSearchResult
+} from '@talex-touch/utils'
 import type { IManifest } from '@talex-touch/utils/plugin'
 import type {
   CoreBoxInputChangeRequest,

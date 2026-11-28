@@ -20,7 +20,9 @@ const mocks = vi.hoisted(() => ({
   registerPluginWebContents: vi.fn(() => 'reg-1'),
   unregisterPluginWebContents: vi.fn(() => true),
   closePluginWebContents: vi.fn(),
-  codeReview: vi.fn(async () => ({ result: { summary: 'ok', score: 100, issues: [], improvements: [] } })),
+  codeReview: vi.fn(async () => ({
+    result: { summary: 'ok', score: 100, issues: [], improvements: [] }
+  })),
   summarize: vi.fn(async () => ({ result: 'sum' })),
   rewrite: vi.fn(async () => ({ result: 'rew' })),
   translate: vi.fn(async () => ({ result: 'tr' })),

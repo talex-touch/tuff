@@ -109,7 +109,13 @@ describe('DP4 box-tool port registries', () => {
       await expect(installBoxToolTpexPluginFromPath('/tmp/plugin.tpex')).rejects.toThrow(
         /not registered/i
       )
-      await expect(forwardBoxToolActiveFeatureInput({ input: 'a', query: { text: 'a', inputs: [] }, source: 'renderer' })).resolves.toBe(false)
+      await expect(
+        forwardBoxToolActiveFeatureInput({
+          input: 'a',
+          query: { text: 'a', inputs: [] },
+          source: 'renderer'
+        })
+      ).resolves.toBe(false)
       await expect(
         searchBoxToolPluginFeatures({ text: 'a', inputs: [] }, new AbortController().signal)
       ).resolves.toBeNull()
@@ -120,9 +126,9 @@ describe('DP4 box-tool port registries', () => {
         effectiveProfile: 'trusted-plugin-view',
         reason: 'missing-plugin'
       })
-      expect(() =>
-        resolveBoxToolPluginViewSecurityProfile(pluginStub, { source: 'test' })
-      ).toThrow(/not registered/i)
+      expect(() => resolveBoxToolPluginViewSecurityProfile(pluginStub, { source: 'test' })).toThrow(
+        /not registered/i
+      )
       expect(() =>
         buildBoxToolPluginViewWebPreferences('trusted-plugin-view', {
           plugin: pluginStub,
@@ -147,7 +153,10 @@ describe('DP4 box-tool port registries', () => {
       ).toThrow(/not registered/i)
 
       // closeBoxToolPluginWebContents still closes live webContents when unregistered
-      const liveWebContents = { isDestroyed: () => false, close: vi.fn() } as unknown as Electron.WebContents
+      const liveWebContents = {
+        isDestroyed: () => false,
+        close: vi.fn()
+      } as unknown as Electron.WebContents
       closeBoxToolPluginWebContents(liveWebContents)
       expect(liveWebContents.close).toHaveBeenCalledTimes(1)
     })
@@ -159,7 +168,10 @@ describe('DP4 box-tool port registries', () => {
       const disposeA = registerBoxToolPluginHostPort(portA)
       setBoxToolActivePlugin('plugin-a')
       expect(portA.setActivePlugin).toHaveBeenCalledWith('plugin-a')
-      expect(getBoxToolPluginProviderDetail('plugin-a')).toEqual({ id: 'plugin-a', name: 'plugin-a' })
+      expect(getBoxToolPluginProviderDetail('plugin-a')).toEqual({
+        id: 'plugin-a',
+        name: 'plugin-a'
+      })
 
       const disposeB = registerBoxToolPluginHostPort(portB)
       // Stale disposer from portA must not clear portB
@@ -200,9 +212,9 @@ describe('DP4 box-tool port registries', () => {
         max: 10,
         resetsAt: 1_800_000_000_000
       })
-      expect(normalizeBoxToolIntelligenceError(limitError, { capabilityId: 'embedding.generate' }).code).toBe(
-        'USAGE_LIMIT_REACHED'
-      )
+      expect(
+        normalizeBoxToolIntelligenceError(limitError, { capabilityId: 'embedding.generate' }).code
+      ).toBe('USAGE_LIMIT_REACHED')
 
       // Subscribe BEFORE port registration; must still fire once port wires its emitter
       const received: number[] = []

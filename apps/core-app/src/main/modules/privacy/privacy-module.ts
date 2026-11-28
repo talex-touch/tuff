@@ -35,10 +35,7 @@ import {
 } from './owners/voice-insights-privacy-owner'
 import { createPrivacyCategoryExporter } from './privacy-export'
 import { createPrivacyLifecycleService } from './privacy-lifecycle-service'
-import {
-  getRegisteredPrivacyVoiceStores,
-  resolvePrivacyRuntimeDependencies
-} from './privacy-ports'
+import { getRegisteredPrivacyVoiceStores, resolvePrivacyRuntimeDependencies } from './privacy-ports'
 import {
   createMainPrivacySecretFileAdapter,
   createPrivacySecretService

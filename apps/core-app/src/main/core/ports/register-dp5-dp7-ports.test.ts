@@ -182,7 +182,9 @@ describe('DP5-DP7 axiomatic ports and composition root registrar', () => {
     await expect(getPluginVoicePort().dictate()).rejects.toThrow('PLUGIN_VOICE_PORT_UNAVAILABLE')
 
     expect(getAiAuthPort().getAuthToken()).toBeNull()
-    await expect(getAiAuthPort().performNexusRequestWithAuth({ url: 'https://x' })).resolves.toBeNull()
+    await expect(
+      getAiAuthPort().performNexusRequestWithAuth({ url: 'https://x' })
+    ).resolves.toBeNull()
     expect(getAiNexusPort().getRuntimeNexusBaseUrl()).toBe(NEXUS_BASE_URL)
     await expect(getAiNexusPort().runNexusScene('scene', {})).resolves.toBeNull()
     await expect(getAiNexusPort().transcribeNexusAudio({} as never)).rejects.toMatchObject({
@@ -284,9 +286,9 @@ describe('DP5-DP7 axiomatic ports and composition root registrar', () => {
       header: { show: false, title: 'Demo' }
     })
 
-    expect(classifyIntelligenceErrorCode(Object.assign(new Error('x'), { code: 'USAGE_LIMIT_REACHED' }))).toBe(
-      'USAGE_LIMIT_REACHED'
-    )
+    expect(
+      classifyIntelligenceErrorCode(Object.assign(new Error('x'), { code: 'USAGE_LIMIT_REACHED' }))
+    ).toBe('USAGE_LIMIT_REACHED')
     expect(classifyIntelligenceErrorCode(new Error('NEXUS_AUTH_REQUIRED'))).toBe(
       'NEXUS_AUTH_REQUIRED'
     )

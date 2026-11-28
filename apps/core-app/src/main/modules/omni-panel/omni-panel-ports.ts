@@ -1,7 +1,4 @@
-import type {
-  NexusSceneRunRequest,
-  NexusSceneRunResult
-} from '../../shared/cloud-port-types'
+import type { NexusSceneRunRequest, NexusSceneRunResult } from '../../shared/cloud-port-types'
 
 export interface OmniPanelNexusPort {
   runNexusScene(sceneId: string, request: NexusSceneRunRequest): Promise<NexusSceneRunResult | null>

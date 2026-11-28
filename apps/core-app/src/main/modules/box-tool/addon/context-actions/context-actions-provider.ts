@@ -26,10 +26,7 @@ import {
   requireBoxToolIntelligence,
   resolveBoxToolCapabilityStatus
 } from '../../ports/ai-capability-port'
-import {
-  hasBoxToolPluginManager,
-  searchBoxToolPluginFeatures
-} from '../../ports/plugin-host-port'
+import { hasBoxToolPluginManager, searchBoxToolPluginFeatures } from '../../ports/plugin-host-port'
 import { t } from '../../../../utils/i18n-helper'
 import { openValidatedExternalUrl } from '../../../../utils/external-url-policy'
 import { getLogger } from '@talex-touch/utils/common/logger'

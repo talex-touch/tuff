@@ -297,9 +297,8 @@ export function createQuickOpsSurfaceAudit(
         input.moduleSource.includes('flowTargetRegistry.registerTarget(') ||
         input.moduleSource.includes('flowPort.registerTarget('),
       usesQuickOpsPluginId:
-        input.moduleSource.includes(
-          'flowTargetRegistry.registerTarget(QUICK_OPS_FLOW_PLUGIN_ID'
-        ) || input.moduleSource.includes('flowPort.registerTarget(QUICK_OPS_FLOW_PLUGIN_ID'),
+        input.moduleSource.includes('flowTargetRegistry.registerTarget(QUICK_OPS_FLOW_PLUGIN_ID') ||
+        input.moduleSource.includes('flowPort.registerTarget(QUICK_OPS_FLOW_PLUGIN_ID'),
       deliveryHandlerCount,
       singleDeliveryHandler: deliveryHandlerCount === 1
     },

@@ -939,7 +939,9 @@ describe('CoreBox IPC hide transport', () => {
 
   it('resolves non-native provider details through the registered plugin host port', async () => {
     const handler = soleHandler(CoreBoxEvents.provider.getDetails) as
-      | ((payload: { providerIds: string[] }) => Promise<Array<{ id: string; name: string; icon?: unknown }>>)
+      | ((payload: {
+          providerIds: string[]
+        }) => Promise<Array<{ id: string; name: string; icon?: unknown }>>)
       | undefined
     expect(handler).toBeTypeOf('function')
 
@@ -956,13 +958,22 @@ describe('CoreBox IPC hide transport', () => {
       setActivePlugin: vi.fn(),
       getPluginProviderDetail: (pluginId) =>
         pluginId === 'plugin-alpha'
-          ? { id: 'plugin-alpha', name: 'plugin-alpha', icon: { type: 'class', value: 'i-ri-apps-line' } }
+          ? {
+              id: 'plugin-alpha',
+              name: 'plugin-alpha',
+              icon: { type: 'class', value: 'i-ri-apps-line' }
+            }
           : null,
       installDevPluginFromPath: vi.fn(async () => ({ status: 'error' as const, error: 'unused' })),
       canInstallTpexPlugin: () => false,
       installTpexPluginFromPath: vi.fn(async () => null),
       handleActiveFeatureInput: vi.fn(async () => false),
-      searchPluginFeatures: vi.fn(async () => ({ items: [], query: { text: '' }, duration: 0, sources: [] })),
+      searchPluginFeatures: vi.fn(async () => ({
+        items: [],
+        query: { text: '' },
+        duration: 0,
+        sources: []
+      })),
       getDefaultSearchProviders: () => ({}),
       usePluginInjections: () => null,
       resolvePluginViewSecurityProfile: vi.fn(),
@@ -974,7 +985,9 @@ describe('CoreBox IPC hide transport', () => {
       closePluginWebContents: vi.fn()
     })
 
-    expect(await handler?.({ providerIds: ['native-apps', 'plugin-alpha', 'missing-plugin'] })).toEqual([
+    expect(
+      await handler?.({ providerIds: ['native-apps', 'plugin-alpha', 'missing-plugin'] })
+    ).toEqual([
       { id: 'native-apps', name: 'Applications', icon: 'app-icon' },
       { id: 'plugin-alpha', name: 'plugin-alpha', icon: { type: 'class', value: 'i-ri-apps-line' } }
     ])

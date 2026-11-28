@@ -183,7 +183,11 @@ describe('system-ports integration', () => {
     const handler = mocks.handlers.get(AppEvents.performance.getReport.toEventName())
     expect(handler).toBeTypeOf('function')
     const report = (await handler?.(undefined, {})) as {
-      processes: Array<{ pid: number; role: string; surfaces: Array<{ kind: string; pluginName: string | null }> }>
+      processes: Array<{
+        pid: number
+        role: string
+        surfaces: Array<{ kind: string; pluginName: string | null }>
+      }>
     }
 
     expect(report.processes.find((p) => p.pid === 100)?.role).toBe('plugin-runtime')
@@ -203,7 +207,11 @@ describe('system-ports integration', () => {
 
     const handler = mocks.handlers.get(AppEvents.performance.getReport.toEventName())
     const report = (await handler?.(undefined, {})) as {
-      processes: Array<{ pid: number; role: string; surfaces: Array<{ kind: string; pluginName: string | null }> }>
+      processes: Array<{
+        pid: number
+        role: string
+        surfaces: Array<{ kind: string; pluginName: string | null }>
+      }>
     }
 
     expect(report.processes.find((p) => p.pid === 100)?.role).toBe('utility')
@@ -262,7 +270,11 @@ describe('system-ports integration', () => {
     const response = (await handler?.({ limit: 10 })) as {
       ok: boolean
       snapshot: {
-        indexing: { summary: Record<string, number>; watchedPathNames: string[]; entries: unknown[] }
+        indexing: {
+          summary: Record<string, number>
+          watchedPathNames: string[]
+          entries: unknown[]
+        }
         ocr: { jobs: unknown[] }
         workers: { summary: { total: number; idle: number }; workers: Array<{ name: string }> }
       }
