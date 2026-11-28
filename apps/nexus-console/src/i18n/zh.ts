@@ -87,7 +87,7 @@ export const zh = {
     tabEmail: '邮箱验证',
     tabPasskey: '通行密钥',
     emailLabel: '邮箱地址',
-    emailPlaceholder: 'you@example.com',
+    emailPlaceholder: "you{'@'}example.com",
     sendMagicLink: '发送登录验证链接',
     passkeyButton: '使用 Passkey 登录',
     passkeyHint: '可选填写邮箱以缩小凭证范围；留空则使用可发现通行密钥。',

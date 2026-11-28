@@ -87,7 +87,7 @@ export const en = {
     tabEmail: 'Email link',
     tabPasskey: 'Passkey',
     emailLabel: 'Email address',
-    emailPlaceholder: 'you@example.com',
+    emailPlaceholder: "you{'@'}example.com",
     sendMagicLink: 'Send verification link',
     passkeyButton: 'Sign in with Passkey',
     passkeyHint: 'Optional email narrows credentials; leave blank for discoverable passkeys.',

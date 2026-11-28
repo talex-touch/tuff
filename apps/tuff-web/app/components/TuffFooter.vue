@@ -251,8 +251,8 @@ onBeforeUnmount(() => {
   );
 }
 
-:global(.dark) .TuffFooter-Main,
-:global([data-theme='dark']) .TuffFooter-Main {
+.dark .TuffFooter-Main,
+[data-theme='dark'] .TuffFooter-Main {
   background-image: linear-gradient(
     180deg,
     rgba(10, 10, 14, 0.9) 0%,

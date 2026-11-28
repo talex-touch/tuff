@@ -163,7 +163,7 @@ async function handlePasskeySignIn() {
       <span>{{ t('auth.orDivider') }}</span>
     </div>
 
-    <TxTabs v-model="activeTab">
+    <TxTabs v-model="activeTab" placement="top" :content-padding="0" borderless>
       <TxTabItem name="email">
         <template #name>
           {{ t('auth.tabEmail') }}

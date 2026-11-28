@@ -1,7 +1,7 @@
 import { defineEventHandler, getQuery } from 'h3'
 import { PRODUCT_SCENE_TEMPLATES } from '#shared/provider-registry'
 import { requireAdmin } from '../../../../utils/auth'
-import { type ProviderRegistryOwnerScope } from '../../../../utils/providerRegistryStore'
+import type { ProviderRegistryOwnerScope } from '../../../../utils/providerRegistryStore'
 import {
   listSceneRegistryEntries,
   type SceneBindingStatus,
