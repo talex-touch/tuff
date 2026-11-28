@@ -1805,18 +1805,18 @@ async function startLoginPage(
     throw new Error('Device auth response is incomplete')
   }
 
-  activeDeviceAuthCode = deviceCode
-  const callbackState = randomBytes(24).toString('base64url')
-  activeAuthCallbackState = callbackState
   const baseOrigin = new URL(resolveAuthBaseUrl()).origin
   const authorizeUrl = new URL(authorizeUrlRaw, resolveAuthBaseUrl())
   if (authorizeUrl.origin !== baseOrigin) {
     throw new Error('Device auth authorize URL must match the configured Nexus origin')
   }
+  const callbackState = randomBytes(24).toString('base64url')
   if (mode === 'sign-up') {
     authorizeUrl.pathname = '/sign-up'
   }
   authorizeUrl.searchParams.set('state', callbackState)
+  activeDeviceAuthCode = deviceCode
+  activeAuthCallbackState = callbackState
 
   authLog.info('Browser login page resolved', {
     meta: {

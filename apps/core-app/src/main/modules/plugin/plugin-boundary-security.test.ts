@@ -1,9 +1,13 @@
+import { createWriteStream } from 'node:fs'
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import compressing from 'compressing'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { isReservedPrivilegedPluginName } from '../../../shared/privileged-plugins'
+import {
+  hasUnsafePluginNameEdgeChars,
+  isReservedPrivilegedPluginName
+} from '../../../shared/privileged-plugins'
 import { bundlePluginPreludeFromFile } from './runtime/plugin-prelude-compiler'
 import { extractArchiveSafely, peekTarManifestBounded } from './safe-archive-extract'
 import { isLoopbackWidgetDevOrigin } from './widget/widget-loader'
@@ -70,10 +74,16 @@ describe('Plugin boundary hardening (#16-2, #16-7, #16-8, #16-20)', () => {
     expect(bundledSymlink).toBeNull()
   })
 
-  it('enforces case-insensitive reservation for privileged plugin names', () => {
+  it('enforces case-insensitive and Windows trailing-dot/space reservation for privileged plugin names', () => {
     expect(isReservedPrivilegedPluginName('touch-system-actions')).toBe(true)
     expect(isReservedPrivilegedPluginName('Touch-System-Actions')).toBe(true)
-    expect(isReservedPrivilegedPluginName('TOUCH-TRANSLATION')).toBe(true)
+    expect(isReservedPrivilegedPluginName('touch-system-actions.')).toBe(true)
+    expect(isReservedPrivilegedPluginName('touch-system-actions.. ')).toBe(true)
+    expect(isReservedPrivilegedPluginName('TOUCH-TRANSLATION.')).toBe(true)
+    expect(hasUnsafePluginNameEdgeChars('touch-system-actions.')).toBe(true)
+    expect(hasUnsafePluginNameEdgeChars('demo ')).toBe(true)
+    expect(hasUnsafePluginNameEdgeChars(' demo')).toBe(true)
+    expect(hasUnsafePluginNameEdgeChars('my-custom-plugin')).toBe(false)
     expect(isReservedPrivilegedPluginName('my-custom-plugin')).toBe(false)
     expect(isReservedPrivilegedPluginName('')).toBe(false)
     expect(isReservedPrivilegedPluginName(undefined)).toBe(false)
@@ -97,14 +107,11 @@ describe('Plugin boundary hardening (#16-2, #16-7, #16-8, #16-20)', () => {
     tarStream.addEntry(path.join(srcDir, 'a.txt'), { relativePath: 'a.txt' })
     tarStream.addEntry(path.join(srcDir, 'b.txt'), { relativePath: 'b.txt' })
     await new Promise<void>((resolve, reject) => {
-      const out = fs.open(tarPath, 'w').then((fh) => {
-        const ws = fh.createWriteStream()
-        tarStream.pipe(ws)
-        ws.on('finish', resolve)
-        ws.on('error', reject)
-        tarStream.on('error', reject)
-      })
-      void out
+      const ws = createWriteStream(tarPath)
+      tarStream.pipe(ws)
+      ws.on('finish', resolve)
+      ws.on('error', reject)
+      tarStream.on('error', reject)
     })
 
     const manifest = await peekTarManifestBounded(tarPath)
@@ -125,5 +132,41 @@ describe('Plugin boundary hardening (#16-2, #16-7, #16-8, #16-20)', () => {
     await expect(
       extractArchiveSafely(tarPath, extractTooBig, 'tar', { maxTotalBytes: 1024 })
     ).rejects.toThrow('ARCHIVE_SIZE_LIMIT_EXCEEDED')
+
+    // node_modules zip bomb is still bounded even when skipNodeModules is true
+    const zipSrcDir = path.join(base, 'zip-bomb-src')
+    await fs.mkdir(path.join(zipSrcDir, 'node_modules'), { recursive: true })
+    await fs.mkdir(path.join(zipSrcDir, 'sub'), { recursive: true })
+    await fs.writeFile(path.join(zipSrcDir, 'node_modules', 'bomb.bin'), 'Z'.repeat(64 * 1024))
+    await fs.writeFile(path.join(zipSrcDir, 'sub', 'nested.txt'), 'nested-ok')
+    await fs.writeFile(path.join(zipSrcDir, 'index.js'), 'module.exports = 1')
+    const zipPath = path.join(base, 'bomb.zip')
+    await compressing.zip.compressDir(zipSrcDir, zipPath, { ignoreBase: true })
+    await expect(
+      extractArchiveSafely(zipPath, path.join(base, 'out-zip-bomb'), 'zip', {
+        skipNodeModules: true,
+        maxTotalBytes: 1024
+      })
+    ).rejects.toThrow('ARCHIVE_SIZE_LIMIT_EXCEEDED')
+
+    // Zip with nested directories extracts cleanly when within bounds
+    const zipGoodOut = path.join(base, 'out-zip-good')
+    await extractArchiveSafely(zipPath, zipGoodOut, 'zip', {
+      skipNodeModules: true,
+      maxTotalBytes: 256 * 1024
+    })
+    expect(await fs.readFile(path.join(zipGoodOut, 'index.js'), 'utf8')).toBe('module.exports = 1')
+    expect(await fs.readFile(path.join(zipGoodOut, 'sub', 'nested.txt'), 'utf8')).toBe('nested-ok')
+
+    // Pre-existing symlink at destination file path is rejected (never followed)
+    const outsideVictim = path.join(base, 'victim.txt')
+    await fs.writeFile(outsideVictim, 'untouched')
+    const symlinkTargetDir = path.join(base, 'out-symlink')
+    await fs.mkdir(symlinkTargetDir, { recursive: true })
+    await fs.symlink(outsideVictim, path.join(symlinkTargetDir, 'a.txt'))
+    await expect(extractArchiveSafely(tarPath, symlinkTargetDir, 'tar')).rejects.toThrow(
+      'ARCHIVE_SYMLINK_ESCAPE_DENIED'
+    )
+    expect(await fs.readFile(outsideVictim, 'utf8')).toBe('untouched')
   })
 })

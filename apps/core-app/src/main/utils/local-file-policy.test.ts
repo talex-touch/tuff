@@ -275,9 +275,16 @@ describe('isServableLocalFilePath', () => {
       await fsPromises.symlink(secretFile, escapeLink)
       await fsPromises.symlink(path.join(outsideRoot, 'missing.txt'), danglingLink)
 
+      const escapeDirLink = path.join(allowedRoot, 'escape-dir')
+      await fsPromises.symlink(outsideRoot, escapeDirLink)
+
       expect(isAllowedLocalFilePath(insideFile, [allowedRoot])).toBe(true)
       expect(isAllowedLocalFilePath(escapeLink, [allowedRoot])).toBe(false)
       expect(isAllowedLocalFilePath(danglingLink, [allowedRoot])).toBe(false)
+      // Nonexistent leaf beneath a symlinked ancestor escaping the root is also rejected.
+      expect(
+        isAllowedLocalFilePath(path.join(escapeDirLink, 'nonexistent.txt'), [allowedRoot])
+      ).toBe(false)
     } finally {
       await fsPromises.rm(allowedRoot, { recursive: true, force: true })
       await fsPromises.rm(outsideRoot, { recursive: true, force: true })

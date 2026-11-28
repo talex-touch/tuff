@@ -16,12 +16,25 @@ import { setTimeout as delay } from 'node:timers/promises'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const require = createRequire(import.meta.url)
+interface HelperOptions {
+  hostPlatform?: 'linux' | 'darwin' | 'win32'
+  bundledScriptDirs?: string[]
+}
 const { launchCommand, recoverOnce, runHelper, validatePlan } =
   require('./update-handoff-helper.cjs') as {
     launchCommand: (command: HelperCommand) => Promise<void>
-    recoverOnce: (root: string, plan: HelperPlan, reason: string) => Promise<boolean>
-    runHelper: (root: string, planPath: string) => Promise<{ status: string }>
-    validatePlan: (root: string, plan: HelperPlan) => HelperPlan
+    recoverOnce: (
+      root: string,
+      plan: HelperPlan,
+      reason: string,
+      options?: HelperOptions
+    ) => Promise<boolean>
+    runHelper: (
+      root: string,
+      planPath: string,
+      options?: HelperOptions
+    ) => Promise<{ status: string }>
+    validatePlan: (root: string, plan: HelperPlan, options?: HelperOptions) => HelperPlan
   }
 
 const temporaryRoots: string[] = []
@@ -69,31 +82,38 @@ async function waitForFile(filePath: string): Promise<string> {
   throw new Error(`Timed out waiting for helper child output: ${filePath}`)
 }
 
-async function createPlan(
-  overrides: Partial<HelperPlan> = {}
-): Promise<{ root: string; attemptRoot: string; planPath: string; plan: HelperPlan }> {
+async function createPlan(overrides: Partial<HelperPlan> = {}): Promise<{
+  root: string
+  attemptRoot: string
+  bundledDir: string
+  planPath: string
+  plan: HelperPlan
+  options: HelperOptions
+}> {
   const root = await mkdtemp(path.join(tmpdir(), 'tuff-update-helper-'))
-  temporaryRoots.push(root)
+  const bundledDir = await mkdtemp(path.join(tmpdir(), 'tuff-update-bundled-'))
+  temporaryRoots.push(root, bundledDir)
   const attemptRoot = path.join(root, 'attempts', 'attempt-1')
   await mkdir(attemptRoot, { recursive: true })
-  const platform = overrides.platform ?? 'linux'
-  const defaultScriptName =
-    platform === 'darwin' ? 'macos-apply-update.sh' : 'linux-apply-update.sh'
-  const defaultScriptPath = path.join(attemptRoot, defaultScriptName)
-  await writeFile(defaultScriptPath, '#!/bin/bash\nexit 0\n', 'utf8')
-  await chmod(defaultScriptPath, 0o755)
-  const defaultHandoff: HelperCommand =
-    platform === 'win32'
-      ? {
-          command: path.join(attemptRoot, 'tuff-setup.exe'),
-          args: [],
-          waitForExit: false
-        }
-      : {
-          command: '/bin/bash',
-          args: [defaultScriptPath],
-          waitForExit: true
-        }
+  const platform =
+    overrides.platform ??
+    (process.platform === 'win32' ? 'win32' : process.platform === 'darwin' ? 'darwin' : 'linux')
+  let defaultHandoff: HelperCommand
+  if (platform === 'darwin') {
+    const scriptPath = path.join(attemptRoot, 'macos-apply-update.sh')
+    await writeFile(scriptPath, '#!/bin/bash\nexit 0\n', 'utf8')
+    await chmod(scriptPath, 0o755)
+    defaultHandoff = { command: '/bin/bash', args: [scriptPath], waitForExit: true }
+  } else if (platform === 'win32') {
+    const exePath = path.join(attemptRoot, 'tuff-setup.exe')
+    await writeFile(exePath, 'MZ', 'utf8')
+    defaultHandoff = { command: exePath, args: [], waitForExit: false }
+  } else {
+    const scriptPath = path.join(bundledDir, 'linux-apply-update.sh')
+    await writeFile(scriptPath, '#!/bin/bash\nexit 0\n', 'utf8')
+    await chmod(scriptPath, 0o755)
+    defaultHandoff = { command: '/bin/bash', args: [scriptPath], waitForExit: true }
+  }
   const plan: HelperPlan = {
     schemaVersion: 1,
     attemptId: 'attempt-1',
@@ -117,7 +137,8 @@ async function createPlan(
   }
   const planPath = path.join(attemptRoot, 'plan.json')
   await writeFile(planPath, JSON.stringify(plan))
-  return { root, attemptRoot, planPath, plan }
+  const options: HelperOptions = { hostPlatform: platform, bundledScriptDirs: [bundledDir] }
+  return { root, attemptRoot, bundledDir, planPath, plan, options }
 }
 
 afterEach(async () => {
@@ -136,7 +157,7 @@ describe('update handoff helper', () => {
   ])(
     'preserves the external old app for a mismatched $name ack, then cleans only after a matching ack',
     async ({ change }) => {
-      const { root, planPath, plan } = await createPlan({ platform: 'darwin' })
+      const { root, planPath, plan, options } = await createPlan({ platform: 'darwin' })
       const applications = await realpath(await mkdtemp(path.join(tmpdir(), 'tuff-ota-external-')))
       temporaryRoots.push(applications)
       const stageRoot = path.join(applications, '.tuff-update-attempt-1')
@@ -163,10 +184,12 @@ describe('update handoff helper', () => {
           recoveryAttempted: true
         })
       )
-      await expect(runHelper(root, planPath)).resolves.toEqual({ status: 'recovery-required' })
+      await expect(runHelper(root, planPath, options)).resolves.toEqual({
+        status: 'recovery-required'
+      })
       expect(await readFile(oldPayload, 'utf8')).toBe('old application')
       await writeFile(plan.ackPath, JSON.stringify(acknowledgement))
-      await expect(runHelper(root, planPath)).resolves.toEqual({ status: 'healthy' })
+      await expect(runHelper(root, planPath, options)).resolves.toEqual({ status: 'healthy' })
       await expect(stat(stageRoot)).rejects.toMatchObject({ code: 'ENOENT' })
     }
   )
@@ -176,7 +199,7 @@ describe('update handoff helper', () => {
       (escape) => process.platform !== 'win32' || escape !== 'symlink'
     )
   )('does not delete an external path through %s', async (escape) => {
-    const { root, planPath, plan } = await createPlan({ platform: 'darwin' })
+    const { root, planPath, plan, options } = await createPlan({ platform: 'darwin' })
     const applications = await realpath(await mkdtemp(path.join(tmpdir(), 'tuff-ota-escape-')))
     temporaryRoots.push(applications)
     const victim = path.join(applications, 'unrelated')
@@ -200,7 +223,7 @@ describe('update handoff helper', () => {
         version: plan.targetVersion
       })
     )
-    await expect(runHelper(root, planPath)).rejects.toThrow()
+    await expect(runHelper(root, planPath, options)).rejects.toThrow()
     expect(await readFile(path.join(victim, 'sentinel'), 'utf8')).toBe('keep')
   })
   it.each([true, false])(
@@ -230,7 +253,7 @@ describe('update handoff helper', () => {
   )
 
   it('waits for an already-exited parent and accepts a matching health acknowledgement', async () => {
-    const { root, attemptRoot, planPath, plan } = await createPlan()
+    const { root, bundledDir, planPath, plan, options } = await createPlan({ platform: 'linux' })
     const acknowledgement = JSON.stringify({
       schemaVersion: 1,
       attemptId: plan.attemptId,
@@ -238,7 +261,7 @@ describe('update handoff helper', () => {
       status: 'healthy',
       version: plan.targetVersion
     })
-    const scriptPath = path.join(attemptRoot, 'linux-apply-update.sh')
+    const scriptPath = path.join(bundledDir, 'linux-apply-update.sh')
     await writeFile(scriptPath, `#!/bin/bash\nprintf '%s' "$1" > "$2"\n`, 'utf8')
     await chmod(scriptPath, 0o755)
     plan.handoff = {
@@ -248,7 +271,7 @@ describe('update handoff helper', () => {
     }
     await writeFile(planPath, JSON.stringify(plan))
 
-    await expect(runHelper(root, planPath)).resolves.toEqual({ status: 'healthy' })
+    await expect(runHelper(root, planPath, options)).resolves.toEqual({ status: 'healthy' })
     expect(JSON.parse(await readFile(plan.ackPath, 'utf8'))).toMatchObject({
       attemptId: plan.attemptId,
       token: plan.token,
@@ -257,9 +280,9 @@ describe('update handoff helper', () => {
   })
 
   it('starts the configured previous recovery only once after a health timeout', async () => {
-    const { root, attemptRoot, plan } = await createPlan()
+    const { root, attemptRoot, plan, options } = await createPlan({ platform: 'darwin' })
     const counterPath = path.join(root, 'recovery-count.txt')
-    const scriptPath = path.join(attemptRoot, 'linux-apply-update.sh')
+    const scriptPath = path.join(attemptRoot, 'macos-restore-update.sh')
     await writeFile(
       scriptPath,
       `#!/bin/bash\ncount=0\nif [ -f "$1" ]; then count=$(cat "$1"); fi\nprintf '%s' "$((count + 1))" > "$1"\n`,
@@ -273,12 +296,12 @@ describe('update handoff helper', () => {
       waitForExit: true
     }
 
-    await expect(recoverOnce(root, plan, 'Startup health acknowledgement timed out')).resolves.toBe(
-      true
-    )
-    await expect(recoverOnce(root, plan, 'Startup health acknowledgement timed out')).resolves.toBe(
-      false
-    )
+    await expect(
+      recoverOnce(root, plan, 'Startup health acknowledgement timed out', options)
+    ).resolves.toBe(true)
+    await expect(
+      recoverOnce(root, plan, 'Startup health acknowledgement timed out', options)
+    ).resolves.toBe(false)
 
     expect(await readFile(counterPath, 'utf8')).toBe('1')
     expect(JSON.parse(await readFile(plan.markerPath, 'utf8'))).toMatchObject({
@@ -289,11 +312,11 @@ describe('update handoff helper', () => {
   })
 
   it('records recovery-required without spawning a recovery when no previous asset exists', async () => {
-    const { root, plan } = await createPlan()
+    const { root, plan, options } = await createPlan()
 
-    await expect(recoverOnce(root, plan, 'Startup health acknowledgement timed out')).resolves.toBe(
-      false
-    )
+    await expect(
+      recoverOnce(root, plan, 'Startup health acknowledgement timed out', options)
+    ).resolves.toBe(false)
 
     expect(JSON.parse(await readFile(plan.markerPath, 'utf8'))).toMatchObject({
       status: 'recovery-required',
@@ -302,96 +325,264 @@ describe('update handoff helper', () => {
     })
   })
 
-  it('rejects arbitrary or out-of-root handoff and recovery commands across platforms', async () => {
-    const { root, attemptRoot, plan } = await createPlan({ platform: 'darwin' })
+  it('rejects cross-platform plans, symlinked scripts, writable Linux roots, and tampered macOS flags', async () => {
+    const { root, attemptRoot, plan, options } = await createPlan({ platform: 'darwin' })
+
+    // Cross-platform plan tampering (e.g. win32 plan on darwin host) is rejected.
+    const winPlanOnMac = await createPlan({ platform: 'win32' })
+    expect(() =>
+      validatePlan(winPlanOnMac.root, winPlanOnMac.plan, { hostPlatform: 'darwin' })
+    ).toThrow(/invalid schema/)
 
     expect(() =>
-      validatePlan(root, {
-        ...plan,
-        handoff: { command: process.execPath, args: ['-e', 'process.exit(0)'], waitForExit: true }
-      })
+      validatePlan(
+        root,
+        {
+          ...plan,
+          handoff: { command: process.execPath, args: ['-e', 'process.exit(0)'], waitForExit: true }
+        },
+        options
+      )
     ).toThrow(/Disallowed macOS handoff command/)
 
     expect(() =>
-      validatePlan(root, {
-        ...plan,
-        handoff: { command: '/bin/bash', args: ['-c', 'id'], waitForExit: true }
-      })
+      validatePlan(
+        root,
+        {
+          ...plan,
+          handoff: { command: '/bin/bash', args: ['-c', 'id'], waitForExit: true }
+        },
+        options
+      )
     ).toThrow(/Disallowed macOS handoff command/)
 
     expect(() =>
-      validatePlan(root, {
-        ...plan,
-        handoff: {
-          command: '/bin/bash',
-          args: ['/tmp/outside/macos-apply-update.sh'],
-          waitForExit: true
-        }
-      })
+      validatePlan(
+        root,
+        {
+          ...plan,
+          handoff: {
+            command: '/bin/bash',
+            args: ['/tmp/outside/macos-apply-update.sh'],
+            waitForExit: true
+          }
+        },
+        options
+      )
     ).toThrow(/Disallowed macOS handoff command/)
 
+    // Symlinked macos-apply-update.sh inside attemptRoot pointing outside is rejected.
+    const outsideScript = path.join(await mkdtemp(path.join(tmpdir(), 'tuff-outside-')), 'evil.sh')
+    temporaryRoots.push(path.dirname(outsideScript))
+    await writeFile(outsideScript, '#!/bin/bash\nexit 0\n', 'utf8')
+    const symlinkedScript = path.join(attemptRoot, 'sub', 'macos-apply-update.sh')
+    await mkdir(path.dirname(symlinkedScript), { recursive: true })
+    await symlink(outsideScript, symlinkedScript)
     expect(() =>
-      validatePlan(root, {
-        ...plan,
-        recovery: {
-          command: '/bin/bash',
-          args: [path.join(attemptRoot, 'macos-apply-update.sh')],
-          waitForExit: true
-        }
-      })
+      validatePlan(
+        root,
+        {
+          ...plan,
+          handoff: { command: '/bin/bash', args: [symlinkedScript], waitForExit: true }
+        },
+        options
+      )
+    ).toThrow(/Disallowed macOS handoff command/)
+
+    // Tampered --swap-helper outside attemptRoot and tampered --dest are rejected.
+    const applications = await realpath(await mkdtemp(path.join(tmpdir(), 'tuff-ota-flags-')))
+    temporaryRoots.push(applications)
+    const stageRoot = path.join(applications, '.tuff-update-attempt-1')
+    const validSwapHelper = path.join(attemptRoot, 'tuff-native-update')
+    await writeFile(validSwapHelper, 'bin', 'utf8')
+    const validMacScript = path.join(attemptRoot, 'macos-apply-update.sh')
+    const macPlanWithTx: HelperPlan = {
+      ...plan,
+      macosTransaction: { appBundlePath: path.join(applications, 'Tuff.app'), stageRoot }
+    }
+    expect(() =>
+      validatePlan(
+        root,
+        {
+          ...macPlanWithTx,
+          handoff: {
+            command: '/bin/bash',
+            args: [
+              validMacScript,
+              '--swap-helper',
+              '/tmp/evil/tuff-native-update',
+              '--dest',
+              macPlanWithTx.macosTransaction!.appBundlePath
+            ],
+            waitForExit: true
+          }
+        },
+        options
+      )
+    ).toThrow(/Disallowed macOS handoff swap-helper path/)
+    expect(() =>
+      validatePlan(
+        root,
+        {
+          ...macPlanWithTx,
+          handoff: {
+            command: '/bin/bash',
+            args: [
+              validMacScript,
+              '--swap-helper',
+              validSwapHelper,
+              '--dest',
+              '/Applications/Other.app'
+            ],
+            waitForExit: true
+          }
+        },
+        options
+      )
+    ).toThrow(/Disallowed macOS handoff destination path/)
+    expect(() =>
+      validatePlan(
+        root,
+        {
+          ...macPlanWithTx,
+          handoff: {
+            command: '/bin/bash',
+            args: [
+              validMacScript,
+              '--swap-helper',
+              validSwapHelper,
+              '--dest',
+              macPlanWithTx.macosTransaction!.appBundlePath
+            ],
+            waitForExit: true
+          }
+        },
+        options
+      )
+    ).not.toThrow()
+
+    expect(() =>
+      validatePlan(
+        root,
+        {
+          ...plan,
+          recovery: {
+            command: '/bin/bash',
+            args: [path.join(attemptRoot, 'macos-apply-update.sh')],
+            waitForExit: true
+          }
+        },
+        options
+      )
     ).toThrow(/Disallowed macOS recovery command/)
 
+    // Linux: writable attemptRoot/linux-apply-update.sh and bash recovery are both rejected.
     const linux = await createPlan({ platform: 'linux' })
+    const writableLinuxScript = path.join(linux.attemptRoot, 'linux-apply-update.sh')
+    await writeFile(writableLinuxScript, '#!/bin/bash\nexit 0\n', 'utf8')
     expect(() =>
-      validatePlan(linux.root, {
-        ...linux.plan,
-        handoff: { command: '/bin/sh', args: ['-c', 'echo pwn'], waitForExit: true }
-      })
+      validatePlan(
+        linux.root,
+        {
+          ...linux.plan,
+          handoff: { command: '/bin/bash', args: [writableLinuxScript], waitForExit: true }
+        },
+        linux.options
+      )
     ).toThrow(/Disallowed Linux handoff command/)
     expect(() =>
-      validatePlan(linux.root, {
-        ...linux.plan,
-        recovery: { command: '/tmp/outside/evil.AppImage', args: [], waitForExit: false }
-      })
+      validatePlan(
+        linux.root,
+        {
+          ...linux.plan,
+          recovery: {
+            command: '/bin/bash',
+            args: [path.join(linux.bundledDir, 'linux-apply-update.sh')],
+            waitForExit: true
+          }
+        },
+        linux.options
+      )
+    ).toThrow(/Disallowed Linux recovery command/)
+    expect(() =>
+      validatePlan(
+        linux.root,
+        {
+          ...linux.plan,
+          handoff: { command: '/bin/sh', args: ['-c', 'echo pwn'], waitForExit: true }
+        },
+        linux.options
+      )
+    ).toThrow(/Disallowed Linux handoff command/)
+    expect(() =>
+      validatePlan(
+        linux.root,
+        {
+          ...linux.plan,
+          recovery: { command: '/tmp/outside/evil.AppImage', args: [], waitForExit: false }
+        },
+        linux.options
+      )
     ).toThrow(/Disallowed Linux recovery command/)
 
+    // Windows: arbitrary executables, external MSI, and non-installer EXE are rejected;
+    // real MSI inside root passes.
     const win = await createPlan({ platform: 'win32' })
     expect(() =>
-      validatePlan(win.root, {
-        ...win.plan,
-        handoff: { command: 'powershell.exe', args: ['-Command', 'calc'], waitForExit: false }
-      })
+      validatePlan(
+        win.root,
+        {
+          ...win.plan,
+          handoff: { command: 'powershell.exe', args: ['-Command', 'calc'], waitForExit: false }
+        },
+        win.options
+      )
     ).toThrow(/Disallowed Windows handoff command/)
     expect(() =>
-      validatePlan(win.root, {
-        ...win.plan,
-        handoff: {
-          command: 'msiexec.exe',
-          args: ['/i', '/tmp/outside/evil.msi'],
-          waitForExit: false
-        }
-      })
+      validatePlan(
+        win.root,
+        {
+          ...win.plan,
+          handoff: {
+            command: 'msiexec.exe',
+            args: ['/i', '/tmp/outside/evil.msi'],
+            waitForExit: false
+          }
+        },
+        win.options
+      )
     ).toThrow(/Disallowed Windows handoff command/)
+    const nonInstallerExe = path.join(win.attemptRoot, 'evil-payload.exe')
+    await writeFile(nonInstallerExe, 'MZ', 'utf8')
     expect(() =>
-      validatePlan(win.root, {
-        ...win.plan,
-        handoff: {
-          command: path.join(win.attemptRoot, 'evil-payload.exe'),
-          args: [],
-          waitForExit: false
-        }
-      })
+      validatePlan(
+        win.root,
+        {
+          ...win.plan,
+          handoff: {
+            command: nonInstallerExe,
+            args: [],
+            waitForExit: false
+          }
+        },
+        win.options
+      )
     ).toThrow(/Disallowed Windows handoff command/)
-    // Legitimate MSI inside root passes.
+    const validMsi = path.join(win.attemptRoot, 'tuff.msi')
+    await writeFile(validMsi, 'MSI', 'utf8')
     expect(() =>
-      validatePlan(win.root, {
-        ...win.plan,
-        handoff: {
-          command: 'msiexec.exe',
-          args: ['/i', path.join(win.attemptRoot, 'tuff.msi')],
-          waitForExit: false
-        }
-      })
+      validatePlan(
+        win.root,
+        {
+          ...win.plan,
+          handoff: {
+            command: 'msiexec.exe',
+            args: ['/i', validMsi],
+            waitForExit: false
+          }
+        },
+        win.options
+      )
     ).not.toThrow()
   })
 })

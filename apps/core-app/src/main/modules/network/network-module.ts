@@ -25,28 +25,86 @@ const NETWORK_STATUS_POLL_INTERVAL_MS = 5000
 const NETWORK_RESPONSE_TYPES: Record<string, true> = {
   json: true,
   text: true,
-  arrayBuffer: true,
-  stream: true
+  arrayBuffer: true
 }
 
-function isPluginViewNetworkRequest(value: unknown): value is NetworkRequest {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
-  if (!('url' in value) || typeof value.url !== 'string' || !isHttpUrl(value.url)) return false
-  if ('method' in value && typeof value.method !== 'string') return false
-  if (
-    'responseType' in value &&
-    (typeof value.responseType !== 'string' ||
-      !Object.hasOwn(NETWORK_RESPONSE_TYPES, value.responseType))
-  ) {
-    return false
+function sanitizePluginViewNetworkRequest(value: unknown): NetworkRequest | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const record = value as Record<string, unknown>
+  if (Object.hasOwn(record, 'proxyOverride') && record.proxyOverride !== undefined) {
+    return null
   }
-  if ('headers' in value) {
-    if (!value.headers || typeof value.headers !== 'object' || Array.isArray(value.headers)) {
-      return false
+  if (!Object.hasOwn(record, 'url') || typeof record.url !== 'string' || !isHttpUrl(record.url)) {
+    return null
+  }
+
+  const sanitized: NetworkRequest = {
+    url: record.url
+  }
+
+  if (Object.hasOwn(record, 'method') && record.method !== undefined) {
+    if (typeof record.method !== 'string') return null
+    sanitized.method = record.method as NetworkRequest['method']
+  }
+
+  if (Object.hasOwn(record, 'responseType') && record.responseType !== undefined) {
+    if (
+      typeof record.responseType !== 'string' ||
+      !Object.hasOwn(NETWORK_RESPONSE_TYPES, record.responseType)
+    ) {
+      return null
     }
-    if (Object.values(value.headers).some((header) => typeof header !== 'string')) return false
+    sanitized.responseType = record.responseType as NetworkRequest['responseType']
   }
-  return true
+
+  if (Object.hasOwn(record, 'headers') && record.headers !== undefined) {
+    if (!record.headers || typeof record.headers !== 'object' || Array.isArray(record.headers)) {
+      return null
+    }
+    const headers: Record<string, string> = {}
+    for (const [key, headerValue] of Object.entries(record.headers as Record<string, unknown>)) {
+      if (typeof headerValue !== 'string') return null
+      headers[key] = headerValue
+    }
+    sanitized.headers = headers
+  }
+
+  if (Object.hasOwn(record, 'query') && record.query !== undefined) {
+    if (!record.query || typeof record.query !== 'object' || Array.isArray(record.query)) {
+      return null
+    }
+    const query: Record<string, string | number | boolean | null | undefined> = {}
+    for (const [key, queryValue] of Object.entries(record.query as Record<string, unknown>)) {
+      if (
+        queryValue !== undefined &&
+        queryValue !== null &&
+        typeof queryValue !== 'string' &&
+        typeof queryValue !== 'number' &&
+        typeof queryValue !== 'boolean'
+      ) {
+        return null
+      }
+      query[key] = queryValue
+    }
+    sanitized.query = query
+  }
+
+  if (Object.hasOwn(record, 'body') && record.body !== undefined) {
+    sanitized.body = record.body
+  }
+
+  if (Object.hasOwn(record, 'timeoutMs') && record.timeoutMs !== undefined) {
+    if (
+      typeof record.timeoutMs !== 'number' ||
+      !Number.isFinite(record.timeoutMs) ||
+      record.timeoutMs <= 0
+    ) {
+      return null
+    }
+    sanitized.timeoutMs = record.timeoutMs
+  }
+
+  return sanitized
 }
 
 async function hasPluginNetworkPermission(
@@ -160,20 +218,21 @@ export class NetworkModule extends BaseModule {
         guarded(
           async (request, context) => {
             if (context.plugin) {
-              if (
-                !isAuthoritativePluginContext(context.plugin) ||
-                !isPluginViewNetworkRequest(request)
-              ) {
+              if (!isAuthoritativePluginContext(context.plugin)) {
                 throw new Error('PLUGIN_NETWORK_REQUEST_INVALID')
               }
-              const target = classifyNetworkTarget(request.url)
+              const sanitizedRequest = sanitizePluginViewNetworkRequest(request)
+              if (!sanitizedRequest) {
+                throw new Error('PLUGIN_NETWORK_REQUEST_INVALID')
+              }
+              const target = classifyNetworkTarget(sanitizedRequest.url)
               const allowLocal =
                 target === 'local' ||
                 (await hasPluginNetworkPermission(context.plugin.name, 'network.local'))
               const allowInternet =
                 target === 'internet' ||
                 (await hasPluginNetworkPermission(context.plugin.name, 'network.internet'))
-              return await service.requestForPlugin(request, {
+              return await service.requestForPlugin(sanitizedRequest, {
                 pluginName: context.plugin.name,
                 allowLocal,
                 allowInternet

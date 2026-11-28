@@ -1154,6 +1154,9 @@ async function applyPulledStorageItems(
         if (await applyPluginStorageDeletion(qualifiedName)) appliedCount += 1
         continue
       }
+      if (!getPluginStorageContent(qualifiedName)) {
+        continue
+      }
       const payload = await resolveEncryptedPayloadText(item, client)
       if (!payload) continue
       const applied = await applyPluginStorageSnapshot(

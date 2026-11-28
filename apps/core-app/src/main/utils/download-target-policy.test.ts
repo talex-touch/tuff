@@ -282,5 +282,6 @@ describe('download-center wiring', () => {
     expect(addTaskBody()).toContain('isSafeDownloadTaskId(request.id)')
     expect(source).toContain('isDangerousDownloadOpenFile(canonicalPath)')
     expect(source).toContain('Modifying download tempDir over IPC is not allowed')
+    expect(source).toContain('Refused temp cleanup on unapproved tempDir')
   })
 })

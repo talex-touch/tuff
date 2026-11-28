@@ -195,9 +195,13 @@ export class SyncPayloadCrypto {
     }
 
     if (normalized.startsWith(LEGACY_SYNC_PAYLOAD_PREFIX)) {
-      const existingKey = this.store.isAvailable()
-        ? await this.store.getValue(SYNC_PAYLOAD_KEY_SECURE_KEY)
-        : null
+      if (!this.store.isAvailable()) {
+        throw new SyncPayloadCryptoError(
+          'SYNC_SECURE_STORE_UNAVAILABLE',
+          'Secure storage is unavailable to verify sync payload encryption state'
+        )
+      }
+      const existingKey = await this.store.getValue(SYNC_PAYLOAD_KEY_SECURE_KEY)
       if (existingKey) {
         throw new SyncPayloadCryptoError(
           'SYNC_PAYLOAD_PLAINTEXT_DOWNGRADE_REJECTED',

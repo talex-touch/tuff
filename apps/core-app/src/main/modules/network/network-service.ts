@@ -957,7 +957,18 @@ export class NetworkService {
     const maxRedirects = policy.maxRedirects ?? MAX_PLUGIN_REDIRECT_HOPS
     const maxResponseBytes = policy.maxResponseBytes ?? DEFAULT_PLUGIN_MAX_RESPONSE_BYTES
     const config = this.getConfigFromSettings()
-    const proxyConfig = mergeProxyConfig(config.proxy, options.proxyOverride)
+    // Never honor caller-supplied proxyOverride for plugins: it would allow bypassing DNS pinning
+    // or exfiltrating host secure-store credentials via authRef.
+    const sanitizedOptions: NetworkRequestOptions = {
+      ...options,
+      proxyOverride: undefined
+    }
+    const proxyConfig = config.proxy
+    const electronProxyConfig =
+      proxyConfig.mode === 'custom'
+        ? await this.toElectronProxyConfig(proxyConfig)
+        : ({ mode: 'direct' } as const)
+    const useCustomProxy = electronProxyConfig.mode !== 'direct'
 
     const resolveAndValidateTarget = async (
       rawUrl: string
@@ -994,57 +1005,55 @@ export class NetworkService {
         throw new Error('NETWORK_DNS_RESOLUTION_FAILED')
       }
       const anyLocal = addresses.some((addr) => isLocalIpAddress(addr))
+      const anyInternet = addresses.some((addr) => !isLocalIpAddress(addr))
       if (anyLocal && !allowLocal) {
         throw new Error('NETWORK_LOCAL_ACCESS_DENIED')
       }
-      if (!anyLocal && !allowInternet) {
+      if (anyInternet && !allowInternet) {
         throw new Error('NETWORK_INTERNET_ACCESS_DENIED')
       }
       return { parsed, addresses }
     }
 
-    const initialUrl = appendQuery(options.url, options.query)
+    const initialUrl = appendQuery(sanitizedOptions.url, sanitizedOptions.query)
     assertHttpNetworkUrl(initialUrl)
 
-    // When a custom proxy is configured, route through a non-persistent per-plugin session with
-    // credentials omitted and manual redirect validation.
-    if (proxyConfig.mode === 'custom') {
-      return await this.executeWithPolicies(options, async () => {
-        const timeoutMs = resolveRequestTimeoutMs(options.timeoutMs, config.timeoutMs)
-        const abortContext = createNetworkAbortContext(options.signal, timeoutMs)
+    // When a host custom proxy is configured (and resolves to non-direct proxy rules), route
+    // through a non-persistent per-plugin session via `net.request({ redirect: 'manual' })` so
+    // 3xx hops are reported for re-validation instead of failing with Chromium's manual fetch error.
+    if (useCustomProxy) {
+      return await this.executeWithPolicies(sanitizedOptions, async () => {
+        const timeoutMs = resolveRequestTimeoutMs(sanitizedOptions.timeoutMs, config.timeoutMs)
+        const abortContext = createNetworkAbortContext(sanitizedOptions.signal, timeoutMs)
         try {
           let currentUrl = initialUrl
           let currentMethod = (
-            options.method ?? 'GET'
+            sanitizedOptions.method ?? 'GET'
           ).toUpperCase() as NetworkRequestOptions['method']
-          let currentHeaders = options.headers
-          let currentBody = options.body
+          let currentHeaders = sanitizedOptions.headers
+          let currentBody = sanitizedOptions.body
           const partitionKey = `plugin:${policy.pluginName}`
 
           for (let hop = 0; hop <= maxRedirects; hop += 1) {
             await resolveAndValidateTarget(currentUrl)
-            const response = await this.executeFetch(
+            const hopResult = await this.executePluginProxyHop(
               {
-                ...options,
+                ...sanitizedOptions,
                 url: currentUrl,
                 query: undefined,
                 method: currentMethod,
                 headers: currentHeaders,
-                body: currentBody,
-                validateStatus: [
-                  ...(options.validateStatus ?? Array.from({ length: 100 }, (_, i) => 200 + i)),
-                  ...REDIRECT_STATUS_CODES
-                ]
+                body: currentBody
               },
-              'manual',
+              proxyConfig,
+              partitionKey,
               abortContext,
-              { partitionKey, omitCredentials: true }
+              maxResponseBytes
             )
-            if (REDIRECT_STATUS_CODES.has(response.status)) {
-              const location = response.headers.get('location')
-              await response.body?.cancel().catch(() => undefined)
+            if (REDIRECT_STATUS_CODES.has(hopResult.status)) {
+              const location = hopResult.headers.location
               if (!location) {
-                throw new NetworkHttpStatusError(response.status, response.statusText, currentUrl)
+                throw new NetworkHttpStatusError(hopResult.status, hopResult.statusText, currentUrl)
               }
               if (hop === maxRedirects) {
                 throw new Error('NETWORK_REDIRECT_LIMIT_EXCEEDED')
@@ -1054,8 +1063,8 @@ export class NetworkService {
                 currentHeaders = stripCrossOriginSensitiveHeaders(currentHeaders)
               }
               if (
-                response.status === 303 ||
-                ((response.status === 301 || response.status === 302) && currentMethod === 'POST')
+                hopResult.status === 303 ||
+                ((hopResult.status === 301 || hopResult.status === 302) && currentMethod === 'POST')
               ) {
                 currentMethod = 'GET'
                 currentBody = undefined
@@ -1064,19 +1073,21 @@ export class NetworkService {
               continue
             }
 
-            if (!isSuccessStatus(response.status, options.validateStatus)) {
-              await response.body?.cancel().catch(() => undefined)
-              throw new NetworkHttpStatusError(response.status, response.statusText, response.url)
+            if (!isSuccessStatus(hopResult.status, sanitizedOptions.validateStatus)) {
+              throw new NetworkHttpStatusError(
+                hopResult.status,
+                hopResult.statusText,
+                hopResult.url
+              )
             }
-            const headers = normalizeHeaders(response.headers)
-            const data = (await this.parseResponseBody(response, responseType)) as T
+            const data = this.parseBufferedResponse<T>(hopResult.body, responseType)
             return {
-              status: response.status,
-              statusText: response.statusText,
-              headers,
+              status: hopResult.status,
+              statusText: hopResult.statusText,
+              headers: hopResult.headers,
               data,
-              url: response.url,
-              ok: response.ok
+              url: hopResult.url,
+              ok: hopResult.status >= 200 && hopResult.status < 300
             }
           }
           throw new Error('NETWORK_REDIRECT_LIMIT_EXCEEDED')
@@ -1089,20 +1100,22 @@ export class NetworkService {
     }
 
     // Direct / system-direct path: DNS-pinned per-hop execution without Chromium cookie jar or cache.
-    return await this.executeWithPolicies(options, async () => {
+    return await this.executeWithPolicies(sanitizedOptions, async () => {
       let currentUrl = initialUrl
-      let currentMethod = (options.method ?? 'GET').toUpperCase() as NetworkRequestOptions['method']
-      let currentHeaders = options.headers
-      let currentBody = options.body
+      let currentMethod = (
+        sanitizedOptions.method ?? 'GET'
+      ).toUpperCase() as NetworkRequestOptions['method']
+      let currentHeaders = sanitizedOptions.headers
+      let currentBody = sanitizedOptions.body
       const baseValidStatuses =
-        options.validateStatus ?? Array.from({ length: 100 }, (_, index) => 200 + index)
+        sanitizedOptions.validateStatus ?? Array.from({ length: 100 }, (_, index) => 200 + index)
       const hopValidStatuses = Array.from(new Set([...baseValidStatuses, ...REDIRECT_STATUS_CODES]))
 
       for (let hop = 0; hop <= maxRedirects; hop += 1) {
         const { parsed, addresses } = await resolveAndValidateTarget(currentUrl)
         const hopResponse = await this.executePinnedRequest(
           {
-            ...options,
+            ...sanitizedOptions,
             url: currentUrl,
             query: undefined,
             method: currentMethod,
@@ -1422,6 +1435,126 @@ export class NetworkService {
    * download failed outright. Only `net.request({ redirect: 'manual' })` reports the hop, through
    * its `redirect` event, before cancelling it.
    */
+  private parseBufferedResponse<T>(
+    buffer: Buffer,
+    responseType: 'json' | 'text' | 'arrayBuffer'
+  ): T {
+    if (responseType === 'arrayBuffer') {
+      const arrayBuffer = buffer.buffer.slice(
+        buffer.byteOffset,
+        buffer.byteOffset + buffer.byteLength
+      )
+      return arrayBuffer as T
+    }
+    const text = buffer.toString('utf8')
+    if (responseType === 'text') {
+      return text as T
+    }
+    if (!text.trim()) {
+      return null as T
+    }
+    try {
+      return JSON.parse(text) as T
+    } catch {
+      return text as T
+    }
+  }
+
+  private async executePluginProxyHop(
+    options: NetworkRequestOptions,
+    proxyConfig: NetworkProxyConfig,
+    partitionKey: string,
+    abortContext: NetworkAbortContext,
+    maxResponseBytes: number
+  ): Promise<{
+    status: number
+    statusText: string
+    headers: Record<string, string>
+    body: Buffer
+    url: string
+  }> {
+    const targetUrl = appendQuery(options.url, options.query)
+    assertHttpNetworkUrl(targetUrl)
+    const sessionInstance = await this.getSession(proxyConfig, partitionKey)
+    const method = (options.method ?? 'GET').toUpperCase()
+    const headers = new Headers(options.headers ?? {})
+    headers.delete('content-length')
+    const body = serializeNetRequestBody(method, options.body, headers)
+
+    return await new Promise((resolve, reject) => {
+      let settled = false
+      const request = net.request({
+        session: sessionInstance,
+        method,
+        url: targetUrl,
+        headers: normalizeHeaders(headers),
+        redirect: 'manual'
+      })
+
+      const onAbort = (): void => request.abort()
+      const settle = (operation: () => void): void => {
+        if (settled) return
+        settled = true
+        abortContext.signal.removeEventListener('abort', onAbort)
+        operation()
+      }
+      const fail = (error: unknown): void =>
+        settle(() => reject(projectNetworkRequestError(error, abortContext)))
+
+      request.on('redirect', (statusCode, _redirectMethod, redirectUrl, responseHeaders) => {
+        settle(() =>
+          resolve({
+            status: statusCode,
+            statusText: STATUS_CODES[statusCode] ?? '',
+            headers: { ...normalizeTransportHeaders(responseHeaders), location: redirectUrl },
+            body: Buffer.alloc(0),
+            url: targetUrl
+          })
+        )
+        request.abort()
+      })
+
+      request.on('response', (response) => {
+        const status = response.statusCode
+        const statusText = response.statusMessage ?? ''
+        const responseHeaders = normalizeTransportHeaders(response.headers)
+        const chunks: Buffer[] = []
+        let total = 0
+
+        response.on('data', (chunk: Buffer) => {
+          total += chunk.byteLength
+          if (total > maxResponseBytes) {
+            request.abort()
+            settle(() => reject(new Error('NETWORK_RESPONSE_TOO_LARGE')))
+            return
+          }
+          chunks.push(chunk)
+        })
+        response.on('end', () => {
+          settle(() =>
+            resolve({
+              status,
+              statusText,
+              headers: responseHeaders,
+              body: Buffer.concat(chunks, total),
+              url: targetUrl
+            })
+          )
+        })
+        response.on('error', (error) => fail(error))
+      })
+
+      request.on('error', (error) => fail(error))
+      if (abortContext.signal.aborted) {
+        settle(() => reject(abortContext.getAbortError() ?? new NetworkAbortError()))
+        return
+      }
+      abortContext.signal.addEventListener('abort', onAbort, { once: true })
+      if (body !== undefined) request.write(body)
+      request.end()
+    })
+  }
+
   private async requestManualRedirectStream(
     options: NetworkRequestOptions,
     abortContext: NetworkAbortContext
@@ -1582,7 +1715,10 @@ export class NetworkService {
         this.guard.recordSuccess(cooldownKey, cooldownPolicy)
         return result
       } catch (error) {
-        if (error instanceof NetworkAbortError) {
+        if (
+          error instanceof NetworkAbortError ||
+          (error instanceof Error && NON_RETRYABLE_NETWORK_ERRORS.has(error.message))
+        ) {
           throw error
         }
         const shouldRetry = this.shouldRetry(error, attempt, retryPolicy)

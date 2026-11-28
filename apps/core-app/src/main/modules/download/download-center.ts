@@ -121,13 +121,17 @@ export class DownloadCenterModule extends BaseModule {
     const t0 = performance.now()
 
     // 初始化配置
+    const candidateTempDir = path.join(moduleDir, 'temp')
+    const safeTempDir = isAllowedDownloadTempDir(candidateTempDir)
+      ? candidateTempDir
+      : path.join(app.getPath('temp'), 'tuff-downloads')
     this.config = {
       ...defaultDownloadConfig,
       storage: {
         ...defaultDownloadConfig.storage,
         // Resolved here rather than in the shared default, which cannot reach Electron's paths.
         defaultDestination: app.getPath('downloads'),
-        tempDir: path.join(moduleDir, 'temp')
+        tempDir: safeTempDir
       }
     }
 
@@ -786,6 +790,12 @@ export class DownloadCenterModule extends BaseModule {
     const tempDir = this.config.storage.tempDir
 
     try {
+      if (!isAllowedDownloadTempDir(tempDir)) {
+        downloadCenterLog.warn('Refused temp cleanup on unapproved tempDir', {
+          meta: { pathLength: String(tempDir ?? '').length }
+        })
+        return
+      }
       await fs.mkdir(tempDir, { recursive: true })
 
       const allTasks = this.getAllTasks()

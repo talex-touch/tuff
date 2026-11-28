@@ -290,6 +290,53 @@ export async function canonicalizeLocalFileRoots(roots: string[]): Promise<strin
   )
 }
 
+function canonicalizeNearestExistingSync(normalizedPath: string): string | null {
+  try {
+    return normalizeAbsolutePath(realpathSync(normalizedPath))
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException | undefined)?.code
+    if (code !== 'ENOENT' && code !== 'ENOTDIR') {
+      return null
+    }
+  }
+
+  const tail: string[] = []
+  let current = normalizedPath
+  while (true) {
+    try {
+      const stat = lstatSync(current)
+      if (stat.isSymbolicLink()) {
+        try {
+          const canonicalAncestor = normalizeAbsolutePath(realpathSync(current))
+          if (!canonicalAncestor) return null
+          return tail.length > 0
+            ? normalizeAbsolutePath(path.join(canonicalAncestor, ...tail.reverse()))
+            : canonicalAncestor
+        } catch {
+          // Dangling symlink
+          return null
+        }
+      }
+      const canonicalAncestor = normalizeAbsolutePath(realpathSync(current))
+      if (!canonicalAncestor) return null
+      return tail.length > 0
+        ? normalizeAbsolutePath(path.join(canonicalAncestor, ...tail.reverse()))
+        : canonicalAncestor
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException | undefined)?.code
+      if (code !== 'ENOENT' && code !== 'ENOTDIR') {
+        return null
+      }
+      const parent = path.dirname(current)
+      if (parent === current) {
+        return normalizedPath
+      }
+      tail.push(path.basename(current))
+      current = parent
+    }
+  }
+}
+
 export function isAllowedLocalFilePath(filePath: string, roots: string[]): boolean {
   const normalized = normalizeAbsolutePath(filePath)
   if (!normalized) {
@@ -301,27 +348,19 @@ export function isAllowedLocalFilePath(filePath: string, roots: string[]): boole
   if (typeof realpathSync !== 'function' || typeof lstatSync !== 'function') {
     return true
   }
-  try {
-    const canonicalTarget = normalizeAbsolutePath(realpathSync(normalized))
-    if (!canonicalTarget) {
-      return false
-    }
-    const canonicalRoots = roots.map(canonicalizeExistingRootSync)
-    return isLexicallyWithinRoots(canonicalTarget, canonicalRoots)
-  } catch (error) {
-    const code = (error as NodeJS.ErrnoException | undefined)?.code
-    if (code === 'ENOENT' || code === 'ENOTDIR') {
-      try {
-        if (lstatSync(normalized).isSymbolicLink()) {
-          return false
-        }
-      } catch {
-        // Truly absent path: lexical containment already passed.
-      }
-      return true
-    }
+  const canonicalTarget = canonicalizeNearestExistingSync(normalized)
+  if (!canonicalTarget) {
     return false
   }
+  const canonicalRoots = roots.map((root) => {
+    const normalizedRoot = normalizeAbsolutePath(root)
+    if (!normalizedRoot) return root
+    return (
+      canonicalizeNearestExistingSync(normalizedRoot) ??
+      canonicalizeExistingRootSync(normalizedRoot)
+    )
+  })
+  return isLexicallyWithinRoots(canonicalTarget, canonicalRoots)
 }
 
 /**

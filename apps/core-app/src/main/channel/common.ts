@@ -815,26 +815,44 @@ async function canonicalizeDialogPath(
     return await fs.realpath(normalized)
   } catch (error) {
     const code = (error as NodeJS.ErrnoException)?.code
-    if (code === 'ENOENT' || code === 'ENOTDIR') {
+    if (code !== 'ENOENT' && code !== 'ENOTDIR') {
+      return null
+    }
+    if (!options.allowMissingLeaf) {
+      return null
+    }
+  }
+
+  const tail: string[] = []
+  let current = normalized
+  while (true) {
+    try {
       if (typeof fs.lstat === 'function') {
-        try {
-          if ((await fs.lstat(normalized)).isSymbolicLink()) {
+        const stat = await fs.lstat(current)
+        if (stat.isSymbolicLink()) {
+          // Reject dangling or symlinked leaf/ancestor on missing-leaf save targets.
+          try {
+            const realAncestor = await fs.realpath(current)
+            return tail.length > 0 ? path.join(realAncestor, ...tail.reverse()) : realAncestor
+          } catch {
             return null
           }
-        } catch {
-          // Leaf genuinely does not exist.
         }
       }
-      if (options.allowMissingLeaf) {
-        try {
-          const realParent = await fs.realpath(path.dirname(normalized))
-          return path.join(realParent, path.basename(normalized))
-        } catch {
-          return normalized
-        }
+      const realAncestor = await fs.realpath(current)
+      return tail.length > 0 ? path.join(realAncestor, ...tail.reverse()) : realAncestor
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException)?.code
+      if (code !== 'ENOENT' && code !== 'ENOTDIR') {
+        return null
       }
+      const parent = path.dirname(current)
+      if (parent === current) {
+        return null
+      }
+      tail.push(path.basename(current))
+      current = parent
     }
-    return normalized
   }
 }
 

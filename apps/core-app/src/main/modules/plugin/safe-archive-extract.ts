@@ -1,5 +1,5 @@
 import fs from 'node:fs/promises'
-import { createWriteStream } from 'node:fs'
+import { constants as fsConstants } from 'node:fs'
 import path from 'node:path'
 import { Readable } from 'node:stream'
 import compressing from 'compressing'
@@ -26,6 +26,67 @@ interface ArchiveEntryHeader {
   type?: string
   size?: number
   mode?: number
+  yauzl?: {
+    uncompressedSize?: number
+  }
+}
+
+function getDeclaredEntrySize(header: ArchiveEntryHeader): number | undefined {
+  const candidates = [header.size, header.yauzl?.uncompressedSize].filter(
+    (value): value is number => typeof value === 'number' && Number.isFinite(value) && value >= 0
+  )
+  if (candidates.length === 0) return undefined
+  return Math.max(...candidates)
+}
+
+async function drainEntryStreamBounded(
+  stream: Readable,
+  limits: {
+    maxFileBytes: number
+    maxTotalBytes: number
+    getTotalBytes: () => number
+    addTotalBytes: (bytes: number) => void
+  },
+  isAlreadyEnded?: () => boolean
+): Promise<void> {
+  if (isAlreadyEnded?.() || stream.readableEnded || stream.destroyed) {
+    return
+  }
+  let entryBytes = 0
+  await new Promise<void>((resolveDrain, rejectDrain) => {
+    let done = false
+    const finish = (err?: unknown) => {
+      if (done) return
+      done = true
+      if (err) {
+        stream.destroy()
+        rejectDrain(err instanceof Error ? err : new Error(String(err)))
+      } else {
+        resolveDrain()
+      }
+    }
+
+    stream.on('data', (chunk: Buffer) => {
+      if (done) return
+      entryBytes += chunk.byteLength
+      limits.addTotalBytes(chunk.byteLength)
+      if (entryBytes > limits.maxFileBytes) {
+        finish(new Error('ARCHIVE_FILE_TOO_LARGE'))
+        return
+      }
+      if (limits.getTotalBytes() > limits.maxTotalBytes) {
+        finish(new Error('ARCHIVE_SIZE_LIMIT_EXCEEDED'))
+      }
+    })
+    stream.on('error', finish)
+    stream.on('end', () => finish())
+    stream.on('close', () => finish())
+    if (isAlreadyEnded?.() || stream.readableEnded || stream.destroyed) {
+      finish()
+      return
+    }
+    stream.resume()
+  })
 }
 
 function normalizeArchiveEntryPath(rawName: string): string | null {
@@ -109,6 +170,15 @@ export async function extractArchiveSafely(
     uncompressStream.on(
       'entry',
       (header: ArchiveEntryHeader, stream: Readable, next: () => void) => {
+        let entryEnded = false
+        stream.once('end', () => {
+          entryEnded = true
+        })
+        stream.once('close', () => {
+          entryEnded = true
+        })
+        const isEntryEnded = () => entryEnded
+        stream.pause()
         const handleEntry = async () => {
           if (settled) {
             stream.resume()
@@ -133,14 +203,33 @@ export async function extractArchiveSafely(
             throw new Error('ARCHIVE_PATH_TRAVERSAL_DENIED')
           }
 
+          const declaredSize = getDeclaredEntrySize(header)
+          if (declaredSize !== undefined && declaredSize > maxFileBytes) {
+            stream.destroy()
+            throw new Error('ARCHIVE_FILE_TOO_LARGE')
+          }
+          if (declaredSize !== undefined && totalBytes + declaredSize > maxTotalBytes) {
+            stream.destroy()
+            throw new Error('ARCHIVE_SIZE_LIMIT_EXCEEDED')
+          }
+
+          const drainLimits = {
+            maxFileBytes,
+            maxTotalBytes,
+            getTotalBytes: () => totalBytes,
+            addTotalBytes: (bytes: number) => {
+              totalBytes += bytes
+            }
+          }
+
           if (normalizedRelative === '') {
-            stream.resume()
+            await drainEntryStreamBounded(stream, drainLimits, isEntryEnded)
             next()
             return
           }
 
           if (options.skipNodeModules && normalizedRelative.split('/').includes('node_modules')) {
-            stream.resume()
+            await drainEntryStreamBounded(stream, drainLimits, isEntryEnded)
             next()
             return
           }
@@ -157,18 +246,9 @@ export async function extractArchiveSafely(
             if (!isWithinCanonicalRoot(targetReal, destReal)) {
               throw new Error('ARCHIVE_SYMLINK_ESCAPE_DENIED')
             }
-            stream.resume()
+            await drainEntryStreamBounded(stream, drainLimits, isEntryEnded)
             next()
             return
-          }
-
-          if (typeof header.size === 'number' && header.size > maxFileBytes) {
-            stream.destroy()
-            throw new Error('ARCHIVE_FILE_TOO_LARGE')
-          }
-          if (typeof header.size === 'number' && totalBytes + header.size > maxTotalBytes) {
-            stream.destroy()
-            throw new Error('ARCHIVE_SIZE_LIMIT_EXCEEDED')
           }
 
           const parentDir = path.dirname(destPath)
@@ -179,48 +259,125 @@ export async function extractArchiveSafely(
             throw new Error('ARCHIVE_SYMLINK_ESCAPE_DENIED')
           }
 
-          let fileBytes = 0
-          await new Promise<void>((resolveWrite, rejectWrite) => {
-            const out = createWriteStream(destPath, { flags: 'w', mode: 0o644 })
-            let writeSettled = false
-            const finishWrite = (err?: unknown) => {
-              if (writeSettled) return
-              writeSettled = true
-              if (err) {
-                stream.destroy()
-                out.destroy()
-                rejectWrite(err instanceof Error ? err : new Error(String(err)))
-              } else {
-                resolveWrite()
-              }
+          try {
+            const existing = await fs.lstat(destPath)
+            if (existing.isSymbolicLink() || existing.isDirectory()) {
+              stream.destroy()
+              throw new Error('ARCHIVE_SYMLINK_ESCAPE_DENIED')
             }
+          } catch (lstatError) {
+            const code = (lstatError as NodeJS.ErrnoException)?.code
+            if (code !== 'ENOENT') {
+              stream.destroy()
+              throw lstatError
+            }
+          }
 
-            stream.on('data', (chunk: Buffer) => {
-              if (writeSettled) return
-              fileBytes += chunk.byteLength
-              totalBytes += chunk.byteLength
-              if (fileBytes > maxFileBytes) {
-                finishWrite(new Error('ARCHIVE_FILE_TOO_LARGE'))
-                return
+          const openFlags =
+            fsConstants.O_WRONLY |
+            fsConstants.O_CREAT |
+            fsConstants.O_TRUNC |
+            (typeof fsConstants.O_NOFOLLOW === 'number' ? fsConstants.O_NOFOLLOW : 0)
+          let handle: fs.FileHandle
+          try {
+            handle = await fs.open(destPath, openFlags, 0o644)
+          } catch (openError) {
+            stream.destroy()
+            const code = (openError as NodeJS.ErrnoException)?.code
+            if (code === 'ELOOP') {
+              throw new Error('ARCHIVE_SYMLINK_ESCAPE_DENIED')
+            }
+            throw openError
+          }
+
+          let fileBytes = 0
+          try {
+            await new Promise<void>((resolveWrite, rejectWrite) => {
+              let writeSettled = false
+              let streamFinished = false
+              let writeInFlight = false
+              const pendingChunks: Buffer[] = []
+
+              const finishWrite = (err?: unknown) => {
+                if (writeSettled) return
+                writeSettled = true
+                if (err) {
+                  stream.destroy()
+                  rejectWrite(err instanceof Error ? err : new Error(String(err)))
+                } else {
+                  resolveWrite()
+                }
               }
-              if (totalBytes > maxTotalBytes) {
-                finishWrite(new Error('ARCHIVE_SIZE_LIMIT_EXCEEDED'))
-                return
+
+              const flushPending = async () => {
+                if (writeInFlight || writeSettled) return
+                writeInFlight = true
+                try {
+                  while (pendingChunks.length > 0 && !writeSettled) {
+                    const chunk = pendingChunks.shift()!
+                    let offset = 0
+                    while (offset < chunk.byteLength && !writeSettled) {
+                      const { bytesWritten } = await handle.write(
+                        chunk,
+                        offset,
+                        chunk.byteLength - offset
+                      )
+                      if (bytesWritten <= 0) {
+                        throw new Error('ARCHIVE_WRITE_FAILED')
+                      }
+                      offset += bytesWritten
+                    }
+                  }
+                } catch (err) {
+                  finishWrite(err)
+                  return
+                } finally {
+                  writeInFlight = false
+                }
+                if (writeSettled) return
+                if (streamFinished && pendingChunks.length === 0) {
+                  finishWrite()
+                  return
+                }
+                if (pendingChunks.length === 0) {
+                  stream.resume()
+                }
               }
-              if (!out.write(chunk)) {
+
+              stream.on('data', (rawChunk: Buffer | string) => {
+                if (writeSettled) return
+                const chunk = Buffer.isBuffer(rawChunk) ? rawChunk : Buffer.from(rawChunk)
+                fileBytes += chunk.byteLength
+                totalBytes += chunk.byteLength
+                if (fileBytes > maxFileBytes) {
+                  finishWrite(new Error('ARCHIVE_FILE_TOO_LARGE'))
+                  return
+                }
+                if (totalBytes > maxTotalBytes) {
+                  finishWrite(new Error('ARCHIVE_SIZE_LIMIT_EXCEEDED'))
+                  return
+                }
                 stream.pause()
-                out.once('drain', () => {
-                  if (!writeSettled) stream.resume()
-                })
+                pendingChunks.push(chunk)
+                void flushPending()
+              })
+              stream.on('error', finishWrite)
+              stream.on('end', () => {
+                streamFinished = true
+                if (!writeInFlight && pendingChunks.length === 0) {
+                  finishWrite()
+                }
+              })
+              if (isEntryEnded() || stream.readableEnded || stream.destroyed) {
+                streamFinished = true
+                finishWrite()
+              } else {
+                stream.resume()
               }
             })
-            stream.on('error', finishWrite)
-            stream.on('end', () => {
-              if (!writeSettled) out.end()
-            })
-            out.on('error', finishWrite)
-            out.on('finish', () => finishWrite())
-          })
+          } finally {
+            await handle.close().catch(() => undefined)
+          }
 
           next()
         }
@@ -239,13 +396,15 @@ export async function extractArchiveSafely(
  */
 export async function peekTarManifestBounded(
   tarPath: string,
-  options: { maxEntries?: number; maxManifestBytes?: number } = {}
+  options: { maxEntries?: number; maxManifestBytes?: number; maxTotalBytes?: number } = {}
 ): Promise<unknown | undefined> {
   const maxEntries = options.maxEntries ?? DEFAULT_MAX_ARCHIVE_ENTRIES
   const maxManifestBytes = options.maxManifestBytes ?? DEFAULT_MAX_MANIFEST_BYTES
+  const maxTotalBytes = options.maxTotalBytes ?? DEFAULT_MAX_ARCHIVE_TOTAL_BYTES
 
   const uncompressStream = new compressing.tar.UncompressStream({ source: tarPath })
   let entryCount = 0
+  let totalBytes = 0
   let manifestJson: unknown | undefined
 
   await new Promise<void>((resolve, reject) => {
@@ -296,13 +455,30 @@ export async function peekTarManifestBounded(
           return
         }
 
-        if (header.type !== 'file' || normalized !== 'manifest.json') {
-          stream.resume()
-          next()
+        const declaredSize = getDeclaredEntrySize(header)
+        if (declaredSize !== undefined && totalBytes + declaredSize > maxTotalBytes) {
+          stream.destroy()
+          fail(new Error('ARCHIVE_SIZE_LIMIT_EXCEEDED'))
           return
         }
 
-        if (typeof header.size === 'number' && header.size > maxManifestBytes) {
+        if (header.type !== 'file' || normalized !== 'manifest.json') {
+          void drainEntryStreamBounded(stream, {
+            maxFileBytes: maxTotalBytes,
+            maxTotalBytes,
+            getTotalBytes: () => totalBytes,
+            addTotalBytes: (bytes: number) => {
+              totalBytes += bytes
+            }
+          })
+            .then(() => {
+              if (!settled) next()
+            })
+            .catch(fail)
+          return
+        }
+
+        if (declaredSize !== undefined && declaredSize > maxManifestBytes) {
           stream.destroy()
           fail(new Error('ARCHIVE_MANIFEST_TOO_LARGE'))
           return
@@ -313,9 +489,15 @@ export async function peekTarManifestBounded(
         stream.on('data', (chunk: Buffer) => {
           if (settled) return
           bytes += chunk.byteLength
+          totalBytes += chunk.byteLength
           if (bytes > maxManifestBytes) {
             stream.destroy()
             fail(new Error('ARCHIVE_MANIFEST_TOO_LARGE'))
+            return
+          }
+          if (totalBytes > maxTotalBytes) {
+            stream.destroy()
+            fail(new Error('ARCHIVE_SIZE_LIMIT_EXCEEDED'))
             return
           }
           chunks.push(chunk)

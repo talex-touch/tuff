@@ -102,12 +102,23 @@ function safeAppPath(
   }
 }
 
+function normalizeComparablePath(targetPath: string): string {
+  const resolved = path.resolve(targetPath)
+  return process.platform === 'darwin' || process.platform === 'win32'
+    ? resolved.toLowerCase()
+    : resolved
+}
+
 function isWithinResolvedRoot(candidate: string, root: string): boolean {
-  return candidate === root || candidate.startsWith(root + path.sep)
+  const compCandidate = normalizeComparablePath(candidate)
+  const compRoot = normalizeComparablePath(root)
+  return compCandidate === compRoot || compCandidate.startsWith(compRoot + path.sep)
 }
 
 function isStrictDescendantOfRoot(candidate: string, root: string): boolean {
-  return candidate !== root && candidate.startsWith(root + path.sep)
+  const compCandidate = normalizeComparablePath(candidate)
+  const compRoot = normalizeComparablePath(root)
+  return compCandidate !== compRoot && compCandidate.startsWith(compRoot + path.sep)
 }
 
 function canonicalizeWithNearestExistingAncestor(targetPath: string): string {
@@ -122,7 +133,7 @@ function canonicalizeWithNearestExistingAncestor(targetPath: string): string {
     } catch (error) {
       const code = (error as NodeJS.ErrnoException)?.code
       if (code !== 'ENOENT' && code !== 'ENOTDIR') {
-        return resolved
+        throw error
       }
       // Reject dangling symlinks rather than falling through to their parent directory.
       try {
@@ -131,6 +142,10 @@ function canonicalizeWithNearestExistingAncestor(targetPath: string): string {
         }
       } catch (lstatError) {
         if (lstatError instanceof Error && lstatError.message === 'DANGLING_SYMLINK') {
+          throw lstatError
+        }
+        const lstatCode = (lstatError as NodeJS.ErrnoException)?.code
+        if (lstatCode && lstatCode !== 'ENOENT' && lstatCode !== 'ENOTDIR') {
           throw lstatError
         }
       }
@@ -170,15 +185,19 @@ export function isSafeDownloadTaskId(taskId: unknown): taskId is string {
 export function getAllowedDownloadTempRoots(appLike: DownloadRootsAppLike = app): string[] {
   const userData = safeAppPath(appLike, 'userData')
   let runtimeTemp: string | null = null
+  let downloadCenterRoot: string | null = null
   try {
     const runtimeRoot = resolveRuntimeRootPath(appLike)
     runtimeTemp = runtimeRoot ? path.join(runtimeRoot, 'temp') : null
+    downloadCenterRoot = runtimeRoot ? path.join(runtimeRoot, 'modules', 'download-center') : null
   } catch {
     runtimeTemp = null
+    downloadCenterRoot = null
   }
 
   const roots: Array<string | null> = [
     runtimeTemp,
+    downloadCenterRoot,
     userData ? path.join(userData, 'temp') : null,
     safeAppPath(appLike, 'temp'),
     os.tmpdir()

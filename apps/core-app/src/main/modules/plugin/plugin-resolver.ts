@@ -10,7 +10,11 @@ import { pluginModule } from './plugin-module'
 import { removeNodeModulesDirs, shouldSkipNodeModulesPath } from './plugin-install-copy-utils'
 import { type PackagedManifest, ensurePluginRuntimeIntegrity } from './plugin-runtime-integrity'
 import { extractArchiveSafely } from './safe-archive-extract'
-import { isReservedPrivilegedPluginName } from '../../../shared/privileged-plugins'
+import {
+  hasUnsafePluginNameEdgeChars,
+  isReservedPrivilegedPluginName,
+  normalizePluginNameForCollision
+} from '../../../shared/privileged-plugins'
 
 type ResolverEvent = { msg: unknown }
 const pluginResolverLog = createLogger('PluginSystem').child('Resolver')
@@ -168,7 +172,11 @@ export class PluginResolver {
         autoReEnable: options?.autoReEnable === true
       }
     })
-    if (typeof manifest.name !== 'string' || !isSafePathSegment(manifest.name)) {
+    if (
+      typeof manifest.name !== 'string' ||
+      !isSafePathSegment(manifest.name) ||
+      hasUnsafePluginNameEdgeChars(manifest.name)
+    ) {
       return cb('invalid plugin name', 'error')
     }
     if (isReservedPrivilegedPluginName(manifest.name)) {
@@ -176,8 +184,10 @@ export class PluginResolver {
     }
     const pluginsRoot = pluginModule.filePath!
     const existingEntries = await fse.readdir(pluginsRoot).catch(() => [] as string[])
+    const normalizedTargetName = normalizePluginNameForCollision(manifest.name)
     const caseCollision = existingEntries.find(
-      (entry) => entry.toLowerCase() === manifest.name.toLowerCase() && entry !== manifest.name
+      (entry) =>
+        normalizePluginNameForCollision(entry) === normalizedTargetName && entry !== manifest.name
     )
     if (caseCollision) {
       return cb('plugin name collides with an existing plugin directory', 'error')

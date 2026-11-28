@@ -128,6 +128,19 @@ describe('SyncPayloadCrypto', () => {
     })
   })
 
+  it('fails closed on b64 payloads when secure storage is unavailable', async () => {
+    const unavailableStore = {
+      ...createMemoryStore(),
+      isAvailable: () => false
+    }
+    const crypto = new SyncPayloadCrypto(unavailableStore)
+    const legacy = `b64:${Buffer.from('{"theme":"dark"}', 'utf-8').toString('base64')}`
+
+    await expect(crypto.decrypt(legacy)).rejects.toMatchObject({
+      code: 'SYNC_SECURE_STORE_UNAVAILABLE'
+    })
+  })
+
   it('registers payload keys with the wrapping backend marker', async () => {
     const crypto = new SyncPayloadCrypto(createMemoryStore())
 

@@ -57,6 +57,44 @@ vi.mock('../../core/runtime-accessor', () => ({
   }))
 }))
 
+vi.mock('../permission', () => ({
+  getPermissionModule: () => ({
+    checkPermission: vi.fn((_pluginId: string, permissionId: string) => ({
+      allowed: permissionId === 'network.internet'
+    })),
+    getGuard: () => ({
+      check: vi.fn((_pluginId: string, permissionId: string) => ({
+        allowed: permissionId === 'network.internet'
+      }))
+    })
+  })
+}))
+
+vi.mock('../permission/permission-module-ref', () => ({
+  getPermissionModule: () => ({
+    checkPermission: vi.fn((_pluginId: string, permissionId: string) => ({
+      allowed: permissionId === 'network.internet'
+    })),
+    getGuard: () => ({
+      check: vi.fn((_pluginId: string, permissionId: string) => ({
+        allowed: permissionId === 'network.internet'
+      }))
+    })
+  })
+}))
+
+vi.mock('../permission/permission-ports', () => ({
+  resolvePermissionPluginDeclaredSdkApi: vi.fn(async () => 260215)
+}))
+
+vi.mock('../plugin/plugin-module', () => ({
+  pluginModule: {
+    pluginManager: {
+      getPluginByName: vi.fn(() => ({ sdkapi: 260215 }))
+    }
+  }
+}))
+
 vi.mock('./network-service', () => ({
   getNetworkService: vi.fn(() => mocks.service)
 }))
@@ -166,50 +204,107 @@ describe('NetworkModule lifecycle status', () => {
     mocks.service.requestForPlugin.mockResolvedValueOnce(response)
 
     module.onInit({} as ModuleInitContext<TalexEvents>)
-    // Must not double-register NetworkEvents.api.request on raw plugin channel
-    expect(mocks.regChannel).not.toHaveBeenCalled()
+    try {
+      // Must not double-register NetworkEvents.api.request on raw plugin channel
+      expect(mocks.regChannel).not.toHaveBeenCalled()
 
-    const handler = mocks.handlers.get(NetworkEvents.api.request.toEventName()) as
-      | ((payload: unknown, context: unknown) => Promise<unknown>)
-      | undefined
-    expect(handler).toBeTypeOf('function')
+      const handler = mocks.handlers.get(NetworkEvents.api.request.toEventName()) as
+        | ((payload: unknown, context: unknown) => Promise<unknown>)
+        | undefined
+      expect(handler).toBeTypeOf('function')
 
-    const pluginContext = createTrustedTestPluginContext({
-      name: 'touch-translation',
-      pluginInstanceId: 'translation-instance',
-      activationGeneration: 2
-    })
+      const pluginContext = createTrustedTestPluginContext({
+        name: 'touch-translation',
+        pluginInstanceId: 'translation-instance',
+        activationGeneration: 2
+      })
 
-    // Non-HTTP schemes such as file:// are rejected before hitting the network service
-    await expect(
-      handler?.(
-        { method: 'GET', url: 'file:///etc/passwd', responseType: 'text' },
-        { sender, eventName: NetworkEvents.api.request.toEventName(), plugin: pluginContext }
+      // Non-HTTP schemes such as file:// are rejected before hitting the network service
+      await expect(
+        handler?.(
+          { method: 'GET', url: 'file:///etc/passwd', responseType: 'text' },
+          { sender, eventName: NetworkEvents.api.request.toEventName(), plugin: pluginContext }
+        )
+      ).rejects.toThrow('NETWORK_UNSUPPORTED_PROTOCOL')
+      expect(mocks.service.request).not.toHaveBeenCalled()
+      expect(mocks.service.requestForPlugin).not.toHaveBeenCalled()
+
+      // Unverified plugin context is denied
+      await expect(
+        handler?.(request, {
+          sender,
+          eventName: NetworkEvents.api.request.toEventName(),
+          plugin: { name: 'touch-translation', uniqueKey: 'forged' }
+        })
+      ).rejects.toThrow()
+
+      // Host requests still go through service.request
+      await expect(
+        handler?.(request, {
+          sender,
+          eventName: NetworkEvents.api.request.toEventName(),
+          plugin: undefined
+        })
+      ).resolves.toBeUndefined()
+      expect(mocks.service.request).toHaveBeenCalledWith(request)
+
+      // Authoritative plugin requests route through requestForPlugin with whitelisted fields only
+      mocks.service.request.mockClear()
+      mocks.service.requestForPlugin.mockClear()
+      mocks.service.requestForPlugin.mockResolvedValueOnce(response)
+      await expect(
+        handler?.(
+          {
+            ...request,
+            headers: { 'x-test': '1' },
+            unexpectedField: 'dropped'
+          },
+          {
+            sender,
+            eventName: NetworkEvents.api.request.toEventName(),
+            plugin: pluginContext
+          }
+        )
+      ).resolves.toEqual(response)
+      expect(mocks.service.request).not.toHaveBeenCalled()
+      expect(mocks.service.requestForPlugin).toHaveBeenCalledWith(
+        {
+          method: 'POST',
+          url: 'https://example.test/translate',
+          responseType: 'json',
+          headers: { 'x-test': '1' },
+          body: { text: 'Hello world' }
+        },
+        {
+          pluginName: 'touch-translation',
+          allowLocal: false,
+          allowInternet: true
+        }
       )
-    ).rejects.toThrow('NETWORK_UNSUPPORTED_PROTOCOL')
-    expect(mocks.service.request).not.toHaveBeenCalled()
-    expect(mocks.service.requestForPlugin).not.toHaveBeenCalled()
 
-    // Unverified plugin context is denied
-    await expect(
-      handler?.(request, {
-        sender,
-        eventName: NetworkEvents.api.request.toEventName(),
-        plugin: { name: 'touch-translation', uniqueKey: 'forged' }
-      })
-    ).rejects.toThrow()
-
-    // Host requests still go through service.request; plugin requests go through isolated requestForPlugin
-    await expect(
-      handler?.(request, {
-        sender,
-        eventName: NetworkEvents.api.request.toEventName(),
-        plugin: undefined
-      })
-    ).resolves.toBeUndefined()
-    expect(mocks.service.request).toHaveBeenCalledWith(request)
-
-    module.onDestroy({} as never)
+      // Plugin requests supplying proxyOverride are rejected fail-closed
+      mocks.service.requestForPlugin.mockClear()
+      await expect(
+        handler?.(
+          {
+            ...request,
+            proxyOverride: {
+              mode: 'custom',
+              custom: { httpProxy: 'http://attacker.example:8080' },
+              authRef: 'auth.token'
+            }
+          },
+          {
+            sender,
+            eventName: NetworkEvents.api.request.toEventName(),
+            plugin: pluginContext
+          }
+        )
+      ).rejects.toThrow('PLUGIN_NETWORK_REQUEST_INVALID')
+      expect(mocks.service.requestForPlugin).not.toHaveBeenCalled()
+    } finally {
+      module.onDestroy({} as never)
+    }
   })
 
   it('pauses 5s net.isOnline polling during background-hidden and system-suspended and resumes without duplicate timers', () => {

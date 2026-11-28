@@ -1422,6 +1422,12 @@ describe('networkService cooldown policy', () => {
       if (hostname === 'rebind-metadata.example.test') {
         return [{ address: '::ffff:169.254.169.254', family: 6 }]
       }
+      if (hostname === 'mixed-dns.example.test') {
+        return [
+          { address: '93.184.216.34', family: 4 },
+          { address: '127.0.0.1', family: 4 }
+        ]
+      }
       return [{ address: '93.184.216.34', family: 4 }]
     })
     const service = new NetworkService({ dnsLookup })
@@ -1464,38 +1470,68 @@ describe('networkService cooldown policy', () => {
       )
     ).rejects.toThrow('NETWORK_LOCAL_ACCESS_DENIED')
 
-    // Under custom proxy: uses non-persistent per-plugin session partition with credentials omitted
-    // and rejects HTTP 302 redirects targeting localhost
-    electronMocks.fetch.mockResolvedValueOnce(
-      new Response(null, {
-        status: 302,
-        headers: { location: 'http://127.0.0.1:8080/internal-admin' }
-      })
-    )
+    // Mixed [publicIp, localIp] DNS records are rejected when either internet or local is disallowed
+    await expect(
+      service.requestForPlugin(
+        { method: 'GET', url: 'https://mixed-dns.example.test/api?case=no-internet' },
+        { pluginName: 'untrusted-plugin', allowLocal: true, allowInternet: false }
+      )
+    ).rejects.toThrow('NETWORK_INTERNET_ACCESS_DENIED')
+    await expect(
+      service.requestForPlugin(
+        { method: 'GET', url: 'https://mixed-dns.example.test/api?case=no-local' },
+        { pluginName: 'untrusted-plugin', allowLocal: false, allowInternet: true }
+      )
+    ).rejects.toThrow('NETWORK_LOCAL_ACCESS_DENIED')
+
+    // Plugin-supplied proxyOverride is ignored (never switches to unpinned fetch or reads authRef)
     await expect(
       service.requestForPlugin(
         {
           method: 'GET',
-          url: 'https://public.example.test/start',
+          url: 'https://rebind-loopback.example.test/api',
           proxyOverride: {
             mode: 'custom',
-            custom: { httpProxy: 'http://127.0.0.1:7890' }
+            custom: { httpProxy: 'http://attacker.example:8080' },
+            authRef: 'auth.token'
           }
         },
         { pluginName: 'untrusted-plugin', allowLocal: false }
       )
     ).rejects.toThrow('NETWORK_LOCAL_ACCESS_DENIED')
+    expect(electronMocks.fetch).not.toHaveBeenCalled()
+    expect(electronMocks.session.fromPartition).not.toHaveBeenCalled()
 
-    expect(electronMocks.session.fromPartition).toHaveBeenCalledWith(
-      expect.stringMatching(/^tuff-plugin-network-[a-f0-9]{16}$/)
-    )
-    expect(electronMocks.fetch).toHaveBeenCalledTimes(1)
-    expect(electronMocks.fetch).toHaveBeenCalledWith(
-      'https://public.example.test/start',
-      expect.objectContaining({
-        redirect: 'manual',
-        credentials: 'omit'
-      })
-    )
+    // Under legitimate HOST custom proxy: uses non-persistent per-plugin session partition with
+    // net.request({ redirect: 'manual' }) and rejects 302 redirects targeting localhost
+    const storageModule = await import('../storage')
+    vi.mocked(storageModule.getMainConfig).mockReturnValue({
+      network: {
+        proxy: {
+          mode: 'custom',
+          custom: { httpProxy: 'http://127.0.0.1:7890' }
+        }
+      }
+    } as never)
+    try {
+      const { request: hopReq, issued } = createManualRedirectHop()
+      const pendingProxy = service.requestForPlugin(
+        {
+          method: 'GET',
+          url: 'https://public.example.test/start'
+        },
+        { pluginName: 'untrusted-plugin', allowLocal: false }
+      )
+      await issued
+      hopReq.emit('redirect', 302, 'GET', 'http://127.0.0.1:8080/internal-admin', {})
+
+      await expect(pendingProxy).rejects.toThrow('NETWORK_LOCAL_ACCESS_DENIED')
+      expect(electronMocks.session.fromPartition).toHaveBeenCalledWith(
+        expect.stringMatching(/^tuff-plugin-network-[a-f0-9]{16}$/)
+      )
+      expect(electronMocks.fetch).not.toHaveBeenCalled()
+    } finally {
+      vi.mocked(storageModule.getMainConfig).mockReturnValue(undefined as never)
+    }
   })
 })

@@ -2,6 +2,7 @@
 
 const { spawn } = require('node:child_process')
 const { randomUUID } = require('node:crypto')
+const fsSync = require('node:fs')
 const fs = require('node:fs/promises')
 const path = require('node:path')
 const process = require('node:process')
@@ -11,23 +12,127 @@ const POLL_INTERVAL_MS = 250
 const PARENT_EXIT_TIMEOUT_MS = 60_000
 const WINDOWS_NSIS_INSTALLER_RE = /(^|[\s._-])(setup|installer)([\s._-]|$)/i
 
-function isWithin(root, candidate) {
-  const resolvedRoot = path.resolve(root)
-  const resolvedCandidate = path.resolve(candidate)
-  return (
-    resolvedCandidate === resolvedRoot || resolvedCandidate.startsWith(`${resolvedRoot}${path.sep}`)
-  )
+function normalizeComparable(targetPath, platform = process.platform) {
+  const resolved = path.resolve(targetPath)
+  return platform === 'darwin' || platform === 'win32' ? resolved.toLowerCase() : resolved
 }
 
-function assertInternalPath(root, candidate) {
-  if (typeof candidate !== 'string' || !isWithin(root, candidate)) {
+function isWithinLexical(root, candidate, platform = process.platform) {
+  const compRoot = normalizeComparable(root, platform)
+  const compCandidate = normalizeComparable(candidate, platform)
+  return compCandidate === compRoot || compCandidate.startsWith(`${compRoot}${path.sep}`)
+}
+
+function canonicalizeNearestExistingSync(targetPath) {
+  const resolved = path.resolve(targetPath)
+  const tail = []
+  let cursor = resolved
+  while (true) {
+    try {
+      const realCursor = fsSync.realpathSync(cursor)
+      return tail.length > 0 ? path.join(realCursor, ...tail.reverse()) : realCursor
+    } catch (error) {
+      const code = error && error.code
+      if (code !== 'ENOENT' && code !== 'ENOTDIR') {
+        throw error
+      }
+      try {
+        if (fsSync.lstatSync(cursor).isSymbolicLink()) {
+          throw new Error('Update helper path cannot traverse a symbolic link')
+        }
+      } catch (lstatError) {
+        if (lstatError && lstatError.code !== 'ENOENT' && lstatError.code !== 'ENOTDIR') {
+          throw lstatError
+        }
+      }
+      const parent = path.dirname(cursor)
+      if (parent === cursor) {
+        return resolved
+      }
+      tail.push(path.basename(cursor))
+      cursor = parent
+    }
+  }
+}
+
+function assertNoSymlinkBetween(root, candidate, options = {}) {
+  const resolvedRoot = path.resolve(root)
+  const resolvedCandidate = path.resolve(candidate)
+  const allowMissing = options.allowMissing === true
+
+  let cursor = resolvedCandidate
+  while (true) {
+    try {
+      if (fsSync.lstatSync(cursor).isSymbolicLink()) {
+        throw new Error('Update helper path cannot be a symbolic link')
+      }
+    } catch (error) {
+      const code = error && error.code
+      if (code === 'ENOENT' || code === 'ENOTDIR') {
+        if (!allowMissing) {
+          throw new Error('Update helper command target does not exist')
+        }
+      } else {
+        throw error
+      }
+    }
+    if (normalizeComparable(cursor) === normalizeComparable(resolvedRoot)) {
+      break
+    }
+    const parent = path.dirname(cursor)
+    if (parent === cursor) {
+      break
+    }
+    cursor = parent
+  }
+}
+
+function isWithin(root, candidate, options = {}) {
+  const platform = options.platform || process.platform
+  if (typeof root !== 'string' || typeof candidate !== 'string') {
+    return false
+  }
+  if (!isWithinLexical(root, candidate, platform)) {
+    return false
+  }
+  try {
+    const canonicalRoot = canonicalizeNearestExistingSync(root)
+    const canonicalCandidate = canonicalizeNearestExistingSync(candidate)
+    if (!isWithinLexical(canonicalRoot, canonicalCandidate, platform)) {
+      return false
+    }
+    if (options.rejectSymlink) {
+      assertNoSymlinkBetween(root, candidate, { allowMissing: options.allowMissing === true })
+    }
+    return true
+  } catch {
+    return false
+  }
+}
+
+function assertInternalPath(root, candidate, options = {}) {
+  if (
+    typeof candidate !== 'string' ||
+    !isWithin(root, candidate, {
+      platform: options.platform || process.platform,
+      rejectSymlink: options.rejectSymlink !== false,
+      allowMissing: options.allowMissing !== false
+    })
+  ) {
     throw new Error('Update helper path escapes the storage root')
   }
   return path.resolve(candidate)
 }
 
-function getAllowedBundledScriptDirs(root, attemptRoot) {
-  const dirs = [path.resolve(attemptRoot), path.resolve(root), path.resolve(__dirname)]
+function getAllowedBundledScriptDirs(root, options = {}) {
+  const dirs = []
+  if (Array.isArray(options.bundledScriptDirs)) {
+    for (const dir of options.bundledScriptDirs) {
+      if (typeof dir === 'string' && path.isAbsolute(dir) && !isWithinLexical(root, dir)) {
+        dirs.push(path.resolve(dir))
+      }
+    }
+  }
   if (typeof process.resourcesPath === 'string' && process.resourcesPath.length > 0) {
     dirs.push(
       path.resolve(process.resourcesPath, 'resources', 'scripts'),
@@ -39,10 +144,16 @@ function getAllowedBundledScriptDirs(root, attemptRoot) {
     path.resolve(execDir, 'resources', 'scripts'),
     path.resolve(execDir, 'resources', 'resources', 'scripts')
   )
-  return dirs
+  // Allow __dirname only when running from the read-only bundled scripts directory, never when
+  // copied into the writable storage root / attemptRoot.
+  if (!isWithinLexical(root, __dirname)) {
+    dirs.push(path.resolve(__dirname))
+  }
+  return dirs.filter((dir) => !isWithinLexical(root, dir))
 }
 
-function isAllowedBundledScriptPath(root, attemptRoot, scriptPath, expectedFilename) {
+function isAllowedBundledScriptPath(root, scriptPath, expectedFilename, options = {}) {
+  const platform = options.platform || process.platform
   if (typeof scriptPath !== 'string' || !path.isAbsolute(scriptPath)) {
     return false
   }
@@ -50,10 +161,28 @@ function isAllowedBundledScriptPath(root, attemptRoot, scriptPath, expectedFilen
   if (path.basename(resolved) !== expectedFilename) {
     return false
   }
-  return getAllowedBundledScriptDirs(root, attemptRoot).some((dir) => isWithin(dir, resolved))
+  if (isWithinLexical(root, resolved, platform)) {
+    return false
+  }
+  return getAllowedBundledScriptDirs(root, options).some((dir) =>
+    isWithin(dir, resolved, {
+      platform,
+      rejectSymlink: true,
+      allowMissing: false
+    })
+  )
 }
 
-function assertCommand(root, plan, command, role) {
+function getFlagValue(args, flagName) {
+  for (let i = 1; i < args.length; i += 1) {
+    if (args[i] === flagName && i + 1 < args.length) {
+      return args[i + 1]
+    }
+  }
+  return null
+}
+
+function assertCommand(root, plan, command, role, options = {}) {
   if (
     !command ||
     typeof command !== 'object' ||
@@ -66,8 +195,15 @@ function assertCommand(root, plan, command, role) {
     throw new Error('Update helper command is invalid')
   }
 
-  const attemptRoot = path.dirname(assertInternalPath(root, plan.ackPath))
+  const hostPlatform = options.hostPlatform || process.platform
   const platform = plan.platform
+  if (platform !== hostPlatform) {
+    throw new Error(`Update plan platform ${String(platform)} does not match host ${hostPlatform}`)
+  }
+
+  const attemptRoot = path.dirname(
+    assertInternalPath(root, plan.ackPath, { platform, rejectSymlink: true, allowMissing: true })
+  )
 
   if (platform === 'darwin') {
     const expectedScript = role === 'handoff' ? 'macos-apply-update.sh' : 'macos-restore-update.sh'
@@ -77,22 +213,64 @@ function assertCommand(root, plan, command, role) {
       command.waitForExit !== true ||
       typeof scriptArg !== 'string' ||
       !path.isAbsolute(scriptArg) ||
-      !isWithin(attemptRoot, scriptArg) ||
-      path.basename(path.resolve(scriptArg)) !== expectedScript
+      path.basename(path.resolve(scriptArg)) !== expectedScript ||
+      !isWithin(attemptRoot, scriptArg, {
+        platform,
+        rejectSymlink: true,
+        allowMissing: false
+      })
     ) {
       throw new Error(`Disallowed macOS ${role} command`)
+    }
+
+    const swapHelperArg = getFlagValue(command.args, '--swap-helper')
+    if (swapHelperArg !== null) {
+      if (
+        !path.isAbsolute(swapHelperArg) ||
+        path.basename(path.resolve(swapHelperArg)) !== 'tuff-native-update' ||
+        !isWithin(attemptRoot, swapHelperArg, {
+          platform,
+          rejectSymlink: true,
+          allowMissing: false
+        })
+      ) {
+        throw new Error(`Disallowed macOS ${role} swap-helper path`)
+      }
+    }
+
+    const destArg = getFlagValue(command.args, '--dest')
+    if (destArg !== null) {
+      if (
+        !plan.macosTransaction ||
+        normalizeComparable(destArg, platform) !==
+          normalizeComparable(plan.macosTransaction.appBundlePath, platform)
+      ) {
+        throw new Error(`Disallowed macOS ${role} destination path`)
+      }
+    }
+
+    const logArg = getFlagValue(command.args, '--log')
+    if (
+      logArg !== null &&
+      !isWithin(attemptRoot, logArg, { platform, rejectSymlink: true, allowMissing: true })
+    ) {
+      throw new Error(`Disallowed macOS ${role} log path`)
     }
     return
   }
 
   if (platform === 'linux') {
-    if (command.command === '/bin/bash') {
+    if (role === 'handoff') {
       const scriptArg = command.args[0]
       if (
+        command.command !== '/bin/bash' ||
         command.waitForExit !== true ||
-        !isAllowedBundledScriptPath(root, attemptRoot, scriptArg, 'linux-apply-update.sh')
+        !isAllowedBundledScriptPath(root, scriptArg, 'linux-apply-update.sh', {
+          ...options,
+          platform
+        })
       ) {
-        throw new Error(`Disallowed Linux ${role} bash command`)
+        throw new Error(`Disallowed Linux ${role} command`)
       }
       return
     }
@@ -102,7 +280,7 @@ function assertCommand(root, plan, command, role) {
         ext === '.appimage' &&
         command.waitForExit === false &&
         command.args.length === 0 &&
-        isWithin(root, command.command)
+        isWithin(root, command.command, { platform, rejectSymlink: true, allowMissing: false })
       ) {
         return
       }
@@ -111,7 +289,7 @@ function assertCommand(root, plan, command, role) {
         command.waitForExit === false &&
         command.args.length === 1 &&
         path.extname(command.args[0]).toLowerCase() === '.deb' &&
-        isWithin(root, command.args[0])
+        isWithin(root, command.args[0], { platform, rejectSymlink: true, allowMissing: false })
       ) {
         return
       }
@@ -126,7 +304,7 @@ function assertCommand(root, plan, command, role) {
       command.args.length === 2 &&
       command.args[0] === '/i' &&
       path.extname(command.args[1]).toLowerCase() === '.msi' &&
-      isWithin(root, command.args[1])
+      isWithin(root, command.args[1], { platform, rejectSymlink: true, allowMissing: false })
     ) {
       return
     }
@@ -137,7 +315,7 @@ function assertCommand(root, plan, command, role) {
       WINDOWS_NSIS_INSTALLER_RE.test(baseName) &&
       command.waitForExit === false &&
       command.args.length === 0 &&
-      isWithin(root, command.command)
+      isWithin(root, command.command, { platform, rejectSymlink: true, allowMissing: false })
     ) {
       return
     }
@@ -147,7 +325,8 @@ function assertCommand(root, plan, command, role) {
   throw new Error(`Unsupported update platform: ${String(platform)}`)
 }
 
-function validatePlan(root, plan) {
+function validatePlan(root, plan, options = {}) {
+  const hostPlatform = options.hostPlatform || process.platform
   if (
     !plan ||
     typeof plan !== 'object' ||
@@ -157,6 +336,7 @@ function validatePlan(root, plan) {
     typeof plan.token !== 'string' ||
     plan.token.length < 32 ||
     !['darwin', 'win32', 'linux'].includes(plan.platform) ||
+    plan.platform !== hostPlatform ||
     typeof plan.currentVersion !== 'string' ||
     typeof plan.targetVersion !== 'string' ||
     typeof plan.taskId !== 'string' ||
@@ -196,8 +376,8 @@ function validatePlan(root, plan) {
     assertInternalPath(root, plan.lockPath)
   }
   for (const cleanupPath of plan.cleanupPaths) assertInternalPath(root, cleanupPath)
-  assertCommand(root, plan, plan.handoff, 'handoff')
-  if (plan.recovery !== null) assertCommand(root, plan, plan.recovery, 'recovery')
+  assertCommand(root, plan, plan.handoff, 'handoff', options)
+  if (plan.recovery !== null) assertCommand(root, plan, plan.recovery, 'recovery', options)
   return plan
 }
 
@@ -329,7 +509,7 @@ async function logPhase(root, planPath, phase, startedAt) {
     .catch((error) => console.error('Unable to record update phase timing:', error))
 }
 
-async function recoverOnce(root, plan, reason) {
+async function recoverOnce(root, plan, reason, options = {}) {
   const existing = await readJson(plan.markerPath)
   if (
     existing &&
@@ -365,7 +545,7 @@ async function recoverOnce(root, plan, reason) {
   })
 
   try {
-    assertCommand(root, plan, plan.recovery, 'recovery')
+    assertCommand(root, plan, plan.recovery, 'recovery', options)
     await launchCommand(plan.recovery)
     return true
   } catch (error) {
@@ -382,9 +562,9 @@ async function recoverOnce(root, plan, reason) {
   }
 }
 
-async function runHelper(root, planPath) {
+async function runHelper(root, planPath, options = {}) {
   const safePlanPath = assertInternalPath(root, planPath)
-  const plan = validatePlan(root, await readJson(safePlanPath))
+  const plan = validatePlan(root, await readJson(safePlanPath), options)
   const existingAck = await readJson(plan.ackPath)
   if (isMatchingHealthAck(plan, existingAck)) {
     await cleanup(root, plan)
@@ -441,7 +621,8 @@ async function runHelper(root, planPath) {
       const recovered = await recoverOnce(
         root,
         plan,
-        `Update handoff failed: ${error instanceof Error ? error.message : String(error)}`
+        `Update handoff failed: ${error instanceof Error ? error.message : String(error)}`,
+        options
       )
       if (recovered && (await waitForHealthAck(plan))) {
         await cleanup(root, plan)
@@ -457,7 +638,12 @@ async function runHelper(root, planPath) {
       return { status: 'healthy' }
     }
 
-    const recovered = await recoverOnce(root, plan, 'Startup health acknowledgement timed out')
+    const recovered = await recoverOnce(
+      root,
+      plan,
+      'Startup health acknowledgement timed out',
+      options
+    )
     if (recovered && (await waitForHealthAck(plan))) {
       await logPhase(root, safePlanPath, 'recovery-health', healthWaitStarted)
       await cleanup(root, plan)

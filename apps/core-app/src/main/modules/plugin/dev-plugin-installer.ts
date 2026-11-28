@@ -6,7 +6,11 @@ import { checkDirWithCreate } from '../../utils/common-util'
 import { createLogger } from '../../utils/logger'
 import { pluginModule } from './plugin-module'
 import { shouldSkipNodeModulesPath } from './plugin-install-copy-utils'
-import { isReservedPrivilegedPluginName } from '../../../shared/privileged-plugins'
+import {
+  hasUnsafePluginNameEdgeChars,
+  isReservedPrivilegedPluginName,
+  normalizePluginNameForCollision
+} from '../../../shared/privileged-plugins'
 
 const devPluginInstallerLog = createLogger('PluginSystem').child('DevInstaller')
 
@@ -64,7 +68,7 @@ export async function installDevPluginFromPath(
     }
 
     const manifest = await readManifest(sourceDir)
-    if (!isSafePathSegment(manifest.name)) {
+    if (!isSafePathSegment(manifest.name) || hasUnsafePluginNameEdgeChars(manifest.name)) {
       return { status: 'error', error: 'INVALID_PLUGIN_NAME' }
     }
     if (isReservedPrivilegedPluginName(manifest.name)) {
@@ -77,8 +81,10 @@ export async function installDevPluginFromPath(
     }
 
     const existingEntries = await fse.readdir(pluginRoot).catch(() => [] as string[])
+    const normalizedTargetName = normalizePluginNameForCollision(manifest.name)
     const caseCollision = existingEntries.find(
-      (entry) => entry.toLowerCase() === manifest.name.toLowerCase() && entry !== manifest.name
+      (entry) =>
+        normalizePluginNameForCollision(entry) === normalizedTargetName && entry !== manifest.name
     )
     if (caseCollision) {
       return { status: 'error', error: 'PLUGIN_NAME_CASE_COLLISION' }
