@@ -10,6 +10,7 @@ import { coerceJsonArray, coerceJsonRecord } from '~/utils/docs-api'
 import { cacheDocsFullBody, hasCachedDocsFullBody, isDocsPageRecordForRoute, readCachedDocsFullBody, requestDocsPage, resolveDocsFullBodyCacheKey } from '~/utils/docs-page-client-cache'
 import { buildDocOutlineFromBody, buildDocOutlineTree, type DocTocEntry } from '~/utils/docs-outline'
 import { buildDocsSeoHead, normalizeDocsSeoCanonicalPath } from '~/utils/docs-seo'
+import { formatDocsCodeLanguage } from '~/utils/docs-code-language'
 import { DOCS_SOURCE_PATH_KEY } from '~/utils/docs-source-path'
 import { useTypedFetch } from '~/utils/request'
 import { normalizeDocsPagePath, resolveDocsLocaleFromRoute, toLocalizedDocsPath } from '#shared/utils/docs-path'
@@ -1126,9 +1127,7 @@ function resolveCodeLanguage(codeEl: HTMLElement | null, preEl: HTMLElement | nu
 }
 
 function formatLanguageLabel(language: string) {
-  if (!language)
-    return copyLabels.value.text
-  return language.replace(/[^a-z0-9+#.-]/gi, '').toUpperCase()
+  return formatDocsCodeLanguage(language, copyLabels.value.text)
 }
 
 async function writeToClipboard(text: string) {
@@ -1286,10 +1285,31 @@ function renderCodeHeader(target: HTMLElement, language: string, codeText: strin
   const copyText = document.createElement('span')
   copyText.textContent = copyLabels.value.copy
 
+  let resetTimer: ReturnType<typeof setTimeout> | null = null
+
   copyButton.append(copyIcon, copyText)
   copyButton.addEventListener('click', async () => {
     try {
       await writeToClipboard(codeText)
+      copyButton.classList.add('is-copied')
+      copyIcon.className = 'i-carbon-checkmark docs-code-copy__icon'
+      copyText.textContent = copyLabels.value.copied
+      copyButton.setAttribute('aria-label', copyLabels.value.copied)
+      if (resetTimer) {
+        clearTimeout(resetTimer)
+        codeHeaderCopyTimers.delete(resetTimer)
+      }
+      resetTimer = setTimeout(() => {
+        copyButton.classList.remove('is-copied')
+        copyIcon.className = 'i-carbon-copy docs-code-copy__icon'
+        copyText.textContent = copyLabels.value.copy
+        copyButton.setAttribute('aria-label', copyLabels.value.copy)
+        if (resetTimer) {
+          codeHeaderCopyTimers.delete(resetTimer)
+          resetTimer = null
+        }
+      }, 1600)
+      codeHeaderCopyTimers.add(resetTimer)
       await showDocsToast('success', copyLabels.value.copied)
       dispatchDocsAction({
         type: 'copy',
@@ -1312,6 +1332,7 @@ let codeEnhanceTimer: ReturnType<typeof setTimeout> | null = null
 let codeEnhanceRaf: number | null = null
 let codeEnhanceRunId = 0
 const codeHeaderTargets = new Set<HTMLElement>()
+const codeHeaderCopyTimers = new Set<ReturnType<typeof setTimeout>>()
 let engagementPanelIdleId: number | null = null
 let engagementPanelFrameId: number | null = null
 let engagementPanelObserver: IntersectionObserver | null = null
@@ -1333,7 +1354,14 @@ function clearCodeEnhanceSchedule() {
 }
 
 function clearRenderedCodeHeaders() {
-  if (import.meta.server || !codeHeaderTargets.size)
+  if (import.meta.server)
+    return
+
+  for (const timer of codeHeaderCopyTimers)
+    clearTimeout(timer)
+  codeHeaderCopyTimers.clear()
+
+  if (!codeHeaderTargets.size)
     return
 
   for (const target of codeHeaderTargets)
@@ -1908,11 +1936,21 @@ watch(
   --docs-ink: var(--tx-text-color-primary);
   --docs-muted: var(--tx-text-color-secondary);
   --docs-border: var(--tx-border-color);
-  --docs-code-bg: var(--tx-fill-color-light);
+  --docs-code-bg: var(--tx-fill-color-lighter);
+  --docs-code-header: var(--tx-fill-color-light);
   --docs-code-border: var(--tx-border-color-light);
+  --docs-code-hairline: var(--tx-border-color-lighter);
   --docs-inline-code-bg: var(--tx-fill-color-lighter);
   --docs-inline-code-border: var(--tx-border-color-lighter);
   --docs-hr-color: color-mix(in srgb, var(--tx-border-color) 70%, transparent);
+}
+
+:global(.dark) .docs-root,
+:global([data-theme='dark']) .docs-root {
+  --docs-code-bg: color-mix(in srgb, var(--tx-bg-color-page) 64%, var(--tx-bg-color));
+  --docs-code-header: var(--tx-fill-color-lighter);
+  --docs-code-border: var(--tx-border-color-lighter);
+  --docs-code-hairline: color-mix(in srgb, var(--tx-border-color-lighter) 70%, transparent);
 }
 
 .docs-state__body {
@@ -2288,69 +2326,95 @@ a.docs-hero-crumb:hover {
 :deep(.docs-prose pre:not(.tuff-code-block__pre):not(:where(.not-prose, .not-prose *))) {
   position: relative;
   margin: 1.2rem 0;
-  padding: 2.2rem 1rem 1rem;
-  border-radius: 8px;
+  padding: 0;
+  border: 0;
+  border-radius: 14px;
   background: var(--docs-code-bg) !important;
-  border: 1px solid var(--docs-code-border);
-  overflow-x: auto;
+  overflow: hidden;
+}
+
+:deep(.docs-prose pre:not(.tuff-code-block__pre):not(:where(.not-prose, .not-prose *))::after) {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1px var(--docs-code-border);
+  pointer-events: none;
+  z-index: 2;
 }
 
 :deep(.docs-prose pre:not(.tuff-code-block__pre) code:not(:where(.not-prose, .not-prose *))) {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
   background-color: transparent !important;
-  padding: 0;
+  padding: 14px 16px;
   border-radius: 0;
   border: none;
-  color: inherit;
-  font-size: 0.9em;
-  line-height: 1.6;
+  color: var(--docs-ink);
+  font-family: var(--tx-font-family-mono, 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace);
+  font-size: 0.8125rem;
+  line-height: 1.65;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  white-space: pre;
+  tab-size: 2;
 }
 
 :deep(.docs-prose pre:not(.tuff-code-block__pre) .docs-code-header) {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.35rem 0.75rem;
-  border-bottom: 1px solid color-mix(in srgb, var(--tx-border-color) 40%, transparent);
-  font-size: 0.75rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--tx-text-color-secondary);
-  background: color-mix(in srgb, var(--tx-fill-color) 55%, transparent);
+  gap: 12px;
+  min-height: 38px;
+  padding: 6px 8px 6px 14px;
+  border-bottom: 1px solid var(--docs-code-hairline);
+  font-family: var(--tx-font-family, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--docs-muted);
+  background: var(--docs-code-header);
 }
 
 :deep(.docs-prose pre:not(.tuff-code-block__pre) .docs-code-language) {
-  font-weight: 600;
+  font-weight: 500;
   color: inherit;
 }
 
 :deep(.docs-prose pre:not(.tuff-code-block__pre) .docs-code-copy) {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
+  gap: 5px;
+  height: 26px;
+  padding: 0 9px;
   border: 0;
-  border-radius: 999px;
+  border-radius: 8px;
   background: transparent;
-  color: inherit;
+  color: var(--tx-text-color-regular);
   cursor: pointer;
-  font-size: 0.7rem;
-  font-weight: 600;
-  letter-spacing: 0.05em;
-  padding: 0.18rem 0.5rem;
-  text-transform: uppercase;
-  transition: background-color 0.16s ease, color 0.16s ease;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
 }
 
 :deep(.docs-prose pre:not(.tuff-code-block__pre) .docs-code-copy:hover) {
-  background: color-mix(in srgb, var(--docs-accent) 12%, transparent);
-  color: var(--docs-accent);
+  background: color-mix(in srgb, var(--tx-text-color-primary) 7%, transparent);
+  color: var(--tx-text-color-primary);
+}
+
+:deep(.docs-prose pre:not(.tuff-code-block__pre) .docs-code-copy:focus-visible) {
+  outline: 2px solid var(--tx-color-primary);
+  outline-offset: -2px;
+}
+
+:deep(.docs-prose pre:not(.tuff-code-block__pre) .docs-code-copy.is-copied) {
+  color: color-mix(in srgb, var(--tx-color-success) 55%, var(--tx-text-color-primary));
 }
 
 :deep(.docs-prose pre:not(.tuff-code-block__pre) .docs-code-copy__icon) {
-  font-size: 0.82rem;
+  flex: none;
+  font-size: 13px;
 }
 
 :deep(.docs-prose pre:not(.tuff-code-block__pre) .docs-code-copy:disabled) {

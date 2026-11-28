@@ -23,6 +23,7 @@ import { useSelectionAnchor } from '@talex-touch/tuffex/selection-actions'
 import { hasDocument, hasWindow } from '@talex-touch/utils/env'
 import { toast } from '@talex-touch/tuffex/utils'
 import { galleryText } from '../gallery-text'
+import GalleryProgressBar from '../GalleryProgressBar.vue'
 // Every `<ClientOnly>` below is this gate, not Nuxt's: each one sits directly
 // in a cell's stage. The gate mounts its specimen when the parent gallery's
 // queue admits it, and the specimen wrapper adds the reset button.
@@ -637,63 +638,6 @@ function fireToastAction() {
   })
 }
 
-const PROGRESS_STEPS = [8, 26, 44, 63, 81, 94, 100]
-const progressStep = ref(0)
-const progressCycle = ref(0)
-const progressPercent = computed(() => PROGRESS_STEPS[progressStep.value] ?? 0)
-const progressDetail = computed(() => `${(progressPercent.value * 0.024).toFixed(1)} MB / 2.4 MB`)
-const progressSegments = computed(() => [
-  { value: 56, color: 'var(--tx-color-success)', label: copy.value.channels[0]?.label },
-  { value: 30, color: 'var(--tx-color-primary)', label: copy.value.channels[1]?.label },
-  { value: 14, color: 'var(--tx-color-warning)', label: copy.value.channels[2]?.label },
-])
-const progressVisible = ref(false)
-let progressReducedMotion = false
-let progressTimer: ReturnType<typeof setInterval> | null = null
-
-function stopProgressTimer() {
-  if (progressTimer) {
-    clearInterval(progressTimer)
-    progressTimer = null
-  }
-}
-
-// The bar moves only while the specimen is on screen and the tab is visible;
-// a hidden or offscreen bar would otherwise wake once a second.
-function onProgressVisibilityChange(visible: boolean) {
-  progressVisible.value = visible
-  syncProgressTimer()
-}
-
-function syncProgressTimer() {
-  if (!import.meta.client || !hasDocument() || progressReducedMotion || document.hidden || !progressVisible.value) {
-    stopProgressTimer()
-    return
-  }
-  if (progressTimer)
-    return
-  progressTimer = setInterval(() => {
-    const next = progressStep.value + 1
-    if (next >= PROGRESS_STEPS.length) {
-      progressStep.value = 0
-      progressCycle.value += 1
-    }
-    else {
-      progressStep.value = next
-    }
-  }, 1000)
-}
-
-onMounted(() => {
-  if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
-    progressReducedMotion = true
-    progressStep.value = 3
-    return
-  }
-  syncProgressTimer()
-  document.addEventListener('visibilitychange', syncProgressTimer)
-})
-
 /* ── Status band state ── */
 interface StatusCell {
   slug: string
@@ -738,8 +682,6 @@ function retryErrorState() {
 }
 
 onBeforeUnmount(() => {
-  document.removeEventListener('visibilitychange', syncProgressTimer)
-  stopProgressTimer()
   if (errorRetryTimer)
     clearTimeout(errorRetryTimer)
 })
@@ -2783,23 +2725,9 @@ const statusStates = computed<StatusCell[]>(() => [
             {{ cellLabel('ProgressBar', '进度条') }}
           </NuxtLink>
           <div class="docs-gallery__stage not-prose">
-            <ClientOnly @visibility-change="onProgressVisibilityChange">
-              <div class="docs-gallery__block docs-gallery__block--wide docs-gallery__stack">
-                <!-- Live, so the specimen shows the easing fill, the tip glow
-                     riding it and the stardust drifting over the filled part. -->
-                <TxProgressBar
-                  :key="progressCycle"
-                  :percentage="progressPercent"
-                  :detail="progressDetail"
-                  text-placement="top"
-                  flow-effect="stardust"
-                  show-text
-                  :aria-label="text.progress.download"
-                />
-                <TxProgressBar :percentage="100" status="success" :aria-label="text.progress.installed" />
-                <TxProgressBar :percentage="38" status="error" :aria-label="text.progress.failed" />
-                <TxProgressBar :segments="progressSegments" :aria-label="text.progress.share" />
-                <TxProgressBar indeterminate indeterminate-variant="elastic" :aria-label="text.progress.loading" />
+            <ClientOnly>
+              <div class="docs-gallery__block docs-gallery__block--wide">
+                <GalleryProgressBar :locale-key="localeKey" />
               </div>
               <template #fallback>
                 <div class="docs-gallery__ph" />

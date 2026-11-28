@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { formatDocsCodeLanguage } from '~/utils/docs-code-language'
 import { formatInstallCommand, PACKAGE_MANAGERS, parseInstallCommand, type PackageManager } from '~/utils/docs-install-command'
 
 /**
@@ -31,7 +32,12 @@ const mermaidRef = ref<HTMLElement | null>(null)
 
 const isZh = computed(() => locale.value === 'zh')
 const canCopy = computed(() => Boolean(props.code?.trim()))
-const resolvedTitle = computed(() => props.title || `EXAMPLE.${(props.lang || 'txt').toUpperCase()}`)
+const resolvedTitle = computed(() => {
+  const customTitle = props.title?.trim()
+  if (customTitle)
+    return customTitle
+  return formatDocsCodeLanguage(props.lang, isZh.value ? '文本' : 'Text')
+})
 const copyLabel = computed(() => (copied.value ? (isZh.value ? '已复制' : 'Copied') : (isZh.value ? '复制' : 'Copy')))
 const showHeader = computed(() => !props.embedded)
 const isMermaid = computed(() => (props.lang || '').toLowerCase() === 'mermaid')
@@ -128,6 +134,7 @@ onBeforeUnmount(() => {
       <button
         type="button"
         class="tuff-code-block__copy tuff-install__copy"
+        :class="{ 'is-copied': copiedInstall }"
         :aria-label="copiedInstall ? installLabels.copied : installLabels.copy"
         :title="copiedInstall ? installLabels.copied : installLabels.copy"
         @click="copyText(installCommand, 'install')"
@@ -144,17 +151,19 @@ onBeforeUnmount(() => {
   <div v-else class="tuff-code-block not-prose" :class="{ 'tuff-code-block--embedded': props.embedded }">
     <div v-if="showHeader" class="tuff-code-block__header">
       <div class="tuff-code-block__meta">
-        <div class="tuff-code-block__dots" aria-hidden="true">
-          <span class="tuff-code-block__dot is-red" />
-          <span class="tuff-code-block__dot is-yellow" />
-          <span class="tuff-code-block__dot is-green" />
-        </div>
         <div class="tuff-code-block__title">
           {{ resolvedTitle }}
         </div>
       </div>
-      <button v-if="canCopy" type="button" class="tuff-code-block__copy" @click="copyText(props.code, 'code')">
-        <span :class="copied ? 'i-carbon-checkmark' : 'i-carbon-copy'" aria-hidden="true" />
+      <button
+        v-if="canCopy"
+        type="button"
+        class="tuff-code-block__copy"
+        :class="{ 'is-copied': copied }"
+        :aria-label="copyLabel"
+        @click="copyText(props.code, 'code')"
+      >
+        <span class="tuff-code-block__copy-icon" :class="copied ? 'i-carbon-checkmark' : 'i-carbon-copy'" aria-hidden="true" />
         <span>{{ copyLabel }}</span>
       </button>
     </div>
@@ -164,9 +173,11 @@ onBeforeUnmount(() => {
         v-if="props.embedded && canCopy"
         type="button"
         class="tuff-code-block__copy tuff-code-block__copy--floating"
+        :class="{ 'is-copied': copied }"
+        :aria-label="copyLabel"
         @click="copyText(props.code, 'code')"
       >
-        <span :class="copied ? 'i-carbon-checkmark' : 'i-carbon-copy'" aria-hidden="true" />
+        <span class="tuff-code-block__copy-icon" :class="copied ? 'i-carbon-checkmark' : 'i-carbon-copy'" aria-hidden="true" />
         <span>{{ copyLabel }}</span>
       </button>
 
@@ -190,15 +201,17 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .tuff-code-block {
+  --tuff-code-radius: 14px;
   --tuff-code-surface: var(--docs-code-bg, #f6f8fa);
-  --tuff-code-header: var(--tx-fill-color, #eef1f6);
+  --tuff-code-header: var(--tx-fill-color-light, #eef1f6);
   --tuff-code-border: var(--docs-code-border, #e4e7ed);
   --tuff-code-hairline: var(--docs-border-light, #ebeef5);
   --tuff-code-ink: var(--docs-ink, #1f2328);
   --tuff-code-muted: var(--docs-muted, #6e7781);
+  --tuff-code-copied-ink: color-mix(in srgb, var(--tx-color-success) 55%, var(--tuff-code-ink));
 
   margin: 16px 0;
-  border-radius: 16px;
+  border-radius: var(--tuff-code-radius);
   overflow: hidden;
   border: 1px solid var(--tuff-code-border);
   background: var(--tuff-code-surface);
@@ -216,7 +229,7 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 10px 14px;
+  padding: 8px 10px 8px 14px;
   border-bottom: 1px solid var(--tuff-code-hairline);
   background: var(--tuff-code-header);
 }
@@ -224,30 +237,14 @@ onBeforeUnmount(() => {
 .tuff-code-block__meta {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
+  min-width: 0;
 }
-
-.tuff-code-block__dots {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.tuff-code-block__dot {
-  width: 9px;
-  height: 9px;
-  border-radius: 999px;
-}
-
-.tuff-code-block__dot.is-red { background: #ff5f57; }
-.tuff-code-block__dot.is-yellow { background: #febc2e; }
-.tuff-code-block__dot.is-green { background: #28c840; }
 
 .tuff-code-block__title {
-  font-size: 10.5px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
   color: var(--tuff-code-muted);
 }
 
@@ -259,20 +256,36 @@ onBeforeUnmount(() => {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 4px 10px;
+  height: 26px;
+  padding: 0 9px;
   border: 0;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--tuff-code-ink) 7%, transparent);
+  border-radius: 7px;
+  background: transparent;
   color: var(--docs-ink-regular);
   font: inherit;
-  font-size: 11.5px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
   cursor: pointer;
 }
 
 .tuff-code-block__copy:hover {
-  background: color-mix(in srgb, var(--tuff-code-ink) 12%, transparent);
+  background: color-mix(in srgb, var(--tuff-code-ink) 7%, transparent);
   color: var(--tuff-code-ink);
+}
+
+.tuff-code-block__copy:focus-visible {
+  outline: 2px solid var(--tx-color-primary);
+  outline-offset: -2px;
+}
+
+.tuff-code-block__copy.is-copied {
+  color: var(--tuff-code-copied-ink);
+}
+
+.tuff-code-block__copy-icon {
+  flex: none;
+  font-size: 13px;
 }
 
 .tuff-code-block__copy--floating {

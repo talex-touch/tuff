@@ -601,6 +601,47 @@
   width: min(360px, 100%);
 }
 
+.docs-gallery__picker {
+  width: min(240px, 100%);
+}
+
+.docs-gallery__progress-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+}
+
+.docs-gallery__progress-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.docs-gallery__progress-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.docs-gallery__progress-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+  color: var(--tx-text-color-regular);
+}
+
+.docs-gallery__progress-meta {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+  color: var(--tx-text-color-secondary);
+}
+
 /* The spark specimen is the scrubber's stage: 168px leaves room for the x/y
    axes and the tooltip the stage paints above the canvas. */
 .docs-gallery__spark {
