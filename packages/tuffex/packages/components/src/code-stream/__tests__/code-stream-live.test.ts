@@ -157,8 +157,8 @@ describe('txCodeStream streaming mode', () => {
     await flushPromises()
     expect(shown(wrapper)).toBe(CODE)
     expect((wrapper.vm as unknown as { state: StreamState }).state).toBe('done')
-    // Once done and the last entrance has played, they fold back into plain markup.
-    await advance(500)
+    // Once done and the last entrance has played (default blur preset settles in 520ms), they fold back into plain markup.
+    await advance(560)
     expect(fresh(wrapper)).toEqual([])
     expect(wrapper.find('.tx-bui-code-stream__code span[style]').exists()).toBe(true)
   })

@@ -2085,7 +2085,7 @@ onBeforeUnmount(() => {
           </div>
         </article>
 
-      <!-- Visual 6-Anchor Snap Guides -->
+        <!-- Visual 6-Anchor Snap Guides -->
         <div
           v-for="(guide, idx) in activeSnapGuides"
           :key="`${guide.axis}-${guide.position}-${idx}`"

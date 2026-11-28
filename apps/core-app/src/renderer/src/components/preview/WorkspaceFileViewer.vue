@@ -1229,13 +1229,9 @@ function triggerCanvasSweepAnimation(oldSnapshot: OldMarkdownSnapshot | null = n
   const body = getLiveMarkdownBody()
   const blocks = getMarkdownBodyBlocks()
   const changed = canvasApplied.value?.changedBlockIndices ?? new Set<number>()
-  const targets =
-    changed.size > 0
-      ? blocks.filter((_, idx) => changed.has(idx))
-      : blocks
+  const targets = changed.size > 0 ? blocks.filter((_, idx) => changed.has(idx)) : blocks
 
-  const firstChangedIdx =
-    changed.size > 0 ? Math.min(...Array.from(changed.values())) : 0
+  const firstChangedIdx = changed.size > 0 ? Math.min(...Array.from(changed.values())) : 0
 
   // Diagonal reading-flow angle (175deg: gentle 5deg tilt so left leads right across each line).
   const TILT_RAD = (5 * Math.PI) / 180
@@ -1356,11 +1352,7 @@ function triggerCanvasSweepAnimation(oldSnapshot: OldMarkdownSnapshot | null = n
       const eased = 0.5 - 0.5 * Math.cos(Math.PI * clamped)
       const curD = fromD + (toD - fromD) * eased
       const veilAlpha =
-        clamped < 0.08
-          ? clamped / 0.08
-          : clamped > 0.86
-            ? Math.max(0, (1 - clamped) / 0.14)
-            : 1
+        clamped < 0.08 ? clamped / 0.08 : clamped > 0.86 ? Math.max(0, (1 - clamped) / 0.14) : 1
       container.style.setProperty('--canvas-replace-y', `${curD.toFixed(1)}px`)
       container.style.setProperty('--canvas-replace-veil-opacity', veilAlpha.toFixed(3))
 
@@ -1464,12 +1456,9 @@ function triggerCanvasSweepAnimation(oldSnapshot: OldMarkdownSnapshot | null = n
     return
   }
 
-  sweepTimer = setTimeout(
-    () => {
-      finishCanvasSweep()
-    },
-    sweepDurationMs + 320
-  )
+  sweepTimer = setTimeout(() => {
+    finishCanvasSweep()
+  }, sweepDurationMs + 320)
 }
 
 // ── Direct Markdown Editing & Safe Debounced Disk Persistence ───────────────────────
@@ -1903,8 +1892,7 @@ async function syncFromDisk(options: {
       return false
     }
     const freshText = fresh.text ?? ''
-    const latestSyncedText =
-      targetPath === lastPersistedPath ? lastPersistedText : diskBaselineText
+    const latestSyncedText = targetPath === lastPersistedPath ? lastPersistedText : diskBaselineText
     if (freshText === diskBaselineText || freshText === latestSyncedText) {
       return false
     }

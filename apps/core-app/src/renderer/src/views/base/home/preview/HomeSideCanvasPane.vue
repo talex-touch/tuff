@@ -1480,7 +1480,7 @@ async function handleAskFrameAi(payload: TdsCanvasAskFramePayload): Promise<void
             class="HomeSideCanvasPane-MoreItem"
             data-testid="canvas-sync-messages"
             @click="
-              handleSyncFromChat();
+              handleSyncFromChat()
               close()
             "
           >

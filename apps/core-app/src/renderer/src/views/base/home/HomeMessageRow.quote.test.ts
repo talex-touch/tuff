@@ -65,14 +65,7 @@ function provideMessageContext() {
 
 describe('HomeMessageRow quote card & monochrome AI stream', () => {
   it('renders quoted user messages with TxContextChunk and keeps raw text for copying', () => {
-    const raw = [
-      '`无名.md`',
-      '> 被抹除。”',
-      '>',
-      '> 我扶着舱沿站起来。',
-      '',
-      '优化'
-    ].join('\n')
+    const raw = ['`无名.md`', '> 被抹除。”', '>', '> 我扶着舱沿站起来。', '', '优化'].join('\n')
 
     const wrapper = mount(HomeMessageRow, {
       props: {
@@ -104,7 +97,12 @@ describe('HomeMessageRow quote card & monochrome AI stream', () => {
   it('keeps plain non-quoted user messages verbatim without TxContextChunk', () => {
     const wrapper = mount(HomeMessageRow, {
       props: {
-        message: { id: 'u-plain-1', role: 'user', content: '给我写一篇科幻小说', status: 'complete' },
+        message: {
+          id: 'u-plain-1',
+          role: 'user',
+          content: '给我写一篇科幻小说',
+          status: 'complete'
+        },
         entering: false,
         latest: true,
         streaming: false,

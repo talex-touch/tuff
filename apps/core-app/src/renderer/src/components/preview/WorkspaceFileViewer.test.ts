@@ -2036,7 +2036,13 @@ describe('WorkspaceFileViewer', () => {
 
   it('paces changed plain paragraph words through useStreamPacer with monochrome blur and unwraps cleanly', async () => {
     vi.useFakeTimers({
-      toFake: ['setTimeout', 'clearTimeout', 'requestAnimationFrame', 'cancelAnimationFrame', 'performance']
+      toFake: [
+        'setTimeout',
+        'clearTimeout',
+        'requestAnimationFrame',
+        'cancelAnimationFrame',
+        'performance'
+      ]
     })
     try {
       let diskText = '# Story\n\n从休眠舱醒来，名字不见了。\n'
@@ -2114,7 +2120,9 @@ describe('WorkspaceFileViewer', () => {
       // Advance rAF frames -> words reveal progressively, then settle and unwrap cleanly back to text nodes.
       vi.advanceTimersByTime(120)
       await nextTick()
-      expect(wrapper.findAll('.WorkspaceFileViewer-RevealWord.is-revealed').length).toBeGreaterThan(0)
+      expect(wrapper.findAll('.WorkspaceFileViewer-RevealWord.is-revealed').length).toBeGreaterThan(
+        0
+      )
 
       vi.advanceTimersByTime(3400)
       await nextTick()

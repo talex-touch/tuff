@@ -38,7 +38,9 @@ describe('parseQuotedUserMessage', () => {
   })
 
   it('parses transcript passage quotes without a file header', () => {
-    const parsed = parseQuotedUserMessage('> Quoted reply line\n> Second line\n\nCan you expand this?')
+    const parsed = parseQuotedUserMessage(
+      '> Quoted reply line\n> Second line\n\nCan you expand this?'
+    )
     expect(parsed).toEqual({
       quoteText: 'Quoted reply line\nSecond line',
       prompt: 'Can you expand this?',
