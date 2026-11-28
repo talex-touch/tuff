@@ -109,6 +109,8 @@ jobs:
         with:
           name: tuffex-docs-dist-cf
           path: apps/tuffex-docs/.dist-cf
+          include-hidden-files: true
+          if-no-files-found: error
           retention-days: 3
 
   deploy_cloudflare:
