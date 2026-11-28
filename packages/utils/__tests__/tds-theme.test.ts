@@ -133,6 +133,33 @@ describe('@talex-touch/utils/tds-theme pure-data protocol (Node, zero-DOM)', () 
 
     const opaqueOnly = validateTdsThemePack(borderline, { checkRefraction: false })
     expect(opaqueOnly.valid).toBe(true)
+
+    // exportThemePackAsCss defaults to strict Refraction validation and honors checkRefraction: false
+    expect(exportThemePackAsCss(borderline)).toBe('')
+    const opaqueCss = exportThemePackAsCss(borderline, { checkRefraction: false })
+    expect(opaqueCss).toContain(`/* TDS Theme Pack: ${borderline.meta.id} */`)
+    expect(opaqueCss).toContain(':root:not(.contrast) {')
+    expect(opaqueCss).toContain('.dark:not(.contrast) {')
+    expect(opaqueCss).toContain('--shell-text-regular: #757575;')
+
+    // parsePluginThemePackManifest forwards checkRefraction policy to exportThemePackAsCss
+    const strictManifest = parsePluginThemePackManifest(borderline)
+    expect(strictManifest.valid).toBe(false)
+    expect(strictManifest.css).toBeUndefined()
+
+    const opaqueManifest = parsePluginThemePackManifest(borderline, { checkRefraction: false })
+    expect(opaqueManifest.valid).toBe(true)
+    expect(opaqueManifest.pack?.meta.builtIn).toBe(false)
+    expect(opaqueManifest.css).toBe(opaqueCss)
+
+    // Unsafe CSS payloads remain rejected even when checkRefraction is disabled
+    const injectedBorderline = makeCustomThemePack()
+    injectedBorderline.tokens.light.textRegular = '#757575'
+    injectedBorderline.tokens.light.primary = '#2458c4; background: url(https://evil.example/x.png)'
+    expect(exportThemePackAsCss(injectedBorderline, { checkRefraction: false })).toBe('')
+    expect(parsePluginThemePackManifest(injectedBorderline, { checkRefraction: false }).valid).toBe(
+      false,
+    )
   })
 
   it('parses direct and enveloped pure-JSON plugin/store manifests safely and stamps builtIn=false', () => {

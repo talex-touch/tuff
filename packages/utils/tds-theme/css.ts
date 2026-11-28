@@ -1,4 +1,4 @@
-import type { TdsThemePack, TdsThemeTokenOverrides } from './types'
+import type { TdsThemePack, TdsThemeTokenOverrides, TdsThemeValidationOptions } from './types'
 import { TDS_DEFAULT_THEME_PACK } from './presets'
 import { TDS_THEME_TOKEN_CSS_VAR_MAP, TDS_THEME_TOKEN_KEYS } from './types'
 import { validateTdsThemePack } from './validator'
@@ -56,8 +56,11 @@ function buildTokenDeclarations(
  * Uses `:root:not(.contrast)` and `.dark:not(.contrast)` so accessibility
  * high-contrast modes (`html.contrast` and `html.dark.contrast`) always win.
  */
-export function exportThemePackAsCss(pack: TdsThemePack): string {
-  const validation = validateTdsThemePack(pack)
+export function exportThemePackAsCss(
+  pack: TdsThemePack,
+  options: TdsThemeValidationOptions = {},
+): string {
+  const validation = validateTdsThemePack(pack, options)
   if (!validation.valid || !validation.pack) {
     return ''
   }

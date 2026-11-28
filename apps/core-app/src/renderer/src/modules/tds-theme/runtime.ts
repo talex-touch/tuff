@@ -189,6 +189,7 @@ function readPersistedState(): PersistedTdsThemePackState {
 
     const record = parsed as Record<string, unknown>
     const validCustomPacks: TdsThemePack[] = []
+    const strictlyValidCustomIds = new Set<string>()
     const seenIds = new Set<string>(TDS_THEME_PACKS.map((p) => p.meta.id))
 
     if (Array.isArray(record.customPacks)) {
@@ -196,32 +197,38 @@ function readPersistedState(): PersistedTdsThemePackState {
         if (validCustomPacks.length >= MAX_CUSTOM_THEME_PACKS) {
           break
         }
-        const validation = validateTdsThemePack(candidate)
-        if (!validation.valid || !validation.pack) {
+        // Retain structurally valid legacy v1 custom packs that pass opaque WCAG AA
+        // checks even if they fail the newer Refraction 0.85 translucency check so
+        // users can still export and repair them instead of losing them on upgrade.
+        const opaqueValidation = validateTdsThemePack(candidate, { checkRefraction: false })
+        if (!opaqueValidation.valid || !opaqueValidation.pack) {
           continue
         }
-        if (seenIds.has(validation.pack.meta.id)) {
+        if (seenIds.has(opaqueValidation.pack.meta.id)) {
           continue
         }
-        seenIds.add(validation.pack.meta.id)
-        validCustomPacks.push({
-          ...validation.pack,
+        seenIds.add(opaqueValidation.pack.meta.id)
+        const sanitizedPack: TdsThemePack = {
+          ...opaqueValidation.pack,
           meta: {
-            ...validation.pack.meta,
+            ...opaqueValidation.pack.meta,
             builtIn: false
           }
-        })
+        }
+        validCustomPacks.push(sanitizedPack)
+        if (validateTdsThemePack(sanitizedPack).valid) {
+          strictlyValidCustomIds.add(sanitizedPack.meta.id)
+        }
       }
     }
 
     const rawActiveId = typeof record.activePackId === 'string' ? record.activePackId.trim() : ''
-    const hasActive =
-      Boolean(getBuiltInThemePack(rawActiveId)) ||
-      validCustomPacks.some((pack) => pack.meta.id === rawActiveId)
+    const hasStrictActive =
+      Boolean(getBuiltInThemePack(rawActiveId)) || strictlyValidCustomIds.has(rawActiveId)
 
     return {
       version: 1,
-      activePackId: hasActive ? rawActiveId : TDS_DEFAULT_THEME_PACK_ID,
+      activePackId: hasStrictActive ? rawActiveId : TDS_DEFAULT_THEME_PACK_ID,
       customPacks: validCustomPacks
     }
   } catch {
@@ -274,6 +281,12 @@ export function hydrateTdsThemePack(doc?: Document | null): TdsThemePack {
     allPacksComputed.value.find((pack) => pack.meta.id === persisted.activePackId) ??
     TDS_DEFAULT_THEME_PACK
 
+  if (!validateTdsThemePack(active).valid) {
+    activePackIdRef.value = TDS_DEFAULT_THEME_PACK_ID
+    applyTdsThemePack(TDS_DEFAULT_THEME_PACK, doc)
+    return TDS_DEFAULT_THEME_PACK
+  }
+
   applyTdsThemePack(active, doc)
   return active
 }
@@ -298,6 +311,15 @@ export function useTdsThemePack(): UseTdsThemePackReturn {
   function selectPack(id: string, options?: SelectTdsThemePackOptions): boolean {
     const target = allPacksComputed.value.find((pack) => pack.meta.id === id)
     if (!target) {
+      return false
+    }
+
+    if (!validateTdsThemePack(target).valid) {
+      if (activePackIdRef.value === target.meta.id) {
+        activePackIdRef.value = TDS_DEFAULT_THEME_PACK_ID
+        persistCurrentState()
+        clearTdsThemePack(options?.doc)
+      }
       return false
     }
 

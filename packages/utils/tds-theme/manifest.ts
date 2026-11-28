@@ -156,6 +156,6 @@ export function parsePluginThemePackManifest(
     errors: [],
     contrastReport: validation.contrastReport,
     pack: sanitizedPack,
-    css: exportThemePackAsCss(sanitizedPack),
+    css: exportThemePackAsCss(sanitizedPack, { checkRefraction }),
   }
 }
